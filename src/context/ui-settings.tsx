@@ -30,8 +30,8 @@ type UiSettingsProviderProps = {
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
   const [layoutSize, setLayoutSize] = useLocalStorage<LayoutSize>("layout-size", "medium");
   const [showStarred, setShowStarred] = useState<boolean>(false)
-  const [showInfo, setShowInfo] = useState<boolean>(false)
-  const [untagged, setUntagged] = useState<boolean>(true)
+  const [showInfo, setShowInfo] = useState<boolean>(true)
+  const [untagged, setUntagged] = useState<boolean>(false)
   return (
     <UiSettingsContext.Provider value={{
       layoutSize,

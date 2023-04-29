@@ -34,55 +34,8 @@ export const DatabaseProvider = ({ children, collectionId }) => {
     worker.postMessage({ publicKey: wallet.publicKey?.toBase58() })
   }, [wallet.publicKey])
 
-
-  useEffect(() => {
-    if (!wallet.publicKey) {
-      return;
-    }
-    setSyncing(true)
-    const worker = new Worker(new URL('../../public/get-data.worker.ts', import.meta.url));
-    worker.addEventListener("message", event => {
-      setSyncing(false)
-      // setWorking(false)
-      // setKeypair(new Keypair(event.data.keypair._keypair));
-    })
-
-    worker.postMessage({ publicKey: wallet.publicKey?.toBase58() })
-  }, [wallet.publicKey])
-
-  useEffect(() => {
-    console.log(collectionId)
-    if (!wallet.publicKey || !collectionId) {
-      return;
-    }
-    setSyncing(true)
-    const worker = new Worker(new URL('../../public/get-data.worker.ts', import.meta.url));
-    worker.addEventListener("message", event => {
-      setSyncing(false)
-      // setWorking(false)
-      // setKeypair(new Keypair(event.data.keypair._keypair));
-    })
-
-    worker.postMessage({ publicKey: wallet.publicKey?.toBase58(), collectionId, type: "update-nfts" })
-  }, [collectionId, wallet.publicKey])
-
-
-  async function updateCollection(id: string, updates: Object) {
-    try {
-      setSyncing(true);
-      await db.collections.update(id, updates);
-    } catch {
-
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   async function updateCollectionImage(id: string, image) {
-    setSyncing(true)
-    const thing = await db.collections.update(id, { image })
-
-    setSyncing(false)
+    await db.collections.update(id, { image })
   }
 
   async function updateStarred(id, starred) {
@@ -95,8 +48,40 @@ export const DatabaseProvider = ({ children, collectionId }) => {
     console.log(a)
   }
 
+  async function updateNfts(updates) {
+    await db.nfts.bulkUpdate(updates.map(item => {
+      const { nftMint, ...changes } = item;
+      return {
+        key: nftMint,
+        changes
+      }
+    }))
+  }
+
+  async function updateItem(item) {
+    const changes = {
+      nftMint: item.nftMint,
+      nftCollectionMint: item.nftCollectionMint,
+      sellerFeeBasisPoints: item.sellerFeeBasisPoints,
+      tokenStandard: item.tokenStandard || item.tokenStandard === 0
+        ? item.tokenStandard
+        : item.type === "metaplex" ? 0 : null,
+      name: item.name,
+      symbol: item.symbol,
+      jsonLoaded: item.jsonLoaded
+    }
+
+    if (item.json) {
+      changes.json = item.json as NftMetadata
+    }
+    if (item.helloMoonCollectionId) {
+      changes.helloMoonCollectionId = item.helloMoonCollectionId;
+    }
+    await db && db.nfts.update(item.nftMint, changes);
+  }
+
   return (
-    <DatabaseContext.Provider value={{ syncing, updateCollection, db, updateCollectionImage, updateStarred, deleteNfts }}>
+    <DatabaseContext.Provider value={{ syncing, db, updateCollectionImage, updateStarred, deleteNfts, updateItem, updateNfts }}>
       { children }
     </DatabaseContext.Provider>
   )

@@ -2,7 +2,7 @@ import { Nft } from "@metaplex-foundation/js";
 import { Box, Button, Card, CardContent, Grid, Rating, Typography } from "@mui/material";
 import { Stack } from "@mui/system";
 import { PublicKey } from "@solana/web3.js";
-import { every, filter, startCase, uniq } from "lodash";
+import { every, filter, flatten, sample, startCase, uniq } from "lodash";
 import { NextPage } from "next";
 import { useEffect, useState } from "react";
 import { Layout } from "../../components/Layout";
@@ -16,12 +16,13 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { db } from "../../db";
 import { useDatabase } from "../../context/database";
 import { FiltersProvider, useFilters } from "../../context/filters";
+import axios from "axios";
 
 const Collection: NextPage = ({ collectionId }) => {
   const [menuShowing, setMenuShowing] = useState(true)
-  const { selectedFilters } = useFilters()
+  const { selectedFilters, search, sort } = useFilters()
   const { untagged } = useUiSettings();
-  const { db } = useDatabase();
+  const { db, updateNfts } = useDatabase();
   const wallet = useWallet()
 
   const nfts = useLiveQuery(
@@ -35,8 +36,8 @@ const Collection: NextPage = ({ collectionId }) => {
       .where({
         helloMoonCollectionId: collectionId
       })
-      .toArray(),
-    [db, wallet.publicKey, collectionId]
+      .sortBy(sort),
+    [db, wallet.publicKey, collectionId, sort]
   ) || [];
 
   const collection = useLiveQuery(
@@ -58,7 +59,39 @@ const Collection: NextPage = ({ collectionId }) => {
     setMenuShowing(!menuShowing);
   }
 
-  console.log(nfts)
+  async function getMoonrankRarity() {
+    const mints = nfts.filter(n => !n.moonRank || !n.moonRankTier).map(n => n.nftMint)
+    if (!mints.length) {
+      return []
+    }
+    const { data } = await axios.post('/api/get-moonrank', { mints });
+    return data
+  }
+
+  async function getHowRareRarity() {
+    const mints = nfts.filter(n => !n.howRare || !n.howRareTier).map(n => n.nftMint)
+    if (!mints.length) {
+      return []
+    }
+    const { data } = await axios.post('/api/get-howrare', { mints });
+    return data
+  }
+
+  async function getRarity() {
+    const [moonRank, howRare] = await Promise.all([
+      getMoonrankRarity(),
+      getHowRareRarity()
+    ])
+
+    await updateNfts(moonRank)
+    await updateNfts(howRare)
+  }
+
+  useEffect(() => {
+    if (nfts.length) {
+      getRarity();
+    }
+  }, [nfts])
 
   const filtered = nfts.filter(nft => {
     return every(selectedFilters, (items, key) => {
@@ -68,8 +101,21 @@ const Collection: NextPage = ({ collectionId }) => {
     })
   })
     .filter(nft => !untagged || !taggedNfts.map(u => u.nftId).includes(nft.nftMint))
+    .filter(nft => {
+      if (!search) {
+        return true
+      }
 
-  console.log({filtered})
+      const s = search.toLowerCase();
+      const name = nft.json?.name || nft.name || ""
+      const symbol = nft.json?.symbol || nft.symbol || ""
+      const description = nft.json?.description || ""
+      const values = (nft.json?.attributes || []).map(att => `${att.value || ""}`.toLowerCase())
+      return name.toLowerCase().includes(s) ||
+        description.toLowerCase().includes(s) ||
+        symbol.toLowerCase().includes(s) ||
+        values.some(val => val.includes(s))
+    })
 
   return (
     <Layout title={collection?.collectionName} nfts={filtered} filters>

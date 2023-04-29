@@ -1,4 +1,4 @@
-import { Box, Card, CardContent, Chip, CircularProgress, Dialog, IconButton, Link, Modal, Rating, Skeleton, Stack, Table, TableCell, TableRow, Typography, styled } from "@mui/material";
+import { Box, Card, CardContent, Chip, CircularProgress, Dialog, IconButton, Link, Modal, Rating, Skeleton, Stack, SvgIcon, Table, TableCell, TableRow, Typography, styled } from "@mui/material";
 import { findKey, isEqual, uniq } from "lodash";
 import { useSelection } from "../../context/selection";
 import { useUiSettings } from "../../context/ui-settings";
@@ -21,6 +21,7 @@ import { toast } from "react-hot-toast";
 import useOnScreen from "../../hooks/use-on-screen";
 import { useMetaplex } from "../../context/metaplex";
 import { PublicKey } from "@metaplex-foundation/js";
+import HowRare from './howrare.svg';
 
 type Category = "image" | "video" | "audio" | "vr";
 
@@ -193,7 +194,7 @@ export const ItemDetails = ({ item }) => {
   }
 
   return (
-    <Card sx={{ height: "100%", outline: 'none !important', width: "100%" }}>
+    <Card sx={{ height: "100%", outline: 'none !important', width: "100%", overflowY: "auto" }}>
       <Stack direction="row">
         <Box sx={{ width: "100%", }}>
           <Stack spacing={2} justifyContent="center">
@@ -342,30 +343,55 @@ export const ItemDetails = ({ item }) => {
   )
 }
 
-export const Item: FC<ItemProps> = memo(({ item: initialItem, selected, select }) => {
-  const { updateStarred } = useDatabase();
+const colors = {
+  Mythic: "#c62828",
+  Legendary: "#e65100",
+  Epic: "#7b1fa2",
+  Rare: "#1565c0",
+  Uncommon: "#1b5e20",
+  Common: "#333333",
+}
+
+const Rarity = ({ rank, type, tier }) => {
+  return <Chip
+    icon={type === "howRare" && <HowRare style={{marginLeft: "0.5em" }} />}
+    label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
+    sx={{ backgroundColor: colors[tier] }}
+    size="small"
+  />
+}
+
+export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, affected = false }) => {
+  const { updateStarred, updateItem } = useDatabase();
   const { layoutSize, showInfo } = useUiSettings()
   const { frozen, inVault } = useFrozen();
   const { renderItem } = useDialog();
-  const [item, setItem] = useState(initialItem);
   const metaplex = useMetaplex();
   
   const ref = useRef();
   const isVisible = useOnScreen(ref)
 
+  if (item.sortedIndex === 1) {
+    console.log({ isVisible })
+  }
+
   async function loadNft() {
-    const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(initialItem.nftMint) });
-    setItem({
-      ...item,
-      ...nft
-    })
+    try {
+      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) });
+      await updateItem({
+        ...item,
+        ...nft
+      })
+    } catch (err) {
+      console.log(err)
+    }
   }
 
   useEffect(() => {
-    if (!initialItem.json && isVisible) {
+    if (isVisible) {
       loadNft()
     }
-  }, [isVisible, initialItem])
+  }, [isVisible, item])
 
   async function onStarredChange(e: SyntheticEvent) {
     await updateStarred(item.nftMint, !item.starred)
@@ -398,17 +424,11 @@ export const Item: FC<ItemProps> = memo(({ item: initialItem, selected, select }
     },
   });
 
-  useEffect(() => {
-    console.log("rendering")
-  })
-
   const fontSizes = {
     small: "14px",
     medium: "20px",
     large: "28px"
   }
-
-  
 
   const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
 
@@ -434,84 +454,90 @@ export const Item: FC<ItemProps> = memo(({ item: initialItem, selected, select }
             ? (
               <>
               <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        onClick={onNftClick}
-        sx={{
-          position: showInfo ? "static" : "absolute",
-          top: 0,
-          width: "100%",
-          padding: "0.5em",
-          background: "rgba(20, 20, 20, 0.8)",
-          opacity: showInfo ? 1 : 0,
-          transition: showInfo ? "none" : 'opacity 0.2s',
-          "&:hover": {
-            ".plus-minus.MuiSvgIcon-root": {
-              color: "white"
-            }
-          }
-          // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
-        }}
-      >
-        {/* <FrozenIndicator
-          max={1}
-          value={frozen.includes(item.nftMint) ? 1 : 0}
-          icon={<AcUnitIcon fontSize="inherit" />}
-          emptyIcon={<AcUnitIcon fontSize="inherit" />}
-          size={layoutSize}
-        /> */}
-        <Rating
-          max={1}
-          value={item.starred ? 1 : 0}
-          onChange={onStarredChange}
-          size={layoutSize}
-        />
-        <RadioIndicator
-          className="plus-minus"
-          sx={{
-            fontSize: fontSizes[layoutSize],
-            color: "grey"
-          }}
-        />
-        {/* <LockedIndicator
-          max={1}
-          value={inVault.includes(item.nftMint) ? 1 : 0}
-          icon={<LockIcon fontSize="inherit" />}
-          emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
-          size={layoutSize}
-        /> */}
-      </Stack>
-
-      {
-        
-         item.json
-            ? <img src={item.json?.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.json?.image}` : "/fallback-image.jpg"} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
-            : <Box sx={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center"
-            }}>
-              <CircularProgress />
-            </Box>
-      }      
-      {
-        showInfo && <CardContent>
-          <Typography>{item.json?.name}</Typography>
-        </CardContent>
-      }
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                onClick={onNftClick}
+                sx={{
+                  position: showInfo ? "static" : "absolute",
+                  top: 0,
+                  width: "100%",
+                  padding: "0.5em",
+                  background: "rgba(20, 20, 20, 0.8)",
+                  opacity: showInfo ? 1 : 0,
+                  transition: showInfo ? "none" : 'opacity 0.2s',
+                  "&:hover": {
+                    ".plus-minus.MuiSvgIcon-root": {
+                      color: "white"
+                    }
+                  }
+                  // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
+                }}
+              >
+                {/* <FrozenIndicator
+                  max={1}
+                  value={frozen.includes(item.nftMint) ? 1 : 0}
+                  icon={<AcUnitIcon fontSize="inherit" />}
+                  emptyIcon={<AcUnitIcon fontSize="inherit" />}
+                  size={layoutSize}
+                /> */}
+                <Rating
+                  max={1}
+                  value={item.starred ? 1 : 0}
+                  onChange={onStarredChange}
+                  size={layoutSize}
+                />
+                { DragHandle }
+                <RadioIndicator
+                  className="plus-minus"
+                  sx={{
+                    fontSize: fontSizes[layoutSize],
+                    color: "grey"
+                  }}
+                />
+                {/* <LockedIndicator
+                  max={1}
+                  value={inVault.includes(item.nftMint) ? 1 : 0}
+                  icon={<LockIcon fontSize="inherit" />}
+                  emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
+                  size={layoutSize}
+                /> */}
+              </Stack>
+              {
+                
+                item.jsonLoaded
+                  ? <img src={item.json?.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.json?.image}` : "/fallback-image.jpg"} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
+                  : <Box sx={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center"
+                  }}>
+                    <CircularProgress />
+                  </Box>
+                }      
+                {
+                  showInfo && <CardContent sx={{ position: "relative" }}>
+                    <Typography>{item.json?.name || item.name}</Typography>
+                    <Stack sx={{ position: "absolute", top: "-15px", width: "calc(100% - 1em)", right: "0.5em" }} direction="row" justifyContent="space-between" spacing={2}>
+                      {
+                        item.howRare && <Rarity type="howRare" rank={item.howRare} tier={item.howRareTier} />
+                      }
+                      {
+                        item.moonRank && <Rarity type="moonRank" rank={item.moonRank} tier={item.moonRankTier} />
+                      }
+                    </Stack>
+                  </CardContent>
+                }
               </>
             )
             : <Skeleton height="100px" variant="rounded" sx={{ paddingTop: "100%" }} />
         }
-
-      
-      
     </Card>
   )
 }, (prev, next) => {
   return isEqual(prev.item, next.item) &&
-    prev.selected === next.selected
+    prev.selected === next.selected &&
+    prev.affected === next.affected
 })

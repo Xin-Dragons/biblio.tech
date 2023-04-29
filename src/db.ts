@@ -14,6 +14,14 @@ export interface Nft {
   nftCollectionMint?: string;
   starred?: boolean;
   tokenStandard?: number;
+  name?: string;
+  symbol?: string;
+  jsonLoaded?: boolean;
+  moonRank?: number;
+  moonRankTier: string;
+  howRare?: number;
+  howRareTier?: string;
+  sortedIndex?: number;
 }
 
 export interface Collection {
@@ -43,11 +51,11 @@ export class DB extends Dexie {
 
   constructor(publicKey: string) {
     super(`biblio.tech.${publicKey}`);
-    this.version(1).stores({
-      nfts: "nftMint,helloMoonCollectionId",
+    this.version(3).stores({
+      nfts: "nftMint,helloMoonCollectionId,moonRank,howRare,sortedIndex",
       collections: "helloMoonCollectionId,name",
       tags: "id,name,color",
-      taggedNfts: '[nftId+tagId],nftId,tagId'
+      taggedNfts: '[nftId+tagId],nftId,tagId,sortedIndex'
     })
   }
 }

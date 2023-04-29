@@ -8,7 +8,7 @@ const Trash: NextPage = () => {
   const { db } = useDatabase();
   const trash = useLiveQuery(() => db && db
     .nfts
-    .filter(item => !item.helloMoonCollectionId)
+    .filter(item => !item.helloMoonCollectionId && item.jsonLoaded && !item.json)
     .toArray(),
     [db],
     []

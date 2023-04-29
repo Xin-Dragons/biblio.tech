@@ -1,5 +1,5 @@
-import { Box, Button, Dialog, DialogTitle, FormControlLabel, Grid, IconButton, Stack, SvgIcon, Switch, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material"
-import { uniq } from "lodash";
+import { Box, Button, Dialog, DialogTitle, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Stack, SvgIcon, Switch, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material"
+import { debounce, uniq } from "lodash";
 import Link from "next/link";
 import { FC, useEffect, useState } from "react";
 import { useSelection } from "../../context/selection";
@@ -8,10 +8,11 @@ import GridIcon from "./grid.svg";
 import GridIcon2 from "./grid-2.svg";
 import GridIcon3 from "./grid-3.svg";
 import InfoIcon from '@mui/icons-material/Info';
-import { useLocalStorage } from "@solana/wallet-adapter-react";
 import { useUiSettings } from "../../context/ui-settings";
 import ImageIcon from '@mui/icons-material/Image';
-import { Masonry } from "@mui/lab";
+import { useFilters } from "../../context/filters";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
 type ActionBarProps = {
   title: string;
@@ -23,6 +24,7 @@ type ActionBarProps = {
 
 export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredControl }) => {
   const { layoutSize, setLayoutSize, showStarred, setShowStarred, setShowInfo, showInfo, untagged, setUntagged } = useUiSettings()
+  const { search, setSearch, sort, setSort } = useFilters()
   const [collageOptions, setCollageOptions] = useState([])
   const [collageModalShowing, setCollageModalShowing] = useState(false);
 
@@ -31,9 +33,9 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
   }
 
   function handleSizeChange(e, value) {
-    if (value !== null) {
+    // if (value !== null) {
       setLayoutSize(value)
-    }
+    // }
   }
 
   function toggleStarred() {
@@ -61,11 +63,30 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
   }
 
   return (
-    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-      <Stack direction="row" alignItems="center">
+    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ borderBottom: "1px solid black", paddingBottom: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={2}>
         <Typography variant="h5">{title}</Typography>
+        <TextField
+          label="Omnisearch"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </Stack>
       <Stack spacing={2} direction="row" alignItems="center">
+        <FormControl fullWidth>
+          <InputLabel id="demo-simple-select-label">Sort</InputLabel>
+          <Select
+            labelId="demo-simple-select-label"
+            id="demo-simple-select"
+            value={sort}
+            label="Age"
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <MenuItem value={"sortedIndex"}>Custom</MenuItem>
+            <MenuItem value={"howRare"}>How Rare</MenuItem>
+            <MenuItem value={"moonRank"}>Moon Rank</MenuItem>
+          </Select>
+        </FormControl>
         <FormControlLabel
           control={
             <Switch checked={untagged} onChange={e => setUntagged(e.target.checked)} name="gilad" />
@@ -86,7 +107,9 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
         }
         {
           <IconButton onClick={toggleInfo}>
-            <InfoIcon sx={{ opacity: showInfo ? 1 : 0.55, color: showInfo ? "#6cbec9" : "inherit" }} fontSize="inherit" />
+            {
+              showInfo ? <VisibilityIcon /> : <VisibilityOffIcon />
+            }
           </IconButton>
         }
         <ToggleButtonGroup
@@ -94,14 +117,15 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
           exclusive
           onChange={handleSizeChange}
           aria-label="Layout size"
+          defaultValue={layoutSize}
         >
-          <ToggleButton value="small" aria-label="centered">
+          <ToggleButton value="small">
             <SvgIcon component={GridIcon3} inheritViewBox />
           </ToggleButton>
-          <ToggleButton value="medium" aria-label="left aligned">
+          <ToggleButton value="medium">
             <SvgIcon component={GridIcon2} inheritViewBox />
           </ToggleButton>
-          <ToggleButton value="large" aria-label="centered">
+          <ToggleButton value="large">
             <SvgIcon component={GridIcon} inheritViewBox />
           </ToggleButton>
         </ToggleButtonGroup>
@@ -129,8 +153,6 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
                 }
 
               }
-
-              console.log(cols)
               
               return (
                   <Box sx={{ display: "grid", gridGap: "2px", gridTemplateColumns: new Array(parseInt(cols)).fill(`${10 / factor}px`).join(' ') }}>
