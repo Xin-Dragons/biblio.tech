@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link"
 import { Toaster } from "react-hot-toast"
 import { FC, useState } from "react";
-import { useNfts } from "../../context/nfts";
 import { ActionBar } from "../ActionBar";
 import { SelectedMenu } from "../SelectedMenu";
 import { SideMenu } from "../SideMenu";
@@ -22,8 +21,7 @@ type LayoutProps = {
   children: JSX.Element | JSX.Element[]
 }
 
-export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId }) => {
-  const { loading } = useNfts()
+export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId, rarity, filtered }) => {
 
   function toggleMenu() {
     setMenuShowing(!menuShowing)
@@ -36,7 +34,7 @@ export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId 
       <AppBar sx={{ background: "black" }}>
         <Stack direction="row" justifyContent="space-between" padding={1} alignItems="center">
           <Link href="/">
-            <img src="/logo.png" width={50} height={50} />
+            <img src="/logo.svg" width={50} height={50} />
           </Link>
           <Typography variant="h4">Biblio</Typography>
           <WalletMultiButtonDynamic />
@@ -49,6 +47,8 @@ export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId 
             title={title}
             includeStarredControl={true}
             nfts={nfts}
+            rarity={rarity}
+            filtered={filtered}
           />
           <Stack direction="row" spacing={2} sx={{ height: "100%" }}>
             <SideMenu nfts={nfts} filters={filters} tagId={tagId} />
@@ -66,7 +66,7 @@ export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId 
                 //   : children
               }
             </Box>
-            <SelectedMenu nfts={nfts} />
+            <SelectedMenu filtered={filtered} />
           </Stack>
         </Stack>
       </main>

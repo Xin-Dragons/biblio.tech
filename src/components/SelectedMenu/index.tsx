@@ -6,7 +6,6 @@ import { PublicKey, Transaction } from "@solana/web3.js";
 import { flatten, uniq } from "lodash";
 import { FC, useEffect, useState } from "react";
 import { useMetaplex } from "../../context/metaplex";
-import { useNfts } from "../../context/nfts";
 import { useSelection } from "../../context/selection";
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
@@ -23,7 +22,7 @@ import { useTheme } from "../../context/theme";
 const { palette } = createTheme();
 
 
-export const SelectedMenu: FC = ({ nfts }) => {
+export const SelectedMenu: FC = ({ filtered }) => {
   const { selected, setSelected } = useSelection();
   const wallet = useWallet()
   const metaplex = useMetaplex().use(walletAdapterIdentity(wallet));
@@ -34,12 +33,21 @@ export const SelectedMenu: FC = ({ nfts }) => {
   const [ selectedTag, setSelectedTag ] = useState("");
   const { db } = useDatabase(0);
   const router = useRouter()
-  const theme = useTheme()
+  const theme = useTheme();
+
+  useEffect(() => {
+    const toDeselect = selected.filter(s => !filtered.map(n => n.nftMint).includes(s))
+    if (toDeselect.length) {
+      setSelected(prev => {
+        return prev.filter(item => !toDeselect.includes(item))
+      })
+    }
+  }, [filtered])
 
   const taggedNfts = useLiveQuery(() => db && db
     .taggedNfts
     .toArray(),
-    [db, nfts],
+    [db, filtered],
     []
   ) || []
 
@@ -49,11 +57,11 @@ export const SelectedMenu: FC = ({ nfts }) => {
     setBulkSendOpen(!bulkSendOpen)
   }
 
-  const mints = nfts.map(n => n.nftMint)
+  const mints = filtered.map(n => n.nftMint)
 
   async function freeze() {
     try {
-      const toFreeze = await Promise.all(nfts.filter(n => selected.includes(n.nftMint)).map(nft => metaplex.nfts().findByMint({ mintAddress: new PublicKey(nft.nftMint) })));
+      const toFreeze = await Promise.all(filtered.filter(n => selected.includes(n.nftMint)).map(nft => metaplex.nfts().findByMint({ mintAddress: new PublicKey(nft.nftMint) })));
       // const mint = await connection.getParsedAccountInfo(nfts[0].mint.address)
       // const address = await getAssociatedTokenAddress(new PublicKey(toFreeze[0].nftMint), wallet.publicKey)
       // const token = await metaplex.tokens().findTokenByAddress({
@@ -109,7 +117,7 @@ export const SelectedMenu: FC = ({ nfts }) => {
     }
   }
 
-  const allSelected = selected.length >= nfts.length
+  const allSelected = selected.length >= filtered.length
 
   function selectAll() {
     setSelected(prevState => {
@@ -131,7 +139,8 @@ export const SelectedMenu: FC = ({ nfts }) => {
 
   async function burn() {
     try {
-      const toBurn = await Promise.all(nfts
+      const toBurn = await Promise.all(
+        filtered
           .filter(n => selected.includes(n.nftMint))
           .map(nft => metaplex.nfts().findByMint({ mintAddress: new PublicKey(nft.nftMint) }))
       );
@@ -210,8 +219,8 @@ export const SelectedMenu: FC = ({ nfts }) => {
             Selection
           </Typography>
           <Stack spacing={2} direction="row">
-            <Button onClick={selectAll} disabled={!nfts.length || allSelected}>Select all</Button>
-            <Button onClick={deselectAll} disabled={!nfts.length || !selected.length}>Deselect all</Button>
+            <Button onClick={selectAll} disabled={!filtered.length || allSelected}>Select all</Button>
+            <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>Deselect all</Button>
           </Stack>
           <Typography>{selected.length} Selected</Typography>
           <Typography variant="h6">Tags</Typography>

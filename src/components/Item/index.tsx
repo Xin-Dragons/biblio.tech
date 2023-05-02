@@ -22,6 +22,8 @@ import useOnScreen from "../../hooks/use-on-screen";
 import { useMetaplex } from "../../context/metaplex";
 import { PublicKey } from "@metaplex-foundation/js";
 import HowRare from './howrare.svg';
+import { useSorting } from "../../context/sorting";
+import { cols } from "../Items";
 
 type Category = "image" | "video" | "audio" | "vr";
 
@@ -163,9 +165,9 @@ export const ItemDetails = ({ item }) => {
 
   async function getAssets() {
     const assets = (await Promise.all(uniq([
-      ...(item.json?.properties?.files ? item.json?.properties.files.map(f => f.uri) : []),
       ...(item.json?.animation_url ? [item.json.animation_url] : []),
       ...(item.json?.image ? [item.json.image] : []),
+      ...(item.json?.properties?.files ? item.json?.properties.files.map(f => f.uri) : []),
       ...(item.json?.properties?.dna ? item.json.properties.dna.map(child => child.metadata.image) : [])
     ]).map(getType))).filter(item => item && item.type)
     console.log({assets})
@@ -179,7 +181,6 @@ export const ItemDetails = ({ item }) => {
   
   useEffect(() => {
     const asset = assets[assetIndex];
-    console.log({ asset})
     setAsset(asset)
   }, [assets, assetIndex])
 
@@ -367,13 +368,6 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
   const { frozen, inVault } = useFrozen();
   const { renderItem } = useDialog();
   const metaplex = useMetaplex();
-  
-  const ref = useRef();
-  const isVisible = useOnScreen(ref)
-
-  if (item.sortedIndex === 1) {
-    console.log({ isVisible })
-  }
 
   async function loadNft() {
     try {
@@ -388,10 +382,8 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
   }
 
   useEffect(() => {
-    if (isVisible) {
-      loadNft()
-    }
-  }, [isVisible, item])
+    loadNft()
+  }, [item])
 
   async function onStarredChange(e: SyntheticEvent) {
     await updateStarred(item.nftMint, !item.starred)
@@ -432,14 +424,19 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
 
   const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
 
+  const margins = {
+    small: 0.5,
+    medium: 0.75,
+    large: 1
+  }
+
   return (
     <Card
-      ref={ref}
       sx={{
-        // outline: selected ? `${layoutSize === "small" ? 2 : 4}px solid #6cbec9` : "none",
-        outline: selected ? `${layoutSize === "small" ? 2 : 4}px solid white` : "none",
+        outline: selected ? `${layoutSize === "small" ? 2 : 3}px solid white` : "none",
         cursor: "pointer",
         position: "relative",
+        margin: margins[layoutSize],
 
         "&:hover": {
           ".MuiStack-root, .MuiSvgIcon-root": {
@@ -449,95 +446,93 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
       }}
       
       onClick={() =>  renderItem(ItemDetails, { item })}>
-        {
-          isVisible
-            ? (
-              <>
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                onClick={onNftClick}
-                sx={{
-                  position: showInfo ? "static" : "absolute",
-                  top: 0,
-                  width: "100%",
-                  padding: "0.5em",
-                  background: "rgba(20, 20, 20, 0.8)",
-                  opacity: showInfo ? 1 : 0,
-                  transition: showInfo ? "none" : 'opacity 0.2s',
-                  "&:hover": {
-                    ".plus-minus.MuiSvgIcon-root": {
-                      color: "white"
-                    }
-                  }
-                  // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
-                }}
-              >
-                {/* <FrozenIndicator
-                  max={1}
-                  value={frozen.includes(item.nftMint) ? 1 : 0}
-                  icon={<AcUnitIcon fontSize="inherit" />}
-                  emptyIcon={<AcUnitIcon fontSize="inherit" />}
-                  size={layoutSize}
-                /> */}
-                <Rating
-                  max={1}
-                  value={item.starred ? 1 : 0}
-                  onChange={onStarredChange}
-                  size={layoutSize}
-                />
-                { DragHandle }
-                <RadioIndicator
-                  className="plus-minus"
-                  sx={{
-                    fontSize: fontSizes[layoutSize],
-                    color: "grey"
-                  }}
-                />
-                {/* <LockedIndicator
-                  max={1}
-                  value={inVault.includes(item.nftMint) ? 1 : 0}
-                  icon={<LockIcon fontSize="inherit" />}
-                  emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
-                  size={layoutSize}
-                /> */}
-              </Stack>
-              {
-                
-                item.jsonLoaded
-                  ? <img src={item.json?.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.json?.image}` : "/fallback-image.jpg"} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
-                  : <Box sx={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center"
-                  }}>
-                    <CircularProgress />
-                  </Box>
-                }      
-                {
-                  showInfo && <CardContent sx={{ position: "relative" }}>
-                    <Typography>{item.json?.name || item.name}</Typography>
-                    <Stack sx={{ position: "absolute", top: "-15px", width: "calc(100% - 1em)", right: "0.5em" }} direction="row" justifyContent="space-between" spacing={2}>
-                      {
-                        item.howRare && <Rarity type="howRare" rank={item.howRare} tier={item.howRareTier} />
-                      }
-                      {
-                        item.moonRank && <Rarity type="moonRank" rank={item.moonRank} tier={item.moonRankTier} />
-                      }
-                    </Stack>
-                  </CardContent>
+          <>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            onClick={onNftClick}
+            sx={{
+              position: showInfo ? "static" : "absolute",
+              top: 0,
+              width: "100%",
+              padding: "0.5em",
+              background: "rgba(20, 20, 20, 0.8)",
+              opacity: showInfo ? 1 : 0,
+              transition: showInfo ? "none" : 'opacity 0.2s',
+              "&:hover": {
+                ".plus-minus.MuiSvgIcon-root": {
+                  color: "white"
                 }
-              </>
-            )
-            : <Skeleton height="100px" variant="rounded" sx={{ paddingTop: "100%" }} />
-        }
+              }
+              // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
+            }}
+          >
+            {/* <FrozenIndicator
+              max={1}
+              value={frozen.includes(item.nftMint) ? 1 : 0}
+              icon={<AcUnitIcon fontSize="inherit" />}
+              emptyIcon={<AcUnitIcon fontSize="inherit" />}
+              size={layoutSize}
+            /> */}
+            <Rating
+              max={1}
+              value={item.starred ? 1 : 0}
+              onChange={onStarredChange}
+              size={layoutSize}
+            />
+            { DragHandle }
+            <RadioIndicator
+              className="plus-minus"
+              sx={{
+                fontSize: fontSizes[layoutSize],
+                color: "grey"
+              }}
+            />
+            {/* <LockedIndicator
+              max={1}
+              value={inVault.includes(item.nftMint) ? 1 : 0}
+              icon={<LockIcon fontSize="inherit" />}
+              emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
+              size={layoutSize}
+            /> */}
+          </Stack>
+          {
+            
+            item.jsonLoaded
+              ? <img src={item.json?.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.json?.image}` : "/fallback-image.jpg"} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
+              : <Box sx={{
+                width: "100%",
+                aspectRatio: "1 / 1",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center"
+              }}>
+                <CircularProgress />
+              </Box>
+            }      
+            {
+              showInfo && <CardContent sx={{ position: "relative" }}>
+                <Typography sx={{
+                  // fontSize: `${7 / cols[layoutSize]}vw`,
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden"
+                }}>{item.json?.name || item.name}</Typography>
+                <Stack sx={{ position: "absolute", top: "-15px", width: "calc(100% - 1em)", right: "0.5em" }} direction="row" justifyContent="space-between" spacing={2}>
+                  {
+                    item.howRare && <Rarity type="howRare" rank={item.howRare} tier={item.howRareTier} />
+                  }
+                  {
+                    item.moonRank && <Rarity type="moonRank" rank={item.moonRank} tier={item.moonRankTier} />
+                  }
+                </Stack>
+              </CardContent>
+            }
+          </>
     </Card>
   )
 }, (prev, next) => {
   return isEqual(prev.item, next.item) &&
-    prev.selected === next.selected &&
-    prev.affected === next.affected
+    prev.selected === next.selected
 })

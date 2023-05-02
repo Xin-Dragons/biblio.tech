@@ -6,20 +6,20 @@ import { useLiveQuery } from "dexie-react-hooks";
 
 const DatabaseContext = createContext();
 
-export const DatabaseProvider = ({ children, collectionId }) => {
+export const DatabaseProvider = ({ children, collectionId, publicKey }) => {
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState(null);
   const wallet = useWallet();
   
   useEffect(() => {
-    if (wallet.publicKey) {
-      const db = new DB(wallet.publicKey.toBase58());
+    if (wallet.publicKey || publicKey) {
+      const db = new DB(publicKey || wallet.publicKey.toBase58());
       setDb(db);
     }
-  }, [wallet.publicKey])
+  }, [wallet.publicKey, publicKey])
 
   useEffect(() => {
-    if (!wallet.publicKey) {
+    if (!publicKey && !wallet.publicKey) {
       return;
     }
     setSyncing(true)
@@ -31,8 +31,8 @@ export const DatabaseProvider = ({ children, collectionId }) => {
       // setKeypair(new Keypair(event.data.keypair._keypair));
     })
 
-    worker.postMessage({ publicKey: wallet.publicKey?.toBase58() })
-  }, [wallet.publicKey])
+    worker.postMessage({ publicKey: publicKey || wallet.publicKey?.toBase58() })
+  }, [publicKey, wallet.publicKey])
 
   async function updateCollectionImage(id: string, image) {
     await db.collections.update(id, { image })
@@ -43,9 +43,7 @@ export const DatabaseProvider = ({ children, collectionId }) => {
   }
 
   async function deleteNfts(nfts: string[]) {
-    console.log(nfts)
     const a = await db.nfts.where("nftMint").anyOf(...nfts).delete()
-    console.log(a)
   }
 
   async function updateNfts(updates) {

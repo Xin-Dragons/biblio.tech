@@ -39,7 +39,7 @@ const Untagged: NextPage = () => {
       values.some(val => val.includes(s))
   }) : nfts
 
-  return <Layout nfts={filtered} tagId="untagged" title="Untagged">
+  return <Layout nfts={nfts} filtered={filtered} tagId="untagged" title="Untagged">
     <Items items={filtered} />
   </Layout>
 }

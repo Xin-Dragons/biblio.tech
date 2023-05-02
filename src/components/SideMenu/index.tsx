@@ -10,23 +10,35 @@ import { Sidebar } from "../Sidebar";
 import { useTags } from "../../context/tags";
 import { Tags } from "../Tags";
 import { FC } from "react";
+import { useRouter } from "next/router";
 
 export const SideMenu: FC = ({ nfts, filters, tagId }) => {
+  const router = useRouter();
+
+  console.log(router)
+
+  function relative(path: string) {
+    return `${router.asPath.replace(path, "")}${path}`
+  }
+
   return (
     <Sidebar defaultShowing={true}>
       <Stack spacing={2}>
-        <Link href="/" passHref>
-          <Button variant="outlined">All Collections</Button>
+        <Link href={relative('/')} passHref>
+          <Button variant={router.route === "/" ? "contained" : "outlined"}>All NFTs</Button>
+        </Link>
+        <Link href={relative("/collections")} passHref>
+          <Button variant={router.route === "/collections" ? "contained" : "outlined"}>All Collections</Button>
         </Link>
         <Typography variant="h6">Go to</Typography>
-        <Link href="/vault" passHref>
-          <Button variant="outlined" startIcon={<LockIcon />}>Vault</Button>
+        <Link href={relative("/vault")} passHref>
+          <Button variant={router.route === "/vault" ? "contained" : "outlined"} startIcon={<LockIcon />}>Vault</Button>
         </Link>
-        <Link href="/trash" passHref>
-          <Button variant="outlined" startIcon={<DeleteIcon />}>Trash</Button>
+        <Link href={relative("/trash")} passHref>
+          <Button variant={router.route === "/trash" ? "contained" : "outlined"} startIcon={<DeleteIcon />}>Trash</Button>
         </Link>
-        <Link href="/tag/starred" passHref>
-          <Button variant="outlined" startIcon={<StarIcon sx={{ color: "#faaf00" }} />}>Starred</Button>
+        <Link href={relative("/tag/starred")} passHref>
+          <Button variant={router.route === "/tag/starred" ? "contained" : "outlined"} startIcon={<StarIcon sx={{ color: "#faaf00" }} />}>Starred</Button>
         </Link>
         <Typography variant="h6">Tags</Typography>
         <Tags tagId={tagId} />

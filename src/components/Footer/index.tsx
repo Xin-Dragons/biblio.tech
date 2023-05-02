@@ -4,7 +4,6 @@ import { FC, useEffect, useState } from "react";
 import WifiIcon from '@mui/icons-material/Wifi';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import { useDatabase } from "../../context/database";
-import { useNfts } from "../../context/nfts";
 import { usePrevious } from "../../hooks/use-previous";
 import DoneIcon from '@mui/icons-material/Done';
 
@@ -45,7 +44,8 @@ export const Footer: FC = () => {
       position: "fixed",
       bottom: 0,
       width: "100%",
-      background: "black"
+      background: "black",
+      zIndex: 100
     }}>
       <Container maxWidth={false} sx={{ padding: 1}}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">

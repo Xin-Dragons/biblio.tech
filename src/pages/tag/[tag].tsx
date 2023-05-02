@@ -8,11 +8,13 @@ import { UpdateTag } from "../../components/UpdateTag"
 import { useState } from "react"
 import { useTags } from "../../context/tags"
 import { Color } from "../../components/Tags"
+import { useFilters } from "../../context/filters"
 
 const Tag: NextPage = ({ tagId }) => {
   const [open, setOpen] = useState(false);
   const { db } = useDatabase()
   const { updateTag } = useTags();
+  const { sort, search } = useFilters()
   const tag = useLiveQuery(() => db && db
     .tags
     .where({ id: tagId })
@@ -24,7 +26,7 @@ const Tag: NextPage = ({ tagId }) => {
   const taggedNfts = useLiveQuery(() => db && db
     .taggedNfts
     .where({ tagId })
-    .toArray(),
+    .sortBy(sort),
     [db, tagId],
     [] 
   ) || [];
@@ -38,10 +40,41 @@ const Tag: NextPage = ({ tagId }) => {
     [] 
   ) || [];
 
-  console.log({ tag })
+  async function updateTags(updates) {
+    const res = await db.taggedNfts.bulkUpdate(
+      updates.map(update => {
+        const { nftMint, ...changes } = update;
+        const tagObject = taggedNfts.find(t => t.nftId === nftMint);
+        return {
+          key: [tagObject.nftId, tagObject.tagId],
+          changes
+        }
+      })
+    )
+  }
 
-  return <Layout nfts={nfts} tagId={tagId} title={tag.name &&
+  const filtered = nfts.sort((a, b) => {
+    return ((taggedNfts.find(n => n.nftId === a.nftMint) || {}).sortedIndex || 0) - ((taggedNfts.find(n => n.nftId === b.nftMint) || {}).sortedIndex || 0)
+  })
+    .filter(nft => {
+      if (!search) {
+        return true
+      }
+
+      const s = search.toLowerCase();
+      const name = nft.json?.name || nft.name || ""
+      const symbol = nft.json?.symbol || nft.symbol || ""
+      const description = nft.json?.description || ""
+      const values = (nft.json?.attributes || []).map(att => `${att.value || ""}`.toLowerCase())
+      return name.toLowerCase().includes(s) ||
+        description.toLowerCase().includes(s) ||
+        symbol.toLowerCase().includes(s) ||
+        values.some(val => val.includes(s))
+    })
+
+  return <Layout nfts={nfts} filtered={filtered} tagId={tagId} title={tag.name &&
     <Stack direction="row" alignItems="center" spacing={1}>
+      <Typography variant="h5">TAGS - </Typography>
       <Color color={tag.color} />
       <Typography variant="h5">{tag.name}</Typography>
       <IconButton onClick={() => setOpen(true)}>
@@ -49,7 +82,7 @@ const Tag: NextPage = ({ tagId }) => {
       </IconButton>
     </Stack>
   }>
-    <Items items={nfts} />
+    <Items items={filtered} sortable updateOrder={updateTags} />
     <UpdateTag
       open={open}
       setOpen={setOpen}

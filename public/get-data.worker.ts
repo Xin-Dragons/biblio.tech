@@ -50,6 +50,8 @@ async function addNftsToDb(db, nfts: any[]) {
       return !fromDb.map(item => item.nftMint).includes(nft.nftMint)
     })
 
+    console.log(toAdd, toUpdate)
+
     await db.nfts.bulkAdd(toAdd.map(n => {
       return {
         nftMint: n.nftMint,

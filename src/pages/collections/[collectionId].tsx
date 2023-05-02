@@ -6,9 +6,6 @@ import { every, filter, flatten, sample, startCase, uniq } from "lodash";
 import { NextPage } from "next";
 import { useEffect, useState } from "react";
 import { Layout } from "../../components/Layout";
-import { useMetaplex } from "../../context/metaplex";
-import { useNfts } from "../../context/nfts";
-import { useSelection } from "../../context/selection";
 import { useUiSettings } from "../../context/ui-settings";
 import { Items } from "../../components/Items";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -21,7 +18,7 @@ import axios from "axios";
 const Collection: NextPage = ({ collectionId }) => {
   const [menuShowing, setMenuShowing] = useState(true)
   const { selectedFilters, search, sort } = useFilters()
-  const { untagged } = useUiSettings();
+  const { untagged, showStarred } = useUiSettings();
   const { db, updateNfts } = useDatabase();
   const wallet = useWallet()
 
@@ -60,22 +57,50 @@ const Collection: NextPage = ({ collectionId }) => {
   }
 
   async function getMoonrankRarity() {
-    const mints = nfts.filter(n => !n.moonRank || !n.moonRankTier).map(n => n.nftMint)
-    if (!mints.length) {
+    try {
+      const mints = nfts.filter(n => !n.moonRank || !n.moonRankTier).map(n => n.nftMint)
+      if (!mints.length) {
+        return []
+      }
+      const { data } = await axios.post('/api/get-moonrank', { mints });
+      return data
+    } catch {
       return []
     }
-    const { data } = await axios.post('/api/get-moonrank', { mints });
-    return data
   }
 
   async function getHowRareRarity() {
-    const mints = nfts.filter(n => !n.howRare || !n.howRareTier).map(n => n.nftMint)
-    if (!mints.length) {
+    try {
+      const mints = nfts.filter(n => !n.howRare || !n.howRareTier).map(n => n.nftMint)
+      if (!mints.length) {
+        return []
+      }
+      const { data } = await axios.post('/api/get-howrare', { mints });
+      return data
+    } catch {
       return []
     }
-    const { data } = await axios.post('/api/get-howrare', { mints });
-    return data
   }
+
+  async function getSales() {
+    if (!nfts.length) {
+      return
+    }
+    const headers = {
+      Authorization: `Bearer ${process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY}`
+    }
+
+    const params = {
+      helloMoonCollectionId: collectionId
+    }
+    const { data } = await axios.post('https://rest-api.hellomoon.io/v0/nft/sales/secondary/latest', params, { headers })
+    const latestSales = data.latestMintPrices.filter(item => nfts.map(n => n.nftMint).includes(item.mint));
+    const mintPrices = nfts.filter(n => latestSales.map(n => n.mint).includes(n.nftMint))
+  }
+
+  useEffect(() => {
+    getSales()
+  }, [nfts])
 
   async function getRarity() {
     const [moonRank, howRare] = await Promise.all([
@@ -101,25 +126,30 @@ const Collection: NextPage = ({ collectionId }) => {
     })
   })
     .filter(nft => !untagged || !taggedNfts.map(u => u.nftId).includes(nft.nftMint))
+    .filter(nft => !showStarred || nft.starred)
     .filter(nft => {
       if (!search) {
         return true
       }
 
+
       const s = search.toLowerCase();
       const name = nft.json?.name || nft.name || ""
+      const mintAddress = nft.nftMint
       const symbol = nft.json?.symbol || nft.symbol || ""
       const description = nft.json?.description || ""
       const values = (nft.json?.attributes || []).map(att => `${att.value || ""}`.toLowerCase())
-      return name.toLowerCase().includes(s) ||
+      return mintAddress == s ||
+        name.toLowerCase().includes(s) ||
+        mintAddress === search ||
         description.toLowerCase().includes(s) ||
         symbol.toLowerCase().includes(s) ||
         values.some(val => val.includes(s))
     })
 
   return (
-    <Layout title={collection?.collectionName} nfts={filtered} filters>
-      <Items items={filtered} />
+    <Layout title={collection?.collectionName} nfts={nfts} filtered={filtered} filters rarity>
+      <Items items={filtered} sortable updateOrder={updateNfts} />
     </Layout>
   )
 }

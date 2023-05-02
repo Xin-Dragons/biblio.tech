@@ -9,6 +9,8 @@ import { sample, update } from "lodash";
 import { CSS } from "@dnd-kit/utilities";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import DragHandleIcon from '@mui/icons-material/DragHandle';
+import { FixedSizeGrid } from "react-window";
+import AutoSizer from "react-virtualized-auto-sizer";
 import {
   arrayMove,
   SortableContext,
@@ -17,6 +19,7 @@ import {
   useSortable
 } from "@dnd-kit/sortable"
 import { useFilters } from "../../context/filters";
+import { useSorting } from "../../context/sorting";
 
 interface ItemsProps {
   items: Item[];
@@ -36,6 +39,7 @@ function getWaitingMessage() {
 }
 
 const SortableItem = (props) => {
+  const { selected } = useSelection()
   const {
     attributes,
     listeners,
@@ -54,25 +58,122 @@ const SortableItem = (props) => {
   
   const Child = props.Component || Item
 
-  const DragHandle = <DragHandleIcon sx={{ cursor: "grab", color: "#666", userSelect: "none", outline: "0 !important" }} {...listeners} {...attributes} />
+  const DragHandle = <DragHandleIcon
+    sx={{
+      cursor: "grab",
+      color: "#666",
+      userSelect: "none",
+      outline: "0 !important",
+      "&:active": {
+        cursor: "grabbing !important"
+      }
+    }}
+    {...listeners}
+    {...attributes}
+  />
   
   return (
     <div ref={setNodeRef} style={style}>
       <Box>
-        <Child item={props.item} DragHandle={DragHandle} affected={props.affected} />
+        <Child
+          item={props.item}
+          DragHandle={DragHandle}
+          affected={props.affected}
+          select={props.select}
+          selected={selected.includes(props.item.nftMint)}
+        />
       </Box>
     </div>
   );
 };
 
-export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable = false }) => {
+const Cell = ({ columnIndex, rowIndex, style, data }) => {
+  const { selected } = useSelection()
+  const { cards, columnCount, Component, select } = data
+  const singleColumnIndex = columnIndex + rowIndex * columnCount
+  const card = cards[singleColumnIndex];
+  const Child = Component || Item;
+  return (
+    <div style={style}>
+      {card && <Child
+        item={card}
+        id={card.nftMint}
+        index={card.nftMint}
+        key={card.nftMint}
+        select={select}
+        selected={selected.includes(card.nftMint)}
+      />}
+    </div>
+  )
+}
+
+export const cols = {
+  small: 12,
+  medium: 9,
+  large: 6
+}
+
+const Cards = ({ cards, Component, select }) => {
+  const { layoutSize, showInfo } = useUiSettings()
+  // const [initialWidth, setInitialWidth] = useState(-1);
+
+  
+  // containerWidth = initialWidth;
+
+  return (
+    <Box sx={{ height: "calc(100vh - 185px)", marginBottom: 10, marginRight: 2 }}>
+    <SortableContext items={cards.map(item => item.nftMint)} strategy={rectSortingStrategy}>
+      <AutoSizer defaultWidth={1920} defaultHeight={1080}>
+        {({ width, height }) => {
+          // if(initialWidth === -1){
+          //   setInitialWidth(width);
+          // }
+          const cardWidth = width / cols[layoutSize];
+          const cardHeight = showInfo ? cardWidth * 4/3.5 + 80 : cardWidth
+          const columnCount = Math.floor(width / cardWidth);
+          const rowCount = Math.ceil(cards.length / columnCount);
+          return (
+            <FixedSizeGrid
+              className="grid"
+              width={width}
+              height={height}
+              columnCount={columnCount}
+              columnWidth={cardWidth}
+              rowCount={rowCount}
+              rowHeight={cardHeight}
+              itemData={{ cards, columnCount, Component, select }}
+            >
+              {Cell}
+            </FixedSizeGrid>
+          );
+        }}
+      </AutoSizer>
+    </SortableContext>
+  </Box>
+  )
+}
+
+export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable = false, updateOrder }) => {
   const [activeId, setActiveId] = useState(null);
   const { layoutSize, showStarred } = useUiSettings();
   const { selected, setSelected } = useSelection();
-  const { syncing, updateNfts } = useDatabase();
+  const { syncing } = useDatabase();
   const { sort } = useFilters();
   const [items, setItems] = useState(initialItems)
   const [affected, setAffected] = useState([]);
+  const { setSorting } = useSorting();
+  
+  const select = nftMint => {
+    setSelected(selected => {
+      if (selected.includes(nftMint)) {
+        return selected.filter(s => nftMint !== s);
+      }
+      return [
+        ...selected,
+        nftMint
+      ]
+    })
+  }
 
   const sizes = {
     small: 1,
@@ -107,6 +208,7 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
       const sortedIndexes = [oldIndex, newIndex].sort((a, b) => a - b)
       const affected = ids.slice(sortedIndexes[0], sortedIndexes[1] + 1)
       setAffected(affected)
+      setSorting(true)
 
       const sorted = arrayMove(items, oldIndex, newIndex)
       setItems(sorted)
@@ -118,7 +220,9 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
           }
         })
 
-      await updateNfts(toUpdate)
+      console.log('HI')
+
+      await updateOrder(toUpdate)
     }
   };
 
@@ -127,12 +231,11 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
   return items.length
     ? (
       <Box sx={{
-        overflowY: "auto",
+        overflowY: "hidden",
         width: "100%",
         height: "100%",
         padding: "4px",
         marginBottom: "0px",
-        height: "calc(100vh - 185px)"
       }}>
         {
           sort === "sortedIndex" && sortable
@@ -143,55 +246,26 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
                 onDragEnd={handleDragEnd}
                 onDragStart={handleDragStart}
               >
-                <Grid
-                  container
-                  spacing={2}
-                  sx={{ width: "100%" , marginBottom: 5 }}
-                  alignItems="flex-start"
-                >
-                  <SortableContext items={items.map(item => item.nftMint)} strategy={rectSortingStrategy}>
-                    {/* {
-                      items
-                        .filter(item => !showStarred || item.starred)
-                        .map(item => (
-                          <SortableItem key={item.nftMint} id={item.nftMint} handle={true} value={item.nftMint} />
-                        // <Grid item xs={sizes[layoutSize]} key={item.nftMint}>
-                          // <Child item={item} selected={selected.includes(item.nftMint)} />
-                        // </Grid>
-                      ))
-                    } */}
-                    {items.map((item, index) => (
-                      <Grid item xs={sizes[layoutSize]} key={item.nftMint}>
-                        <SortableItem id={item.nftMint} item={item} key={item.nftMint} affected={affected.includes(item.nftMint)} />
-                      </Grid>
-                    ))}
-                    <DragOverlay>
-                      {activeId ? (
-                        <Child item={items.find(i => i.nftMint === activeId)} /> 
-                      ) : null}
-                    </DragOverlay>
-                  </SortableContext>
-                  
-                </Grid>
-
+                <Cards cards={items} Component={SortableItem} select={select} />
+                <DragOverlay>
+                  {activeId ? (
+                    <Child
+                      item={items.find(i => i.nftMint === activeId)}
+                      DragHandle={<DragHandleIcon
+                        sx={{
+                          cursor: "grabbing",
+                          color: "#666",
+                          userSelect: "none",
+                          outline: "0 !important",
+                        }}
+                      />
+                    } /> 
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             )
-            : <Grid
-                container
-                spacing={2}
-                sx={{ width: "100%" , marginBottom: 5 }}
-                alignItems="flex-start"
-              >
-                {
-                  items.map(item => (
-                    <Grid item xs={sizes[layoutSize]} key={item.nftMint}>
-                      <Child item={item} />
-                    </Grid>
-                  ))
-                }
-                
-              </Grid>
-            }
+            : <Cards cards={items} Component={Component} select={select} />
+          }
         
       
       </Box>

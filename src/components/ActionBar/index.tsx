@@ -13,6 +13,8 @@ import ImageIcon from '@mui/icons-material/Image';
 import { useFilters } from "../../context/filters";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import ClearIcon from "@mui/icons-material/Clear"
+import { useWallet } from "../../context/wallet";
 
 type ActionBarProps = {
   title: string;
@@ -22,7 +24,8 @@ type ActionBarProps = {
   includeStarredControl?: boolean;
 }
 
-export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredControl }) => {
+export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredControl, rarity, filtered }) => {
+  const { isAdmin } = useWallet()
   const { layoutSize, setLayoutSize, showStarred, setShowStarred, setShowInfo, showInfo, untagged, setUntagged } = useUiSettings()
   const { search, setSearch, sort, setSort } = useFilters()
   const [collageOptions, setCollageOptions] = useState([])
@@ -33,9 +36,9 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
   }
 
   function handleSizeChange(e, value) {
-    // if (value !== null) {
+    if (value !== null) {
       setLayoutSize(value)
-    // }
+    }
   }
 
   function toggleStarred() {
@@ -66,27 +69,38 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
     <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ borderBottom: "1px solid black", paddingBottom: 2 }}>
       <Stack direction="row" alignItems="center" spacing={2}>
         <Typography variant="h5">{title}</Typography>
+      </Stack>
+      <Stack spacing={2} direction="row" alignItems="center" sx={{ flexGrow: 1 }} justifyContent="flex-end">
+        {
+          filtered.length !== nfts.length && <Typography variant="h6">Showing {filtered.length} of {nfts.length}</Typography>
+        }
         <TextField
           label="Omnisearch"
           value={search}
           onChange={e => setSearch(e.target.value)}
+          InputProps={{
+            endAdornment: <IconButton sx={{visibility: search ? "visible": "hidden"}} onClick={() => setSearch("")}><ClearIcon/></IconButton>
+          }}
         />
-      </Stack>
-      <Stack spacing={2} direction="row" alignItems="center">
-        <FormControl fullWidth>
-          <InputLabel id="demo-simple-select-label">Sort</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={sort}
-            label="Age"
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <MenuItem value={"sortedIndex"}>Custom</MenuItem>
-            <MenuItem value={"howRare"}>How Rare</MenuItem>
-            <MenuItem value={"moonRank"}>Moon Rank</MenuItem>
-          </Select>
-        </FormControl>
+        {
+          rarity && (
+            <FormControl>
+              <InputLabel id="demo-simple-select-label">Sort</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={sort}
+                label="Age"
+                onChange={(e) => setSort(e.target.value)}
+              >
+                <MenuItem value={"sortedIndex"}>Custom</MenuItem>
+                <MenuItem value={"howRare"}>How Rare</MenuItem>
+                <MenuItem value={"moonRank"}>Moon Rank</MenuItem>
+              </Select>
+            </FormControl>
+          )
+        }
+        
         <FormControlLabel
           control={
             <Switch checked={untagged} onChange={e => setUntagged(e.target.checked)} name="gilad" />

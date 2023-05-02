@@ -23,12 +23,11 @@ export const Sidebar: FC = ({ children, side = "left", defaultShowing = false })
   const Arrow = side === "left"
     ? showing ? ArrowBackIosNewIcon : ArrowForwardIosIcon
     : showing ? ArrowForwardIosIcon : ArrowBackIosNewIcon 
-  
+    
   return (
     <Box sx={{
       position: "relative",
       height: "calc(100vh - 180px)",
-      transition: "all 0.2s",
       width: "220px",
       // overflow: "visible",
       marginLeft: side === 'left'

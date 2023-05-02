@@ -6,6 +6,7 @@ import { Layout } from "../components/Layout";
 import { Items } from "../components/Items";
 import { useMetaplex } from "../context/metaplex";
 import { useFrozen } from "../context/frozen";
+import { useFilters } from "../context/filters";
 
 const Vault: NextPage = () => {
   const [nfts, setNfts] = useState([]);
@@ -13,6 +14,7 @@ const Vault: NextPage = () => {
   const { connection } = useConnection();
   const { inVault } = useFrozen();
   const wallet = useWallet()
+  const { search } = useFilters()
 
   async function getNfts() {
     
@@ -37,10 +39,26 @@ const Vault: NextPage = () => {
       getNfts()
     }
   }, [wallet.publicKey, inVault])
+
+  const filtered = nfts.filter(nft => {
+    if (!search) {
+      return true
+    }
+
+    const s = search.toLowerCase();
+    const name = nft.json?.name || nft.name || ""
+    const symbol = nft.json?.symbol || nft.symbol || ""
+    const description = nft.json?.description || ""
+    const values = (nft.json?.attributes || []).map(att => `${att.value || ""}`.toLowerCase())
+    return name.toLowerCase().includes(s) ||
+      description.toLowerCase().includes(s) ||
+      symbol.toLowerCase().includes(s) ||
+      values.some(val => val.includes(s))
+  })
   
   return (
-    <Layout title="Vault" nfts={nfts}>
-      <Items items={nfts} />
+    <Layout title="Vault" nfts={nfts} filtered={filtered}>
+      <Items items={filtered} />
     </Layout>
   )
 }
