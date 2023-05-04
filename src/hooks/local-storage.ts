@@ -1,37 +1,47 @@
-/* eslint-disable no-console */
-/* eslint-disable react-hooks/exhaustive-deps */
-import { get, set } from 'local-storage'
-import { useState, useEffect } from "react";
-import { isUndefined } from 'lodash';
+import { useCallback, useEffect, useState } from "react";
 
-export const useLocalStorage = <T>(key: string, initialValue: T) => {
-  const [storedValue, setStoredValue] = useState<T | undefined>(initialValue);
+export const useLocalStorage = (key, initialValue) => {
+  const initialize = (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (item && item !== "undefined") {
+        return JSON.parse(item);
+      }
 
-  const setValue = (value: T) => {
-    set(key, value);
+      localStorage.setItem(key, JSON.stringify(initialValue));
+      return initialValue;
+    } catch {
+      return initialValue;
+    }
   };
 
-  useEffect(() => {
-    const value = get(key);
+  const [state, setState] = useState(null); // problem is here
 
-    if (value) {
+  // solution is here....
+  useEffect(()=>{
+    setState(initialize(key));
+  },[]);
+
+  const setValue = useCallback(
+    (value) => {
       try {
-        const parsed = value as T;
-        setStoredValue(parsed);
+        const valueToStore = value instanceof Function ? value(storedValue) : value;
+        setState(valueToStore);
+        localStorage.setItem(key, JSON.stringify(valueToStore));
       } catch (error) {
         console.log(error);
-        setStoredValue(initialValue);
       }
-    } else {
-      setStoredValue(initialValue);
-    }
-  }, []);
+    },
+    [key, setState]
+  );
 
-  useEffect(() => {
-    if (!isUndefined(storedValue)) {
-      setValue(storedValue);
+  const remove = useCallback(() => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      console.log(error);
     }
-  }, [storedValue]);
+  }, [key]);
 
-  return [storedValue as T, setStoredValue] as const;
+  return [state, setValue, remove];
 };

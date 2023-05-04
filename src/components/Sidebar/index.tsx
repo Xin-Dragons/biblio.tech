@@ -27,8 +27,9 @@ export const Sidebar: FC = ({ children, side = "left", defaultShowing = false })
   return (
     <Box sx={{
       position: "relative",
-      height: "calc(100vh - 180px)",
+      height: "calc(100vh - 195px)",
       width: "220px",
+
       // overflow: "visible",
       marginLeft: side === 'left'
         ? showing ? "0px !important" : "-244px !important"

@@ -11,6 +11,9 @@ import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, 
 import DragHandleIcon from '@mui/icons-material/DragHandle';
 import { FixedSizeGrid } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
+
 import {
   arrayMove,
   SortableContext,
@@ -20,6 +23,8 @@ import {
 } from "@dnd-kit/sortable"
 import { useFilters } from "../../context/filters";
 import { useSorting } from "../../context/sorting";
+import { useWidth } from "../../hooks/use-width";
+import { WalletSearch } from "../WalletSearch";
 
 interface ItemsProps {
   items: Item[];
@@ -108,27 +113,48 @@ const Cell = ({ columnIndex, rowIndex, style, data }) => {
 }
 
 export const cols = {
-  small: 12,
-  medium: 9,
-  large: 6
+  xl: {
+    small: 12,
+    medium: 9,
+    large: 6
+  },
+  lg: {
+    small: 10,
+    medium: 7,
+    large: 4
+  },
+  md: {
+    small: 8,
+    medium: 5,
+    large: 3
+  },
+  sm: {
+    small: 6,
+    medium: 4,
+    large: 2,
+  },
+  xs: {
+    small: 4,
+    medium: 2,
+    large: 1
+  }
 }
 
 const Cards = ({ cards, Component, select }) => {
+  const theme = useTheme();
   const { layoutSize, showInfo } = useUiSettings()
-  // const [initialWidth, setInitialWidth] = useState(-1);
-
-  
-  // containerWidth = initialWidth;
+  const pageWidth = useWidth()
+  console.log({ pageWidth })
 
   return (
-    <Box sx={{ height: "calc(100vh - 185px)", marginBottom: 10, marginRight: 2 }}>
+    <Box sx={{ height: "calc(100vh - 195px)", marginBottom: 10, marginRight: 2 }}>
     <SortableContext items={cards.map(item => item.nftMint)} strategy={rectSortingStrategy}>
       <AutoSizer defaultWidth={1920} defaultHeight={1080}>
         {({ width, height }) => {
           // if(initialWidth === -1){
           //   setInitialWidth(width);
           // }
-          const cardWidth = width / cols[layoutSize];
+          const cardWidth = width / cols[pageWidth][layoutSize];
           const cardHeight = showInfo ? cardWidth * 4/3.5 + 80 : cardWidth
           const columnCount = Math.floor(width / cardWidth);
           const rowCount = Math.ceil(cards.length / columnCount);
@@ -155,13 +181,14 @@ const Cards = ({ cards, Component, select }) => {
 
 export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable = false, updateOrder }) => {
   const [activeId, setActiveId] = useState(null);
-  const { layoutSize, showStarred } = useUiSettings();
+  const { collageView, layoutSize } = useUiSettings();
   const { selected, setSelected } = useSelection();
   const { syncing } = useDatabase();
   const { sort } = useFilters();
   const [items, setItems] = useState(initialItems)
   const [affected, setAffected] = useState([]);
   const { setSorting } = useSorting();
+  const width = useWidth();
   
   const select = nftMint => {
     setSelected(selected => {
@@ -220,13 +247,49 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
           }
         })
 
-      console.log('HI')
-
       await updateOrder(toUpdate)
     }
   };
 
   const Child = Component || Item;
+
+  if (layoutSize === "collage") {
+    const masonrySizes = {
+      xl: {
+        cols: 5,
+        gap: 3
+      },
+      lg: {
+        cols: 4,
+        gap: 2.5
+      },
+      md: {
+        cols: 3,
+        gap: 2
+      },
+      sm: {
+        cols: 2,
+        gap: 1.5
+      },
+      xs: {
+        cols: 2,
+        gap: 1.2
+      }
+    }
+
+    console.log({ masonrySizes })
+
+    return <Box sx={{
+      overflowY: "scroll",
+      width: "100%",
+      height: "calc(100vh - 150px)",
+      padding: "4px",
+      marginBottom: "0px",
+    }}><Masonry columns={masonrySizes[width].cols} spacing={masonrySizes[width].gap}>
+      { items.map(item => <Child key={item.nftMint} item={item} select={select} selected={selected.includes(item.nftMint)} />)}
+    </Masonry>
+    </Box>
+  }
 
   return items.length
     ? (
@@ -271,9 +334,12 @@ export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable
       </Box>
       
     )
-    : <Box sx={{ height: "calc(100vh - 150px)", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+    : <Box sx={{ height: "calc(100vh - 195px)", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
         <Stack spacing={2} width="100%" justifyContent="center" alignItems="center">
           <Typography variant="h5" textAlign="center">{ syncing ? getWaitingMessage() : "Nothing here yet..."}</Typography>
+          {
+            !syncing && <WalletSearch />
+          }
         </Stack>
       </Box>
     

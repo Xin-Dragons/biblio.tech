@@ -14,6 +14,7 @@ import { useFilters } from "../../context/filters";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import ClearIcon from "@mui/icons-material/Clear"
+import ViewQuiltIcon from '@mui/icons-material/ViewQuilt';
 import { useWallet } from "../../context/wallet";
 
 type ActionBarProps = {
@@ -24,12 +25,16 @@ type ActionBarProps = {
   includeStarredControl?: boolean;
 }
 
-export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredControl, rarity, filtered }) => {
+export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredControl, rarity, filtered, allowCollageView, showUntagged }) => {
   const { isAdmin } = useWallet()
-  const { layoutSize, setLayoutSize, showStarred, setShowStarred, setShowInfo, showInfo, untagged, setUntagged } = useUiSettings()
-  const { search, setSearch, sort, setSort } = useFilters()
+  const { layoutSize, setLayoutSize, showStarred, setShowStarred, setShowInfo, showInfo, untagged, setUntagged, collageView, setCollageView } = useUiSettings()
+  const { sort, setSort } = useFilters()
   const [collageOptions, setCollageOptions] = useState([])
   const [collageModalShowing, setCollageModalShowing] = useState(false);
+
+  function toggleCollageView() {
+    setCollageView(!collageView)
+  }
 
   function toggleCollageModalShowing() {
     setCollageModalShowing(!collageModalShowing);
@@ -74,17 +79,10 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
         {
           filtered.length !== nfts.length && <Typography variant="h6">Showing {filtered.length} of {nfts.length}</Typography>
         }
-        <TextField
-          label="Omnisearch"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          InputProps={{
-            endAdornment: <IconButton sx={{visibility: search ? "visible": "hidden"}} onClick={() => setSearch("")}><ClearIcon/></IconButton>
-          }}
-        />
+        
         {
           rarity && (
-            <FormControl>
+            <FormControl size="small">
               <InputLabel id="demo-simple-select-label">Sort</InputLabel>
               <Select
                 labelId="demo-simple-select-label"
@@ -94,19 +92,23 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
                 onChange={(e) => setSort(e.target.value)}
               >
                 <MenuItem value={"sortedIndex"}>Custom</MenuItem>
+                <MenuItem value={"name"}>Name</MenuItem>
                 <MenuItem value={"howRare"}>How Rare</MenuItem>
                 <MenuItem value={"moonRank"}>Moon Rank</MenuItem>
               </Select>
             </FormControl>
           )
         }
-        
-        <FormControlLabel
-          control={
-            <Switch checked={untagged} onChange={e => setUntagged(e.target.checked)} name="gilad" />
-          }
-          label="Untagged"
-        />
+        {
+          showUntagged && (
+            <FormControlLabel
+              control={
+                <Switch checked={untagged} onChange={e => setUntagged(e.target.checked)} />
+              }
+              label="Untagged"
+            />
+          )
+        }
         {
           <IconButton onClick={toggleCollageModalShowing}>
             <ImageIcon fontSize="inherit" />
@@ -122,7 +124,7 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
         {
           <IconButton onClick={toggleInfo}>
             {
-              showInfo ? <VisibilityIcon /> : <VisibilityOffIcon />
+              showInfo && layoutSize !== "collage" ? <VisibilityIcon /> : <VisibilityOffIcon sx={{ opacity: layoutSize === "collage" ? 0.55 : 1}} />
             }
           </IconButton>
         }
@@ -133,6 +135,9 @@ export const ActionBar: FC<ActionBarProps> = ({ title, nfts, includeStarredContr
           aria-label="Layout size"
           defaultValue={layoutSize}
         >
+          <ToggleButton value="collage" disabled={!allowCollageView}>
+            <ViewQuiltIcon inheritViewBox  />
+          </ToggleButton>
           <ToggleButton value="small">
             <SvgIcon component={GridIcon3} inheritViewBox />
           </ToggleButton>

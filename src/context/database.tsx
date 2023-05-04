@@ -3,23 +3,25 @@ import { DB } from "../db";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useRouter } from "next/router";
 
 const DatabaseContext = createContext();
 
-export const DatabaseProvider = ({ children, collectionId, publicKey }) => {
+export const DatabaseProvider = ({ children }) => {
+  const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState(null);
   const wallet = useWallet();
   
   useEffect(() => {
-    if (wallet.publicKey || publicKey) {
-      const db = new DB(publicKey || wallet.publicKey.toBase58());
+    if (wallet.publicKey || router.query.publicKey) {
+      const db = new DB(router.query.publicKey || wallet.publicKey.toBase58());
       setDb(db);
     }
-  }, [wallet.publicKey, publicKey])
+  }, [wallet.publicKey, router.query.publicKey])
 
   useEffect(() => {
-    if (!publicKey && !wallet.publicKey) {
+    if (!router.query.publicKey && !wallet.publicKey) {
       return;
     }
     setSyncing(true)
@@ -31,8 +33,8 @@ export const DatabaseProvider = ({ children, collectionId, publicKey }) => {
       // setKeypair(new Keypair(event.data.keypair._keypair));
     })
 
-    worker.postMessage({ publicKey: publicKey || wallet.publicKey?.toBase58() })
-  }, [publicKey, wallet.publicKey])
+    worker.postMessage({ publicKey: router.query.publicKey || wallet.publicKey?.toBase58() })
+  }, [router.query.publicKey, wallet.publicKey])
 
   async function updateCollectionImage(id: string, image) {
     await db.collections.update(id, { image })

@@ -114,12 +114,19 @@ const Collection: FC<CollectionProps> = ({ item, selected }) => {
         }}>
           <Stack>
             <Typography textAlign="center">Estimated value</Typography>
-            <Typography variant="h6" textAlign="center">◎{item.value.toLocaleString(undefined, { minimumFractionDrgits: 4 })}</Typography>
+            <Typography variant="h6" textAlign="center">
+              {
+                item.id === 'unknown'
+                  ? "Unknown"
+                  : `◎${item.value.toLocaleString(undefined, { minimumFractionDrgits: 4 })}`
+              }
+              
+            </Typography>
           </Stack>
         </Box>
         {
           item.image || item.id === "unknown"
-            ? <img src={item.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image}` : '/fallback-image.jpg'} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
+            ? <img src={item.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image}` : '/books.svg'} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
             : <Box sx={{
               width: "100%",
               aspectRatio: "1 / 1",
@@ -147,6 +154,7 @@ const Home: NextPage = () => {
   const nfts = useLiveQuery(
     () => db && db
       .nfts
+      .filter(n => [0, 4, null].includes(n.tokenStandard))
       .toArray(),
     [db, wallet.publicKey],
     []
@@ -192,6 +200,7 @@ const Home: NextPage = () => {
     const name = nft.name
     return name.toLowerCase().includes(s)
   })
+  .filter(item => item.nfts.length)
 
   return (
     <Layout title="All collections" nfts={items} filtered={filtered} filters={false}>

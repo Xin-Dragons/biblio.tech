@@ -16,7 +16,7 @@ export const Tag: FC = ({ tag, selected }) => {
   const [name, setName] = useState(tag.name);
 
   return (
-    <Link href={`/tag/${tag.id}`} passHref key={tag.id}>
+    <Link href={`/tags/${tag.id}`} passHref key={tag.id}>
       <Button variant={ selected ? "contained" : "outlined"}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography>

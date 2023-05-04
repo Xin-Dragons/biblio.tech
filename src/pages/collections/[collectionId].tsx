@@ -26,13 +26,14 @@ const Collection: NextPage = ({ collectionId }) => {
     () => collectionId === "unknown"
     ? db && db
       .nfts
-      .filter(item => !item.helloMoonCollectionId)
+      .filter(item => !item.helloMoonCollectionId && [0, 4, null].includes(item.tokenStandard))
       .toArray()
     : db && db
       .nfts
       .where({
         helloMoonCollectionId: collectionId
       })
+      .filter(item => [0, 4, null].includes(item.tokenStandard))
       .sortBy(sort),
     [db, wallet.publicKey, collectionId, sort]
   ) || [];
@@ -95,7 +96,8 @@ const Collection: NextPage = ({ collectionId }) => {
     }
     const { data } = await axios.post('https://rest-api.hellomoon.io/v0/nft/sales/secondary/latest', params, { headers })
     const latestSales = data.latestMintPrices.filter(item => nfts.map(n => n.nftMint).includes(item.mint));
-    const mintPrices = nfts.filter(n => latestSales.map(n => n.mint).includes(n.nftMint))
+    const mintedNfts = nfts.filter(n => !latestSales.map(n => n.mint).includes(n.nftMint))
+    
   }
 
   useEffect(() => {
@@ -113,7 +115,7 @@ const Collection: NextPage = ({ collectionId }) => {
   }
 
   useEffect(() => {
-    if (nfts.length) {
+    if (nfts.length && collectionId !== 'unknown') {
       getRarity();
     }
   }, [nfts])
@@ -148,7 +150,7 @@ const Collection: NextPage = ({ collectionId }) => {
     })
 
   return (
-    <Layout title={collection?.collectionName} nfts={nfts} filtered={filtered} filters rarity>
+    <Layout title={collection?.collectionName || "Unknown collection"} nfts={nfts} filtered={filtered} filters={collectionId !== "unknown"} rarity showUntagged>
       <Items items={filtered} sortable updateOrder={updateNfts} />
     </Layout>
   )

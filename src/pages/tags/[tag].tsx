@@ -72,7 +72,7 @@ const Tag: NextPage = ({ tagId }) => {
         values.some(val => val.includes(s))
     })
 
-  return <Layout nfts={nfts} filtered={filtered} tagId={tagId} title={tag.name &&
+  return <Layout nfts={nfts} filtered={filtered} tagId={tagId} allowCollageView title={tag.name &&
     <Stack direction="row" alignItems="center" spacing={1}>
       <Typography variant="h5">TAGS - </Typography>
       <Color color={tag.color} />

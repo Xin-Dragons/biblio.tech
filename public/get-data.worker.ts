@@ -1,9 +1,9 @@
 import { Connection } from "@solana/web3.js";
 import { DB, NftMetadata } from "../src/db";
-import { Metadata, Metaplex, Nft } from "@metaplex-foundation/js";
+import { Metadata, Metaplex, Nft, token } from "@metaplex-foundation/js";
 import { PublicKey } from "@solana/web3.js";
 import { LeaderboardStatsRequest, NftMintsByOwner, NftMintsByOwnerRequest, RestClient } from "@hellomoon/api";
-import { partition, uniq, uniqBy } from "lodash";
+import { partition, uniq, uniqBy, groupBy, sample, flatten } from "lodash";
 import axios from "axios";
 
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string);
@@ -46,60 +46,92 @@ async function addNftsToDb(db, nfts: any[]) {
   db.transaction('rw', db.nfts, async () => {
     const fromDb = await db.nfts.toArray();
 
-    const [toAdd, toUpdate] = partition(nfts, nft => {
+    let [sfts, rest] = partition(nfts, n => n.tokenStandard === 1);
+
+    sfts = (
+      await Promise.all(sfts.map(async metadata => await metaplex.nfts().load({ metadata })))
+    ).map((item, index) => {
+      return {
+        ...item,
+        ...sfts[index],
+        supply: item.mint.supply.basisPoints.toNumber()
+      }
+    })
+
+    const [toAdd, toUpdate] = partition(uniqBy([...sfts, ...rest], item => item.nftMint), nft => {
       return !fromDb.map(item => item.nftMint).includes(nft.nftMint)
     })
 
-    console.log(toAdd, toUpdate)
+    console.log(toUpdate.filter(t => t.tokenStandard === 1))
 
-    await db.nfts.bulkAdd(toAdd.map(n => {
-      return {
-        nftMint: n.nftMint,
-        helloMoonCollectionId: n.helloMoonCollectionId,
-        nftCollectionMint: n.nftCollectionMint,
-        tokenStandard: n.tokenStandard || n.tokenStandard === 0
-          ? n.tokenStandard
-          : n.type === "metaplex" ? 0 : null,
-        sellerFeeBasisPoints: n.sellerFeeBasisPoints,
-        json: n.json,
-        name: n.name,
-        symbol: n.symbol,
-        jsonLoaded: n.jsonLoaded,
-        sortedIndex: n.sortedIndex
+    function getTokenStandard(n) {
+      if (n.tokenStandard === 1) {
+        if (n.supply === 1) {
+          return 5
+        }
       }
-    }))
-
-    await db.nfts.bulkUpdate(toUpdate.map(n => {
-      const prev = fromDb.find(nft => nft.nftMint === n.nftMint)
-      const changes = {
-        nftMint: n.nftMint,
-        nftCollectionMint: n.nftCollectionMint,
-        sellerFeeBasisPoints: n.sellerFeeBasisPoints,
-        tokenStandard: n.tokenStandard || n.tokenStandard === 0
-          ? n.tokenStandard
-          : n.type === "metaplex" ? 0 : null,
-        name: n.name,
-        symbol: n.symbol,
+      if (!n.tokenStandard && n.type === 'metaplex') {
+        return 0
       }
+      return n.tokenStandard;
+    }
 
-      if (n.json) {
-        changes.json = n.json as NftMetadata
-        changes.jsonLoaded = n.jsonLoaded
-      }
+    const a = await Promise.all([
+      db.nfts.bulkAdd(toAdd.map(n => {
+        const tokenStandard = getTokenStandard(n)
+        if (n.nftMint === "91ykPng7RmwXtYaW9Mx956veuzJB6AtvbYDVa478VZTJ") {
+          console.log(n, tokenStandard)
+        }
+        return {
+          nftMint: n.nftMint,
+          helloMoonCollectionId: n.helloMoonCollectionId,
+          nftCollectionMint: n.nftCollectionMint,
+          tokenStandard,
+          sellerFeeBasisPoints: n.sellerFeeBasisPoints,
+          json: n.json,
+          name: n.name,
+          symbol: n.symbol,
+          jsonLoaded: n.jsonLoaded,
+          sortedIndex: n.sortedIndex
+        }
+      })),
+      db.nfts.bulkUpdate(toUpdate.map(n => {
+        const tokenStandard = getTokenStandard(n)
 
-      if (!prev.sortedIndex && prev.sortedIndex !== 0) {
-        changes.sortedIndex = n.sortedIndex;
-      }
+        if (n.nftMint === "91ykPng7RmwXtYaW9Mx956veuzJB6AtvbYDVa478VZTJ") {
+          console.log(n, tokenStandard)
+        }
+        const prev = fromDb.find(nft => nft.nftMint === n.nftMint)
+        const changes = {
+          nftMint: n.nftMint,
+          nftCollectionMint: n.nftCollectionMint,
+          sellerFeeBasisPoints: n.sellerFeeBasisPoints,
+          tokenStandard,
+          name: n.name,
+          symbol: n.symbol,
+        }
 
-      if (n.helloMoonCollectionId) {
-        changes.helloMoonCollectionId = n.helloMoonCollectionId;
-      }
+        if (n.json) {
+          changes.json = n.json as NftMetadata
+          changes.jsonLoaded = n.jsonLoaded
+        }
 
-      return {
-        key: n.nftMint,
-        changes
-      };
-    }))
+        if (!prev.sortedIndex && prev.sortedIndex !== 0) {
+          changes.sortedIndex = n.sortedIndex;
+        }
+
+        if (n.helloMoonCollectionId) {
+          changes.helloMoonCollectionId = n.helloMoonCollectionId;
+        }
+
+        return {
+          key: n.nftMint,
+          changes
+        };
+      }))
+    ])
+
+    console.log(a)
   })
 }
 
@@ -172,16 +204,58 @@ self.addEventListener("message", async event => {
     item => item.helloMoonCollectionId
   );
 
+  const [hasCollection, noCollection] = partition(combined, item => item.helloMoonCollectionId);
+
+  const groups = groupBy(noCollection, nft => {
+    return (nft.collection?.verified && nft.collection?.address.toBase58()) || (nft.creators.find(c => c.verified) || {}).address?.toBase58()
+  })
+
+  let derivedCollections = [];
+
+  const derivedNfts = flatten(await Promise.all(Object.keys(groups).map(async key => {
+    const nfts = groups[key];
+    if (key === 'unknown') {
+      return nfts;
+    }
+    try {
+      const collectionNft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(key) })
+      derivedCollections.push({
+        helloMoonCollectionId: key,
+        image: collectionNft.json.sample_image,
+        floorPrice: 0,
+        collectionName: collectionNft.json.name || collectionNft.name
+      })
+    } catch {
+      try {
+        const randoNft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(nfts[0]) });
+        derivedCollections.push({
+          helloMoonCollectionId: key,
+          image: randoNft.json.sample_image,
+          floorPrice: 0,
+        })
+      } catch {
+        console.log("unable to find collection")
+      }
+    }
+
+    return nfts.map(n => {
+      return {
+        ...n,
+        helloMoonCollectionId: key
+      }
+    });
+  })))
+
   const collections = await getCollections(nftPerCollection.map(n => n.helloMoonCollectionId) as string[])
   collections.forEach(collection => {
-    const nfts = combined.filter(n => n.helloMoonCollectionId === collection.helloMoonCollectionId)
-    nfts.sort((a, b) => a.nftMint.localeCompare(b.nftMint)).forEach((item, sortedIndex) => {
+    const nfts = hasCollection.filter(n => n.helloMoonCollectionId === collection.helloMoonCollectionId)
+    nfts.sort((a, b) => a.name.localeCompare(b.name)).forEach((item, sortedIndex) => {
       item.sortedIndex = sortedIndex;
     })
   })
   await Promise.all([
-    addCollectionsToDb(db, collections),
-    addNftsToDb(db, combined)
+    addCollectionsToDb(db, [...collections, ...derivedCollections]),
+    addNftsToDb(db, [...hasCollection, ...derivedNfts])
   ])
 
   self.postMessage({ok: true})

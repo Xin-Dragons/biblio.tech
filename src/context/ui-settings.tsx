@@ -1,5 +1,6 @@
 import { useLocalStorage } from "@solana/wallet-adapter-react";
-import { createContext, FC, useContext, useState } from "react";
+import { useRouter } from "next/router";
+import { createContext, FC, useContext, useEffect, useState } from "react";
 
 export type LayoutSize = "small" | "medium" | "large";
 
@@ -32,6 +33,9 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
   const [showStarred, setShowStarred] = useState<boolean>(false)
   const [showInfo, setShowInfo] = useState<boolean>(true)
   const [untagged, setUntagged] = useState<boolean>(false)
+  const [selectedMenuShowing, setSelectedMenuShowing] = useState<boolean>(false)
+  const router = useRouter();
+
   return (
     <UiSettingsContext.Provider value={{
       layoutSize,
@@ -41,7 +45,9 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       showInfo,
       setShowInfo,
       untagged,
-      setUntagged
+      setUntagged,
+      selectedMenuShowing,
+      setSelectedMenuShowing
     }}>
       { children }
     </UiSettingsContext.Provider>

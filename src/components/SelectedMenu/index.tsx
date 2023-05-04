@@ -1,5 +1,5 @@
 import { Nft, Sft, walletAdapterIdentity } from "@metaplex-foundation/js";
-import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, ThemeProvider, Typography, createTheme } from "@mui/material";
+import { Box, Button, Chip, Container, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, ThemeProvider, Typography, createTheme } from "@mui/material";
 import { createBurnInstruction, createCloseAccountInstruction, getAssociatedTokenAddress, getMint } from "@solana/spl-token";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction } from "@solana/web3.js";
@@ -12,17 +12,19 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { Sidebar } from "../Sidebar";
 import { toast } from "react-hot-toast";
 import { useDatabase } from "../../context/database";
-import { LocalFireDepartment, TakeoutDining } from "@mui/icons-material";
+import { Close, LocalFireDepartment, TakeoutDining } from "@mui/icons-material";
 import { useTags } from "../../context/tags";
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRouter } from "next/router";
 import { useTheme } from "../../context/theme";
+import { useUiSettings } from "../../context/ui-settings";
 
 const { palette } = createTheme();
 
 
 export const SelectedMenu: FC = ({ filtered }) => {
+  const {selectedMenuShowing, setSelectedMenuShowing} = useUiSettings()
   const { selected, setSelected } = useSelection();
   const wallet = useWallet()
   const metaplex = useMetaplex().use(walletAdapterIdentity(wallet));
@@ -34,6 +36,10 @@ export const SelectedMenu: FC = ({ filtered }) => {
   const { db } = useDatabase(0);
   const router = useRouter()
   const theme = useTheme();
+
+  function toggleSelectedMenuShowing() {
+    setSelectedMenuShowing(!selectedMenuShowing);
+  }
 
   useEffect(() => {
     const toDeselect = selected.filter(s => !filtered.map(n => n.nftMint).includes(s))
@@ -213,17 +219,40 @@ export const SelectedMenu: FC = ({ filtered }) => {
   }
 
   return (
-    <Sidebar side="right" defaultShowing={selected.length}>
+    <Box sx={{
+      transition: "opacity 0.1s",
+      position: "fixed",
+      width: "40vw",
+      marginLeft: "30vw",
+      zIndex: 1000,
+      bottom: "5em",
+      background: "rgba(0, 0, 0, 0.8)",
+      backdropFilter: "blur(10px)",
+      borderRadius: "10px",
+      padding: 2,
+      opacity: selectedMenuShowing ? 1 : 0,
+      pointerEvents: selectedMenuShowing ? "all" : "none",
+      border: '2px solid white'
+    }}>
         <Stack spacing={2}>
-          <Typography variant="h5">
-            Selection
-          </Typography>
-          <Stack spacing={2} direction="row">
-            <Button onClick={selectAll} disabled={!filtered.length || allSelected}>Select all</Button>
-            <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>Deselect all</Button>
+          <Stack direction="row" alignItems="center" spacing={2} justifyContent="space-between">
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Typography variant="h4">
+                Selection
+              </Typography>
+              <Typography>{selected.length} Selected</Typography>
+            </Stack>
+            <Stack spacing={2} direction="row">
+              <Button onClick={selectAll} disabled={!filtered.length || allSelected}>Select all</Button>
+              <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>Deselect all</Button>
+              <IconButton size="medium" onClick={toggleSelectedMenuShowing}>
+                <Close fontSize="large" />
+              </IconButton>
+            </Stack>
+            
           </Stack>
-          <Typography>{selected.length} Selected</Typography>
-          <Typography variant="h6">Tags</Typography>
+          
+          {/* <Typography variant="h6">Tags</Typography> */}
           <Stack direction="row" spacing={0} sx={{ flexWrap: 'wrap', gap: 1 }}>
             {
               tags.map(tag => {
@@ -247,10 +276,16 @@ export const SelectedMenu: FC = ({ filtered }) => {
                   )
               })
             }
+            <Chip
+              label="Add to new tag"
+              disabled={!selected.length}
+            />
           </Stack>
-          <Button onClick={freeze} variant="outlined" disabled={!selected.length}>Send to Vault</Button>
-          <Button onClick={toggleBulkSendOpen} variant="contained" disabled={!selected.length}>Bulk send</Button>
-          <Button onClick={burn} variant="outlined" color="error" disabled={!selected.length} startIcon={<LocalFireDepartment />}>BURN</Button>
+          <Stack direction="row" spacing={2}>
+            <Button onClick={burn} variant="outlined" color="error" disabled={!selected.length} startIcon={<LocalFireDepartment />}>BURN</Button>
+            <Button onClick={freeze} variant="outlined" disabled={!selected.length}>Send to Vault</Button>
+            <Button onClick={toggleBulkSendOpen} variant="contained" disabled={!selected.length}>Bulk send</Button>
+          </Stack>
         </Stack>
         <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
           <DialogTitle>Bulk send</DialogTitle>
@@ -268,6 +303,6 @@ export const SelectedMenu: FC = ({ filtered }) => {
             <Button onClick={toggleBulkSendOpen} variant="contained" disabled={!recipient || !selected.length}>Send</Button>
           </DialogActions>
         </Dialog>
-    </Sidebar>
+    </Box>
   )
 }

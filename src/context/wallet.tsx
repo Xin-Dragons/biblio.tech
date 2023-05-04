@@ -4,9 +4,9 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adap
 import { PublicKey } from "@solana/web3.js";
 import { FC, ReactElement, createContext, useContext, useEffect, useState } from "react";
 
-type WalletContextProps = WalletContextStateWithAdmin | null
+type WalletContextProps = WalletContextStateWithAdmin
 
-export const WalletContext = createContext<WalletContextProps>(null);
+export const WalletContext = createContext<WalletContextProps>();
 
 interface WalletContextStateWithAdmin extends WalletContextState {
   isAdmin?: boolean;
@@ -40,7 +40,7 @@ export const WalletContextProvider: FC<WalletProviderProps> = ({ children, publi
     setWallet((prevState: WalletContextStateWithAdmin) => {
       return {
         ...prevState,
-        isAdmin: !!baseWallet.publicKey && (!publicKey || baseWallet.publicKey.equals(publicKey))
+        isAdmin: baseWallet.publicKey && (!publicKey || publicKey.equals(baseWallet.publicKey))
       }
     })
   }, [baseWallet.publicKey, publicKey])

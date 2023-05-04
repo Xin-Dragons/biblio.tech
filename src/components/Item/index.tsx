@@ -61,18 +61,18 @@ export interface ItemProps {
 }
 
 export const Asset = ({ asset }) => {
-  console.log("WEEEE", asset)
+  console.log(asset)
   if (!asset) {
-    return null;
+    return <img src="/books.svg" width="100%" style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }} />
   }
   const multimediaType = getMultimediaType(asset.type.split('/')[1]);
 
   if (multimediaType === "image") {
-    
     return <img
-      src={asset.uri}
-      style={{ display: "block", width: "100%" }}
+      src={`https://img-cdn.magiceden.dev/rs:fill:800/plain/${asset.uri}`}
+      style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }}
     />      
+
   }
 
   if (multimediaType === "web") {
@@ -193,6 +193,7 @@ export const ItemDetails = ({ item }) => {
     await removeNftsFromTag(tag.id, [item.nftMint]);
     toast.success(`Removed item from ${tag.name}`)
   }
+  console.log(item)
 
   return (
     <Card sx={{ height: "100%", outline: 'none !important', width: "100%", overflowY: "auto" }}>
@@ -293,6 +294,14 @@ export const ItemDetails = ({ item }) => {
                 <TableCell>Token standard</TableCell>
                 <TableCell sx={{ textAlign: "right" }}>{tokenStandards[item.tokenStandard] || "NFT"}</TableCell>
               </TableRow>
+              {
+                item.tokenStandard === 3 && (
+                  <TableRow>
+                    <TableCell>Edition #</TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>Editions</TableCell>
+                  </TableRow>
+                )
+              }
               <TableRow>
                 <TableCell>Royalties</TableCell>
                 <TableCell sx={{ textAlign: "right" }}>{item.sellerFeeBasisPoints / 100}%</TableCell>
@@ -419,7 +428,8 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
   const fontSizes = {
     small: "14px",
     medium: "20px",
-    large: "28px"
+    large: "28px",
+    collage: "3opx"
   }
 
   const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
@@ -427,16 +437,21 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
   const margins = {
     small: 0.5,
     medium: 0.75,
-    large: 1
+    large: 1,
+    collage: 5
   }
+
+  const infoShowing = showInfo && layoutSize !== "collage";
 
   return (
     <Card
       sx={{
-        outline: selected ? `${layoutSize === "small" ? 2 : 3}px solid white` : "none",
+        outline: selected && layoutSize !== "collage" ? `${layoutSize === "small" ? 2 : 3}px solid white` : "none",
+        // outlineOffset: "-2px",
         cursor: "pointer",
         position: "relative",
         margin: margins[layoutSize],
+        userSelect: "none",
 
         "&:hover": {
           ".MuiStack-root, .MuiSvgIcon-root": {
@@ -453,13 +468,13 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
             alignItems="center"
             onClick={onNftClick}
             sx={{
-              position: showInfo ? "static" : "absolute",
+              position: infoShowing ? "static" : "absolute",
               top: 0,
               width: "100%",
               padding: "0.5em",
               background: "rgba(20, 20, 20, 0.8)",
-              opacity: showInfo ? 1 : 0,
-              transition: showInfo ? "none" : 'opacity 0.2s',
+              opacity: infoShowing || (layoutSize === "collage" && selected) ? 1 : 0,
+              transition: infoShowing ? "none" : 'opacity 0.2s',
               "&:hover": {
                 ".plus-minus.MuiSvgIcon-root": {
                   color: "white"
@@ -479,7 +494,7 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
               max={1}
               value={item.starred ? 1 : 0}
               onChange={onStarredChange}
-              size={layoutSize}
+              size={layoutSize === "collage" ? "large" : "layoutSize"}
             />
             { DragHandle }
             <RadioIndicator
@@ -500,7 +515,21 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
           {
             
             item.jsonLoaded
-              ? <img src={item.json?.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.json?.image}` : "/fallback-image.jpg"} width="100%" style={{ display: "block", aspectRatio: "1 / 1" }} />
+              ? <Box sx={{
+                width: "100%",
+                aspectRatio: layoutSize === "collage" ? "auto" : "1 / 1",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center"
+              }}><img
+              src={item.json?.image
+                ? `https://img-cdn.magiceden.dev/${layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"}/plain/${item.json?.image}`
+                : "/books.svg"
+              }
+              onError={e => e.target.src = "./books.svg"}
+              width="100%"
+              style={{ display: "block" }}
+            /></Box>
               : <Box sx={{
                 width: "100%",
                 aspectRatio: "1 / 1",
@@ -512,13 +541,14 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
               </Box>
             }      
             {
-              showInfo && <CardContent sx={{ position: "relative" }}>
+              infoShowing && <CardContent sx={{ position: "relative" }}>
                 <Typography sx={{
                   // fontSize: `${7 / cols[layoutSize]}vw`,
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  overflow: "hidden"
-                }}>{item.json?.name || item.name}</Typography>
+                  overflow: "hidden",
+                  fontWeight: "bold"
+                }}>{item.json?.name || item.name || "Unknown"}</Typography>
                 <Stack sx={{ position: "absolute", top: "-15px", width: "calc(100% - 1em)", right: "0.5em" }} direction="row" justifyContent="space-between" spacing={2}>
                   {
                     item.howRare && <Rarity type="howRare" rank={item.howRare} tier={item.howRareTier} />
@@ -527,6 +557,11 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
                     item.moonRank && <Rarity type="moonRank" rank={item.moonRank} tier={item.moonRankTier} />
                   }
                 </Stack>
+              </CardContent>
+            }
+            {
+              layoutSize === "collage" && <CardContent>
+                <Stack direction="row" justifyContent="center">{ item.name }</Stack>
               </CardContent>
             }
           </>

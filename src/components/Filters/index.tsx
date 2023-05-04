@@ -49,17 +49,16 @@ export const Filters: FC = ({ nfts }) => {
   }
 
   return (
-    <Stack spacing={2} sx={{ width: "220px", minWidth: "220px" }}>
-      <Typography variant="h5">Filters</Typography>
+    <Stack spacing={2}>
       <Button href="#" onClick={clearFilters} disabled={!activeFilters}>Clear all</Button>
       {
         map(filters, (items, filter) => {
           return (
-            <FormControl sx={{ width: "100%" }}>
+            <FormControl size="small">
               <InputLabel id="demo-multiple-checkbox-label" sx={{
                 backgroundColor: "#111316",
                 // backgroundImage: "linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));",
-                paddingRight: 1
+                // paddingRight: 1
               }}>{filter}</InputLabel>
               <Select
                 onClose={() => {
@@ -67,8 +66,6 @@ export const Filters: FC = ({ nfts }) => {
                     (document.activeElement as HTMLElement).blur();
                   }, 0);
                 }}
-                labelId="demo-multiple-checkbox-label"
-                id="demo-multiple-checkbox"
                 multiple
                 value={selectedFilters[filter] || []}
                 onChange={onFilterChange(filter)}

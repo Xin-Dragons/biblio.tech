@@ -19,7 +19,14 @@ body {
 }
 
 .wallet-adapter-button-trigger {
-  background-color: #226f7d;
+  background-color: transparent !important;
+  font-family: Barmeno;
+  color: #6cbec9;
+  white-space: nowrap;
+
+}
+.wallet-adapter-button-start-icon {
+  display: none
 }
 
 a {
@@ -35,3 +42,35 @@ a {
 h1, h2, h3, h4, h5, h6 {
   font-family: "Barmano";
 }
+* {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+*::-webkit-scrollbar { 
+  display: none;  /* Safari and Chrome */
+}
+
+// /* Works on Firefox */
+// * {
+//   scrollbar-width: thin;
+//   scrollbar-color: #000000 black;
+// }
+
+// /* Works on Chrome, Edge, and Safari */
+// *::-webkit-scrollbar {
+//   width: 15px;
+//   height: 20px
+// }
+
+// *::-webkit-scrollbar-track {
+//   background: #000000;
+//   border-radius: 20px;
+//   /* border: 2px solid #000000; */
+// }
+
+// *::-webkit-scrollbar-thumb {
+//   background: #6cbec9;
+//   border-radius: 20px;
+//   /* border: 2px solid #000000; */
+// }
