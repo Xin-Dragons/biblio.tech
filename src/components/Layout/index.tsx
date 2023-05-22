@@ -1,109 +1,100 @@
-import { AppBar, Box, Button, Dialog, IconButton, Stack, TextField, Typography, useMediaQuery } from "@mui/material"
-import { Container } from "@mui/system";
-import { Main } from "next/document";
-import dynamic from "next/dynamic";
+import { Box, Button, Dialog, IconButton, Stack, TextField, Theme, Typography, useMediaQuery } from "@mui/material"
+import { Container } from "@mui/system"
+import { Main } from "next/document"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { Toaster } from "react-hot-toast"
-import { FC, useState } from "react";
-import { ActionBar } from "../ActionBar";
-import { SelectedMenu } from "../SelectedMenu";
-import { SideMenu } from "../SideMenu";
-import Spinner from "../Spinner";
-import styles from './style.module.scss';
-import { Footer } from "../Footer";
-import Head from "next/head";
-import { Search } from "../Search";
-import { useWidth } from "../../hooks/use-width";
-import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
-import { Close } from "@mui/icons-material";
-import { useTags } from "../../context/tags";
-import { Color, Tags } from "../Tags";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletSearch } from "../WalletSearch";
-import { useBasePath } from "../../context/base-path";
-
-const WalletMultiButtonDynamic = dynamic(
-  async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
-  { ssr: false }
-);
+import { FC, useEffect, useState } from "react"
+import { ActionBar, WalletMultiButtonDynamic } from "../ActionBar"
+import { SideMenu } from "../SideMenu"
+import Spinner from "../Spinner"
+import { Footer } from "../Footer"
+import Head from "next/head"
+import { Close } from "@mui/icons-material"
+import { Color, Tags } from "../Tags"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { WalletSearch } from "../WalletSearch"
+import { useBasePath } from "../../context/base-path"
+import { useUiSettings } from "../../context/ui-settings"
+import { TagList } from "../TagList"
+import { AppBar } from "../AppBar"
+import { useSelection } from "../../context/selection"
+import { useAccess } from "../../context/access"
+import { useRouter } from "next/router"
+import { SignUp } from "../SignUp"
+import { Collection, Nft } from "../../db"
+import { CollectionItem } from "../../pages/collections"
 
 type LayoutProps = {
+  nfts: Nft[] | CollectionItem[]
+  filtered: Nft[] | CollectionItem[]
   children: JSX.Element | JSX.Element[]
+  showUntagged?: boolean
+  selection?: boolean
 }
 
-export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId, rarity, filtered, allowCollageView, showUntagged }) => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const showMenu = useMediaQuery(theme => theme.breakpoints.up("md"))
-  const showNavigation = useMediaQuery(theme => theme.breakpoints.up("sm"))
-  const wallet = useWallet();
-  const basePath = useBasePath();
+export const Layout: FC<LayoutProps> = ({ children, filtered, nfts, showUntagged, selection }) => {
+  const { showTags, setShowTags } = useUiSettings()
+  const { selected } = useSelection()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const router = useRouter()
 
   function toggleMenu() {
     setMenuOpen(!menuOpen)
   }
 
+  const wallet = useWallet()
+  const { isAdmin } = useAccess()
+  const basePath = useBasePath()
+
+  const showMenu = useMediaQuery((theme: Theme) => theme.breakpoints.up("md"))
+
   return (
     <Box>
-    <Head>
-      <title>BiBLIO | Smart wallet for NFTs</title>
-    </Head>
-    <Container maxWidth={false} sx={{ height: "100%" }}>
-      <AppBar sx={{ background: "black" }}>
-        <Stack direction="row" justifyContent="space-between" padding={1} alignItems="center" spacing={2}>
-          <Link href="/">
-            <img src="/logo.svg" width={50} height={50} style={{ cursor: "pointer" }}/>
-          </Link>
-          {
-            showNavigation && (
-              <>
-                <Link href="/" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>Collections</Button>
-                </Link>
-                <Link href="/nfts" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>NFTs</Button>
-                </Link>
-                <Link href="/wallet" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>Wallets</Button>
-                </Link>
-              </>
-            )
-          }
-          
-          <Search />
-          
-          <Stack direction="row" spacing={1} alignItems="center">
-            <WalletMultiButtonDynamic />
-            {
-              !showMenu && <IconButton onClick={toggleMenu}>
-                <MenuRoundedIcon fontSize="large" />
-              </IconButton>
-            }
-          </Stack>
-        </Stack>
-      </AppBar>
+      <Head>
+        <title>BIBLIO | Smart wallet for NFTs</title>
+        <link rel="preload" href="/Barmeno-Regular.woff" as="font" crossOrigin="" type="font/woff" />
+        <link rel="preload" href="/Barmeno-Regular.woff2" as="font" crossOrigin="" type="font/woff2" />
+        <link rel="preload" href="/Lato-Regular.woff" as="font" crossOrigin="" type="font/woff" />
+        <link rel="preload" href="/Lato-Regular.woff2" as="font" crossOrigin="" type="font/woff2" />
+        <link rel="preload" href="/Lato-Bold.woff" as="font" crossOrigin="" type="font/woff" />
+        <link rel="preload" href="/Lato-Bold.woff2" as="font" crossOrigin="" type="font/woff2" />
+      </Head>
       <Toaster />
-      <main className={styles.main}>
-        <Stack spacing={2}>
-          <ActionBar
-            title={title}
-            includeStarredControl={true}
-            allowCollageView={allowCollageView}
-            nfts={nfts}
-            rarity={rarity}
-            filtered={filtered}
-            showUntagged={showUntagged}
-          />
-          <Stack direction="row" spacing={2} sx={{ height: "100%" }}>
-            {
-              showMenu && <SideMenu nfts={nfts} filters={filters} tagId={tagId} />
-            }
-            
-            <Box sx={{ width: "100%", marginLeft: showMenu && "2rem !important" }}>
-              {
-                wallet.connected
-                  ? children
-                  : <Stack sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} spacing={2}>
-                    <Typography variant="h4">Wallet not connected</Typography>
+      <Stack height="100vh">
+        <AppBar showMenu={showMenu} toggleMenu={toggleMenu} />
+        <Box flexGrow={1} sx={{ overflow: "hidden" }}>
+          <Stack direction="row" spacing={2} sx={{ height: "100%", overflowY: "auto" }}>
+            {showMenu && <SideMenu />}
+            <Stack sx={{ flexGrow: 1 }}>
+              <ActionBar nfts={nfts} filtered={filtered} />
+              {showTags && <TagList filtered={filtered} />}
+              <Box
+                sx={{
+                  width: "100%",
+                  overflowY: "auto",
+                  flexGrow: 1,
+                  backgroundImage: "url(/books-lighter.svg)",
+                  backgroundSize: "200px",
+                }}
+              >
+                {wallet.connected || router.query.publicKey ? (
+                  children
+                ) : (
+                  <Stack
+                    sx={{
+                      width: "100%",
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      paddingTop: 5,
+                    }}
+                    spacing={2}
+                  >
+                    <Typography variant="h5" textTransform="uppercase">
+                      Wallet not connected
+                    </Typography>
                     <WalletSearch />
                     <Stack direction="row" alignItems="center">
                       <Typography>or</Typography>
@@ -111,39 +102,44 @@ export const Layout: FC<LayoutProps> = ({ children, title, nfts, filters, tagId,
                       <Typography>to begin</Typography>
                     </Stack>
                   </Stack>
-              }
-            </Box>
+                )}
+              </Box>
+            </Stack>
           </Stack>
-        </Stack>
-      </main>
-      {
-        !showMenu && (
-          <Dialog open={menuOpen} onClose={toggleMenu} fullScreen>
-            <Container>
-              <Stack>
-                <IconButton size="large" sx={{ position: "fixed", top: "0.25em", right: "0.25em" }} onClick={toggleMenu}>
-                  <Close fontSize="large" />
-                </IconButton>
-                <img src="/biblio-logo.png" style={{ color: "red"}} width="40%" style={{ margin: "0 auto" }} />
-                <Link href="/collections" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>Collections</Button>
-                </Link>
-                <Link href="/" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>NFTs</Button>
-                </Link>
-                <Link href="/wallet" passHref>
-                  <Button size="large" sx={{ fontWeight: "bold" }}>Wallets</Button>
-                </Link>
-                <Typography variant="h5">Tags</Typography>
-                <Tags />
-              </Stack>
-            </Container>
-          </Dialog>
-        )
-      }
-      </Container>
-      <SelectedMenu filtered={filtered} />
-      <Footer />
+        </Box>
+        <Footer />
+      </Stack>
+
+      {!showMenu && (
+        <Dialog open={menuOpen} onClose={toggleMenu} fullScreen>
+          <Container>
+            <Stack>
+              <IconButton size="large" sx={{ position: "fixed", top: "0.25em", right: "0.25em" }} onClick={toggleMenu}>
+                <Close fontSize="large" />
+              </IconButton>
+              <img src="/biblio-logo.png" style={{ color: "red", margin: "0 auto" }} width="40%" />
+              <Link href="/collections" passHref>
+                <Button size="large" sx={{ fontWeight: "bold" }}>
+                  Collections
+                </Button>
+              </Link>
+              <Link href="/" passHref>
+                <Button size="large" sx={{ fontWeight: "bold" }}>
+                  NFTs
+                </Button>
+              </Link>
+              <Link href="/wallet" passHref>
+                <Button size="large" sx={{ fontWeight: "bold" }}>
+                  Wallets
+                </Button>
+              </Link>
+              <Typography variant="h5">Tags</Typography>
+              <Tags />
+            </Stack>
+          </Container>
+        </Dialog>
+      )}
+      <SignUp />
     </Box>
   )
 }

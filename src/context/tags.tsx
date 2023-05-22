@@ -1,36 +1,76 @@
-import { v4 as uuid } from "uuid";
-import { FC, createContext, useContext, useEffect, useState } from "react";
-import { useDatabase } from "./database";
-import { useLiveQuery } from "dexie-react-hooks";
-import { toPairs } from "lodash";
+import { v4 as uuid } from "uuid"
+import { FC, createContext, useContext, useEffect, useState } from "react"
+import { useDatabase } from "./database"
+import { useLiveQuery } from "dexie-react-hooks"
+import { noop, toPairs } from "lodash"
+import { useRouter } from "next/router"
+import { Tag } from "../db"
+import { toast } from "react-hot-toast"
 
-const TagsContext = createContext();
-
-type Tag = {
-  id: typeof uuid;
-  name?: string;
+type TagsContextProps = {
+  tags: Tag[]
+  tag: Tag | null
+  starredNfts: string[]
+  addTag: Function
+  updateTag: Function
+  deleteTag: Function
+  addNftsToTag: Function
+  removeNftsFromTag: Function
+  addNftToStarred: Function
+  removeNftFromStarred: Function
 }
 
+const initial: TagsContextProps = {
+  tags: [],
+  tag: null,
+  starredNfts: [],
+  addTag: noop,
+  updateTag: noop,
+  deleteTag: noop,
+  addNftsToTag: noop,
+  removeNftsFromTag: noop,
+  addNftToStarred: noop,
+  removeNftFromStarred: noop,
+}
+
+const TagsContext = createContext<TagsContextProps>(initial)
+
 type TagsProviderProps = {
-  children: JSX.Element;
+  children: JSX.Element
 }
 
 export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
-  const { db } = useDatabase();
-  const tags = useLiveQuery(() => db && db
-    .tags
-    .toArray(),
-    [db],
-    []
-  ) || []
+  const { db } = useDatabase()
+  const router = useRouter()
+  const [tag, setTag] = useState<Tag | null>(null)
+  const tags = useLiveQuery(() => db.tags.filter((t) => t.id !== "starred").toArray(), [], []) || []
+
+  const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], []).map(
+    (n) => n.nftId
+  )
 
   async function addTag(name: string, color: string) {
-    console.log('adding', name, color)
-    await db.tags.add({
+    const id = await db.tags.add({
       name,
       color,
-      id: uuid()
+      id: uuid(),
     })
+
+    return id
+  }
+
+  async function addNftToStarred(mint: string) {
+    await db.transaction("rw", db.tags, db.taggedNfts, async () => {
+      const tag = await db.tags.get("starred")
+      if (!tag) {
+        await db.tags.add({ id: "starred", name: "Starred" })
+      }
+      await db.taggedNfts.put({ tagId: "starred", nftId: mint })
+    })
+  }
+
+  async function removeNftFromStarred(mint: string) {
+    await db.taggedNfts.where({ tagId: "starred", nftId: mint }).delete()
   }
 
   async function updateTag(id: typeof uuid, name: string, color: string) {
@@ -38,43 +78,71 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   }
 
   async function addNftsToTag(tagId: string, nftMints: string[]) {
-    await db.taggedNfts.bulkPut(nftMints.map(nftId => {
-      return {
-        nftId,
-        tagId
-      }
-    }))
+    if (!tagId || !nftMints.length) {
+      toast.error("Missing params")
+      return
+    }
+    await db.taggedNfts.bulkPut(
+      nftMints.map((nftId) => {
+        return {
+          nftId,
+          tagId,
+        }
+      })
+    )
   }
 
   async function removeNftsFromTag(tagId: string, nftMints: string[]) {
-    await db
-      .taggedNfts
+    if (!tagId || !nftMints.length) {
+      toast.error("Missing params")
+      return
+    }
+    await db.taggedNfts
       .where({ tagId })
-      .and(item => nftMints.includes(item.nftId))
+      .and((item) => nftMints.includes(item.nftId))
       .delete()
   }
 
   async function deleteTag(tagId: string) {
-    await db.transaction('rw', db.tags, db.taggedNfts, async () => {
-      await db.taggedNfts.where({ tagId }).delete();
-      await db.tags.where({ id: tagId }).delete();
-    });
+    await db.transaction("rw", db.tags, db.taggedNfts, async () => {
+      await db.taggedNfts.where({ tagId }).delete()
+      await db.tags.where({ id: tagId }).delete()
+    })
   }
 
+  useEffect(() => {
+    if (!tags.length || !router.query.tag || router.query.tag === "untagged") {
+      setTag(null)
+      return
+    }
+    const tag = tags.find((t) => t.id === router.query.tag)
+    if (tag) {
+      setTag(tag)
+    } else {
+      setTag(null)
+    }
+  }, [tags, router.query.tag])
+
   return (
-    <TagsContext.Provider value={{
-      addTag,
-      updateTag,
-      deleteTag,
-      addNftsToTag,
-      removeNftsFromTag,
-      tags
-    }}>
-      { children }
+    <TagsContext.Provider
+      value={{
+        addTag,
+        updateTag,
+        deleteTag,
+        addNftsToTag,
+        removeNftsFromTag,
+        tags,
+        tag,
+        addNftToStarred,
+        removeNftFromStarred,
+        starredNfts,
+      }}
+    >
+      {children}
     </TagsContext.Provider>
   )
 }
 
 export const useTags = () => {
-  return useContext(TagsContext);
+  return useContext(TagsContext)
 }

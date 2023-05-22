@@ -1,11 +1,12 @@
-import { Dialog } from "@mui/material";
-import { createContext, useContext, useEffect, useState } from "react";
+import { Dialog } from "@mui/material"
+import { initial, noop } from "lodash"
+import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 
-export const DialogContext = createContext()
+export const DialogContext = createContext<{ renderItem: Function }>({ renderItem: noop })
 
-export const DialogProvider = ({ children }) => {
+export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [open, setOpen] = useState(false)
-  const [item, setItem] = useState(null);
+  const [item, setItem] = useState<any>(null)
 
   useEffect(() => {
     if (item) {
@@ -14,20 +15,19 @@ export const DialogProvider = ({ children }) => {
   }, [item])
 
   function toggleOpen() {
-    setOpen(!open);
+    setOpen(!open)
   }
 
-  function renderItem(Component, props) {
+  function renderItem(Component: React.ElementType, props: any) {
     setItem(<Component {...props} />)
   }
-  
+
   return (
     <DialogContext.Provider value={{ renderItem }}>
-      { children }
+      {children}
       <Dialog open={open} onClose={toggleOpen} maxWidth="lg">
-        { item }
+        {item}
       </Dialog>
-      
     </DialogContext.Provider>
   )
 }

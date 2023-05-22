@@ -1,38 +1,147 @@
-import { Box, Card, CardContent, Chip, CircularProgress, Dialog, IconButton, Link, Modal, Rating, Skeleton, Stack, SvgIcon, Table, TableCell, TableRow, Typography, styled } from "@mui/material";
-import { findKey, isEqual, uniq } from "lodash";
-import { useSelection } from "../../context/selection";
-import { useUiSettings } from "../../context/ui-settings";
-import { FC, MouseEvent, SyntheticEvent, forwardRef, memo, useEffect, useRef, useState } from "react";
-import { useFrozen } from "../../context/frozen";
-import AcUnitIcon from '@mui/icons-material/AcUnit';
-import LockIcon from '@mui/icons-material/Lock';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import { useDatabase } from "../../context/database";
-import axios from "axios";
-import { ArrowBackIosNew, ArrowForward, ArrowForwardIos, Public } from "@mui/icons-material";
-import { useDialog } from "../../context/dialog";
-import { useTags } from "../../context/tags";
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  CircularProgressProps,
+  Dialog,
+  IconButton,
+  Link,
+  Rating,
+  Stack,
+  SvgIcon,
+  Table,
+  TableCell,
+  TableRow,
+  Tooltip,
+  Typography,
+} from "@mui/material"
+import { default as NextLink } from "next/link"
+import { findKey, uniq } from "lodash"
+import { useUiSettings } from "../../context/ui-settings"
+import { FC, MouseEvent, ReactNode, SyntheticEvent, useEffect, useState } from "react"
+import Frozen from "@mui/icons-material/AcUnit"
+import LockIcon from "@mui/icons-material/Lock"
+import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
+import { useDatabase } from "../../context/database"
+import axios from "axios"
+import { ArrowBackIosNew, ArrowForwardIos, Close, LocalFireDepartment } from "@mui/icons-material"
+import { useDialog } from "../../context/dialog"
+import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
-import { useLiveQuery } from "dexie-react-hooks";
-import { useRouter } from "next/router";
-import { toast } from "react-hot-toast";
-import useOnScreen from "../../hooks/use-on-screen";
-import { useMetaplex } from "../../context/metaplex";
-import { PublicKey } from "@metaplex-foundation/js";
-import HowRare from './howrare.svg';
-import { useSorting } from "../../context/sorting";
-import { cols } from "../Items";
+import { useLiveQuery } from "dexie-react-hooks"
+import { useRouter } from "next/router"
+import { toast } from "react-hot-toast"
+import useOnScreen from "../../hooks/use-on-screen"
+import { useMetaplex } from "../../context/metaplex"
+import { PublicKey } from "@metaplex-foundation/js"
+import HowRare from "./howrare.svg"
 
-type Category = "image" | "video" | "audio" | "vr";
+import { useAccess } from "../../context/access"
+import { useTransactionStatus } from "../../context/transactions"
+import PlaneIcon from "../ActionBar/plane.svg"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { LAMPORTS_PER_SOL } from "@solana/web3.js"
+import { CopyAddress } from "../CopyAddress"
+import LockOpenIcon from "@mui/icons-material/LockOpen"
+import { unwrapSome } from "@metaplex-foundation/umi"
+import { Loan, Nft, RarityTier, Tag } from "../../db"
+import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
+import { useUmi } from "../../context/umi"
+import { useNfts } from "../../context/nfts"
+import { useBasePath } from "../../context/base-path"
+
+type Category = "image" | "video" | "audio" | "vr" | "web"
 
 const tokenStandards = {
   0: "NFT",
   1: "SFT",
   2: "Token",
   3: "NFT Edition",
-  4: "pNFT"
+  4: "pNFT",
+  5: "OCP NFT",
+}
+
+interface CircularProgressWithLabelProps extends CircularProgressProps {
+  children: ReactNode
+}
+
+const CircularProgressWithLabel: FC<CircularProgressWithLabelProps> = (props) => {
+  return (
+    <Box sx={{ position: "relative", display: "inline-flex" }}>
+      <CircularProgress {...props} size="5rem" />
+      <Box
+        sx={{
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          position: "absolute",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {props.children}
+      </Box>
+    </Box>
+  )
+}
+
+const Loan: FC<{ loan: Loan }> = ({ loan }) => {
+  const [timeRemaining, setTimeRemaining] = useState("")
+  const [urgent, setUrgent] = useState(false)
+  const { showInfo } = useUiSettings()
+
+  function getTimeRemaining() {
+    const seconds = loan.defaults - Date.now() / 1000
+    const days = Math.floor(seconds / 24 / 60 / 60)
+    const hoursLeft = Math.floor(seconds - days * 86400)
+    const hours = Math.floor(hoursLeft / 3600)
+    const minutesLeft = Math.floor(hoursLeft - hours * 3600)
+    const minutes = Math.floor(minutesLeft / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+    setTimeRemaining(`${days > 0 ? `${days}d ` : ""}${hours > 0 ? `${hours}h ` : ""}${minutes}m ${remainingSeconds}s`)
+    setUrgent(days <= 0)
+  }
+
+  useEffect(() => {
+    getTimeRemaining()
+    const interval = setInterval(getTimeRemaining, 1000)
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
+
+  return (
+    <Stack
+      sx={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(20, 20, 20, 0.8)",
+        opacity: showInfo ? 1 : 0,
+        transition: "opacity 0.2s",
+      }}
+      justifyContent="center"
+      alignItems="center"
+    >
+      <Typography variant="h5">{loan.market}</Typography>
+      <Typography variant="h5">◎{(loan.amountToRepay / LAMPORTS_PER_SOL).toLocaleString()}</Typography>
+      <Typography
+        variant={urgent ? "h6" : "body2"}
+        color={urgent ? "error" : "inherit"}
+        fontWeight={urgent ? "bold" : "default"}
+      >
+        {timeRemaining}
+      </Typography>
+    </Stack>
+  )
 }
 
 function getMultimediaType(ext: string): Category {
@@ -41,119 +150,125 @@ function getMultimediaType(ext: string): Category {
     video: ["mp4", "mov"],
     audio: ["mp3", "wav", "flac"],
     web: ["html"],
-    vr: ["glb", "gltf"]
-  } 
-  return findKey(types, items => items.includes(ext)) as Category
+    vr: ["glb", "gltf"],
+  }
+  return findKey(types, (items) => items.includes(ext)) as Category
 }
 
 export function shorten(address: string) {
   return `${address.substring(0, 4)}...${address.substring(address.length - 4, address.length)}`
 }
 
-export type Item = {
-  mint: string;
-  image?: string | null;
-  starred?: boolean;
-}
-
 export interface ItemProps {
-  item: Item
+  item: Nft
+  select?: Function
+  selected?: boolean
+  DragHandle?: ReactNode
+  lazyLoad?: boolean
 }
 
-export const Asset = ({ asset }) => {
-  console.log(asset)
+type Asset = {
+  type: string
+  uri: string
+}
+
+export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
   if (!asset) {
-    return <img src="/books.svg" width="100%" style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }} />
+    return (
+      <img src="/loading-slow.gif" width="100%" style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }} />
+    )
   }
-  const multimediaType = getMultimediaType(asset.type.split('/')[1]);
+  const multimediaType = getMultimediaType(asset.type.split("/")[1].split(";")[0]) || "image"
 
   if (multimediaType === "image") {
-    return <img
-      src={`https://img-cdn.magiceden.dev/rs:fill:800/plain/${asset.uri}`}
-      style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }}
-    />      
-
+    return <img src={asset.uri} style={{ display: "block", width: "100%" }} />
   }
 
   if (multimediaType === "web") {
-    return <iframe
-      src={asset.uri}
-      style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }}
-      onLoad={(event) => event.target.focus()}
-    />      
+    return (
+      <iframe
+        src={asset.uri}
+        style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }}
+        onLoad={(event: any) => event.target.focus()}
+      />
+    )
   }
-  
+
   if (multimediaType === "video") {
-    return <video
-      src={asset.uri}
-      autoPlay
-      width="100%"
-      style={{ display: "block", aspectRatio: "1 / 1" }}
-      muted
-      controls
-      loop
-    />
+    return (
+      <video
+        src={asset.uri}
+        autoPlay
+        width="100%"
+        style={{ display: "block", aspectRatio: "1 / 1" }}
+        muted
+        controls
+        loop
+      />
+    )
   }
 
   if (multimediaType === "audio") {
-    return <audio
-      src={asset.uri}
-      style={{ display: "block", aspectRatio: "1 / 1" }}
-      autoPlay
-      controls
-      loop
-    />
+    return <audio src={asset.uri} style={{ display: "block", aspectRatio: "1 / 1" }} autoPlay controls loop />
   }
 
-  if (multimediaType === 'vr') {
-    return <model-viewer
-      src={asset.uri}
-      alt="Model"
-      camera-controls
-      ar-modes="webxr"
-      width="100%"
-      style={{ width: "55px", height: "55px", background: "transparent" }}
-    >
-    </model-viewer>
+  if (multimediaType === "vr") {
+    return (
+      <model-viewer
+        src={asset.uri}
+        alt="Model"
+        camera-controls
+        ar-modes="webxr"
+        width="100%"
+        style={{ width: "55px", height: "55px", background: "transparent" }}
+      ></model-viewer>
+    )
   }
 
-  return null;
+  return null
 }
 
 async function getType(uri: string) {
   if (!uri) {
-    return;
+    return
   }
   try {
-    const { headers } = await axios.get(uri);
+    const { headers } = await axios.get(uri)
     console.log(headers)
-    const type = headers["content-type"];
-  
+    const type = headers["content-type"]
+
     return {
       uri,
-      type
+      type,
     }
   } catch (err) {
-    console.error(err);
-    return;
+    console.error(err)
+    return
   }
 }
 
-export const ItemDetails = ({ item }) => {
-  const [assetIndex, setAssetIndex] = useState(0);
-  const [assets, setAssets] = useState([])
-  const [asset, setAsset] = useState(null);
-  const { db } = useDatabase();
-  const { tags, removeNftsFromTag, addNftsToTag } = useTags();
+export const ItemDetails = ({ item }: { item: Nft }) => {
+  const [assetIndex, setAssetIndex] = useState(0)
+  const [assets, setAssets] = useState<Asset[]>([])
+  const [asset, setAsset] = useState<Asset | null>(null)
+  const { db } = useDatabase()
+  const { tags, removeNftsFromTag, addNftsToTag } = useTags()
+  const { isAdmin } = useAccess()
   const router = useRouter()
+  const { connection } = useConnection()
+  const { collections } = useDatabase()
+  const metaplex = useMetaplex()
+  const wallet = useWallet()
+  const [gate, setgate] = useState(null)
+  const basePath = useBasePath()
+  const [metadataShowing, setMetadataShowing] = useState(false)
 
-  const selectedTags = useLiveQuery(() => db && db
-    .taggedNfts
-    .where({ nftId: item.nftMint })
-    .toArray(),
-    [item, db],
-    []
-  ) || [];
+  function toggleMetadataShowing() {
+    setMetadataShowing(!metadataShowing)
+  }
+
+  const selectedTags =
+    useLiveQuery(() => db && db.taggedNfts.where({ nftId: item.nftMint }).toArray(), [item, db], []) || []
 
   function forward() {
     setAssetIndex(assets[assetIndex + 1] ? assetIndex + 1 : 0)
@@ -164,69 +279,86 @@ export const ItemDetails = ({ item }) => {
   }
 
   async function getAssets() {
-    const assets = (await Promise.all(uniq([
-      ...(item.json?.animation_url ? [item.json.animation_url] : []),
-      ...(item.json?.image ? [item.json.image] : []),
-      ...(item.json?.properties?.files ? item.json?.properties.files.map(f => f.uri) : []),
-      ...(item.json?.properties?.dna ? item.json.properties.dna.map(child => child.metadata.image) : [])
-    ]).map(getType))).filter(item => item && item.type)
-    console.log({assets})
+    const assets = (
+      await Promise.all(
+        uniq([
+          ...(item.json?.animation_url ? [item.json.animation_url] : []),
+          ...(item.json?.image ? [item.json.image] : []),
+          ...(item.json?.properties?.files ? item.json?.properties.files.map((f) => f.uri) : []),
+          ...(item.json?.properties?.dna
+            ? (item.json.properties.dna as any).map((child: any) => child.metadata.image)
+            : []),
+        ]).map(getType)
+      )
+    ).filter((item) => item && item.type)
 
-    setAssets(assets)
+    setAssets(assets as Asset[])
   }
 
   useEffect(() => {
     getAssets()
   }, [])
-  
+
   useEffect(() => {
-    const asset = assets[assetIndex];
+    const asset = assets[assetIndex]
     setAsset(asset)
   }, [assets, assetIndex])
 
-  async function addTag(tag) {
+  async function addTag(tag: Tag) {
     await addNftsToTag(tag.id, [item.nftMint])
     toast.success(`Added item to ${tag.name}`)
   }
 
-  async function removeTag(tag) {
-    await removeNftsFromTag(tag.id, [item.nftMint]);
+  async function removeTag(tag: Tag) {
+    await removeNftsFromTag(tag.id, [item.nftMint])
     toast.success(`Removed item from ${tag.name}`)
   }
-  console.log(item)
+
+  const collection = collections.find((c) => c.id === item.collectionIdentifier)
+
+  const statuses = {
+    staked: "Staked",
+    frozen: "Frozen",
+    inVault: "In Vault",
+  }
 
   return (
-    <Card sx={{ height: "100%", outline: 'none !important', width: "100%", overflowY: "auto" }}>
+    <Card sx={{ height: "100%", outline: "none !important", width: "100%", overflowY: "auto", padding: 2 }}>
       <Stack direction="row">
-        <Box sx={{ width: "100%", }}>
-          <Stack spacing={2} justifyContent="center">
-            <Box sx={{
-              position: "relative",
-              width: "100%",
-              height: "auto",
-              "&:hover": {
-                ".MuiStack-root": {
-                  opacity: 1
-                }
-            }}}>
+        <Box sx={{ width: "100%" }}>
+          <Stack spacing={2} justifyContent="center" alignItems="center">
+            <Box
+              sx={{
+                position: "relative",
+                width: "100%",
+                height: "auto",
+                aspectRatio: "1 / 1",
+                "&:hover": {
+                  ".MuiStack-root": {
+                    opacity: 1,
+                  },
+                },
+              }}
+            >
               <Asset asset={asset} />
-              {
-                assets.length > 1 && (
-                  <Stack
+              {assets.length > 1 && (
+                <Stack
+                  sx={{
+                    width: "100%",
+                    position: "absolute",
+                    height: "100%",
+                    opacity: 0,
+                    transition: "opacity .2s",
+                    top: 0,
+                    pointerEvents: "none",
+                  }}
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
+                  <Box
+                    onClick={back}
                     sx={{
-                      width: "100%",
-                      position: "absolute",
-                      height: "100%",
-                      opacity: 0,
-                      transition: "opacity .2s",
-                      top: 0,
-                      pointerEvents: "none"
-                    }}
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <Box onClick={back} sx={{
                       pointerEvents: "all",
                       backgroundColor: "rgba(0, 0, 0, 0.6)",
                       position: "absolute",
@@ -236,11 +368,14 @@ export const ItemDetails = ({ item }) => {
                       cursor: "pointer",
                       left: 0,
                       display: "flex",
-                      alignItems: "center"
-                    }}>
-                      <ArrowBackIosNew />
-                    </Box>
-                    <Box onClick={forward} sx={{
+                      alignItems: "center",
+                    }}
+                  >
+                    <ArrowBackIosNew />
+                  </Box>
+                  <Box
+                    onClick={forward}
+                    sx={{
                       pointerEvents: "all",
                       backgroundColor: "rgba(0, 0, 0, 0.6)",
                       position: "absolute",
@@ -250,105 +385,188 @@ export const ItemDetails = ({ item }) => {
                       cursor: "pointer",
                       right: 0,
                       display: "flex",
-                      alignItems: "center"
-                    }}>
-                      <ArrowForwardIos />
-                    </Box>
-                  </Stack>
-                )
-              }
+                      alignItems: "center",
+                    }}
+                  >
+                    <ArrowForwardIos />
+                  </Box>
+                </Stack>
+              )}
             </Box>
-            {
-              asset && <Link href={asset.uri} sx={{ textAlign: "center", display: "block", marginBottom: "2em !important" }} underline="hover" variant="h6">View full asset</Link>
-            }
+            <Stack direction="row" spacing={2}>
+              {asset && (
+                <Button href={asset.uri} target="_blank" rel="noreferrer" variant="contained" size="large">
+                  View full asset
+                </Button>
+              )}
+              <Button size="large" onClick={toggleMetadataShowing}>
+                {metadataShowing ? "View image" : "View metadata"}
+              </Button>
+            </Stack>
           </Stack>
-              
         </Box>
-        <CardContent sx={{ width: "100%"}}>
+        <CardContent sx={{ width: "100%" }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h4">
-              {item.json?.name || item.name}
+            <Typography variant="h4" fontFamily="Lato" fontWeight="bold">
+              {item.json?.name || item.metadata.name}
             </Typography>
-            <Typography>
-              {item.json?.symbol || item.symbol}
-            </Typography>
+            <Typography color="primary">{item.json?.symbol || item.metadata.symbol}</Typography>
           </Stack>
           <hr />
           <Stack spacing={2}>
-            <Typography variant="h5">Details</Typography>
+            <Typography variant="h5" color="primary" fontFamily="Lato" fontWeight="bold">
+              Details
+            </Typography>
             <Table>
               <TableRow>
-                <TableCell>Mint address</TableCell>
+                <TableCell>
+                  <Typography fontWeight="bold" color="primary">
+                    Mint address
+                  </Typography>
+                </TableCell>
                 <TableCell sx={{ textAlign: "right" }}>
-                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end">
-                    <Link href={`https://solscan.io/token/${item.nftMint}`}>
-                      <img src="/solscan.png" width="15px" style={{ display: "block" }}/>
-                    </Link>
-                    <Typography>
-                      {shorten(item.nftMint)}
-                    </Typography>
-                  </Stack>
+                  <CopyAddress>{item.nftMint}</CopyAddress>
                 </TableCell>
               </TableRow>
+              {[0, 1, 4].includes(unwrapSome(item.metadata.tokenStandard)!) && collection && (
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Collection
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <Typography>
+                      <NextLink href={`${basePath}/collections/${collection.id}`} passHref>
+                        <Link underline="hover">{collection.collectionName}</Link>
+                      </NextLink>
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
               <TableRow>
-                <TableCell>Token standard</TableCell>
-                <TableCell sx={{ textAlign: "right" }}>{tokenStandards[item.tokenStandard] || "NFT"}</TableCell>
+                <TableCell>
+                  <Typography fontWeight="bold" color="primary">
+                    Token standard
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ textAlign: "right" }}>
+                  <Typography>{tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}</Typography>
+                </TableCell>
               </TableRow>
-              {
-                item.tokenStandard === 3 && (
-                  <TableRow>
-                    <TableCell>Edition #</TableCell>
-                    <TableCell sx={{ textAlign: "right" }}>Editions</TableCell>
-                  </TableRow>
-                )
-              }
+              {unwrapSome(item.metadata.tokenStandard) === TokenStandard.NonFungibleEdition && (
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Edition #
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <Typography>
+                      {item.editionDetails?.edition.toString()} of {item.editionDetails?.supply.toString()}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
               <TableRow>
-                <TableCell>Royalties</TableCell>
-                <TableCell sx={{ textAlign: "right" }}>{item.sellerFeeBasisPoints / 100}%</TableCell>
+                <TableCell>
+                  <Typography fontWeight="bold" color="primary">
+                    Royalties
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ textAlign: "right" }}>
+                  <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
+                </TableCell>
               </TableRow>
+              {item.status && (
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Status
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <Typography>{statuses[item.status as keyof object]}</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {gate && (
+                <TableRow>
+                  <TableCell>gate</TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <CopyAddress>{gate}</CopyAddress>
+                  </TableCell>
+                </TableRow>
+              )}
             </Table>
             <Typography>{item.json?.description}</Typography>
-            <Typography variant="h5">Traits</Typography>
-            {
-              item.json?.attributes?.length
-                ? <Stack direction="row" spacing={0} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                    {
-                      (item.json?.attributes || []).map((att, index) => (
-                        <Box key={index} sx={{ borderRadius: "5px", border: "1px solid GrayText", padding: 1 }}>
-                          <Typography color="GrayText" textTransform="uppercase">{ att.trait_type }</Typography>
-                          <Typography>{ att.value }</Typography>
-                        </Box>
-                      ))
-                    }
-                  </Stack>
-                : <Typography variant="h6">None</Typography>
-            }
-            <Typography variant="h6">Tags</Typography>
-            <Stack direction="row"
-              spacing={0}
-              sx={{ flexWrap: 'wrap', gap: 1 }}
-            >
-            {
-              tags.map(tag => {
-                const isSelected = selectedTags.map(item => item.tagId).includes(tag.id);
-                return (
-                  <Chip
-                    label={tag.name}
-                    key={tag.id}
-                    onDelete={() => isSelected ? removeTag(tag) : addTag(tag)}
-                    onClick={() => router.push(`/tag/${tag.id}`)}
-                    color={tag.id}
-                    variant={isSelected ? "contained" : "outlined"}
-                    deleteIcon={!isSelected && <AddCircleIcon />}
-                  />
-                )
-              })
-            }
-            </Stack>
-            
+            <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">
+              Traits
+            </Typography>
+            {item.json?.attributes?.length ? (
+              <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>
+                {(item.json?.attributes || []).map((att, index) => (
+                  <Box
+                    key={index}
+                    sx={{ borderRadius: "5px", border: "1px solid", padding: 1, borderColor: "primary.main" }}
+                  >
+                    <Typography color="primary" textTransform="uppercase">
+                      {att.trait_type}
+                    </Typography>
+                    <Typography>{att.value}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="h6">None</Typography>
+            )}
+            {isAdmin && !router.query.publicKey && (
+              <>
+                <Typography variant="h5" fontFamily="Lato" color="primary" fontWeight="bold">
+                  Tags
+                </Typography>
+                <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>
+                  {tags.map((tag) => {
+                    const isSelected = selectedTags.map((item) => item.tagId).includes(tag.id)
+                    return (
+                      <Chip
+                        label={tag.name}
+                        key={tag.id}
+                        onDelete={isAdmin ? () => (isSelected ? removeTag(tag) : addTag(tag)) : undefined}
+                        onClick={() => router.push(`/tags/${tag.id}`)}
+                        // @ts-ignore
+                        color={tag.id}
+                        variant={isSelected ? "filled" : "outlined"}
+                        deleteIcon={!isSelected ? <AddCircleIcon /> : undefined}
+                      />
+                    )
+                  })}
+                </Stack>
+              </>
+            )}
           </Stack>
         </CardContent>
       </Stack>
+      <Dialog fullScreen onClose={toggleMetadataShowing} open={metadataShowing}>
+        <IconButton sx={{ position: "fixed", top: 1, right: 1 }} size="large">
+          <Close fontSize="large" onClick={toggleMetadataShowing} />
+        </IconButton>
+        <Card
+          sx={{
+            overflow: "auto",
+            backgroundColor: "#111",
+            backgroundImage: "url(/books-lighter.svg)",
+            backgroundAttachment: "fixed",
+            height: "100vh",
+            borderRadius: 0,
+          }}
+        >
+          <CardContent>
+            <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(item.json, null, 2)}</pre>
+          </CardContent>
+        </Card>
+      </Dialog>
     </Card>
   )
 }
@@ -362,28 +580,46 @@ const colors = {
   Common: "#333333",
 }
 
-const Rarity = ({ rank, type, tier }) => {
-  return <Chip
-    icon={type === "howRare" && <HowRare style={{marginLeft: "0.5em" }} />}
-    label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
-    sx={{ backgroundColor: colors[tier] }}
-    size="small"
-  />
+type RarityProps = {
+  rank: number
+  type: "moonRank" | "howRare"
+  tier: RarityTier
 }
 
-export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, affected = false }) => {
-  const { updateStarred, updateItem } = useDatabase();
+const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
+  const { layoutSize } = useUiSettings()
+
+  return (
+    <Chip
+      icon={type === "howRare" ? <HowRare style={{ marginLeft: "0.5em" }} /> : undefined}
+      label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
+      sx={{ backgroundColor: colors[tier as keyof object], fontSize: layoutSize === "small" ? "10px" : "inherit" }}
+      size="small"
+    />
+  )
+}
+
+export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
+  const { updateItem } = useDatabase()
   const { layoutSize, showInfo } = useUiSettings()
-  const { frozen, inVault } = useFrozen();
-  const { renderItem } = useDialog();
-  const metaplex = useMetaplex();
+  const { rarity } = useNfts()
+  const { renderItem } = useDialog()
+  const metaplex = useMetaplex()
+  const { isAdmin } = useAccess()
+  const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
+
+  const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
+
+  const { transactions } = useTransactionStatus()
+  const transaction = transactions.find((t) => t.nftMint === item.nftMint)
 
   async function loadNft() {
     try {
-      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) });
+      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
       await updateItem({
         ...item,
-        ...nft
+        json: nft.json,
+        jsonLoaded: true,
       })
     } catch (err) {
       console.log(err)
@@ -391,45 +627,36 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
   }
 
   useEffect(() => {
+    if (item.json) return
     loadNft()
   }, [item])
 
+  const starred = starredNfts.includes(item.nftMint)
+
   async function onStarredChange(e: SyntheticEvent) {
-    await updateStarred(item.nftMint, !item.starred)
+    if (!isAdmin) return
+    if (starred) {
+      await removeNftFromStarred(item.nftMint)
+    } else {
+      await addNftToStarred(item.nftMint)
+    }
   }
 
   const onNftClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    const target = e.target as HTMLElement;
-    if (['LABEL', 'INPUT'].includes(target.tagName)) {
-      return;
+    if (!isAdmin) return
+    e.stopPropagation()
+    const target = e.target as HTMLElement
+    if (["LABEL", "INPUT"].includes(target.tagName)) {
+      return
     }
-    select(item.nftMint)
+    select?.(item.nftMint)
   }
-
-  const LockedIndicator = styled(Rating)({
-    '& .MuiRating-iconFilled': {
-      color: '#ff6d75',
-    },
-    '& .MuiRating-iconHover': {
-      color: '#ff3d47',
-    },
-  });
-
-  const FrozenIndicator = styled(Rating)({
-    '& .MuiRating-iconFilled': {
-      color: "#a6e3e0"
-    },
-    '& .MuiRating-iconHover': {
-      color: "#a6e3e0"
-    },
-  });
 
   const fontSizes = {
     small: "14px",
     medium: "20px",
     large: "28px",
-    collage: "3opx"
+    collage: "3opx",
   }
 
   const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
@@ -438,10 +665,28 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
     small: 0.5,
     medium: 0.75,
     large: 1,
-    collage: 5
+    collage: 5,
   }
 
-  const infoShowing = showInfo && layoutSize !== "collage";
+  const infoShowing = showInfo && layoutSize !== "collage"
+  const colors = {
+    frozen: "#c8ad7f",
+    inVault: "#a6e3e0",
+    staked: "#ffffff",
+  }
+
+  const transactionIcons = {
+    send: <PlaneIcon />,
+    burn: <LocalFireDepartment />,
+    freeze: <LockIcon />,
+    thaw: <LockOpenIcon />,
+  }
+
+  const statusTitles = {
+    staked: "Staked",
+    inVault: "In Vault",
+    frozen: "Frozen",
+  }
 
   return (
     <Card
@@ -452,16 +697,54 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
         position: "relative",
         margin: margins[layoutSize],
         userSelect: "none",
+        overflow: "visible",
 
         "&:hover": {
           ".MuiStack-root, .MuiSvgIcon-root": {
-            opacity: 1
-          }
-        }
+            opacity: 1,
+          },
+        },
       }}
-      
-      onClick={() =>  renderItem(ItemDetails, { item })}>
-          <>
+      onClick={() => renderItem(ItemDetails, { item })}
+    >
+      {transaction && (
+        <Box
+          sx={{
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {transaction.status === "pending" && (
+            <CircularProgressWithLabel>
+              <SvgIcon fontSize="large" color={transaction.type === "burn" ? "error" : "primary"}>
+                {transactionIcons[transaction.type as keyof object]}
+              </SvgIcon>
+            </CircularProgressWithLabel>
+          )}
+
+          {transaction.status === "success" && (
+            <SvgIcon fontSize="large" color={transaction.type === "burn" ? "error" : "success"}>
+              {transactionIcons[transaction.type as keyof object]}
+            </SvgIcon>
+          )}
+
+          {transaction.status === "error" && (
+            <SvgIcon fontSize="large" color={transaction.type === "burn" ? "disabled" : "error"}>
+              {transactionIcons[transaction.type as keyof object]}
+            </SvgIcon>
+          )}
+        </Box>
+      )}
+      <>
+        {isAdmin && (
           <Stack
             direction="row"
             justifyContent="space-between"
@@ -470,104 +753,174 @@ export const Item: FC<ItemProps> = memo(({ item, selected, select, DragHandle, a
             sx={{
               position: infoShowing ? "static" : "absolute",
               top: 0,
+              zIndex: 1,
+              overflow: "visible",
               width: "100%",
               padding: "0.5em",
               background: "rgba(20, 20, 20, 0.8)",
               opacity: infoShowing || (layoutSize === "collage" && selected) ? 1 : 0,
-              transition: infoShowing ? "none" : 'opacity 0.2s',
+              transition: infoShowing ? "none" : "opacity 0.2s",
               "&:hover": {
                 ".plus-minus.MuiSvgIcon-root": {
-                  color: "white"
-                }
-              }
+                  color: "white",
+                },
+              },
               // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
             }}
           >
-            {/* <FrozenIndicator
-              max={1}
-              value={frozen.includes(item.nftMint) ? 1 : 0}
-              icon={<AcUnitIcon fontSize="inherit" />}
-              emptyIcon={<AcUnitIcon fontSize="inherit" />}
-              size={layoutSize}
-            /> */}
             <Rating
               max={1}
-              value={item.starred ? 1 : 0}
+              value={starred ? 1 : 0}
               onChange={onStarredChange}
-              size={layoutSize === "collage" ? "large" : "layoutSize"}
+              size={layoutSize === "collage" ? "large" : layoutSize}
             />
-            { DragHandle }
+            {DragHandle}
             <RadioIndicator
               className="plus-minus"
               sx={{
                 fontSize: fontSizes[layoutSize],
-                color: "grey"
+                color: "grey",
               }}
             />
             {/* <LockedIndicator
-              max={1}
-              value={inVault.includes(item.nftMint) ? 1 : 0}
-              icon={<LockIcon fontSize="inherit" />}
-              emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
-              size={layoutSize}
-            /> */}
+                max={1}
+                value={inVault.includes(item.nftMint) ? 1 : 0}
+                icon={<LockIcon fontSize="inherit" />}
+                emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
+                size={layoutSize}
+              /> */}
           </Stack>
-          {
-            
-            item.jsonLoaded
-              ? <Box sx={{
-                width: "100%",
-                aspectRatio: layoutSize === "collage" ? "auto" : "1 / 1",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center"
-              }}><img
-              src={item.json?.image
-                ? `https://img-cdn.magiceden.dev/${layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"}/plain/${item.json?.image}`
-                : "/books.svg"
+        )}
+
+        {item.jsonLoaded ? (
+          <Box
+            sx={{
+              width: "100%",
+              aspectRatio: layoutSize === "collage" ? "auto" : "1 / 1",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              position: "relative",
+            }}
+          >
+            <img
+              src={
+                item.json?.image
+                  ? `https://img-cdn.magiceden.dev/${
+                      layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"
+                    }/plain/${item.json?.image}`
+                  : "/books.svg"
               }
-              onError={e => e.target.src = "./books.svg"}
+              onError={(e: any) => (e.target.src = "/books.svg")}
               width="100%"
               style={{ display: "block" }}
-            /></Box>
-              : <Box sx={{
-                width: "100%",
-                aspectRatio: "1 / 1",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center"
-              }}>
-                <CircularProgress />
+            />
+            {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
+              <Chip
+                label={(item.balance || 1).toLocaleString()}
+                sx={{
+                  position: "absolute",
+                  backgroundColor: "rgba(0, 0, 0, 0.8)",
+                  right: "0.5em",
+                  bottom: "0.5em",
+                  fontWeight: "bold",
+                }}
+              />
+            )}
+            {item.status && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: "0.25em",
+                  right: "0.25em",
+                  backgroundColor: "rgba(0, 0, 0, 0.8)",
+                  padding: "5px",
+                  // auto: "40px",
+                  // height: "40px",
+                  aspectRatio: "1 / 1",
+                  borderRadius: "100%",
+                }}
+              >
+                <Tooltip title={statusTitles[item.status as keyof object]}>
+                  <SvgIcon
+                    sx={{
+                      color: colors[item.status as keyof object],
+                      display: "block",
+                    }}
+                    fontSize="small"
+                  >
+                    <Frozen />
+                  </SvgIcon>
+                </Tooltip>
               </Box>
-            }      
-            {
-              infoShowing && <CardContent sx={{ position: "relative" }}>
-                <Typography sx={{
-                  // fontSize: `${7 / cols[layoutSize]}vw`,
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  fontWeight: "bold"
-                }}>{item.json?.name || item.name || "Unknown"}</Typography>
-                <Stack sx={{ position: "absolute", top: "-15px", width: "calc(100% - 1em)", right: "0.5em" }} direction="row" justifyContent="space-between" spacing={2}>
-                  {
-                    item.howRare && <Rarity type="howRare" rank={item.howRare} tier={item.howRareTier} />
-                  }
-                  {
-                    item.moonRank && <Rarity type="moonRank" rank={item.moonRank} tier={item.moonRankTier} />
-                  }
-                </Stack>
-              </CardContent>
-            }
-            {
-              layoutSize === "collage" && <CardContent>
-                <Stack direction="row" justifyContent="center">{ item.name }</Stack>
-              </CardContent>
-            }
-          </>
+            )}
+            {item.loan && <Loan loan={item.loan} />}
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              width: "100%",
+              aspectRatio: "1 / 1",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              position: "relative",
+            }}
+          >
+            <img src="/loading-slow.gif" width="100%" />
+            {item.loan && <Loan loan={item.loan} />}
+          </Box>
+        )}
+
+        {infoShowing && (
+          <CardContent sx={{ position: "relative" }}>
+            <Typography
+              sx={{
+                // fontSize: `${7 / cols[layoutSize]}vw`,
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                fontWeight: "bold",
+              }}
+            >
+              {item.json?.name || item.metadata?.name || "Unknown"}
+            </Typography>
+            {itemRarity && (
+              <Stack
+                sx={{
+                  position: "absolute",
+                  top: layoutSize === "small" ? "-34px" : "-15px",
+                  width: "calc(100% - 1em)",
+                  right: layoutSize === "small" ? "unset" : "0.5em",
+                  left: layoutSize === "small" ? "-3px" : "unset",
+                }}
+                direction={layoutSize === "small" ? "column" : "row"}
+                justifyContent={layoutSize === "small" ? "flex-start" : "space-between"}
+                alignItems={layoutSize === "small" ? "flex-start" : "center"}
+                spacing={layoutSize === "small" ? 0.25 : 1}
+              >
+                {itemRarity.howRare ? (
+                  <Rarity type="howRare" rank={itemRarity.howRare} tier={itemRarity.howRareTier!} />
+                ) : (
+                  <Box />
+                )}
+                {itemRarity.moonRank ? (
+                  <Rarity type="moonRank" rank={itemRarity.moonRank} tier={itemRarity.moonRankTier} />
+                ) : (
+                  <Box />
+                )}
+              </Stack>
+            )}
+          </CardContent>
+        )}
+        {layoutSize === "collage" && showInfo && (
+          <CardContent>
+            <Stack direction="row" justifyContent="center">
+              {item.json?.name || item.metadata?.name}
+            </Stack>
+          </CardContent>
+        )}
+      </>
     </Card>
   )
-}, (prev, next) => {
-  return isEqual(prev.item, next.item) &&
-    prev.selected === next.selected
-})
+}

@@ -1,34 +1,49 @@
-import { Box, Grid, Stack, Typography } from "@mui/material"
+import { Box, Button, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "../../context/ui-settings"
-import { Item, ItemProps } from "../Item"
-import { FC, ReactComponentElement, memo, useEffect, useState } from "react";
-import { useSelection } from "../../context/selection";
-import Masonry from '@mui/lab/Masonry';
-import { useDatabase } from "../../context/database";
-import { sample, update } from "lodash";
-import { CSS } from "@dnd-kit/utilities";
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
-import DragHandleIcon from '@mui/icons-material/DragHandle';
-import { FixedSizeGrid } from "react-window";
-import AutoSizer from "react-virtualized-auto-sizer";
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Item } from "../Item"
+import { ElementType, FC, useEffect, useState } from "react"
+import { useSelection } from "../../context/selection"
+import Masonry from "@mui/lab/Masonry"
+import { useDatabase } from "../../context/database"
+import { sample } from "lodash"
+import { CSS } from "@dnd-kit/utilities"
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import DragHandleIcon from "@mui/icons-material/DragHandle"
+import { FixedSizeGrid } from "react-window"
+import AutoSizer from "react-virtualized-auto-sizer"
+import useMediaQuery from "@mui/material/useMediaQuery"
+import { useTheme } from "@mui/material/styles"
 
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   rectSortingStrategy,
-  useSortable
+  useSortable,
 } from "@dnd-kit/sortable"
-import { useFilters } from "../../context/filters";
-import { useSorting } from "../../context/sorting";
-import { useWidth } from "../../hooks/use-width";
-import { WalletSearch } from "../WalletSearch";
+import { useWidth } from "../../hooks/use-width"
+import { WalletSearch } from "../WalletSearch"
+import { useBasePath } from "../../context/base-path"
+import Link from "next/link"
+import { useNfts } from "../../context/nfts"
+import { Nft } from "../../db"
+import { CollectionItem } from "../../pages/collections"
 
 interface ItemsProps {
-  items: Item[];
-  Component?: FC;
+  items: Nft[] | CollectionItem[]
+  Component?: FC<any>
+  updateOrder?: Function
+  sortable?: boolean
+  onSelect?: Function
+  squareChildren?: boolean
 }
 
 function getWaitingMessage() {
@@ -37,46 +52,49 @@ function getWaitingMessage() {
     "Dividing one by zero...",
     "Skipping the light fantastic...",
     "Initiating primary thrusters...",
-    "Shaking, not stirring..."
+    "Shaking, not stirring...",
   ]
 
   return sample(messages)
 }
 
-const SortableItem = (props) => {
+type SortableItemProps = {
+  id: string
+  Component: React.ElementType
+  item: any
+  affected: any
+  select?: Function
+}
+
+const SortableItem: FC<SortableItemProps> = (props) => {
   const { selected } = useSelection()
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: props.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? "100" : "auto",
-    opacity: isDragging ? 0 : 1
-  };
-  
+    opacity: isDragging ? 0 : 1,
+  }
+
   const Child = props.Component || Item
 
-  const DragHandle = <DragHandleIcon
-    sx={{
-      cursor: "grab",
-      color: "#666",
-      userSelect: "none",
-      outline: "0 !important",
-      "&:active": {
-        cursor: "grabbing !important"
-      }
-    }}
-    {...listeners}
-    {...attributes}
-  />
-  
+  const DragHandle = (
+    <DragHandleIcon
+      sx={{
+        cursor: "grab",
+        color: "#666",
+        userSelect: "none",
+        outline: "0 !important",
+        "&:active": {
+          cursor: "grabbing !important",
+        },
+      }}
+      {...listeners}
+      {...attributes}
+    />
+  )
+
   return (
     <div ref={setNodeRef} style={style}>
       <Box>
@@ -89,25 +107,36 @@ const SortableItem = (props) => {
         />
       </Box>
     </div>
-  );
-};
+  )
+}
 
-const Cell = ({ columnIndex, rowIndex, style, data }) => {
+type CellProps = {
+  columnIndex: number
+  rowIndex: number
+  style: any
+  data: any
+}
+
+const Cell: FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
   const { selected } = useSelection()
+
   const { cards, columnCount, Component, select } = data
   const singleColumnIndex = columnIndex + rowIndex * columnCount
-  const card = cards[singleColumnIndex];
-  const Child = Component || Item;
+  const card = cards[singleColumnIndex]
+  const Child = Component || Item
+
   return (
     <div style={style}>
-      {card && <Child
-        item={card}
-        id={card.nftMint}
-        index={card.nftMint}
-        key={card.nftMint}
-        select={select}
-        selected={selected.includes(card.nftMint)}
-      />}
+      {card && (
+        <Child
+          item={card}
+          id={card.nftMint}
+          index={card.nftMint}
+          key={card.nftMint}
+          select={select}
+          selected={selected.includes(card.nftMint)}
+        />
+      )}
     </div>
   )
 }
@@ -116,17 +145,17 @@ export const cols = {
   xl: {
     small: 12,
     medium: 9,
-    large: 6
+    large: 6,
   },
   lg: {
     small: 10,
     medium: 7,
-    large: 4
+    large: 4,
   },
   md: {
     small: 8,
     medium: 5,
-    large: 3
+    large: 3,
   },
   sm: {
     small: 6,
@@ -136,211 +165,240 @@ export const cols = {
   xs: {
     small: 4,
     medium: 2,
-    large: 1
-  }
+    large: 1,
+  },
 }
 
-const Cards = ({ cards, Component, select }) => {
-  const theme = useTheme();
+type CardsProps = {
+  cards: any[]
+  Component: ElementType
+  select?: Function
+  squareChildren?: boolean
+}
+
+const Cards: FC<CardsProps> = ({ cards, Component, select, squareChildren }) => {
+  const theme = useTheme()
   const { layoutSize, showInfo } = useUiSettings()
   const pageWidth = useWidth()
-  console.log({ pageWidth })
 
   return (
-    <Box sx={{ height: "calc(100vh - 195px)", marginBottom: 10, marginRight: 2 }}>
-    <SortableContext items={cards.map(item => item.nftMint)} strategy={rectSortingStrategy}>
-      <AutoSizer defaultWidth={1920} defaultHeight={1080}>
-        {({ width, height }) => {
-          // if(initialWidth === -1){
-          //   setInitialWidth(width);
-          // }
-          const cardWidth = width / cols[pageWidth][layoutSize];
-          const cardHeight = showInfo ? cardWidth * 4/3.5 + 80 : cardWidth
-          const columnCount = Math.floor(width / cardWidth);
-          const rowCount = Math.ceil(cards.length / columnCount);
-          return (
-            <FixedSizeGrid
-              className="grid"
-              width={width}
-              height={height}
-              columnCount={columnCount}
-              columnWidth={cardWidth}
-              rowCount={rowCount}
-              rowHeight={cardHeight}
-              itemData={{ cards, columnCount, Component, select }}
-            >
-              {Cell}
-            </FixedSizeGrid>
-          );
-        }}
-      </AutoSizer>
-    </SortableContext>
-  </Box>
+    <Box sx={{ height: "calc(100vh - 195px)" }}>
+      <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
+        <AutoSizer defaultWidth={1920} defaultHeight={1080}>
+          {({ width, height }) => {
+            const adjust = 80
+            const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object]
+            const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
+            const columnCount = Math.floor(width! / cardWidth)
+            const rowCount = Math.ceil(cards.length / columnCount)
+            return (
+              <FixedSizeGrid
+                className="grid"
+                width={width!}
+                height={height!}
+                columnCount={columnCount!}
+                columnWidth={cardWidth!}
+                rowCount={rowCount!}
+                rowHeight={cardHeight!}
+                itemData={{ cards, columnCount, Component, select }}
+              >
+                {Cell}
+              </FixedSizeGrid>
+            )
+          }}
+        </AutoSizer>
+      </SortableContext>
+    </Box>
   )
 }
 
-export const Items: FC<ItemsProps> = ({ items: initialItems, Component, sortable = false, updateOrder }) => {
-  const [activeId, setActiveId] = useState(null);
-  const { collageView, layoutSize } = useUiSettings();
-  const { selected, setSelected } = useSelection();
-  const { syncing } = useDatabase();
-  const { sort } = useFilters();
+export const Items: FC<ItemsProps> = ({
+  items: initialItems,
+  Component,
+  sortable = false,
+  updateOrder,
+  onSelect,
+  squareChildren,
+}) => {
+  const [activeId, setActiveId] = useState(null)
+  const { layoutSize, sort } = useUiSettings()
+  const { selected, setSelected } = useSelection()
+  const { syncing } = useDatabase()
+  const { loading } = useNfts()
   const [items, setItems] = useState(initialItems)
-  const [affected, setAffected] = useState([]);
-  const { setSorting } = useSorting();
-  const width = useWidth();
-  
-  const select = nftMint => {
-    setSelected(selected => {
+  const width = useWidth()
+  const basePath = useBasePath()
+
+  const select = (nftMint: string) => {
+    setSelected((selected: string[]) => {
       if (selected.includes(nftMint)) {
-        return selected.filter(s => nftMint !== s);
+        return selected.filter((s) => nftMint !== s)
       }
-      return [
-        ...selected,
-        nftMint
-      ]
+      return [...selected, nftMint]
     })
   }
 
   const sizes = {
     small: 1,
     medium: 1.5,
-    large: 2
+    large: 2,
   }
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
+      coordinateGetter: sortableKeyboardCoordinates,
     })
-  );
+  )
 
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id);
-  };
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id)
+  }
 
   useEffect(() => {
     setItems(initialItems)
   }, [initialItems])
 
-  const handleDragEnd = async (event) => {
-    setActiveId(null);
-    const { active, over } = event;
+  const handleDragEnd = async (event: any) => {
+    setActiveId(null)
+    const { active, over } = event
 
     if (active.id !== over.id) {
-      const ids = items.map(item => item.nftMint)
-      const oldIndex = ids.indexOf(active.id);
-      const newIndex = ids.indexOf(over.id);
+      const ids = items.map((item) => (item as Nft).nftMint)
+      const oldIndex = ids.indexOf(active.id)
+      const newIndex = ids.indexOf(over.id)
 
       const sortedIndexes = [oldIndex, newIndex].sort((a, b) => a - b)
-      const affected = ids.slice(sortedIndexes[0], sortedIndexes[1] + 1)
-      setAffected(affected)
-      setSorting(true)
 
-      const sorted = arrayMove(items, oldIndex, newIndex)
+      const sorted = arrayMove(items as Nft[], oldIndex, newIndex)
       setItems(sorted)
-      const toUpdate = sorted
-        .map((item, index) => {
-          return {
-            nftMint: item.nftMint,
-            sortedIndex: index
-          }
-        })
+      const toUpdate = sorted.map((item, index) => {
+        return {
+          nftMint: item.nftMint,
+          sortedIndex: index,
+        }
+      })
 
-      await updateOrder(toUpdate)
+      await updateOrder?.(toUpdate)
     }
-  };
+  }
 
-  const Child = Component || Item;
+  const Child = Component || Item
 
   if (layoutSize === "collage") {
     const masonrySizes = {
       xl: {
         cols: 5,
-        gap: 3
+        gap: 3,
       },
       lg: {
         cols: 4,
-        gap: 2.5
+        gap: 2.5,
       },
       md: {
         cols: 3,
-        gap: 2
+        gap: 2,
       },
       sm: {
         cols: 2,
-        gap: 1.5
+        gap: 1.5,
       },
       xs: {
         cols: 2,
-        gap: 1.2
-      }
+        gap: 1.2,
+      },
     }
 
-    console.log({ masonrySizes })
-
-    return <Box sx={{
-      overflowY: "scroll",
-      width: "100%",
-      height: "calc(100vh - 150px)",
-      padding: "4px",
-      marginBottom: "0px",
-    }}><Masonry columns={masonrySizes[width].cols} spacing={masonrySizes[width].gap}>
-      { items.map(item => <Child key={item.nftMint} item={item} select={select} selected={selected.includes(item.nftMint)} />)}
-    </Masonry>
-    </Box>
+    return (
+      <Box
+        sx={{
+          // overflowY: 'scroll',
+          width: "100%",
+          padding: "4px",
+          marginBottom: "0px",
+          height: "100%",
+        }}
+      >
+        <Masonry
+          columns={(masonrySizes[width as keyof object] as any).cols}
+          spacing={(masonrySizes[width as keyof object] as any).gap}
+        >
+          {items.map((item: any) => (
+            <Child key={item.nftMint} item={item} select={select} selected={selected.includes(item.nftMint)} lazyLoad />
+          ))}
+        </Masonry>
+      </Box>
+    )
   }
 
-  return items.length
-    ? (
-      <Box sx={{
+  return !loading && items.length ? (
+    <Box
+      sx={{
         overflowY: "hidden",
         width: "100%",
-        height: "100%",
         padding: "4px",
         marginBottom: "0px",
-      }}>
-        {
-          sort === "sortedIndex" && sortable
-            ? (
-            <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-                onDragStart={handleDragStart}
-              >
-                <Cards cards={items} Component={SortableItem} select={select} />
-                <DragOverlay>
-                  {activeId ? (
-                    <Child
-                      item={items.find(i => i.nftMint === activeId)}
-                      DragHandle={<DragHandleIcon
-                        sx={{
-                          cursor: "grabbing",
-                          color: "#666",
-                          userSelect: "none",
-                          outline: "0 !important",
-                        }}
-                      />
-                    } /> 
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-            )
-            : <Cards cards={items} Component={Component} select={select} />
-          }
-        
-      
-      </Box>
-      
-    )
-    : <Box sx={{ height: "calc(100vh - 195px)", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
-        <Stack spacing={2} width="100%" justifyContent="center" alignItems="center">
-          <Typography variant="h5" textAlign="center">{ syncing ? getWaitingMessage() : "Nothing here yet..."}</Typography>
-          {
-            !syncing && <WalletSearch />
-          }
-        </Stack>
-      </Box>
-    
+      }}
+    >
+      {sort === "custom" && sortable ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+        >
+          <Cards cards={items} Component={SortableItem} select={onSelect || select} squareChildren={squareChildren} />
+          <DragOverlay>
+            {activeId ? (
+              <Child
+                item={(items as Nft[]).find((i) => i.nftMint === activeId)!}
+                DragHandle={
+                  <DragHandleIcon
+                    sx={{
+                      cursor: "grabbing",
+                      color: "#666",
+                      userSelect: "none",
+                      outline: "0 !important",
+                    }}
+                  />
+                }
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <Cards cards={items} Component={Component as any} select={onSelect || select} squareChildren={squareChildren} />
+      )}
+    </Box>
+  ) : (
+    <Box
+      sx={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        paddingTop: 5,
+      }}
+    >
+      <Stack spacing={2} width="100%" justifyContent="flex-start" alignItems="center">
+        {syncing ? (
+          <Typography variant="h5" textAlign="center">
+            {getWaitingMessage()}
+          </Typography>
+        ) : (
+          <Stack spacing={2}>
+            <Typography variant="h5" textAlign="center">
+              Nothing here yet...
+            </Typography>
+            <Link href={`${basePath}/`} passHref>
+              <Button>View all collections</Button>
+            </Link>
+            <Typography textAlign="center">or</Typography>
+            <WalletSearch />
+          </Stack>
+        )}
+      </Stack>
+    </Box>
+  )
 }
