@@ -15,7 +15,7 @@ import { FC, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import axios from "axios"
 import { Items } from "../Items"
-import { Nft } from "../../../nextauth"
+import { Nft } from "../../types/nextauth"
 
 const Nft: FC<{ item: Nft; select: Function }> = ({ item, select }) => {
   return (

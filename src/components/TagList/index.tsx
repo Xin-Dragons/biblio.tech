@@ -105,6 +105,7 @@ export const TagList: FC<TagListProps> = ({ filtered }) => {
         const selectedNfts = taggedNfts.filter((n) => n.tagId === tag.id).map((n) => n.nftId)
         return (
           <Tag
+            key={tag.id}
             tag={tag}
             isSelected={Boolean(selected.length && selected.every((mint) => selectedNfts.includes(mint)))}
             addToTag={addToTag}

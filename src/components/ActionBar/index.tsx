@@ -46,6 +46,7 @@ import { toast } from "react-hot-toast"
 import { useTags } from "../../context/tags"
 import VaultIcon from "./vault.svg"
 import { Connection, PublicKey } from "@solana/web3.js"
+import { PublicKey as UmiPublicKey } from "@metaplex-foundation/umi"
 import { useMetaplex } from "../../context/metaplex"
 import { Metadata, toBigNumber } from "@metaplex-foundation/js"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
@@ -566,7 +567,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
               umi.identity.publicKey
             )
 
-            let masterEditionMint
+            let masterEditionMint: UmiPublicKey | undefined = undefined
             let masterEditionToken
             const isEdition =
               isSome(digitalAsset.metadata.tokenStandard) &&
@@ -784,7 +785,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
         )}
         <Search />
       </Stack>
-      <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing} maxWidth="xl">
+      {/* <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing} maxWidth="xl">
         <DialogTitle>Export collage</DialogTitle>
         <Stack spacing={2}>
           {collageOptions.map((option) => {
@@ -830,7 +831,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
             )
           })}
         </Stack>
-      </Dialog>
+      </Dialog> */}
 
       <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
         <DialogTitle>Bulk send</DialogTitle>

@@ -10,7 +10,7 @@ import base58 from "bs58"
 import { Selector } from "../Selector"
 import { useSession } from "next-auth/react"
 import { useDatabase } from "../../context/database"
-import { User } from "../../../nextauth"
+import { User } from "../../types/nextauth"
 
 type ProfileProps = {
   user: User

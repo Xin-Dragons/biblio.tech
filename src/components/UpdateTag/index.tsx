@@ -108,9 +108,10 @@ export const UpdateTag: FC<UpdateTagProps> = ({
           <Typography variant="h5">Colour</Typography>
           <RadioGroup value={color} onChange={(e, color) => setColor(color)}>
             <Stack spacing={2} direction={"row"}>
-              {presets.map((preset) => {
+              {presets.map((preset, index) => {
                 return (
                   <Radio
+                    key={index}
                     sx={{
                       "&, &.Mui-checked": {
                         color: preset,

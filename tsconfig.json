@@ -1,6 +1,6 @@
 {
     "extends": "./tsconfig.root.json",
-    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "src/pages/api/auth/[...nextauth].ts"],
+    "include": ["src/types/next-env.d.ts", "**/*.ts", "**/*.tsx", "src/pages/api/auth/[...nextauth].ts"],
     "compilerOptions": {
         "outDir": "lib",
         "target": "es6",
