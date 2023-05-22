@@ -165,8 +165,6 @@ const Home: NextPage = () => {
       !flatten(collections.map((c: any) => c.nfts.map((cn: Nft) => cn.nftMint))).includes(n.nftMint)
   )
 
-  console.log(uncategorized)
-
   if (collections.length && uncategorized.length) {
     collections.push({
       id: "uncategorized",

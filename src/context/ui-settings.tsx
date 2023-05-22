@@ -49,6 +49,12 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   const { db } = useDatabase()
 
+  useEffect(() => {
+    if (!router.query.collectionId && !router.query.tag && !router.query.filter) {
+      setShowTags(false)
+    }
+  }, [router.query])
+
   const uiSettings = useLiveQuery(
     () => {
       const page = router.query.filter || router.query.collectionId || router.query.tag

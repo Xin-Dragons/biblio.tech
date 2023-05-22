@@ -234,7 +234,6 @@ async function getType(uri: string) {
   }
   try {
     const { headers } = await axios.get(uri)
-    console.log(headers)
     const type = headers["content-type"]
 
     return {
@@ -589,12 +588,18 @@ type RarityProps = {
 const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
   const { layoutSize } = useUiSettings()
 
+  const sizes = {
+    small: "12px",
+    medium: "16x",
+    large: "16px",
+  }
+
   return (
     <Chip
       icon={type === "howRare" ? <HowRare style={{ marginLeft: "0.5em" }} /> : undefined}
       label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
-      sx={{ backgroundColor: colors[tier as keyof object], fontSize: layoutSize === "small" ? "10px" : "inherit" }}
-      size="small"
+      sx={{ backgroundColor: colors[tier as keyof object], fontSize: sizes[layoutSize as keyof object] || "inherit" }}
+      size={layoutSize === "large" ? "medium" : "small"}
     />
   )
 }

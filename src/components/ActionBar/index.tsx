@@ -235,7 +235,6 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   }
 
   function getUmiChunks(instructionSets: InstructionSet[]) {
-    console.log(instructionSets)
     return chunkBy(instructionSets, (ch: InstructionSet[], i: number) => {
       if (!instructionSets[i + 1]) {
         return true
@@ -352,7 +351,6 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
       )
 
       const chunks = getUmiChunks(instructionSets)
-      console.log(chunks)
       const txns = await Promise.all(
         chunks.map(async (builders) => {
           const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
@@ -586,7 +584,6 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
 
               const masterEditionDigitalAsset = await fetchDigitalAssetWithTokenByMint(umi, fromWeb3JsPublicKey(key))
               masterEditionMint = masterEditionDigitalAsset.mint.publicKey
-              console.log(base58PublicKey(masterEditionMint))
               masterEditionToken = masterEditionDigitalAsset.token.publicKey
             }
 

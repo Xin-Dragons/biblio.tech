@@ -57,7 +57,6 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
   const { tags } = useTags()
 
   useEffect(() => {
-    console.log(tags)
     const colors = tags
       .filter((t) => t.color)
       .reduce((all, item) => {

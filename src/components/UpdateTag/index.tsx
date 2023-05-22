@@ -73,7 +73,6 @@ export const UpdateTag: FC<UpdateTagProps> = ({
       if (!name || !color) {
         throw new Error("Missing params")
       }
-      console.log(name, color, customColor)
       await onUpdate(id, name, color === "custom" ? customColor : color)
       setColor(initialColor)
       setName(initialName)

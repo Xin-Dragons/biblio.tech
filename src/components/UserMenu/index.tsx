@@ -35,7 +35,6 @@ export const UserMenu: FC = () => {
   }, [wallet.publicKey, session])
 
   useEffect(() => {
-    console.log(wallet.connected, status)
     if (wallet.connected && status === "unauthenticated") {
       handleSignIn()
     }

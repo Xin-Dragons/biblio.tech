@@ -31,7 +31,6 @@ async function getRarity(nfts: Nft[]) {
 }
 
 self.addEventListener("message", async event => {
-  console.log('rarity started')
   try {
     const { nfts } = event.data;
   
@@ -48,11 +47,9 @@ self.addEventListener("message", async event => {
         lastParsed: Date.now()
       } as Rarity
     })
-    console.log('rarity ended')
     self.postMessage({ updates });
   } catch (err) {
     console.log(err)
-    console.log('rarity error')
     self.postMessage({ok: true});
   }
 })

@@ -78,10 +78,8 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
           const { data: user } = await axios.get(`${process.env.API_URL}/biblio/${token.sub}`, { headers });
           Object.assign(session.user, user)
           const settings = user?.access_nft?.collection?.['biblio-collections']
-          console.log({settings}, settings && settings.active && !settings.hours_active)
           session.user.active = !!(settings && settings.active && !settings.hours_active)
         }
-        console.log(session)
         return session;
       },
     },

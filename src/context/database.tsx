@@ -184,7 +184,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (!publicKey) return
-    console.log({ publicKey })
     syncDataWorker()
   }, [publicKey])
 
@@ -223,7 +222,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     const rarity = await db.rarity.toArray()
     const toUpdate = nfts.filter((n) => {
       const r = rarity.find((r) => r.nftMint === n.nftMint)
-      console.log(r && Date.now() - (r.lastParsed || Date.now()) >= MS_PER_DAY)
       return !r || force || Date.now() - (r.lastParsed || Date.now()) >= MS_PER_DAY
     })
 

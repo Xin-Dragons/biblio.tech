@@ -82,10 +82,6 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     })
   }
 
-  useEffect(() => {
-    console.log(transactions)
-  }, [transactions])
-
   return (
     <TransactionStatusContext.Provider
       value={{

@@ -154,9 +154,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     setNfts(nftsFromDb)
   }, [nftsFromDb])
 
-  useEffect(() => {
-    setNfts([])
-  }, [router.query])
+  // useEffect(() => {
+  // setNfts([])
+  // }, [router.query])
 
   // if (collections.length && nfts.find((n) => !n.helloMoonCollectionId)) {
   //   collections.push({
@@ -214,8 +214,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         values.some((val: any) => val.includes(s))
       )
     })
-
-  console.log("SORT", sort)
 
   if (sort === "name") {
     filtered = sortBy(filtered, (item) => (item.json ? item.json.name : item.metadata.name))
