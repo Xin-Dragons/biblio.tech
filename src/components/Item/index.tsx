@@ -611,7 +611,6 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
   const { isAdmin } = useAccess()
-  const umi = useUmi()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
 
   const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
@@ -622,8 +621,6 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   async function loadNft() {
     try {
       const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
-      const file = await umi.downloader.downloadJson(item.metadata.uri)
-      console.log({ file })
       await updateItem({
         ...item,
         json: nft.json,

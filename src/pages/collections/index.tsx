@@ -159,7 +159,7 @@ const Home: NextPage = () => {
       }
     })
     .filter(Boolean)
-    .filter((item: any) => item.nfts.length)
+    .filter((item: any) => item.allNfts.length)
 
   const uncategorized = nfts.filter(
     (n) =>
@@ -172,13 +172,14 @@ const Home: NextPage = () => {
       id: "uncategorized",
       name: "Uncategorized",
       image: "/books.svg",
-      nfts: uncategorized,
+      allNfts: uncategorized,
+      nfts: uncategorized.filter((n) => allFilteredMints.includes(n.nftMint)),
       value: 0,
     })
   }
 
-  let filteredCollections = collections.filter((item) => {
-    return item.nfts.length
+  let filteredCollections = collections.filter((item: any) => {
+    return !search || item?.name.toLowerCase().includes(search?.toLowerCase()) || item.nfts.length
   })
 
   if (sort === "value") {
@@ -188,13 +189,6 @@ const Home: NextPage = () => {
   } else if (sort === "holdings") {
     filteredCollections = sortBy(filteredCollections, (item) => item?.nfts.length).reverse()
   }
-
-  console.log(
-    difference(
-      filtered.map((f) => f.id),
-      collections.map((c) => c.id)
-    )
-  )
 
   return (
     <Layout nfts={collections as CollectionItem[]} filtered={filteredCollections as CollectionItem[]} selection={false}>

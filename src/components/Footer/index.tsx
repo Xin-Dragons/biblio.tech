@@ -8,8 +8,10 @@ import {
   IconButton,
   Link,
   Stack,
+  Theme,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from "@mui/material"
 import { FC, ReactNode, useEffect, useState } from "react"
 import WifiIcon from "@mui/icons-material/Wifi"
@@ -22,7 +24,9 @@ import { useUiSettings } from "../../context/ui-settings"
 import SyncIcon from "@mui/icons-material/Sync"
 import axios from "axios"
 import format from "date-fns/format"
-import { useConnection } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { LAMPORTS_PER_SOL } from "@solana/web3.js"
+import { AccountBalanceWallet } from "@mui/icons-material"
 
 function Time() {
   const [time, setTime] = useState("")
@@ -103,13 +107,19 @@ const TPS = () => {
   )
 }
 
-const FooterSection: FC<{ children: ReactNode; first?: boolean }> = ({ children, first }) => {
+const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean; last?: boolean }> = ({
+  children,
+  first,
+  right,
+  last,
+}) => {
   return (
     <Box
       sx={{
-        borderRight: "1px solid #333",
-        paddingRight: 2,
+        borderRight: right ? "none" : "1px solid #333",
+        borderLeft: right ? "1px solid #333" : "none",
         paddingLeft: first ? 0 : 2,
+        paddingRight: right ? (last ? 0 : 2) : 2,
       }}
     >
       {children}
@@ -117,10 +127,41 @@ const FooterSection: FC<{ children: ReactNode; first?: boolean }> = ({ children,
   )
 }
 
+const Balance: FC = () => {
+  const wallet = useWallet()
+  const { connection } = useConnection()
+  const [balance, setBalance] = useState(0)
+
+  async function getBalance() {
+    try {
+      const bal = await connection.getBalance(wallet.publicKey!)
+      setBalance(bal)
+    } catch {
+      setBalance(0)
+    }
+  }
+
+  useEffect(() => {
+    if (wallet.publicKey) {
+      getBalance()
+    } else {
+      setBalance(0)
+    }
+  }, [wallet.publicKey])
+
+  return (
+    <Typography variant="body2" fontWeight="bold">
+      ◎{(balance / LAMPORTS_PER_SOL).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+    </Typography>
+  )
+}
+
 export const Footer: FC = () => {
   const [synced, setSynced] = useState(false)
   const { syncing, sync, syncingData, syncingRarity } = useDatabase()
   const previousLoading = usePrevious(syncing)
+  const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
+  const wallet = useWallet()
 
   useEffect(() => {
     if (!synced) return
@@ -180,34 +221,59 @@ export const Footer: FC = () => {
                 </Link>
               </Stack>
             </FooterSection>
-          </Stack>
-          <Box sx={{ padding: 0.25, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
-            <Typography variant="body2" fontWeight="bold" color="grey">
-              https://biblio.tech
-            </Typography>
-          </Box>
-          <Stack direction="row">
-            {!syncing && !synced && (
-              <Tooltip title="Refetch data">
-                <SyncIcon onClick={sync as any} sx={{ cursor: "pointer" }} />
-              </Tooltip>
-            )}
-            {syncing && !synced ? (
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography color="primary" variant="body2" fontWeight="bold">
-                  {syncingData ? "Syncing data..." : syncingRarity && "Pulling rarity..."}
+            {attachWeb && (
+              <FooterSection>
+                <Typography variant="body2" fontWeight="bold" color="grey">
+                  https://biblio.tech
                 </Typography>
-                <CircularProgress size="1rem" />
-              </Stack>
-            ) : (
-              <Box />
+              </FooterSection>
             )}
-            {synced && (
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography color="#66bb6a">Synced</Typography>
-                <DoneIcon color="success" />
-              </Stack>
+          </Stack>
+          {!attachWeb && (
+            <Box sx={{ padding: 0.25, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
+              <Typography variant="body2" fontWeight="bold" color="grey">
+                https://biblio.tech
+              </Typography>
+            </Box>
+          )}
+
+          <Stack direction="row" alignItems="center">
+            {wallet.connected && (
+              <FooterSection right>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <AccountBalanceWallet fontSize="small" />
+                  <Balance />
+                </Stack>
+              </FooterSection>
             )}
+            {syncing && (
+              <FooterSection right>
+                {syncing && !synced ? (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography color="primary" variant="body2" fontWeight="bold">
+                      {syncingData ? "Syncing data..." : syncingRarity && "Pulling rarity..."}
+                    </Typography>
+                    <CircularProgress size="1rem" />
+                  </Stack>
+                ) : (
+                  <Box />
+                )}
+                {synced && (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography color="#66bb6a">Synced</Typography>
+                    <DoneIcon color="success" />
+                  </Stack>
+                )}
+              </FooterSection>
+            )}
+
+            <FooterSection right last>
+              <Tooltip title="Refetch data">
+                <IconButton onClick={sync as any} disabled={syncing} size="small">
+                  <SyncIcon sx={{ cursor: "pointer" }} />
+                </IconButton>
+              </Tooltip>
+            </FooterSection>
           </Stack>
         </Stack>
       </Container>
