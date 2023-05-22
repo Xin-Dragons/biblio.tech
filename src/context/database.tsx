@@ -47,7 +47,7 @@ const initial = {
   removeNftsFromVault: noop,
   stakeNft: noop,
   unstakeNft: noop,
-  syncingMetadata: noop,
+  syncingMetadata: false,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)

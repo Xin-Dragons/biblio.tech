@@ -1,4 +1,4 @@
-import { Metaplex, PublicKey } from "@metaplex-foundation/js";
+import { Metaplex, Nft, PublicKey, Sft } from "@metaplex-foundation/js";
 import { Connection } from "@solana/web3.js";
 import { chunk, flatten } from "lodash";
 
@@ -44,9 +44,9 @@ self.addEventListener("message", async event => {
   
     const metadata = await getMetadata(mints)
   
-    self.postMessage({ metadata: mints.map(m => {
+    self.postMessage({ metadata: mints.map((m: string) => {
       try {
-        const result = metadata.find(meta => meta.mint.address.toBase58() === m)
+        const result = metadata.find((meta: any) => meta?.mint?.address?.toBase58() === m) as Nft | Sft
         if (result) {
           return {
             nftMint: m,
