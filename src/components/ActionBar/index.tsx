@@ -771,7 +771,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
         )}
 
         {includeStarredControl && (
-          <Tooltip title="Toggle favourites filter">
+          <Tooltip title={showStarred ? "Show all" : "Show only starred"}>
             <IconButton onClick={toggleStarred}>
               <StarIcon
                 sx={{ opacity: showStarred ? 1 : 0.55, color: showStarred ? "#faaf00" : "inherit" }}

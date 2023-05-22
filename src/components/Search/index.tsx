@@ -2,6 +2,7 @@ import { styled } from "@mui/material/styles"
 import ClearIcon from "@mui/icons-material/Clear"
 import { TextField, IconButton } from "@mui/material"
 import { useFilters } from "../../context/filters"
+import { useNfts } from "../../context/nfts"
 
 const StyledTextField = styled(TextField)({
   "& label": {
@@ -29,10 +30,15 @@ const StyledTextField = styled(TextField)({
 
 export const Search = () => {
   const { search, setSearch } = useFilters()
+  const { nfts } = useNfts()
+  const complete = nfts.filter((n) => n.jsonLoaded)
+  const missingMeta = complete.length < nfts.length
+
   return (
     <StyledTextField
       label="Filter by anything"
       color="primary"
+      helperText={missingMeta && `Filtering by meta for ${complete.length} items`}
       value={search}
       onChange={(e) => setSearch(e.target.value)}
       InputProps={{

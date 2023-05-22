@@ -599,7 +599,7 @@ const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
       icon={type === "howRare" ? <HowRare style={{ marginLeft: "0.5em" }} /> : undefined}
       label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
       sx={{ backgroundColor: colors[tier as keyof object], fontSize: sizes[layoutSize as keyof object] || "inherit" }}
-      size={layoutSize === "large" ? "medium" : "small"}
+      size={"small"}
     />
   )
 }
@@ -611,6 +611,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
   const { isAdmin } = useAccess()
+  const umi = useUmi()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
 
   const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
@@ -621,6 +622,8 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   async function loadNft() {
     try {
       const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
+      const file = await umi.downloader.downloadJson(item.metadata.uri)
+      console.log({ file })
       await updateItem({
         ...item,
         json: nft.json,
@@ -661,7 +664,14 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     small: "14px",
     medium: "20px",
     large: "28px",
-    collage: "3opx",
+    collage: "30px",
+  }
+
+  const nameFontSizes = {
+    small: "12px",
+    medium: "16px",
+    large: "20px",
+    collage: "24px",
   }
 
   const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
@@ -878,18 +888,21 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
         )}
 
         {infoShowing && (
-          <CardContent sx={{ position: "relative" }}>
-            <Typography
-              sx={{
-                // fontSize: `${7 / cols[layoutSize]}vw`,
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                fontWeight: "bold",
-              }}
-            >
-              {item.json?.name || item.metadata?.name || "Unknown"}
-            </Typography>
+          <CardContent sx={{ position: "relative", paddingBottom: "1em !important" }}>
+            <Tooltip title={item.json?.name || item.metadata?.name || "Unknown"}>
+              <Typography
+                sx={{
+                  fontSize: nameFontSizes[layoutSize],
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  fontWeight: "bold",
+                  lineHeight: "2em",
+                }}
+              >
+                {item.json?.name || item.metadata?.name || "Unknown"}
+              </Typography>
+            </Tooltip>
             {itemRarity && (
               <Stack
                 sx={{

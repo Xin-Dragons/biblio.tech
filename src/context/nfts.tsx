@@ -154,9 +154,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     setNfts(nftsFromDb)
   }, [nftsFromDb])
 
-  // useEffect(() => {
-  // setNfts([])
-  // }, [router.query])
+  useEffect(() => {
+    setNfts([])
+  }, [router.query])
 
   // if (collections.length && nfts.find((n) => !n.helloMoonCollectionId)) {
   //   collections.push({
@@ -194,9 +194,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     // .filter((nft) => !untagged || !taggedNfts.map((u) => u.nftId).includes(nft.nftMint))
     .filter((nft) => !showStarred || starredNfts.map((n) => n.nftId).includes(nft.nftMint))
     .filter((nft) => {
-      if (!router.query.filter && !router.query.tag && !router.query.collectionId) {
-        return true
-      }
       if (!search) {
         return true
       }

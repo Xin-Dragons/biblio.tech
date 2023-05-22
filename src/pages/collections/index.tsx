@@ -14,7 +14,7 @@ import { useFilters } from "../../context/filters"
 import { useBasePath } from "../../context/base-path"
 import { publicKey, unwrapSome } from "@metaplex-foundation/umi"
 import { useNfts } from "../../context/nfts"
-import { flatten, sortBy } from "lodash"
+import { difference, flatten, sortBy } from "lodash"
 import { Nft } from "../../db"
 import { useAccess } from "../../context/access"
 
@@ -124,8 +124,9 @@ const Home: NextPage = () => {
   const { db } = useDatabase()
   const { search } = useFilters()
   const { sort } = useUiSettings()
-  const { nfts } = useNfts()
-  const { publicKey } = useAccess()
+  const { nfts, filtered } = useNfts()
+
+  const allFilteredMints = filtered.map((f) => f.nftMint)
 
   const collections = useLiveQuery(
     () =>
@@ -152,7 +153,8 @@ const Home: NextPage = () => {
         id: collection.id,
         image: collection.image,
         name: collection.collectionName,
-        nfts: collectionNfts,
+        allNfts: collectionNfts,
+        nfts: collectionNfts.filter((n) => allFilteredMints.includes(n.nftMint)),
         value: value || 0,
       }
     })
@@ -175,27 +177,28 @@ const Home: NextPage = () => {
     })
   }
 
-  let filtered = collections.filter((nft: any) => {
-    if (!search) {
-      return true
-    }
-
-    const s = search.toLowerCase()
-    const name = nft.name
-    return name.toLowerCase().includes(s)
+  let filteredCollections = collections.filter((item) => {
+    return item.nfts.length
   })
 
   if (sort === "value") {
-    filtered = sortBy(filtered, ["value", (item) => item?.nfts.length]).reverse()
+    filteredCollections = sortBy(filteredCollections, ["value", (item) => item?.nfts.length]).reverse()
   } else if (sort === "name") {
-    filtered = sortBy(filtered, (item: any) => item.name.toLowerCase().trim())
+    filteredCollections = sortBy(filteredCollections, (item: any) => item.name.toLowerCase().trim())
   } else if (sort === "holdings") {
-    filtered = sortBy(filtered, (item) => item?.nfts.length).reverse()
+    filteredCollections = sortBy(filteredCollections, (item) => item?.nfts.length).reverse()
   }
 
+  console.log(
+    difference(
+      filtered.map((f) => f.id),
+      collections.map((c) => c.id)
+    )
+  )
+
   return (
-    <Layout nfts={collections as CollectionItem[]} filtered={filtered as CollectionItem[]} selection={false}>
-      <Items items={filtered as CollectionItem[]} Component={Collection} sortable />
+    <Layout nfts={collections as CollectionItem[]} filtered={filteredCollections as CollectionItem[]} selection={false}>
+      <Items items={filteredCollections as CollectionItem[]} Component={Collection} sortable />
     </Layout>
   )
 }
