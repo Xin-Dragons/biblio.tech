@@ -28,6 +28,7 @@ type DatabaseContextProps = {
   removeNftsFromVault: Function
   stakeNft: Function
   unstakeNft: Function
+  syncingMetadata: boolean
 }
 
 const initial = {
@@ -46,6 +47,7 @@ const initial = {
   removeNftsFromVault: noop,
   stakeNft: noop,
   unstakeNft: noop,
+  syncingMetadata: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -60,6 +62,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const nfts = useLiveQuery(() => db.nfts.where({ owner: publicKey }).toArray(), [publicKey], [])
+  const [syncingMetadata, setSyncingMetadata] = useState(false)
   const collections = useLiveQuery(
     () =>
       db.collections
@@ -187,6 +190,43 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     syncDataWorker()
   }, [publicKey])
 
+  async function updateMetadata(metadata: any) {
+    await db.nfts.bulkUpdate(
+      metadata.map((item: any) => {
+        return {
+          key: item.nftMint,
+          changes: {
+            json: item.json,
+            jsonLoaded: item.jsonLoaded,
+          },
+        }
+      })
+    )
+  }
+
+  async function syncMetadataWorker(items: Nft[], force?: boolean) {
+    setSyncingMetadata(true)
+    const worker = new Worker(new URL("../../public/get-metadata.worker.ts", import.meta.url))
+    worker.addEventListener("message", async (event) => {
+      setSyncingMetadata(false)
+      await updateMetadata(event.data.metadata)
+    })
+
+    const nfts = await db.nfts.where({ owner: publicKey }).toArray()
+
+    const mints = items
+      .filter((n) => {
+        if (force) {
+          return true
+        }
+        const item = nfts.find((nft) => nft.nftMint === n.nftMint)
+        return !item || !item.json
+      })
+      .map((m) => m.nftMint)
+
+    worker.postMessage({ mints })
+  }
+
   function syncDataWorker(force?: boolean) {
     setSyncingData(true)
     const worker = new Worker(new URL("../../public/get-data.worker.ts", import.meta.url))
@@ -194,6 +234,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       const { type } = event.data
       if (type === "get-rarity") {
         syncRoyaltiesWorker(event.data.nfts, event.data.force)
+        syncMetadataWorker(event.data.nfts, event.data.force)
       } else if (type === "done") {
         setSyncingData(false)
         await Promise.all([
@@ -370,8 +411,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    setSyncing(syncingData || syncingRarity)
-  }, [syncingData, syncingRarity])
+    setSyncing(syncingData || syncingRarity || syncingMetadata)
+  }, [syncingData, syncingRarity, syncingMetadata])
 
   async function sync() {
     if (!publicKey || syncing) {
@@ -414,6 +455,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         removeNftsFromVault,
         stakeNft,
         unstakeNft,
+        syncingMetadata,
       }}
     >
       {children}
