@@ -904,12 +904,12 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               <Stack
                 sx={{
                   position: "absolute",
-                  top: layoutSize === "small" ? "-34px" : "-15px",
+                  top: layoutSize === "small" ? "-15px" : "-15px",
                   width: "calc(100% - 1em)",
                   right: layoutSize === "small" ? "unset" : "0.5em",
-                  left: layoutSize === "small" ? "-3px" : "unset",
+                  left: layoutSize === "small" ? "3px" : "unset",
                 }}
-                direction={layoutSize === "small" ? "column" : "row"}
+                direction={layoutSize === "small" ? "row" : "row"}
                 justifyContent={layoutSize === "small" ? "flex-start" : "space-between"}
                 alignItems={layoutSize === "small" ? "flex-start" : "center"}
                 spacing={layoutSize === "small" ? 0.25 : 1}
