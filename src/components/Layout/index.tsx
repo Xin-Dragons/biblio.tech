@@ -88,7 +88,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered, nfts, showUntagged
                       paddingTop: 5,
                     }}
                     spacing={2}
-                  >
+                  className="not-connected-wrap">
                     <Typography variant="h5" textTransform="uppercase">
                       Wallet not connected
                     </Typography>
