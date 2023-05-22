@@ -70,14 +70,14 @@ h1, h2, h3, h4, h5, h6 {
   display: none;  /* Safari and Chrome */
 }
 
-.no-items-wrap a{
+.no-items-wrap a, .not-connected-wrap button{
     color: rgb(17 54 58) !important;
     font-weight: 800  !important;
     background-color: #6cbec9  !important;
     font-size: 25px  !important}
-.no-items-wrap fieldset{border-color: rgb(108, 190, 201) !important;}
-.no-items-wrap input {font-size:30px !important}
-.no-items-wrap label {color:#6cbec9 !important}
+.no-items-wrap fieldset, .not-connected-wrap fieldset{border-color: rgb(108, 190, 201) !important;}
+.no-items-wrap input, .not-connected-wrap input {font-size:30px !important}
+.no-items-wrap label, .not-connected-wrap label {color:#6cbec9 !important}
 
 // /* Works on Firefox */
 // * {
