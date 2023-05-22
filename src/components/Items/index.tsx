@@ -391,7 +391,7 @@ export const Items: FC<ItemsProps> = ({
             <Typography variant="h5" textAlign="center">
               Nothing here yet...
             </Typography>
-            <Link href={`${basePath}/`} passHref style={{fontSize:"25px",backgroundColor:"#6cbec9"}}>
+            <Link href={`${basePath}/`} passHref>
               <Button>View all collections</Button>
             </Link>
             <Typography textAlign="center">or</Typography>
