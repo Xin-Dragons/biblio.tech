@@ -70,6 +70,12 @@ h1, h2, h3, h4, h5, h6 {
   display: none;  /* Safari and Chrome */
 }
 
+.no-items-wrap a{
+    color: rgb(17 54 58) !important;
+    font-weight: 800  !important;
+    background-color: #6cbec9  !important;
+    font-size: 25px  !important}
+
 // /* Works on Firefox */
 // * {
 //   scrollbar-width: thin;
