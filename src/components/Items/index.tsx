@@ -387,11 +387,11 @@ export const Items: FC<ItemsProps> = ({
             {getWaitingMessage()}
           </Typography>
         ) : (
-          <Stack spacing={2}>
+          <Stack spacing={2} className="no-items-wrap">
             <Typography variant="h5" textAlign="center">
               Nothing here yet...
             </Typography>
-            <Link href={`${basePath}/`} passHref>
+            <Link href={`${basePath}/`} passHref style={{fontSize:"25px",backgroundColor:"#6cbec9"}}>
               <Button>View all collections</Button>
             </Link>
             <Typography textAlign="center">or</Typography>
