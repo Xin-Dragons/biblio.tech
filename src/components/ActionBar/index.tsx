@@ -41,7 +41,7 @@ import { Search } from "../Search"
 import SellIcon from "@mui/icons-material/Sell"
 import dynamic from "next/dynamic"
 import SendIcon from "@mui/icons-material/Send"
-import { LocalFireDepartment, Public, SmartphoneOutlined } from "@mui/icons-material"
+import { Label, LabelOff, LocalFireDepartment, Public, SmartphoneOutlined } from "@mui/icons-material"
 import { toast } from "react-hot-toast"
 import { useTags } from "../../context/tags"
 import VaultIcon from "./vault.svg"
@@ -115,7 +115,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const router = useRouter()
   const wallet = useWallet()
   const { isAdmin } = useAccess()
-  const { showStarred, setShowStarred, showTags, setShowTags } = useUiSettings()
+  const { showStarred, setShowStarred, showTags, setShowTags, showUntagged, setShowUntagged } = useUiSettings()
   const { selected, setSelected } = useSelection()
   const [collageOptions, setCollageOptions] = useState([])
   const [collageModalShowing, setCollageModalShowing] = useState(false)
@@ -128,7 +128,13 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const { setTransactionInProgress, setTransactionErrors, setTransactionComplete, clearTransactions } =
     useTransactionStatus()
 
-  const includeStarredControl = Boolean(router.query.filter || router.query.tag || router.query.collectionId)
+  const includeStarredControl = Boolean(
+    (router.query.filter && router.query.filter !== "starred") || router.query.tag || router.query.collectionId
+  )
+
+  const includeUnlabeledIcon = Boolean(
+    (router.query.tag && router.query.tag !== "untagged") || router.query.filter || router.query.collectionId
+  )
   const selection = includeStarredControl
 
   const [recipient, setRecipient] = useState("")
@@ -318,12 +324,23 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
 
       const instructionSets = await Promise.all(
         toSend.map(async (item: Metadata) => {
+          let amount = BigInt(1)
+          if ([1, 2].includes(item.tokenStandard || 0)) {
+            const ata = metaplex
+              .tokens()
+              .pdas()
+              .associatedTokenAccount({ mint: item.mintAddress, owner: metaplex.identity().publicKey })
+
+            const balance = await connection.getTokenAccountBalance(ata)
+            amount = BigInt(balance.value.amount)
+          }
           const instSet = []
           instSet.push(
             transferV1(umi, {
               destinationOwner: publicKey(recipient),
               mint: fromWeb3JsPublicKey(item.mintAddress),
               tokenStandard: item.tokenStandard!,
+              amount,
             })
           )
 
@@ -377,6 +394,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
     } finally {
       setRecipient("")
       setSending(false)
+      setBulkSendOpen(false)
     }
   }
 
@@ -770,6 +788,14 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
           </Typography>
         )}
 
+        {includeUnlabeledIcon && (
+          <Tooltip title={showUntagged ? "Show all" : "Show only untagged"}>
+            <IconButton onClick={() => setShowUntagged(!showUntagged)}>
+              {showUntagged ? <LabelOff /> : <Label />}
+            </IconButton>
+          </Tooltip>
+        )}
+
         {includeStarredControl && (
           <Tooltip title={showStarred ? "Show all" : "Show only starred"}>
             <IconButton onClick={toggleStarred}>
@@ -782,73 +808,27 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
         )}
         <Search />
       </Stack>
-      {/* <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing} maxWidth="xl">
-        <DialogTitle>Export collage</DialogTitle>
-        <Stack spacing={2}>
-          {collageOptions.map((option) => {
-            let cols = option[1] + option[0] / (option[2] || 1)
-            let factor = 1
-            if (!Number.isInteger(cols)) {
-              cols = cols * ++factor
-              if (!Number.isInteger(cols)) {
-                cols = cols * ++factor
-                if (!Number.isInteger(cols)) {
-                  cols = cols * ++factor
-                  if (!Number.isInteger(cols)) {
-                    cols = cols * ++factor
-                    if (!Number.isInteger(cols)) {
-                      cols = cols * ++factor
-                    }
-                  }
-                }
-              }
-            }
-
-            return (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridGap: "2px",
-                  gridTemplateColumns: new Array(parseInt(cols as any)).fill(`${10 / factor}px`).join(" "),
-                }}
-              >
-                {Array.from(new Array(nfts.length).keys()).map((item, index) => {
-                  return (
-                    <Box
-                      sx={{
-                        backgroundColor: "red",
-                        aspectRatio: "1 / 1",
-                        gridColumn: option[2] && index === 0 ? `1 / ${3 * factor}` : "auto",
-                        gridRow: option[2] && index === 0 ? `1 / ${3 * factor}` : "auto",
-                      }}
-                    />
-                  )
-                })}
-              </Box>
-            )
-          })}
-        </Stack>
-      </Dialog> */}
-
       <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
-        <DialogTitle>Bulk send</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Recipient"
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            sx={{ minWidth: "400px" }}
-            fullWidth
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cancelSend} color="error">
-            Cancel
-          </Button>
-          <Button onClick={bulkSend} variant="contained" disabled={!recipient || !selected.length}>
-            Send
-          </Button>
-        </DialogActions>
+        <Card>
+          <DialogTitle>Bulk send</DialogTitle>
+          <DialogContent>
+            <TextField
+              label="Recipient"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              sx={{ minWidth: "400px" }}
+              fullWidth
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={cancelSend} color="error">
+              Cancel
+            </Button>
+            <Button onClick={bulkSend} variant="contained" disabled={!recipient || !selected.length}>
+              Send
+            </Button>
+          </DialogActions>
+        </Card>
       </Dialog>
 
       <Dialog open={burnOpen} onClose={toggleBurnOpen}>

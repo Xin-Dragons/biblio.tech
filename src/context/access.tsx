@@ -52,13 +52,17 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
+    if (!isActive) {
+      setPublicKey("")
+      return
+    }
     const publicKey = (router.query.publicKey as string) || wallet.publicKey?.toBase58()
     if (!publicKey) {
       setPublicKey("")
     } else {
       getPublicKey(publicKey)
     }
-  }, [router.query.publicKey, wallet.publicKey])
+  }, [router.query.publicKey, wallet.publicKey, isActive])
 
   async function getUser() {
     const publicKey = router.query.publicKey || wallet.publicKey?.toBase58()

@@ -75,7 +75,7 @@ const allOptions = {
 const sortOptionsConfig = {
   loans: ["expiring", "outstanding", "name"],
   nonFungible: ["custom", "name", "howRare", "moonRank"],
-  fungible: ["custom", "balance", "name"],
+  fungible: ["value", "custom", "balance", "name"],
   editions: ["custom", "name", "creator"],
   collections: ["value", "name", "holdings"],
 }
@@ -95,6 +95,7 @@ type SortType =
   | "balance"
   | "value"
   | "holdings"
+  | "price"
 
 export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   const [selectedFilters, setSelectedFilters] = useState({})

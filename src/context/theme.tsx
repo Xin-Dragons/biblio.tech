@@ -17,22 +17,28 @@ const baseTheme = {
   },
   typography: {
     h1: {
-      fontFamily: "Barmeno",
+      fontFamily: "Lato",
+      fontWeight: "bold",
     },
     h2: {
-      fontFamily: "Barmeno",
+      fontFamily: "Lato",
+      fontWeight: "bold",
     },
     h3: {
-      fontFamily: "Barmeno",
+      fontFamily: "Lato",
+      fontWeight: "bold",
     },
     h4: {
-      fontFamily: "Barmeno",
+      fontFamily: "Lato",
+      fontWeight: "bold",
     },
     h5: {
-      fontFamily: "Barmeno",
+      fontFamily: "Lato",
+      fontWeight: "bold",
     },
     h6: {
       fontFamily: "Lato",
+      fontWeight: "normal",
     },
     body1: {
       fontFamily: "Lato",

@@ -158,7 +158,7 @@ const Balance: FC = () => {
 
 export const Footer: FC = () => {
   const [synced, setSynced] = useState(false)
-  const { syncing, sync, syncingData, syncingRarity } = useDatabase()
+  const { syncing, sync } = useDatabase()
   const previousLoading = usePrevious(syncing)
   const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
   const wallet = useWallet()
@@ -251,7 +251,7 @@ export const Footer: FC = () => {
                 {syncing && !synced ? (
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Typography color="primary" variant="body2" fontWeight="bold">
-                      {syncingData ? "Syncing data..." : syncingRarity && "Pulling rarity..."}
+                      {syncing && "Syncing data..."}
                     </Typography>
                     <CircularProgress size="1rem" />
                   </Stack>

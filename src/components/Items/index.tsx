@@ -36,6 +36,8 @@ import Link from "next/link"
 import { useNfts } from "../../context/nfts"
 import { Nft } from "../../db"
 import { CollectionItem } from "../../pages/collections"
+import { useRouter } from "next/router"
+import { useFilters } from "../../context/filters"
 
 interface ItemsProps {
   items: Nft[] | CollectionItem[]
@@ -46,16 +48,36 @@ interface ItemsProps {
   squareChildren?: boolean
 }
 
-function getWaitingMessage() {
+const WaitingMessage: FC = () => {
   const messages = [
     "Recalibrating flux capacitor...",
     "Dividing one by zero...",
     "Skipping the light fantastic...",
     "Initiating primary thrusters...",
     "Shaking, not stirring...",
+    "Waiting for bull market...",
+    "Searching for Sugarman...",
   ]
+  const [message, setMessage] = useState("")
 
-  return sample(messages)
+  function getMessage() {
+    setMessage(sample(messages)!)
+  }
+
+  useEffect(() => {
+    getMessage()
+    const interval = setInterval(getMessage, 2000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
+
+  return (
+    <Typography variant="h5" textAlign="center">
+      {message}
+    </Typography>
+  )
 }
 
 type SortableItemProps = {
@@ -221,13 +243,14 @@ export const Items: FC<ItemsProps> = ({
   squareChildren,
 }) => {
   const [activeId, setActiveId] = useState(null)
-  const { layoutSize, sort } = useUiSettings()
+  const { layoutSize, sort, showStarred, setShowStarred } = useUiSettings()
   const { selected, setSelected } = useSelection()
   const { syncing } = useDatabase()
   const { loading } = useNfts()
   const [items, setItems] = useState(initialItems)
   const width = useWidth()
   const basePath = useBasePath()
+  const { search, setSearch } = useFilters()
 
   const select = (nftMint: string) => {
     setSelected((selected: string[]) => {
@@ -309,6 +332,8 @@ export const Items: FC<ItemsProps> = ({
       },
     }
 
+    console.log((masonrySizes[width as keyof object] as any).cols)
+
     return (
       <Box
         sx={{
@@ -322,6 +347,7 @@ export const Items: FC<ItemsProps> = ({
         <Masonry
           columns={(masonrySizes[width as keyof object] as any).cols}
           spacing={(masonrySizes[width as keyof object] as any).gap}
+          defaultColumns={5}
         >
           {items.map((item: any) => (
             <Child key={item.nftMint} item={item} select={select} selected={selected.includes(item.nftMint)} lazyLoad />
@@ -383,14 +409,14 @@ export const Items: FC<ItemsProps> = ({
     >
       <Stack spacing={2} width="100%" justifyContent="flex-start" alignItems="center">
         {syncing ? (
-          <Typography variant="h5" textAlign="center">
-            {getWaitingMessage()}
-          </Typography>
+          <WaitingMessage />
         ) : (
           <Stack spacing={2} className="no-items-wrap">
-            <Typography variant="h5" textAlign="center">
+            <Typography variant="h5" textAlign="center" fontWeight="normal">
               Nothing here yet...
             </Typography>
+            {search && <Button onClick={() => setSearch("")}>Clear search</Button>}
+            {showStarred && <Button onClick={() => setShowStarred("")}>Toggle starred filter</Button>}
             <Link href={`${basePath}/`} passHref>
               <Button>View all collections</Button>
             </Link>

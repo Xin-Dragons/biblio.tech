@@ -21,6 +21,7 @@ import { TransactionStatusProvider } from "../context/transactions"
 import { SessionProvider } from "next-auth/react"
 import { NftsProvider } from "../context/nfts"
 import { Session } from "next-auth"
+import { InfoProvider } from "../context/info"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -55,18 +56,20 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
                             <MetaplexProvider>
                               <TagsProvider>
                                 <ThemeProvider>
-                                  <Script
-                                    async
-                                    strategy="afterInteractive"
-                                    type="module"
-                                    src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                  />
-                                  <CssBaseline />
-                                  <SelectionProvider>
-                                    <DialogProvider>
-                                      <Component {...pageProps} />
-                                    </DialogProvider>
-                                  </SelectionProvider>
+                                  <InfoProvider>
+                                    <Script
+                                      async
+                                      strategy="afterInteractive"
+                                      type="module"
+                                      src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                    />
+                                    <CssBaseline />
+                                    <SelectionProvider>
+                                      <DialogProvider>
+                                        <Component {...pageProps} />
+                                      </DialogProvider>
+                                    </SelectionProvider>
+                                  </InfoProvider>
                                 </ThemeProvider>
                               </TagsProvider>
                             </MetaplexProvider>

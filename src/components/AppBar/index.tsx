@@ -39,16 +39,19 @@ import { UserMenu } from "../UserMenu"
 import { useNfts } from "../../context/nfts"
 import { useTags } from "../../context/tags"
 import { Color } from "../Tags"
-import { Edit } from "@mui/icons-material"
+import { Edit, Info } from "@mui/icons-material"
 import { UpdateTag } from "../UpdateTag"
 import { FC, useState } from "react"
 import { useDatabase } from "../../context/database"
+import { useInfo } from "../../context/info"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   const { isAdmin } = useAccess()
   const { collections } = useDatabase()
   const router = useRouter()
   const { tag } = useTags()
+  const isVault = router.query.filter === "vault"
+  const { toggleInfo } = useInfo()
 
   let title
   if (router.query.tag && tag) {
@@ -71,6 +74,17 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   } else if (router.query.collectionId) {
     const collection = collections.find((c) => c.id === router.query.collectionId)
     title = collection?.collectionName || "Unknown collection"
+  } else if (isVault) {
+    title = (
+      <Stack direction="row" alignItems="center">
+        <Typography variant="h5" fontFamily="Lato" fontWeight="bold">
+          THE VAULT
+        </Typography>
+        <IconButton onClick={() => toggleInfo("vault")}>
+          <Info />
+        </IconButton>
+      </Stack>
+    )
   } else if (router.query.filter) {
     title = router.query.filter
   } else if (!router.query.collectionId && !router.query.tag && !router.query.filter) {

@@ -19,6 +19,7 @@ export async function getPublicKeyFromSolDomain(domain: string): Promise<string>
 export const WalletSearch: FC = () => {
   const [publicKey, setPublicKey] = useState("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
+  const { isActive } = useAccess()
   const router = useRouter()
 
   useEffect(() => {
@@ -64,7 +65,7 @@ export const WalletSearch: FC = () => {
   }, [publicKey])
 
   function onSubmit() {
-    if (publicKeyError || !publicKey) {
+    if (publicKeyError || !publicKey || !isActive) {
       return
     }
 
@@ -102,6 +103,7 @@ export const WalletSearch: FC = () => {
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       size="small"
+      disabled={!isActive}
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">

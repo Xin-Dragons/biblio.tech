@@ -1,4 +1,5 @@
 import {
+  Avatar,
   Box,
   Button,
   Card,
@@ -813,6 +814,8 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               justifyContent: "center",
               alignItems: "center",
               position: "relative",
+              backgroundImage: "url(/loading-slow.gif)",
+              backgroundSize: "100%",
             }}
           >
             <img
@@ -825,19 +828,40 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               }
               onError={(e: any) => (e.target.src = "/books.svg")}
               width="100%"
-              style={{ display: "block" }}
+              style={{ display: "block", background: "#121212" }}
             />
             {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
-              <Chip
-                label={(item.balance || 1).toLocaleString()}
-                sx={{
-                  position: "absolute",
-                  backgroundColor: "rgba(0, 0, 0, 0.8)",
-                  right: "0.5em",
-                  bottom: "0.5em",
-                  fontWeight: "bold",
-                }}
-              />
+              <Stack>
+                {item.price && item.balance ? (
+                  <>
+                    <Chip
+                      avatar={<Avatar src="/birdeye.png" />}
+                      label={`$${(item.price * item.balance).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                      component="a"
+                      href={`https://birdeye.so/token/${item.nftMint}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      sx={{
+                        position: "absolute",
+                        backgroundColor: "rgba(0, 0, 0, 0.8)",
+                        right: "0.5em",
+                        top: "0.5em",
+                        fontWeight: "bold",
+                      }}
+                    />
+                  </>
+                ) : null}
+                <Chip
+                  label={(item.balance || 1).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  sx={{
+                    position: "absolute",
+                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    right: "0.5em",
+                    bottom: "0.5em",
+                    fontWeight: "bold",
+                  }}
+                />
+              </Stack>
             )}
             {item.status && (
               <Box
@@ -898,6 +922,12 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 }}
               >
                 {item.json?.name || item.metadata?.name || "Unknown"}
+                {unwrapSome(item.metadata.tokenStandard) === 2 && (
+                  <Typography display="inline" variant="body2" color="primary" fontWeight="bold">
+                    {" "}
+                    - ({item.metadata.symbol || item.json?.symbol})
+                  </Typography>
+                )}
               </Typography>
             </Tooltip>
             {itemRarity && (

@@ -36,7 +36,7 @@ type NftsProviderProps = {
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
   const { publicKey } = useAccess()
-  const { showStarred, sort } = useUiSettings()
+  const { showStarred, sort, showUntagged } = useUiSettings()
   const { search } = useFilters()
   const [nfts, setNfts] = useState<Nft[]>([])
 
@@ -51,10 +51,23 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     []
   )
 
+  const allTaggedNfts = useLiveQuery(() => db.taggedNfts.filter((item) => item.tagId !== "starred").toArray(), [], [])
+
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], [])
 
   const order = useLiveQuery(() => db.order.toArray(), [], [])
   const allNFts = useLiveQuery(() => db.nfts.toArray(), [], [])
+
+  const rarity = useLiveQuery(
+    () =>
+      db.rarity
+        // .where("nftMint")
+        // .anyOf(nfts.map((n) => n.nftMint))
+        .filter((r) => Boolean(r.howRare || r.moonRank))
+        .toArray(),
+    [],
+    []
+  )
 
   const nftsFromDb = useLiveQuery(
     () => {
@@ -87,8 +100,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         return query
           .filter((item) =>
             Boolean(
-              // things categorised by HM prob aren't junk
-              !item.helloMoonCollectionId &&
+              !rarity.find((r) => r.nftMint === item.nftMint) &&
+                // things categorised by HM prob aren't junk
+                !item.helloMoonCollectionId &&
                 // we dont know about these yet
                 item.jsonLoaded &&
                 // NFT editions probably aren't junk
@@ -116,7 +130,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       if (router.query.tag) {
         if (router.query.tag === "untagged") {
-          return query.filter((item) => !taggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
+          return query.filter((item) => !allTaggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
         }
         return query.filter((item) => taggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
       }
@@ -137,16 +151,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       return []
     },
     [publicKey, showStarred, sort, router.query, taggedNfts, allNFts],
-    []
-  )
-
-  const rarity = useLiveQuery(
-    () =>
-      db.rarity
-        .where("nftMint")
-        .anyOf(nfts.map((n) => n.nftMint))
-        .toArray(),
-    [nfts],
     []
   )
 
@@ -191,8 +195,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   // });
 
   let filtered: Nft[] = (nfts || [])
-    // .filter((nft) => !untagged || !taggedNfts.map((u) => u.nftId).includes(nft.nftMint))
     .filter((nft) => !showStarred || starredNfts.map((n) => n.nftId).includes(nft.nftMint))
+    .filter((nft) => !showUntagged || !allTaggedNfts.map((t) => t.nftId).includes(nft.nftMint))
     .filter((nft) => {
       if (!search) {
         return true
@@ -205,6 +209,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       const values = (nft.json?.attributes || []).map((att: any) => `${att.value || ""}`.toLowerCase())
       return (
         nft.nftMint === search ||
+        nft.status === s ||
         name.toLowerCase().includes(s) ||
         description.toLowerCase().includes(s) ||
         symbol.toLowerCase().includes(s) ||
@@ -226,6 +231,12 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   if (sort === "outstanding") {
     filtered = sortBy(filtered, (item) => item.loan?.amountToRepay || 0).reverse()
+  }
+
+  if (sort === "value") {
+    filtered = sortBy(filtered, (item) => {
+      return item.balance && item.price ? item.price * item.balance : 0
+    }).reverse()
   }
 
   if (sort === "expiring") {

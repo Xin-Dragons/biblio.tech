@@ -2,7 +2,7 @@ import { Connection } from "@solana/web3.js";
 import { Loan } from "../src/db";
 import { PublicKey } from "@solana/web3.js";
 import { LeaderboardStatsRequest, NftMintsByOwner, NftMintsByOwnerRequest, RestClient } from "@hellomoon/api";
-import { partition, uniqBy, groupBy, findKey, size, uniq } from "lodash";
+import { partition, uniqBy, groupBy, findKey, size, uniq, chunk, flatten } from "lodash";
 import axios from "axios";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
 import { DigitalAsset, JsonMetadata, TokenStandard, fetchAllDigitalAssetByOwner, fetchDigitalAsset, fetchMasterEdition } from "@metaplex-foundation/mpl-token-metadata";
@@ -15,6 +15,32 @@ const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, {
   commitment: "confirmed"
 })
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string);
+
+async function getTokenPrices(mints: string[]) {
+  const batches = chunk(mints, 100)
+
+  const headers = {
+    "Authorization": "Bearer 678c78ac-efa1-42d5-bfea-cc860c73ed3d"
+  }
+
+  const results = flatten(await Promise.all(batches.map(async batch => {
+    try {
+      const params = {
+        mints: batch
+      }
+    
+      const { data } = await axios.post("https://rest-api.hellomoon.io/v0/token/price/batched", params, { headers })
+      return data.data
+    } catch (err) {
+      console.log(err)
+    }
+  })))
+
+  console.log({ results })
+
+  return flatten(results).filter(Boolean)
+
+}
 
 async function getLoanSummaryForUser(publicKey: string, paginationToken?: string): Promise<any> {
   const { data } = await axios.post(`https://rest-api.hellomoon.io/v0/nft/loans`, {
@@ -57,7 +83,7 @@ async function getFrozenStatus(publicKey: string) {
   return {
     staked: staked.map((item: any) => item.account.data.parsed.info.mint),
     frozen: frozen.map((item: any) => item.account.data.parsed.info.mint),
-    inVault: inVault.map((item: any) => item.account.data.parsed.info.mint)
+    inVault: inVault.map((item: any) => item.account.data.parsed.info.mint),
   }
 }
 
@@ -247,15 +273,22 @@ self.addEventListener("message", async event => {
       ...(types[ExtendedTokenStandard.FungibleAsset] || [])
     ]
 
+    const prices = await getTokenPrices(fungibles.map(n => n.nftMint))
+    console.log(prices)
+
     const fungiblesWithBalances = await Promise.all(fungibles.map(async item => {
       const ata = await getAssociatedTokenAddress(new PublicKey(item.nftMint), new PublicKey(owner));
       const balance = await connection.getTokenAccountBalance(ata)
+      const price = prices.find(p => p.mints === item.nftMint);
       return {
         ...item,
         supply: Number(item.mint.supply.toString()),
-        balance: balance.value.uiAmount
+        balance: balance.value.uiAmount,
+        price: price ? price.price / Math.pow(10, 6) : null
       }
     }))
+
+    console.log(fungiblesWithBalances)
 
     const editionsWithNumbers = await Promise.all((types[ExtendedTokenStandard.NonFungibleEdition] || []).map(async item => {
       if (item.edition?.isOriginal) {
@@ -291,7 +324,6 @@ self.addEventListener("message", async event => {
     .filter(item => Boolean(item.id))
 
     const nftsToAdd = [...fungiblesWithBalances, ...nfts, ...editionsWithNumbers];
-    console.log('data ended')
     self.postMessage({ type: "done", collectionsToAdd, nftsToAdd })
 
   } catch (err) {

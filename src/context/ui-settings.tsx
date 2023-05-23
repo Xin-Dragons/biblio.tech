@@ -20,6 +20,8 @@ type UiSettingsContextProps = {
   setShowTags: Function
   sort: string
   setSort: Function
+  showUntagged: boolean
+  setShowUntagged: Function
 }
 
 const initialProps = {
@@ -33,6 +35,8 @@ const initialProps = {
   setShowTags: noop,
   sort: "",
   setSort: noop,
+  showUntagged: true,
+  setShowUntagged: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -42,7 +46,6 @@ type UiSettingsProviderProps = {
 }
 
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
-  const [showStarred, setShowStarred] = useState<boolean>(false)
   const [showTags, setShowTags] = useState<boolean>(false)
   const { nfts } = useNfts()
   const router = useRouter()
@@ -100,11 +103,15 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       showInfo: true,
       layoutSize: "medium",
       sort: "custom",
+      showStarred: false,
+      setShowUntagged: false,
     }
   ) as {
     showInfo: boolean
     layoutSize: LayoutSize
     sort: string
+    showStarred: boolean
+    showUntagged: boolean
   }
 
   async function setSort(sort: string) {
@@ -119,6 +126,14 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("showInfo", show)
   }
 
+  async function setShowStarred(show: boolean) {
+    await updatePreferences("showStarred", show)
+  }
+
+  async function setShowUntagged(show: boolean) {
+    await updatePreferences("showUntagged", show)
+  }
+
   useEffect(() => {
     if (nfts.length > 500 && preferences.layoutSize === "collage") {
       setLayoutSize("large")
@@ -128,9 +143,11 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
   return (
     <UiSettingsContext.Provider
       value={{
+        showUntagged: preferences.showUntagged,
+        setShowUntagged,
         layoutSize: preferences.layoutSize,
         setLayoutSize,
-        showStarred,
+        showStarred: preferences.showStarred,
         setShowStarred,
         showInfo: preferences.showInfo,
         setShowInfo,

@@ -92,7 +92,7 @@ export const SideMenu: FC = () => {
                       </SvgIcon>
                     }
                   >
-                    Vault
+                    The Vault
                   </Button>
                 </Link>
               )}
