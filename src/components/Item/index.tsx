@@ -848,7 +848,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                       href={`https://birdeye.so/token/${item.nftMint}`}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={(e) => {
+                      onClick={(e: any) => {
                         e.stopPropagation()
                       }}
                       sx={{

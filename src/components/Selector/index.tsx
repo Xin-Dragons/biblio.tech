@@ -213,7 +213,7 @@ export const Selector: FC<SelectorProps> = ({
         <Card sx={{ padding: 2 }}>
           {libraryCards.map((card: Nft) => {
             return (
-              <Card sx={{ width: "300px", cursor: "pointer" }} onClick={() => onSelect(card)}>
+              <Card key={card.mint} sx={{ width: "300px", cursor: "pointer" }} onClick={() => onSelect(card)}>
                 <img src={card.metadata.image} width="100%" />
                 <CardContent>
                   <Typography variant="h6" fontWeight="bold" textAlign="center">
