@@ -100,6 +100,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         return query
           .filter((item) =>
             Boolean(
+              // things on HR or MR probably aren't junk
               !rarity.find((r) => r.nftMint === item.nftMint) &&
                 // things categorised by HM prob aren't junk
                 !item.helloMoonCollectionId &&
@@ -116,16 +117,20 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
                     /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
                   ) ||
                   // includes junk words - probably junk
-                  (item.json.description || "").toLowerCase().includes("whitelist") ||
-                  (item.json.description || "").toLowerCase().includes("invited") ||
-                  (item.json.description || "").toLowerCase().includes("upgrade") ||
-                  (item.json.description || "").toLowerCase().includes("reward") ||
-                  (item.json.description || "").toLowerCase().includes("free") ||
-                  (item.json.description || "").toLowerCase().includes("reveal here") ||
-                  (item.json.description || "").toLowerCase().includes("upgrade here") ||
-                  (item.json.description || "").toLowerCase().includes("mystery box") ||
-                  (item.json.description || "").toLowerCase().includes("claim") ||
-                  (item.json.description || "").toLowerCase().includes("exchange here"))
+                  [
+                    "whitelist",
+                    "invited",
+                    "upgrade",
+                    "reward",
+                    "free",
+                    "reveal here",
+                    "upgrade here",
+                    "mystery box",
+                    "claim",
+                    "exchange here",
+                    "airdrop",
+                    "mystery",
+                  ].some((trigger) => (item?.json?.description || "").toLowerCase().includes(trigger)))
             )
           )
           .toArray()

@@ -59,6 +59,8 @@ import {
   revoke,
 } from "@solana/spl-token"
 import {
+  DigitalAsset,
+  DigitalAssetWithToken,
   TokenStandard,
   burnNft,
   burnV1,
@@ -73,6 +75,7 @@ import {
   findMasterEditionPda,
   findMetadataPda,
   findTokenRecordPda,
+  isNonFungible,
   lockV1,
   revokeUtilityV1,
   transferV1,
@@ -576,13 +579,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
       const toBurn = await Promise.all(
         filtered
           .filter((n: any) => selected.includes(n.nftMint))
-          .map(async (n: any) => {
-            const digitalAsset = await fetchDigitalAssetWithAssociatedToken(
-              umi,
-              publicKey(n.nftMint),
-              umi.identity.publicKey
-            )
-
+          .map(async (digitalAsset: Nft) => {
             let masterEditionMint: UmiPublicKey | undefined = undefined
             let masterEditionToken
             const isEdition =
@@ -621,6 +618,12 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
               amount = BigInt(balance.value.amount)
             }
 
+            let digitalAssetWithToken: DigitalAssetWithToken | undefined = undefined
+            const isNonFungible = [0, 3, 4, 5].includes(unwrapSome(digitalAsset.metadata.tokenStandard) || 0)
+            if (isNonFungible) {
+              digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
+            }
+
             const burnInstruction = burnV1(umi, {
               mint: digitalAsset.mint.publicKey,
               authority: umi.identity,
@@ -633,8 +636,8 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
                 ? findMetadataPda(umi, { mint: digitalAsset.metadata.collection.value.key })
                 : undefined,
               edition: isEdition ? digitalAsset.edition?.publicKey : undefined,
-              token: isEdition ? digitalAsset.token.publicKey : undefined,
-              tokenRecord: isEdition ? digitalAsset.tokenRecord?.publicKey : undefined,
+              token: isNonFungible ? digitalAssetWithToken?.token?.publicKey : undefined,
+              tokenRecord: isNonFungible ? digitalAssetWithToken?.tokenRecord?.publicKey : undefined,
               masterEdition: isEdition
                 ? digitalAsset.edition?.isOriginal
                   ? digitalAsset.edition.publicKey
@@ -661,7 +664,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
 
             return {
               instructions: burnInstruction,
-              mint: n.nftMint,
+              mint: digitalAsset.nftMint,
             }
           })
       )
@@ -686,8 +689,6 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
         txns.map((t) => t.mints),
         "burn"
       )
-
-      toast.success("Burned that shit")
     } catch (err: any) {
       console.error(err)
       toast.error(err.message)
@@ -722,23 +723,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Show/hide tags menu">
-              <span>
-                <IconButton
-                  onClick={toggleShowTags}
-                  color="secondary"
-                  sx={{
-                    color: showTags ? "#111316" : "#9c27b0",
-                    background: showTags ? "#9c27b0" : "default",
-                    "&:hover": {
-                      color: "#9c27b0",
-                    },
-                  }}
-                >
-                  <SellIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
+
             <Tooltip
               title={
                 onlyNftsSelected
@@ -765,6 +750,24 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
                   <SvgIcon>
                     <VaultIcon />
                   </SvgIcon>
+                </IconButton>
+              </span>
+            </Tooltip>
+
+            <Tooltip title="Show/hide tags menu">
+              <span>
+                <IconButton
+                  onClick={toggleShowTags}
+                  color="secondary"
+                  sx={{
+                    color: showTags ? "#111316" : "#9c27b0",
+                    background: showTags ? "#9c27b0" : "default",
+                    "&:hover": {
+                      color: "#9c27b0",
+                    },
+                  }}
+                >
+                  <SellIcon />
                 </IconButton>
               </span>
             </Tooltip>

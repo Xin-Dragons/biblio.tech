@@ -163,6 +163,21 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
 
+      const toRemove = fromDb.filter(
+        (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
+      )
+
+      await db.nfts.bulkUpdate(
+        toRemove.map((item) => {
+          return {
+            key: item.nftMint,
+            changes: {
+              owner: null,
+            },
+          }
+        })
+      )
+
       const [toAdd, toUpdate] = partition(
         uniqBy(nfts, (nft) => nft.nftMint),
         (nft) => {

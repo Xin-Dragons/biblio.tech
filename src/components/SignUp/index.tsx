@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -97,6 +98,13 @@ export const SignUp: FC = () => {
     }
   }
 
+  console.log({ session })
+
+  const maxWallets = session?.user?.access_nft?.collection?.["biblio-collections"].number_wallets || 0
+  const linkedWallets = session?.user?.["biblio-wallets"]?.length || 0
+
+  const canLink = linkedWallets >= maxWallets
+
   return (
     <Dialog open={isOpen} fullWidth maxWidth="md">
       <Card>
@@ -105,11 +113,17 @@ export const SignUp: FC = () => {
             <Stack spacing={2} justifyContent="center" alignItems="center">
               <Typography variant="h4">Add wallet - {shorten(wallet.publicKey?.toBase58())}</Typography>
               <Typography variant="h6">You are signed in as {shorten(session.publicKey)}</Typography>
+              {!canLink && (
+                <Alert severity="error">
+                  Your account only permits linking {maxWallets} wallet{maxWallets === 1 ? "" : "s"}
+                </Alert>
+              )}
+
               <Stack direction="row" spacing={2}>
                 <Button variant="outlined" color="error" onClick={signOutAndDisconnect} disabled={adding}>
                   Sign out
                 </Button>
-                <Button disabled={adding} variant="outlined" onClick={addWallet}>
+                <Button disabled={adding || !canLink} variant="outlined" onClick={addWallet}>
                   Add wallet
                 </Button>
               </Stack>

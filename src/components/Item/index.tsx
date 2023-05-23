@@ -451,7 +451,10 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                   </Typography>
                 </TableCell>
                 <TableCell sx={{ textAlign: "right" }}>
-                  <Typography>{tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}</Typography>
+                  <Typography>
+                    {unwrapSome(item.metadata.collectionDetails) && "Collection "}
+                    {tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}
+                  </Typography>
                 </TableCell>
               </TableRow>
               {unwrapSome(item.metadata.tokenStandard) === TokenStandard.NonFungibleEdition && (

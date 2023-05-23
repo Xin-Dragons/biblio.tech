@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/router"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { getPublicKeyFromSolDomain } from "../components/WalletSearch"
-import { Session } from "next-auth"
 
 type AccessContextProps = {
   publicKey: string | null
