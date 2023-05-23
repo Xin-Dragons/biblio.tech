@@ -1,6 +1,17 @@
 import { getCsrfToken, signIn, signOut, useSession } from "next-auth/react"
 import { AccountBalanceWallet } from "@mui/icons-material"
-import { Box, Dialog, IconButton, Link, ListItemIcon, ListItemText, Menu, MenuItem, MenuList } from "@mui/material"
+import {
+  Box,
+  Dialog,
+  IconButton,
+  Link,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  MenuList,
+  Switch,
+} from "@mui/material"
 import { FC, MouseEvent, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
@@ -14,6 +25,10 @@ import LogoutIcon from "@mui/icons-material/Logout"
 import LoginIcon from "@mui/icons-material/Login"
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined"
 import { toast } from "react-hot-toast"
+import { useUiSettings } from "../../context/ui-settings"
+import { useUmi } from "../../context/umi"
+import { transactionBuilder } from "@metaplex-foundation/umi"
+import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
 
 export const UserMenu: FC = () => {
   const { setVisible, visible } = useWalletModal()
@@ -22,6 +37,8 @@ export const UserMenu: FC = () => {
   const [profileModalShowing, setProfileModalShowing] = useState(false)
   const open = Boolean(anchorEl)
   const wallet = useWallet()
+  const { usingLedger, setUsingLedger } = useUiSettings()
+  const umi = useUmi()
 
   async function signOutIn() {
     await signOut({ redirect: false })
@@ -42,26 +59,66 @@ export const UserMenu: FC = () => {
 
   async function handleSignIn() {
     try {
-      const csrf = await getCsrfToken()
-      if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+      if (usingLedger) {
+        console.log(1)
+        async function ledgerSignIn() {
+          const txn = await addMemo(umi, {
+            memo: "Sign this message to sign in to Biblio",
+          }).buildWithLatestBlockhash(umi)
 
-      const message = new SigninMessage({
-        domain: window.location.host,
-        publicKey: wallet.publicKey?.toBase58(),
-        statement: `Sign this message to sign in to Biblio.\n\n`,
-        nonce: csrf,
-      })
+          const signed = await umi.identity.signTransaction(txn)
 
-      const data = new TextEncoder().encode(message.prepare())
-      const signature = await wallet.signMessage(data)
-      const serializedSignature = base58.encode(signature)
+          console.log(2)
+          const result = await signIn("credentials", {
+            redirect: false,
+            rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+            publicKey: wallet.publicKey?.toBase58(),
+            usingLedger,
+          })
 
-      const result = await signIn("credentials", {
-        message: JSON.stringify(message),
-        redirect: false,
-        signature: serializedSignature,
-      })
-      toast.success("Signed in")
+          console.log(3)
+
+          if (!result?.ok) {
+            throw new Error("Failed to sign in")
+          }
+        }
+
+        const ledgerSignInPromise = ledgerSignIn()
+
+        toast.promise(ledgerSignInPromise, {
+          loading: "Signing in...",
+          success: "Signed in",
+          error: "Error signing in",
+        })
+
+        await ledgerSignInPromise
+      } else {
+        const csrf = await getCsrfToken()
+        if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+
+        const message = new SigninMessage({
+          domain: window.location.host,
+          publicKey: wallet.publicKey?.toBase58(),
+          statement: `Sign this message to sign in to Biblio.\n\n`,
+          nonce: csrf,
+        })
+
+        const data = new TextEncoder().encode(message.prepare())
+        const signature = await wallet.signMessage(data)
+        const serializedSignature = base58.encode(signature)
+
+        const result = await signIn("credentials", {
+          message: JSON.stringify(message),
+          redirect: false,
+          signature: serializedSignature,
+        })
+
+        if (result?.ok) {
+          toast.success("Signed in")
+        } else {
+          toast.error("Failed to sign in")
+        }
+      }
     } catch (err: any) {
       console.log(err)
       toast.error(err.message)
@@ -138,33 +195,44 @@ export const UserMenu: FC = () => {
             <div>
               {session?.user && (
                 <MenuItem onClick={openProfile}>
-                  <ListItemIcon>
+                  <ListItemIcon sx={{ width: "50px" }}>
                     <PermIdentityIcon />
                   </ListItemIcon>
                   <ListItemText>Profile</ListItemText>
                 </MenuItem>
               )}
               <MenuItem onClick={wallet.disconnect}>
-                <ListItemIcon>
+                <ListItemIcon sx={{ width: "50px" }}>
                   <LinkOffIcon />
                 </ListItemIcon>
                 <ListItemText>Disconnect</ListItemText>
               </MenuItem>
               {session?.user ? (
                 <MenuItem onClick={handleSignOut}>
-                  <ListItemIcon>
+                  <ListItemIcon sx={{ width: "50px" }}>
                     <LogoutIcon />
                   </ListItemIcon>
                   <ListItemText>Sign out</ListItemText>
                 </MenuItem>
               ) : (
                 <MenuItem onClick={handleSignIn}>
-                  <ListItemIcon>
+                  <ListItemIcon sx={{ width: "50px" }}>
                     <LoginIcon />
                   </ListItemIcon>
                   <ListItemText>Sign in</ListItemText>
                 </MenuItem>
               )}
+              <MenuItem onClick={() => setUsingLedger(!usingLedger)}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Switch
+                    checked={usingLedger}
+                    onChange={(e) => setUsingLedger(e.target.checked)}
+                    inputProps={{ "aria-label": "controlled" }}
+                    size="small"
+                  />
+                </ListItemIcon>
+                <ListItemText>Using Ledger?</ListItemText>
+              </MenuItem>
             </div>
           )}
         </MenuList>

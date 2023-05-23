@@ -22,6 +22,8 @@ type UiSettingsContextProps = {
   setSort: Function
   showUntagged: boolean
   setShowUntagged: Function
+  usingLedger: boolean
+  setUsingLedger: Function
 }
 
 const initialProps = {
@@ -37,6 +39,8 @@ const initialProps = {
   setSort: noop,
   showUntagged: true,
   setShowUntagged: noop,
+  usingLedger: false,
+  setUsingLedger: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -73,7 +77,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   const defaults = useLiveQuery(() => db.preferences.get("defaults"), [], {})
 
-  async function updatePreferences(key: string, value: any) {
+  async function updatePreferences(key: string, value: any, isDefault = false) {
     let page: string
     let { tag, collectionId, filter } = router.query
     if (!tag && !collectionId && !filter) {
@@ -85,9 +89,9 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await db.transaction("rw", db.preferences, async () => {
       const item = await db.preferences.get(page)
       if (item) {
-        await db.preferences.update(page, { [key]: value })
+        await db.preferences.update(isDefault ? "defaults" : page, { [key]: value })
       } else {
-        await db.preferences.add({ page, [key]: value } as any)
+        await db.preferences.add({ page: isDefault ? "defaults" : page, [key]: value } as any)
       }
     })
   }
@@ -105,6 +109,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       sort: "custom",
       showStarred: false,
       setShowUntagged: false,
+      usingLedger: false,
     }
   ) as {
     showInfo: boolean
@@ -112,6 +117,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     sort: string
     showStarred: boolean
     showUntagged: boolean
+    usingLedger: boolean
   }
 
   async function setSort(sort: string) {
@@ -132,6 +138,10 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   async function setShowUntagged(show: boolean) {
     await updatePreferences("showUntagged", show)
+  }
+
+  async function setUsingLedger(usingLedger: boolean) {
+    await updatePreferences("usingLedger", usingLedger)
   }
 
   useEffect(() => {
@@ -155,6 +165,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setShowTags,
         sort: preferences.sort,
         setSort,
+        usingLedger: preferences.usingLedger,
+        setUsingLedger,
       }}
     >
       {children}
