@@ -45,8 +45,13 @@ body {
   white-space: nowrap;
 
 }
+
 .wallet-adapter-button-start-icon {
   display: none
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button-start-icon {
+  display: flex
 }
 
 a {
