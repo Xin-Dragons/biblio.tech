@@ -12,33 +12,25 @@ export type LayoutSize = "small" | "medium" | "large" | "collage"
 type UiSettingsContextProps = {
   layoutSize: LayoutSize
   setLayoutSize: Function
-  showStarred: boolean
-  setShowStarred: Function
   showInfo: boolean
   setShowInfo: Function
   showTags: boolean
   setShowTags: Function
   sort: string
   setSort: Function
-  showUntagged: boolean
-  setShowUntagged: Function
   usingLedger: boolean
   setUsingLedger: Function
 }
 
-const initialProps = {
+const initialProps: UiSettingsContextProps = {
   layoutSize: "medium" as LayoutSize,
   setLayoutSize: noop,
-  showStarred: false,
-  setShowStarred: noop,
   showInfo: false,
   setShowInfo: noop,
   showTags: false,
   setShowTags: noop,
   sort: "",
   setSort: noop,
-  showUntagged: true,
-  setShowUntagged: noop,
   usingLedger: false,
   setUsingLedger: noop,
 }
@@ -132,14 +124,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("showInfo", show)
   }
 
-  async function setShowStarred(show: boolean) {
-    await updatePreferences("showStarred", show)
-  }
-
-  async function setShowUntagged(show: boolean) {
-    await updatePreferences("showUntagged", show)
-  }
-
   async function setUsingLedger(usingLedger: boolean) {
     await updatePreferences("usingLedger", usingLedger)
   }
@@ -153,12 +137,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
   return (
     <UiSettingsContext.Provider
       value={{
-        showUntagged: preferences.showUntagged,
-        setShowUntagged,
         layoutSize: preferences.layoutSize,
         setLayoutSize,
-        showStarred: preferences.showStarred,
-        setShowStarred,
         showInfo: preferences.showInfo,
         setShowInfo,
         showTags,

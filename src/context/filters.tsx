@@ -17,6 +17,14 @@ type FiltersContextProps = {
   search?: string
   setSearch: Function
   sortOptions: Sort[]
+  showLoans: boolean
+  setShowLoans: Function
+  showUntagged: boolean
+  setShowUntagged: Function
+  showStarred: boolean
+  setShowStarred: Function
+  clearFilters: Function
+  filtersActive: boolean
 }
 
 const initial = {
@@ -25,6 +33,14 @@ const initial = {
   search: "",
   setSearch: noop,
   sortOptions: [],
+  showLoans: false,
+  setShowLoans: noop,
+  showUntagged: false,
+  setShowUntagged: noop,
+  showStarred: false,
+  setShowStarred: noop,
+  clearFilters: noop,
+  filtersActive: false,
 }
 
 export const FiltersContext = createContext<FiltersContextProps>(initial)
@@ -102,7 +118,16 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   const [search, setSearch] = useState("")
   const [sortOptions, setSortOptions] = useState<Sort[]>([])
   const { sort, setSort } = useUiSettings()
+  const [showLoans, setShowLoans] = useState<boolean>(false)
+  const [showStarred, setShowStarred] = useState<boolean>(false)
+  const [showUntagged, setShowUntagged] = useState<boolean>(false)
   const router = useRouter()
+
+  function clearFilters() {
+    setShowLoans(false)
+    setShowStarred(false)
+    setShowUntagged(false)
+  }
 
   useEffect(() => {
     let type: Type
@@ -131,7 +156,23 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   }, [sortOptions, sort])
 
   return (
-    <FiltersContext.Provider value={{ selectedFilters, setSelectedFilters, search, setSearch, sortOptions }}>
+    <FiltersContext.Provider
+      value={{
+        selectedFilters,
+        setSelectedFilters,
+        search,
+        setSearch,
+        sortOptions,
+        showLoans,
+        setShowLoans,
+        showUntagged,
+        setShowUntagged,
+        showStarred,
+        setShowStarred,
+        clearFilters,
+        filtersActive: Boolean(search) || showLoans || showUntagged || showStarred,
+      }}
+    >
       {children}
     </FiltersContext.Provider>
   )

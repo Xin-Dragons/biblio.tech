@@ -13,7 +13,7 @@ import {
   Switch,
 } from "@mui/material"
 import { FC, MouseEvent, useEffect, useState } from "react"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import base58 from "bs58"
 import { SigninMessage } from "../../utils/SigninMessge"
@@ -27,8 +27,9 @@ import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalance
 import { toast } from "react-hot-toast"
 import { useUiSettings } from "../../context/ui-settings"
 import { useUmi } from "../../context/umi"
-import { transactionBuilder } from "@metaplex-foundation/umi"
+import { sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
+import { SystemProgram, Transaction } from "@solana/web3.js"
 
 export const UserMenu: FC = () => {
   const { setVisible, visible } = useWalletModal()
@@ -38,7 +39,7 @@ export const UserMenu: FC = () => {
   const open = Boolean(anchorEl)
   const wallet = useWallet()
   const { usingLedger, setUsingLedger } = useUiSettings()
-  const umi = useUmi()
+  const { connection } = useConnection()
 
   async function signOutIn() {
     await signOut({ redirect: false })
@@ -51,32 +52,34 @@ export const UserMenu: FC = () => {
     }
   }, [wallet.publicKey, session])
 
-  useEffect(() => {
-    if (wallet.connected && status === "unauthenticated") {
-      handleSignIn()
-    }
-  }, [wallet.publicKey])
+  // useEffect(() => {
+  //   if (wallet.connected && status === "unauthenticated") {
+  //     handleSignIn()
+  //   }
+  // }, [wallet.publicKey, usingLedger])
 
   async function handleSignIn() {
     try {
       if (usingLedger) {
-        console.log(1)
         async function ledgerSignIn() {
-          const txn = await addMemo(umi, {
-            memo: "Sign this message to sign in to Biblio",
-          }).buildWithLatestBlockhash(umi)
+          const txn = new Transaction().add(
+            SystemProgram.transfer({
+              fromPubkey: wallet.publicKey!,
+              toPubkey: wallet.publicKey!,
+              lamports: 0,
+            })
+          )
 
-          const signed = await umi.identity.signTransaction(txn)
+          txn.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+          txn.feePayer = wallet.publicKey!
 
-          console.log(2)
+          const signed = await wallet?.signTransaction?.(txn)
+
           const result = await signIn("credentials", {
             redirect: false,
-            rawTransaction: base58.encode(umi.transactions.serialize(signed)),
             publicKey: wallet.publicKey?.toBase58(),
-            usingLedger,
+            rawTransaction: base58.encode(signed?.serialize()!),
           })
-
-          console.log(3)
 
           if (!result?.ok) {
             throw new Error("Failed to sign in")

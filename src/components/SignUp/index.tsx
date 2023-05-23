@@ -42,10 +42,10 @@ export const SignUp: FC = () => {
   }, [session, wallet.publicKey])
 
   useEffect(() => {
-    if (
-      (status === "authenticated" && !wallet.publicKey?.toBase58()) ||
-      wallet.publicKey?.toBase58() !== session?.publicKey
-    ) {
+    if (status !== "authenticated") {
+      return
+    }
+    if (!wallet.publicKey || wallet.publicKey?.toBase58() !== session?.publicKey) {
       signOut({ redirect: false })
     }
   }, [wallet.publicKey])

@@ -243,14 +243,14 @@ export const Items: FC<ItemsProps> = ({
   squareChildren,
 }) => {
   const [activeId, setActiveId] = useState(null)
-  const { layoutSize, sort, showStarred, setShowStarred } = useUiSettings()
+  const { layoutSize, sort } = useUiSettings()
   const { selected, setSelected } = useSelection()
   const { syncing } = useDatabase()
   const { loading } = useNfts()
   const [items, setItems] = useState(initialItems)
   const width = useWidth()
   const basePath = useBasePath()
-  const { search, setSearch } = useFilters()
+  const { filtersActive, clearFilters } = useFilters()
 
   const select = (nftMint: string) => {
     setSelected((selected: string[]) => {
@@ -414,8 +414,7 @@ export const Items: FC<ItemsProps> = ({
             <Typography variant="h5" textAlign="center" fontWeight="normal">
               Nothing here yet...
             </Typography>
-            {search && <Button onClick={() => setSearch("")}>Clear search</Button>}
-            {showStarred && <Button onClick={() => setShowStarred("")}>Toggle starred filter</Button>}
+            {filtersActive && <Button onClick={() => clearFilters()}>Toggle filters</Button>}
             <Link href={`${basePath}/`} passHref>
               <Button>View all collections</Button>
             </Link>

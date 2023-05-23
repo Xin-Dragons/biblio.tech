@@ -6,9 +6,8 @@ import { SigninMessage } from "../../../utils/SigninMessge";
 import axios from "axios";
 import base58 from "bs58";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
-import { Connection } from "@solana/web3.js";
+import { Connection, Transaction } from "@solana/web3.js";
 
-const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" })
 
 export default async function auth(req: NextApiRequest, res: NextApiResponse) {
@@ -24,10 +23,6 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
           label: "Signature",
           type: "text",
         },
-        usingLedger: {
-          label: "Using ledger",
-          type: "boolean"
-        },
         rawTransaction: {
           label: "Sign in transaction",
           type: "text"
@@ -39,17 +34,11 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
       },
       async authorize(credentials, req) {
         try {
-          if (credentials?.usingLedger) {
-            const txn = umi.transactions.deserialize(base58.decode(credentials?.rawTransaction));
-            const result = await umi.rpc.sendTransaction(txn)
-            const confirm = await umi.rpc.confirmTransaction(result, {
-              strategy: {
-                type: "blockhash",
-                ...(await umi.rpc.getLatestBlockhash())
-              }
-            })
+          if (credentials?.rawTransaction) {
+            const txn = Transaction.from(base58.decode(credentials.rawTransaction));
+            const valid = txn.verifySignatures()
 
-            if (confirm.value.err) {
+            if (!valid) {
               throw new Error("Error signing in")
             }
 

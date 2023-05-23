@@ -41,7 +41,7 @@ import { Search } from "../Search"
 import SellIcon from "@mui/icons-material/Sell"
 import dynamic from "next/dynamic"
 import SendIcon from "@mui/icons-material/Send"
-import { Label, LabelOff, LocalFireDepartment, Public, SmartphoneOutlined } from "@mui/icons-material"
+import { AttachMoney, Label, LabelOff, LocalFireDepartment, Public, SmartphoneOutlined } from "@mui/icons-material"
 import { toast } from "react-hot-toast"
 import { useTags } from "../../context/tags"
 import VaultIcon from "./vault.svg"
@@ -52,6 +52,7 @@ import { Metadata, toBigNumber } from "@metaplex-foundation/js"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useAccess } from "../../context/access"
 import { fromWeb3JsInstruction, fromWeb3JsPublicKey, toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
+import FilterAltIcon from "@mui/icons-material/FilterAlt"
 import {
   createBurnInstruction,
   createCloseAccountInstruction,
@@ -118,7 +119,8 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const router = useRouter()
   const wallet = useWallet()
   const { isAdmin } = useAccess()
-  const { showStarred, setShowStarred, showTags, setShowTags, showUntagged, setShowUntagged } = useUiSettings()
+  const { showTags, setShowTags } = useUiSettings()
+  const { showUntagged, setShowUntagged, showLoans, setShowLoans, showStarred, setShowStarred } = useFilters()
   const { selected, setSelected } = useSelection()
   const [collageOptions, setCollageOptions] = useState([])
   const [collageModalShowing, setCollageModalShowing] = useState(false)
@@ -138,6 +140,11 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const includeUnlabeledIcon = Boolean(
     (router.query.tag && router.query.tag !== "untagged") || router.query.filter || router.query.collectionId
   )
+
+  const includeLoansIcon = Boolean(
+    (router.query.filter && router.query.filter !== "loans") || router.query.tag || router.query.collectionId
+  )
+
   const selection = includeStarredControl
 
   const [recipient, setRecipient] = useState("")
@@ -823,10 +830,22 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
           </Typography>
         )}
 
+        <IconButton>
+          <FilterAltIcon />
+        </IconButton>
+
+        {includeLoansIcon && (
+          <Tooltip title={showLoans ? "Show all" : "Show items with outstanding loans"}>
+            <IconButton onClick={() => setShowLoans(!showLoans)}>
+              <AttachMoney sx={{ color: showLoans ? "primary.main" : "grey" }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
         {includeUnlabeledIcon && (
           <Tooltip title={showUntagged ? "Show all" : "Show only untagged"}>
             <IconButton onClick={() => setShowUntagged(!showUntagged)}>
-              {showUntagged ? <LabelOff /> : <Label />}
+              <LabelOff sx={{ color: showUntagged ? "#9c27b0" : "grey" }} />
             </IconButton>
           </Tooltip>
         )}
