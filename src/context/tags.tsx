@@ -47,7 +47,7 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   const { userId } = useAccess()
   console.log({ userId })
   const tags =
-    useLiveQuery(() => db.tags.filter((t) => t.userId === userId && t.id !== "starred").toArray(), [], []) || []
+    useLiveQuery(() => db.tags.filter((t) => t.userId === userId && t.id !== "starred").toArray(), [userId], []) || []
 
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], []).map(
     (n) => n.nftId
