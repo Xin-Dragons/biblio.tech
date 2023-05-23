@@ -22,7 +22,7 @@ import {
 import { default as NextLink } from "next/link"
 import { findKey, uniq } from "lodash"
 import { useUiSettings } from "../../context/ui-settings"
-import { FC, MouseEvent, ReactNode, SyntheticEvent, useEffect, useState } from "react"
+import { FC, MouseEvent, ReactElement, ReactNode, SyntheticEvent, useEffect, useState } from "react"
 import Frozen from "@mui/icons-material/AcUnit"
 import LockIcon from "@mui/icons-material/Lock"
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
@@ -788,27 +788,25 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
             }}
           >
-            <Rating
-              max={1}
-              value={starred ? 1 : 0}
-              onChange={onStarredChange}
-              size={layoutSize === "collage" ? "large" : layoutSize}
-            />
-            {DragHandle}
-            <RadioIndicator
-              className="plus-minus"
-              sx={{
-                fontSize: fontSizes[layoutSize],
-                color: "grey",
-              }}
-            />
-            {/* <LockedIndicator
+            <Tooltip title={starred ? "Remove from starred" : "Add to starred"}>
+              <Rating
                 max={1}
-                value={inVault.includes(item.nftMint) ? 1 : 0}
-                icon={<LockIcon fontSize="inherit" />}
-                emptyIcon={<LockOutlinedIcon fontSize="inherit" />}
-                size={layoutSize}
-              /> */}
+                value={starred ? 1 : 0}
+                onChange={onStarredChange}
+                size={layoutSize === "collage" ? "large" : layoutSize}
+              />
+            </Tooltip>
+            {DragHandle && <Tooltip title="Drag to reorder">{DragHandle as ReactElement}</Tooltip>}
+
+            <Tooltip title={selected ? "Remove from selection" : "Add to selection"}>
+              <RadioIndicator
+                className="plus-minus"
+                sx={{
+                  fontSize: fontSizes[layoutSize],
+                  color: "grey",
+                }}
+              />
+            </Tooltip>
           </Stack>
         )}
 

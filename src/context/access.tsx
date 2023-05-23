@@ -89,9 +89,6 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         .map((wallet: any) => wallet.public_key)
         .includes(wallet.publicKey?.toBase58()) && session?.publicKey === wallet.publicKey?.toBase58()
 
-    console.log(isActive, isLocalScope, isAdmin)
-    console.log(Boolean(isAdmin && isLocalScope && isActive))
-
     setIsAdmin(Boolean(isAdmin && isLocalScope && isActive))
   }, [session, user, wallet.publicKey, router.query])
 
