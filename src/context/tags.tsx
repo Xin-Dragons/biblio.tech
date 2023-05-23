@@ -6,6 +6,7 @@ import { noop, toPairs } from "lodash"
 import { useRouter } from "next/router"
 import { Tag } from "../db"
 import { toast } from "react-hot-toast"
+import { useAccess } from "./access"
 
 type TagsContextProps = {
   tags: Tag[]
@@ -43,42 +44,58 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   const { db } = useDatabase()
   const router = useRouter()
   const [tag, setTag] = useState<Tag | null>(null)
-  const tags = useLiveQuery(() => db.tags.filter((t) => t.id !== "starred").toArray(), [], []) || []
+  const { userId } = useAccess()
+  console.log({ userId })
+  const tags =
+    useLiveQuery(() => db.tags.filter((t) => t.userId === userId && t.id !== "starred").toArray(), [], []) || []
 
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], []).map(
     (n) => n.nftId
   )
 
   async function addTag(name: string, color: string) {
+    if (!userId) {
+      throw new Error("User account not found")
+    }
     const id = await db.tags.add({
       name,
       color,
       id: uuid(),
+      userId,
     })
 
     return id
   }
 
   async function addNftToStarred(mint: string) {
+    if (!userId) {
+      throw new Error("User account not found")
+    }
     await db.transaction("rw", db.tags, db.taggedNfts, async () => {
       const tag = await db.tags.get("starred")
       if (!tag) {
-        await db.tags.add({ id: "starred", name: "Starred" })
+        await db.tags.add({ id: "starred", name: "Starred", userId })
       }
       await db.taggedNfts.put({ tagId: "starred", nftId: mint })
     })
   }
 
   async function removeNftFromStarred(mint: string) {
+    if (!userId) {
+      throw new Error("User account not found")
+    }
     await db.taggedNfts.where({ tagId: "starred", nftId: mint }).delete()
   }
 
   async function updateTag(id: typeof uuid, name: string, color: string) {
+    if (!userId) {
+      throw new Error("User account not found")
+    }
     await db.tags.update(id, { name, color })
   }
 
   async function addNftsToTag(tagId: string, nftMints: string[]) {
-    if (!tagId || !nftMints.length) {
+    if (!tagId || !nftMints.length || !userId) {
       toast.error("Missing params")
       return
     }
@@ -93,7 +110,7 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   }
 
   async function removeNftsFromTag(tagId: string, nftMints: string[]) {
-    if (!tagId || !nftMints.length) {
+    if (!tagId || !nftMints.length || !userId) {
       toast.error("Missing params")
       return
     }
@@ -104,6 +121,9 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   }
 
   async function deleteTag(tagId: string) {
+    if (!userId) {
+      throw new Error("User not found")
+    }
     await db.transaction("rw", db.tags, db.taggedNfts, async () => {
       await db.taggedNfts.where({ tagId }).delete()
       await db.tags.where({ id: tagId }).delete()

@@ -5,16 +5,19 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/router"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { getPublicKeyFromSolDomain } from "../components/WalletSearch"
+import { User } from "../types/nextauth"
 
 type AccessContextProps = {
   publicKey: string | null
   user: any
   isAdmin: boolean
   isActive: boolean
+  userId: string | null
 }
 
 const initial = {
   publicKey: null,
+  userId: null,
   user: null,
   isAdmin: false,
   isActive: false,
@@ -27,7 +30,8 @@ type AccessProviderProps = {
 }
 
 export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
   const [isActive, setIsActive] = useState(false)
@@ -64,12 +68,12 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }, [router.query.publicKey, wallet.publicKey, isActive])
 
   async function getUser() {
-    const publicKey = router.query.publicKey || wallet.publicKey?.toBase58()
-    if (publicKey) {
-      const { data } = await axios.get("/api/get-user", { params: { publicKey } })
-      setUser(data)
+    if (session?.user) {
+      setUser(session?.user)
+      setUserId(session?.user?.id)
     } else {
       setUser(null)
+      setUserId(null)
     }
   }
 
@@ -90,9 +94,11 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
 
   useEffect(() => {
     getUser()
-  }, [router.query.publicKey, wallet.publicKey])
+  }, [session?.user])
 
-  return <AccessContext.Provider value={{ user, isAdmin, publicKey, isActive }}>{children}</AccessContext.Provider>
+  return (
+    <AccessContext.Provider value={{ user, isAdmin, publicKey, isActive, userId }}>{children}</AccessContext.Provider>
+  )
 }
 
 export const useAccess = () => {

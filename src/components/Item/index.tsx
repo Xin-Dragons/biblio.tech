@@ -635,6 +635,10 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     }
   }
 
+  function onItemClick(e: any) {
+    renderItem(ItemDetails, { item })
+  }
+
   useEffect(() => {
     if (item.json) return
     loadNft()
@@ -721,7 +725,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
           },
         },
       }}
-      onClick={() => renderItem(ItemDetails, { item })}
+      onClick={onItemClick}
     >
       {transaction && (
         <Box
@@ -827,9 +831,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   ? `https://img-cdn.magiceden.dev/${
                       layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"
                     }/plain/${item.json?.image}`
-                  : "/books.svg"
+                  : "/books-lighter.svg"
               }
-              onError={(e: any) => (e.target.src = "/books.svg")}
+              onError={(e: any) => (e.target.src = "/books-lighter.svg")}
               width="100%"
               style={{ display: "block", background: "#121212" }}
             />
@@ -844,12 +848,19 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                       href={`https://birdeye.so/token/${item.nftMint}`}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                      }}
                       sx={{
                         position: "absolute",
                         backgroundColor: "rgba(0, 0, 0, 0.8)",
                         right: "0.5em",
                         top: "0.5em",
                         fontWeight: "bold",
+                        cursor: "pointer",
+                        "&:hover": {
+                          backgroundColor: "rgba(0, 0, 0, 0.5)!important",
+                        },
                       }}
                     />
                   </>

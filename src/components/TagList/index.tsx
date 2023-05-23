@@ -11,6 +11,7 @@ import { useTheme } from "../../context/theme"
 import { Collection, Nft, Tag, Tag as TagType } from "../../db"
 import { ChipPropsColorOverrides } from "@mui/material/Chip"
 import { CollectionItem } from "../../pages/collections"
+import { noop } from "lodash"
 
 type TagProps = {
   isSelected: boolean
@@ -31,12 +32,15 @@ const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag }) => {
     <Chip
       key={tag.id}
       label={tag.name}
-      onDelete={() => (isSelected ? removeFromTag(tag) : addToTag(tag))}
+      onDelete={selected.length ? () => (isSelected ? removeFromTag(tag) : addToTag(tag)) : undefined}
+      onClick={() => toast.success(tag.name)}
       variant={isSelected ? "filled" : "outlined"}
       deleteIcon={!isSelected ? <AddCircleIcon /> : undefined}
+      sx={{
+        fontWeight: "bold",
+      }}
       //@ts-ignore
       color={tag.id}
-      disabled={!selected.length}
     />
   )
 }
@@ -92,8 +96,12 @@ export const TagList: FC<TagListProps> = ({ filtered }) => {
         throw new Error("Color is required")
       }
       const id = await addTag(name, color)
-      await addNftsToTag(id, selected)
-      toast.success(`Added NFT${selected.length === 1 ? "" : "s"} to ${name}`)
+      if (selected.length) {
+        await addNftsToTag(id, selected)
+        toast.success(`Added NFT${selected.length === 1 ? "" : "s"} to ${name}`)
+      } else {
+        toast.success(`Added new tag: ${name}`)
+      }
     } catch (err: any) {
       toast.error(err.message)
     }
@@ -114,8 +122,7 @@ export const TagList: FC<TagListProps> = ({ filtered }) => {
         )
       })}
       <Chip
-        label="Add to new tag"
-        disabled={!selected.length}
+        label={`Add ${selected.length ? "to " : ""}new tag`}
         onDelete={() => setOpen(true)}
         deleteIcon={<AddCircleIcon />}
       />

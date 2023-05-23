@@ -28,11 +28,11 @@ export const UserMenu: FC = () => {
     await handleSignIn()
   }
 
-  // useEffect(() => {
-  //   if (wallet.publicKey && session?.publicKey && wallet.publicKey.toBase58() !== session?.publicKey) {
-  //     signOutIn()
-  //   }
-  // }, [wallet.publicKey, session])
+  useEffect(() => {
+    if (wallet.publicKey && session?.publicKey && wallet.publicKey.toBase58() !== session?.publicKey) {
+      signOutIn()
+    }
+  }, [wallet.publicKey, session])
 
   useEffect(() => {
     if (wallet.connected && status === "unauthenticated") {

@@ -311,15 +311,31 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
       })
     )
 
+    const icons = {
+      burn: "🔥",
+      send: "✈️",
+      freeze: "🔒",
+      thaw: "🔓",
+    }
+
+    const pastTense = {
+      burn: "burned",
+      freeze: "frozen",
+      thaw: "thawed",
+      send: "sent",
+    }
+
     if (errs.length && !successes.length) {
-      toast.error(`Failed to burn ${errs.length} items. Check the console for more details`)
+      toast.error(`Failed to ${type} ${errs.length} items. Check the console for more details`)
     } else if (errs.length && successes.length) {
       toast(
-        `${successes.length} mints burned successfully, ${errs.length} failed to burn. Check the console for more details`
+        `${successes.length} mints ${pastTense[type as keyof object]} successfully, ${
+          errs.length
+        } failed to burn. Check the console for more details`
       )
     } else if (successes.length && !errs.length) {
-      toast.success(`${successes.length} items burned successfully`, {
-        icon: "🔥",
+      toast.success(`${successes.length} items ${pastTense[type as keyof object]} successfully`, {
+        icon: icons[type as keyof object],
       })
     }
   }
@@ -788,7 +804,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
               </span>
             </Tooltip>
 
-            <Typography fontWeight="bold">{selected.length} Selected</Typography>
+            {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
           </>
         ) : (
           router.query.publicKey && (

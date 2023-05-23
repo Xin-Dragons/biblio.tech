@@ -41,8 +41,9 @@ export interface Collection {
 
 export interface Tag {
   id: string;
+  userId: string;
   name: string;
-  color?: string
+  color?: string;
 }
 
 export interface TaggedNft {

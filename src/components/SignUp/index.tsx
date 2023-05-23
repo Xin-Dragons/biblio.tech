@@ -41,6 +41,15 @@ export const SignUp: FC = () => {
     }
   }, [session, wallet.publicKey])
 
+  useEffect(() => {
+    if (
+      (status === "authenticated" && !wallet.publicKey?.toBase58()) ||
+      wallet.publicKey?.toBase58() !== session?.publicKey
+    ) {
+      signOut({ redirect: false })
+    }
+  }, [wallet.publicKey])
+
   async function createAccount(mint: string) {
     try {
       if (!wallet.connected) {

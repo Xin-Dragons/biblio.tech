@@ -57,7 +57,7 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey } = useAccess()
+  const { publicKey, isActive } = useAccess()
   const [syncingData, setSyncingData] = useState(false)
   const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -201,9 +201,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    if (!publicKey) return
+    if (!isActive || !publicKey) return
     syncDataWorker()
-  }, [publicKey])
+  }, [publicKey, isActive])
 
   async function updateMetadata(metadata: any) {
     await db.nfts.bulkUpdate(
