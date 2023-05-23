@@ -264,6 +264,8 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
     recipient = ""
   ) {
     const blockhash = await umi.rpc.getLatestBlockhash()
+    let errs: string[] = []
+    let successes: string[] = []
     await Promise.all(
       signedTransactions.map(async (transaction, index) => {
         const mints = txnMints[index]
@@ -297,15 +299,29 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
               await updateOwnerForNfts(mints, recipient)
             }
           }
+          successes = [...successes, ...mints]
         } catch (err) {
-          console.log(err)
+          console.error(err)
           setTransactionErrors(mints)
+          successes = [...errs, ...mints]
           await sleep(2000)
 
           clearTransactions(mints)
         }
       })
     )
+
+    if (errs.length && !successes.length) {
+      toast.error(`Failed to burn ${errs.length} items. Check the console for more details`)
+    } else if (errs.length && successes.length) {
+      toast(
+        `${successes.length} mints burned successfully, ${errs.length} failed to burn. Check the console for more details`
+      )
+    } else if (successes.length && !errs.length) {
+      toast.success(`${successes.length} items burned successfully`, {
+        icon: "🔥",
+      })
+    }
   }
 
   async function bulkSend() {

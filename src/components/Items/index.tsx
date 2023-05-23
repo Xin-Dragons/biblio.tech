@@ -204,12 +204,12 @@ const Cards: FC<CardsProps> = ({ cards, Component, select, squareChildren }) => 
   const pageWidth = useWidth()
 
   return (
-    <Box sx={{ height: "calc(100vh - 195px)" }}>
+    <Box sx={{ height: "100%" }}>
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }) => {
             const adjust = 80
-            const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object]
+            const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
             const columnCount = Math.floor(width! / cardWidth)
             const rowCount = Math.ceil(cards.length / columnCount)
@@ -337,7 +337,6 @@ export const Items: FC<ItemsProps> = ({
     return (
       <Box
         sx={{
-          // overflowY: 'scroll',
           width: "100%",
           padding: "4px",
           marginBottom: "0px",
@@ -362,7 +361,7 @@ export const Items: FC<ItemsProps> = ({
       sx={{
         overflowY: "hidden",
         width: "100%",
-        padding: "4px",
+        height: "100%",
         marginBottom: "0px",
       }}
     >
