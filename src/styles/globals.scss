@@ -90,14 +90,18 @@ h1, h2, h3, h4, h5, h6 {
 //   height: 20px
 // }
 
- *::-webkit-scrollbar-track {
+::-webkit-scrollbar {
+    width: 7px;
+    height: 7px
+}
+
+ ::-webkit-scrollbar-track {
    background: #000000;
-     width:7px;
    /* border: 2px solid #000000; */
  }
 
- *::-webkit-scrollbar-thumb {
+
+ ::-webkit-scrollbar-thumb {
    background: #6cbec9;
-     width:7px;
    /* border: 2px solid #000000; */
  }
