@@ -105,6 +105,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
                 !item.helloMoonCollectionId &&
                 // we dont know about these yet
                 item.jsonLoaded &&
+                // frozen things are probably cool
+                item.status &&
                 // NFT editions probably aren't junk
                 unwrapSome(item.metadata.tokenStandard) !== 3 &&
                 // missing json probably junk
