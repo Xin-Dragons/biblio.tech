@@ -414,7 +414,7 @@ export const Items: FC<ItemsProps> = ({
             <Typography variant="h5" textAlign="center" fontWeight="normal">
               Nothing here yet...
             </Typography>
-            {filtersActive && <Button onClick={() => clearFilters()}>Toggle filters</Button>}
+            {filtersActive && <Button onClick={() => clearFilters()}>Clear filters</Button>}
             <Link href={`${basePath}/`} passHref>
               <Button>View all collections</Button>
             </Link>

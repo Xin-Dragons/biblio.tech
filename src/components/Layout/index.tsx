@@ -30,9 +30,8 @@ type LayoutProps = {
   selection?: boolean
 }
 
-export const Layout: FC<LayoutProps> = ({ children, filtered, nfts, showUntagged, selection }) => {
-  const { showTags, setShowTags } = useUiSettings()
-  const { selected } = useSelection()
+export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) => {
+  const { showTags } = useUiSettings()
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
 
