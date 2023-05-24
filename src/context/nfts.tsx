@@ -35,7 +35,7 @@ type NftsProviderProps = {
 
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
-  const { publicKey } = useAccess()
+  const { publicKey, userId } = useAccess()
   const { sort } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search } = useFilters()
   const {} = useFilters()

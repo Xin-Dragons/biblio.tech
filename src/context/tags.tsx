@@ -45,13 +45,39 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   const router = useRouter()
   const [tag, setTag] = useState<Tag | null>(null)
   const { userId } = useAccess()
-  console.log({ userId })
   const tags =
     useLiveQuery(() => db.tags.filter((t) => t.userId === userId && t.id !== "starred").toArray(), [userId], []) || []
 
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], []).map(
     (n) => n.nftId
   )
+
+  async function migrate() {
+    if (!userId) {
+      return
+    }
+    const toMigrate = tags.filter((t) => !t.userId)
+    console.log({ toMigrate })
+
+    if (!toMigrate.length) {
+      return
+    }
+
+    await db.tags.bulkUpdate(
+      toMigrate.map((item) => {
+        return {
+          key: item.id,
+          changes: {
+            userId,
+          },
+        }
+      })
+    )
+  }
+
+  useEffect(() => {
+    migrate()
+  }, [userId])
 
   async function addTag(name: string, color: string) {
     if (!userId) {
