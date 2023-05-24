@@ -13,7 +13,7 @@ import {
   Switch,
 } from "@mui/material"
 import { FC, MouseEvent, useEffect, useState } from "react"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import base58 from "bs58"
 import { SigninMessage } from "../../utils/SigninMessge"
@@ -29,17 +29,17 @@ import { useUiSettings } from "../../context/ui-settings"
 import { useUmi } from "../../context/umi"
 import { sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
-import { SystemProgram, Transaction } from "@solana/web3.js"
 
 export const UserMenu: FC = () => {
   const { setVisible, visible } = useWalletModal()
+  const [isSigningIn, setIsSigningIn] = useState(false)
   const { data: session, status } = useSession()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [profileModalShowing, setProfileModalShowing] = useState(false)
   const open = Boolean(anchorEl)
   const wallet = useWallet()
   const { usingLedger, setUsingLedger } = useUiSettings()
-  const { connection } = useConnection()
+  const umi = useUmi()
 
   async function signOutIn() {
     await signOut({ redirect: false })
@@ -52,50 +52,50 @@ export const UserMenu: FC = () => {
     }
   }, [wallet.publicKey, session])
 
-  // useEffect(() => {
-  //   if (wallet.connected && status === "unauthenticated") {
-  //     handleSignIn()
-  //   }
-  // }, [wallet.publicKey, usingLedger])
+  useEffect(() => {
+    if (wallet.connected && status === "unauthenticated" && document.hasFocus()) {
+      handleSignIn()
+    }
+  }, [wallet.publicKey])
 
-  async function handleSignIn() {
-    try {
-      if (usingLedger) {
-        async function ledgerSignIn() {
-          const txn = new Transaction().add(
-            SystemProgram.transfer({
-              fromPubkey: wallet.publicKey!,
-              toPubkey: wallet.publicKey!,
-              lamports: 0,
-            })
-          )
+  async function walletSignIn(isUsingLedger: boolean = false): Promise<void> {
+    if (isUsingLedger) {
+      try {
+        const txn = await addMemo(umi, {
+          memo: "Sign in to Biblio",
+        }).buildWithLatestBlockhash(umi)
 
-          txn.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
-          txn.feePayer = wallet.publicKey!
+        const signed = await umi.identity.signTransaction(txn)
 
-          const signed = await wallet?.signTransaction?.(txn)
-
-          const result = await signIn("credentials", {
-            redirect: false,
-            publicKey: wallet.publicKey?.toBase58(),
-            rawTransaction: base58.encode(signed?.serialize()!),
-          })
-
-          if (!result?.ok) {
-            throw new Error("Failed to sign in")
-          }
-        }
-
-        const ledgerSignInPromise = ledgerSignIn()
-
-        toast.promise(ledgerSignInPromise, {
-          loading: "Signing in...",
-          success: "Signed in",
-          error: "Error signing in",
+        const result = await signIn("credentials", {
+          redirect: false,
+          rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+          publicKey: wallet.publicKey?.toBase58(),
+          usingLedger,
         })
 
-        await ledgerSignInPromise
-      } else {
+        if (!result?.ok) {
+          throw new Error("Failed to sign in")
+        }
+      } catch (err: any) {
+        console.error(err)
+
+        if (err.message.includes("Something went wrong")) {
+          throw new Error(
+            "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+          )
+        }
+
+        if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+          throw new Error(
+            'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+          )
+        }
+
+        throw err
+      }
+    } else {
+      try {
         const csrf = await getCsrfToken()
         if (!wallet.publicKey || !csrf || !wallet.signMessage) return
 
@@ -117,15 +117,37 @@ export const UserMenu: FC = () => {
         })
 
         if (result?.ok) {
-          toast.success("Signed in")
-        } else {
-          toast.error("Failed to sign in")
+          throw new Error("Failed to sign in")
         }
+      } catch (err: any) {
+        if (err.message.includes("Signing off chain messages with Ledger is not yet supported")) {
+          toast(
+            "Looks like you're using Ledger!\n\nLedger doesn't support offchain message signing (yet) so please sign this memo transaction to sign in."
+          )
+          setUsingLedger(true)
+          return await walletSignIn(true)
+        }
+        throw err
       }
+    }
+  }
+
+  async function handleSignIn(): Promise<void> {
+    try {
+      setIsSigningIn(true)
+      const signInPromise = walletSignIn(usingLedger)
+
+      toast.promise(signInPromise, {
+        loading: "Signing in...",
+        success: "Signed in",
+        error: "Error signing in",
+      })
+
+      await signInPromise
     } catch (err: any) {
-      console.log(err)
       toast.error(err.message)
-      // wallet.disconnect();
+    } finally {
+      setIsSigningIn(false)
     }
   }
 
@@ -184,7 +206,7 @@ export const UserMenu: FC = () => {
             width: "180px",
           }}
         >
-          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }}>
+          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }} disabled={isSigningIn}>
             <ListItemIcon>
               <AccountBalanceWalletOutlinedIcon color={wallet.connected ? "primary" : "inherit"} />
             </ListItemIcon>
@@ -197,40 +219,41 @@ export const UserMenu: FC = () => {
           {wallet.connected && (
             <div>
               {session?.user && (
-                <MenuItem onClick={openProfile}>
+                <MenuItem onClick={openProfile} disabled={isSigningIn}>
                   <ListItemIcon sx={{ width: "50px" }}>
                     <PermIdentityIcon />
                   </ListItemIcon>
                   <ListItemText>Profile</ListItemText>
                 </MenuItem>
               )}
-              <MenuItem onClick={wallet.disconnect}>
+              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <LinkOffIcon />
                 </ListItemIcon>
                 <ListItemText>Disconnect</ListItemText>
               </MenuItem>
               {session?.user ? (
-                <MenuItem onClick={handleSignOut}>
+                <MenuItem onClick={handleSignOut} disabled={isSigningIn}>
                   <ListItemIcon sx={{ width: "50px" }}>
                     <LogoutIcon />
                   </ListItemIcon>
                   <ListItemText>Sign out</ListItemText>
                 </MenuItem>
               ) : (
-                <MenuItem onClick={handleSignIn}>
+                <MenuItem onClick={(e) => handleSignIn()} disabled={isSigningIn}>
                   <ListItemIcon sx={{ width: "50px" }}>
                     <LoginIcon />
                   </ListItemIcon>
                   <ListItemText>Sign in</ListItemText>
                 </MenuItem>
               )}
-              <MenuItem onClick={() => setUsingLedger(!usingLedger)}>
+              <MenuItem onClick={() => setUsingLedger(!usingLedger)} disabled={isSigningIn}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
                     checked={usingLedger}
                     onChange={(e) => setUsingLedger(e.target.checked)}
                     inputProps={{ "aria-label": "controlled" }}
+                    disabled={isSigningIn}
                     size="small"
                   />
                 </ListItemIcon>
