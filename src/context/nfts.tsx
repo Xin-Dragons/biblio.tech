@@ -37,7 +37,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
   const { publicKey, userId } = useAccess()
   const { sort } = useUiSettings()
-  const { showStarred, showLoans, showUntagged, search } = useFilters()
+  const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
   const {} = useFilters()
   const [nfts, setNfts] = useState<Nft[]>([])
 
@@ -206,6 +206,15 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     .filter((nft) => !showStarred || starredNfts.map((n) => n.nftId).includes(nft.nftMint))
     .filter((nft) => !showUntagged || !allTaggedNfts.map((t) => t.nftId).includes(nft.nftMint))
     .filter((nft) => !showLoans || nft.loan)
+    .filter((nft) => {
+      if (!selectedTags.length) {
+        return true
+      }
+      return taggedNfts
+        .filter((t) => selectedTags.includes(t.tagId))
+        .map((t) => t.nftId)
+        .includes(nft.nftMint)
+    })
     .filter((nft) => {
       if (!search) {
         return true

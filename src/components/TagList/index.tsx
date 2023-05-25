@@ -1,4 +1,4 @@
-import { Chip, Stack } from "@mui/material"
+import { Chip, IconButton, Stack, Tooltip } from "@mui/material"
 import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
 import { useLiveQuery } from "dexie-react-hooks"
@@ -11,34 +11,53 @@ import { useTheme } from "../../context/theme"
 import { Collection, Nft, Tag, Tag as TagType } from "../../db"
 import { ChipPropsColorOverrides } from "@mui/material/Chip"
 import { CollectionItem } from "../../pages/collections"
-import { noop } from "lodash"
+import { noop, update } from "lodash"
+import { useFilters } from "../../context/filters"
+import { useRouter } from "next/router"
+import { Close, LabelOff, TakeoutDining } from "@mui/icons-material"
+import { useNfts } from "../../context/nfts"
 
 type TagProps = {
   isSelected: boolean
-  tag: TagType
+  tag: TagType & { numNfts?: number }
   addToTag: Function
   removeFromTag: Function
+  clip?: boolean
+  edit?: boolean
 }
 
-const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag }) => {
+const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag, edit }) => {
+  const { selectedTags, selectTag, deselectTag } = useFilters()
   const theme = useTheme()
-  const { selected } = useSelection()
 
   if (!theme.palette[tag.id as keyof object]) {
     return null
   }
 
+  const selectedTag = selectedTags.includes(tag.id)
+
+  function onTagClick() {
+    if (selectedTag) {
+      deselectTag(tag.id)
+    } else {
+      selectTag(tag.id)
+    }
+  }
+
   return (
     <Chip
       key={tag.id}
-      label={tag.name}
-      onDelete={selected.length ? () => (isSelected ? removeFromTag(tag) : addToTag(tag)) : undefined}
-      onClick={() => toast.success(tag.name)}
-      variant={isSelected ? "filled" : "outlined"}
-      deleteIcon={!isSelected ? <AddCircleIcon /> : undefined}
+      label={`${tag.name} ${tag.numNfts}`}
+      onDelete={edit ? () => (isSelected ? removeFromTag(tag) : addToTag(tag)) : undefined}
+      onClick={edit ? undefined : onTagClick}
+      variant={edit ? (isSelected ? "filled" : "outlined") : selectedTag ? "filled" : "outlined"}
+      deleteIcon={edit && !isSelected ? <AddCircleIcon /> : undefined}
       sx={{
         fontWeight: "bold",
+        border: `1px solid`,
+        borderColor: `${tag.id}.main`,
       }}
+      disabled={!update && !tag.numNfts}
       //@ts-ignore
       color={tag.id}
     />
@@ -46,15 +65,25 @@ const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag }) => {
 }
 
 type TagListProps = {
-  filtered: Nft[] | CollectionItem[]
+  edit?: boolean
+  clip?: boolean
 }
 
-export const TagList: FC<TagListProps> = ({ filtered }) => {
+export const TagList: FC<TagListProps> = ({ edit, clip }) => {
   const { tags, addNftsToTag, removeNftsFromTag, addTag } = useTags()
   const { db } = useDatabase()
   const { selected } = useSelection()
+  const { selectedTags, clearSelectedTags } = useFilters()
   const [open, setOpen] = useState(false)
-  const taggedNfts = useLiveQuery(() => db && db.taggedNfts.toArray(), [filtered], []) || []
+  const { nfts, filtered } = useNfts()
+  const taggedNfts =
+    useLiveQuery(
+      () => db.taggedNfts.filter((item) => nfts.map((n) => n.nftMint).includes(item.nftId)).toArray(),
+      [filtered, nfts],
+      []
+    ) || []
+  const router = useRouter()
+  const includeUnlabeledIcon = router.query.filter !== "untagged"
 
   async function addToTag(tag: Tag) {
     try {
@@ -108,24 +137,66 @@ export const TagList: FC<TagListProps> = ({ filtered }) => {
   }
 
   return (
-    <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1, padding: 1, paddingTop: 0 }}>
-      {tags.map((tag: TagType) => {
-        const selectedNfts = taggedNfts.filter((n) => n.tagId === tag.id).map((n) => n.nftId)
-        return (
-          <Tag
-            key={tag.id}
-            tag={tag}
-            isSelected={Boolean(selected.length && selected.every((mint) => selectedNfts.includes(mint)))}
-            addToTag={addToTag}
-            removeFromTag={removeFromTag}
-          />
-        )
-      })}
-      <Chip
-        label={`Add ${selected.length ? "to " : ""}new tag`}
-        onDelete={() => setOpen(true)}
-        deleteIcon={<AddCircleIcon />}
-      />
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="flex-end"
+      sx={{
+        padding: 1,
+        paddingTop: 0,
+        paddingBottom: 0,
+        paddingRight: 2,
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={clip ? 1 : 0}
+        sx={{
+          gap: clip ? 0 : 1,
+          flexWrap: clip ? "none" : "wrap",
+          overflowX: "auto",
+          "&::-webkit-scrollbar": { display: "none" },
+        }}
+        alignItems="center"
+      >
+        {tags
+          .map((t) => {
+            return {
+              ...t,
+              numNfts: taggedNfts.filter((tag) => tag.tagId === t.id).length,
+            }
+          })
+          .sort((b, a) => {
+            if (!edit) {
+              return a.numNfts - b.numNfts
+            }
+            return b.name.localeCompare(a.name)
+          })
+          .map((tag: TagType) => {
+            const selectedNfts = taggedNfts.filter((n) => n.tagId === tag.id).map((n) => n.nftId)
+            return (
+              <Tag
+                key={tag.id}
+                tag={tag}
+                isSelected={Boolean(selected.length && selected.every((mint) => selectedNfts.includes(mint)))}
+                addToTag={addToTag}
+                removeFromTag={removeFromTag}
+                clip={clip}
+                edit={edit}
+              />
+            )
+          })}
+      </Stack>
+      {!edit && (
+        <Tooltip title="Clear tag filters">
+          <span>
+            <IconButton onClick={() => clearSelectedTags()} disabled={!selectedTags.length}>
+              <Close />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+
       <UpdateTag open={open} setOpen={setOpen} onUpdate={createTagAndAddItems} />
     </Stack>
   )

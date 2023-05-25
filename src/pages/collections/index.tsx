@@ -148,13 +148,14 @@ const Home: NextPage = () => {
       if (!collectionNfts) {
         return null
       }
-      const value = (collection.floorPrice * collectionNfts.length) / LAMPORTS_PER_SOL
+      const filtered = collectionNfts.filter((n) => allFilteredMints.includes(n.nftMint))
+      const value = (collection.floorPrice * filtered.length) / LAMPORTS_PER_SOL
       return {
         id: collection.id,
         image: collection.image,
         name: collection.collectionName,
         allNfts: collectionNfts,
-        nfts: collectionNfts.filter((n) => allFilteredMints.includes(n.nftMint)),
+        nfts: filtered,
         value: value || 0,
       }
     })
@@ -179,7 +180,7 @@ const Home: NextPage = () => {
   }
 
   let filteredCollections = collections.filter((item: any) => {
-    return !search || item?.name.toLowerCase().includes(search?.toLowerCase()) || item.nfts.length
+    return (!search || item?.name.toLowerCase().includes(search?.toLowerCase())) && item.nfts.length
   })
 
   if (sort === "value") {

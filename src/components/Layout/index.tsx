@@ -31,7 +31,6 @@ type LayoutProps = {
 }
 
 export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) => {
-  const { showTags } = useUiSettings()
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
 
@@ -49,8 +48,6 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
     <Box>
       <Head>
         <title>BIBLIO | Smart wallet for NFTs</title>
-        <link rel="preload" href="/Barmeno-Regular.woff" as="font" crossOrigin="" type="font/woff" />
-        <link rel="preload" href="/Barmeno-Regular.woff2" as="font" crossOrigin="" type="font/woff2" />
         <link rel="preload" href="/Lato-Regular.woff" as="font" crossOrigin="" type="font/woff" />
         <link rel="preload" href="/Lato-Regular.woff2" as="font" crossOrigin="" type="font/woff2" />
         <link rel="preload" href="/Lato-Bold.woff" as="font" crossOrigin="" type="font/woff" />
@@ -64,7 +61,6 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
             {showMenu && <SideMenu />}
             <Stack sx={{ flexGrow: 1 }}>
               <ActionBar nfts={nfts} filtered={filtered} />
-              {showTags && <TagList filtered={filtered} />}
               <Box
                 sx={{
                   width: "100%",

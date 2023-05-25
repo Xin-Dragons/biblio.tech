@@ -93,7 +93,8 @@ export interface Preferences {
   page: string;
   layoutSize: 'small' | 'medium' | 'large' | 'collage';
   showInfo: boolean;
-  darkMode?: boolean
+  darkMode?: boolean;
+  wallet?: string
 }
 
 export class DB extends Dexie {

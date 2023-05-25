@@ -40,6 +40,7 @@
         "@emotion/react": "^11.10.6",
         "@emotion/styled": "^11.10.6",
         "@hellomoon/api": "^1.15.7",
+        "@jup-ag/react-hook": "^4.0.0-beta.17",
         "@metaplex-foundation/js": "^0.19.3",
         "@metaplex-foundation/mpl-essentials": "^0.5.8",
         "@metaplex-foundation/mpl-token-metadata": "^3.0.0-alpha.19",

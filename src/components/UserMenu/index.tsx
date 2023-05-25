@@ -29,6 +29,7 @@ import { useUiSettings } from "../../context/ui-settings"
 import { useUmi } from "../../context/umi"
 import { sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
+import { useRouter } from "next/router"
 
 export const UserMenu: FC = () => {
   const { setVisible, visible } = useWalletModal()
@@ -40,6 +41,7 @@ export const UserMenu: FC = () => {
   const wallet = useWallet()
   const { usingLedger, setUsingLedger } = useUiSettings()
   const umi = useUmi()
+  const router = useRouter()
 
   async function signOutIn() {
     await signOut({ redirect: false })
@@ -73,6 +75,8 @@ export const UserMenu: FC = () => {
           publicKey: wallet.publicKey?.toBase58(),
           usingLedger,
         })
+
+        console.log(result)
 
         if (!result?.ok) {
           throw new Error("Failed to sign in")
@@ -116,7 +120,7 @@ export const UserMenu: FC = () => {
           signature: serializedSignature,
         })
 
-        if (result?.ok) {
+        if (!result?.ok) {
           throw new Error("Failed to sign in")
         }
       } catch (err: any) {
@@ -124,7 +128,7 @@ export const UserMenu: FC = () => {
           toast(
             "Looks like you're using Ledger!\n\nLedger doesn't support offchain message signing (yet) so please sign this memo transaction to sign in."
           )
-          setUsingLedger(true)
+          setUsingLedger(true, wallet.publicKey?.toBase58())
           return await walletSignIn(true)
         }
         throw err
@@ -144,6 +148,8 @@ export const UserMenu: FC = () => {
       })
 
       await signInPromise
+
+      router.push("/")
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -251,7 +257,7 @@ export const UserMenu: FC = () => {
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
                     checked={usingLedger}
-                    onChange={(e) => setUsingLedger(e.target.checked)}
+                    onChange={(e) => setUsingLedger(e.target.checked, wallet.publicKey?.toBase58())}
                     inputProps={{ "aria-label": "controlled" }}
                     disabled={isSigningIn}
                     size="small"

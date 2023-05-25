@@ -107,7 +107,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
   const { layoutSize, showInfo, setShowInfo, setLayoutSize, sort, setSort } = useUiSettings()
   const { filtered } = useNfts()
   const [open, setOpen] = useState(false)
-  const { sortOptions } = useFilters()
+
   const { tag, updateTag } = useTags()
   const router = useRouter()
   const { isAdmin } = useAccess()
@@ -156,25 +156,8 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
             <Title setOpen={setOpen} />
 
             <Stack direction="row" spacing={1} alignItems="center">
-              <FormControl size="small">
-                <InputLabel id="demo-simple-select-label">Sort</InputLabel>
-                <Select
-                  labelId="demo-simple-select-label"
-                  id="demo-simple-select"
-                  value={sort}
-                  label="Age"
-                  onChange={(e) => setSort(e.target.value)}
-                  sx={{ fontSize: "14px", width: "100px" }}
-                >
-                  {sortOptions.map((item, index) => (
-                    <MenuItem key={index} value={item.value}>
-                      {item.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
               <Tooltip title="Toggle detailed view">
-                <IconButton onClick={toggleInfo}>{showInfo ? <VisibilityIcon /> : <VisibilityOffIcon />}</IconButton>
+                <IconButton onClick={toggleInfo}>{showInfo ? <VisibilityOffIcon /> : <VisibilityIcon />}</IconButton>
               </Tooltip>
               <ToggleButtonGroup
                 value={layoutSize}

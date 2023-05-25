@@ -33,7 +33,6 @@ import StarIcon from "@mui/icons-material/Star"
 import PlaneIcon from "./plane.svg"
 import InfoIcon from "@mui/icons-material/Info"
 import { useUiSettings } from "../../context/ui-settings"
-import ImageIcon from "@mui/icons-material/Image"
 import { useFilters } from "../../context/filters"
 import ClearIcon from "@mui/icons-material/Clear"
 import { chunkBy } from "chunkier"
@@ -53,6 +52,8 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useAccess } from "../../context/access"
 import { fromWeb3JsInstruction, fromWeb3JsPublicKey, toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
 import FilterAltIcon from "@mui/icons-material/FilterAlt"
+import FilterAltOffIcon from "@mui/icons-material/FilterAltOff"
+import LabelIcon from "@mui/icons-material/Label"
 import {
   createBurnInstruction,
   createCloseAccountInstruction,
@@ -102,6 +103,8 @@ import { shorten } from "../Item"
 import { BN } from "bn.js"
 import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { Collection, Nft } from "../../db"
+import ImageIcon from "@mui/icons-material/Image"
+import { TagList } from "../TagList"
 
 export const WalletMultiButtonDynamic = dynamic(
   async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
@@ -116,11 +119,15 @@ type ActionBarProps = {
 }
 
 export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
+  const [showTags, setShowTags] = useState<boolean>(false)
+  const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
   const router = useRouter()
   const wallet = useWallet()
   const { isAdmin } = useAccess()
-  const { showTags, setShowTags } = useUiSettings()
-  const { showUntagged, setShowUntagged, showLoans, setShowLoans, showStarred, setShowStarred } = useFilters()
+  const { sortOptions } = useFilters()
+  const { sort, setSort } = useUiSettings()
+  const { showUntagged, setShowUntagged, showLoans, setShowLoans, showStarred, setShowStarred, selectedTags } =
+    useFilters()
   const { selected, setSelected } = useSelection()
   const [collageOptions, setCollageOptions] = useState([])
   const [collageModalShowing, setCollageModalShowing] = useState(false)
@@ -133,17 +140,13 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const { setTransactionInProgress, setTransactionErrors, setTransactionComplete, clearTransactions } =
     useTransactionStatus()
 
-  const includeStarredControl = Boolean(
-    (router.query.filter && router.query.filter !== "starred") || router.query.tag || router.query.collectionId
-  )
+  const collectionPage = !router.query.tags && !router.query.filter && !router.query.collectionId
 
-  const includeUnlabeledIcon = Boolean(
-    (router.query.tag && router.query.tag !== "untagged") || router.query.filter || router.query.collectionId
-  )
+  const includeStarredControl = router.query.filter !== "starred"
 
-  const includeLoansIcon = Boolean(
-    (router.query.filter && router.query.filter !== "loans") || router.query.tag || router.query.collectionId
-  )
+  const includeUnlabeledIcon = router.query.tag !== "untagged"
+
+  const includeLoansIcon = router.query.filter !== "loans"
 
   const selection = includeStarredControl
 
@@ -166,6 +169,10 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
 
   const mints = filtered.map((n: any) => n.nftMint)
 
+  function toggleTagMenuOpen() {
+    setTagMenuOpen(!tagMenuOpen)
+  }
+
   function isPublicKey(input: string) {
     try {
       new PublicKey(input)
@@ -174,6 +181,12 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
       return false
     }
   }
+
+  useEffect(() => {
+    if (!router.query.collectionId && !router.query.tag && !router.query.filter) {
+      setShowTags(false)
+    }
+  }, [router.query])
 
   function toggleShowTags() {
     setShowTags(!showTags)
@@ -211,6 +224,13 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
 
   //   setCollageOptions(options)
   // }, [nfts.length])
+
+  // useEffect(() => {
+  //   const items = selected.length || filtered.length
+  //   const rows = Math.ceil(items / 3)
+  //   const cols = Math.ceil(items / rows)
+  //   console.log({ rows, cols })
+  // }, [filtered, selected])
 
   async function exportCollage() {}
 
@@ -333,17 +353,22 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
     }
 
     if (errs.length && !successes.length) {
-      toast.error(`Failed to ${type} ${errs.length} items. Check the console for more details`)
+      toast.error(
+        `Failed to ${type} ${errs.length} item${errs.length === 1 ? "" : "s"}. Check the console for more details`
+      )
     } else if (errs.length && successes.length) {
       toast(
-        `${successes.length} mints ${pastTense[type as keyof object]} successfully, ${
-          errs.length
-        } failed to burn. Check the console for more details`
+        `${successes.length} item${successes.length === 1 ? "" : "s"} ${
+          pastTense[type as keyof object]
+        } successfully, ${errs.length} failed to burn. Check the console for more details`
       )
     } else if (successes.length && !errs.length) {
-      toast.success(`${successes.length} items ${pastTense[type as keyof object]} successfully`, {
-        icon: icons[type as keyof object],
-      })
+      toast.success(
+        `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense[type as keyof object]} successfully`,
+        {
+          icon: icons[type as keyof object],
+        }
+      )
     }
   }
 
@@ -736,132 +761,170 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   }
 
   return (
-    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ padding: 1 }}>
-      <Stack spacing={2} direction="row" alignItems="center">
-        {isAdmin && selection ? (
-          <>
-            <Button onClick={selectAll} disabled={!filtered.length || allSelected}>
-              Select all
-            </Button>
-            <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>
-              Deselect all
-            </Button>
-            <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Bulk send selected items"}>
-              <span>
-                <IconButton disabled={!selected.length || frozenSelected} onClick={toggleBulkSendOpen}>
-                  <SvgIcon fontSize="small">
-                    <PlaneIcon />
-                  </SvgIcon>
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Burn selected items"}>
-              <span>
-                <IconButton disabled={!selected.length || frozenSelected} color="error" onClick={toggleBurnOpen}>
-                  <LocalFireDepartment />
-                </IconButton>
-              </span>
-            </Tooltip>
+    <Stack direction="column">
+      <Stack
+        direction="row"
+        spacing={2}
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ padding: "0.5em 1em 0.5em 0" }}
+      >
+        <Stack spacing={2} direction="row" alignItems="center">
+          {isAdmin && selection && !collectionPage ? (
+            <>
+              <Button onClick={selectAll} disabled={!filtered.length || allSelected}>
+                Select all
+              </Button>
+              <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>
+                Deselect all
+              </Button>
+              <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Bulk send selected items"}>
+                <span>
+                  <IconButton disabled={!selected.length || frozenSelected} onClick={toggleBulkSendOpen}>
+                    <SvgIcon fontSize="small">
+                      <PlaneIcon />
+                    </SvgIcon>
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Burn selected items"}>
+                <span>
+                  <IconButton disabled={!selected.length || frozenSelected} color="error" onClick={toggleBurnOpen}>
+                    <LocalFireDepartment />
+                  </IconButton>
+                </span>
+              </Tooltip>
 
-            <Tooltip
-              title={
-                onlyNftsSelected
-                  ? canFreezeThaw
-                    ? frozenSelected
-                      ? "Remove selected items from vault"
-                      : "Add selected items to vault"
-                    : "Cannot freeze and thaw in same transaction"
-                  : "Only NFTs and pNFTs can be locked in the vault"
-              }
+              <Tooltip
+                title={
+                  onlyNftsSelected
+                    ? canFreezeThaw
+                      ? frozenSelected
+                        ? "Remove selected items from vault"
+                        : "Add selected items to vault"
+                      : "Cannot freeze and thaw in same transaction"
+                    : "Only NFTs and pNFTs can be locked in the vault"
+                }
+              >
+                <span>
+                  <IconButton
+                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+                    sx={{
+                      color: allInVault ? "#111316" : "#a6e3e0",
+                      background: allInVault ? "#a6e3e0" : "default",
+                      "&:hover": {
+                        color: "#a6e3e0",
+                      },
+                    }}
+                    onClick={lockUnlock}
+                  >
+                    <SvgIcon>
+                      <VaultIcon />
+                    </SvgIcon>
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <IconButton
+                onClick={toggleTagMenuOpen}
+                color="secondary"
+                disabled={!selected.length}
+                sx={{
+                  color: showTags ? "#111316" : "#9c27b0",
+                  background: showTags ? "#9c27b0" : "default",
+                  "&:hover": {
+                    color: "#9c27b0",
+                  },
+                }}
+              >
+                <LabelIcon />
+              </IconButton>
+              {/* <IconButton onClick={toggleCollageModalShowing}>
+                <ImageIcon />
+              </IconButton> */}
+
+              {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
+            </>
+          ) : (
+            router.query.publicKey && (
+              <Typography variant="h5">{`Peeking in ${
+                isPublicKey(router.query.publicKey as string)
+                  ? shorten(router.query.publicKey as string)
+                  : `${router.query.publicKey}.sol`
+              }`}</Typography>
+            )
+          )}
+        </Stack>
+        <Stack spacing={2} direction="row" alignItems="center" sx={{ flexGrow: 1 }} justifyContent="flex-end">
+          {filtered.length !== nfts.length && (
+            <Typography fontWeight="bold">
+              Showing {filtered.length} of {nfts.length}
+            </Typography>
+          )}
+
+          {includeUnlabeledIcon && (
+            <Tooltip title={showUntagged ? "Show all" : "Show only untagged"}>
+              <IconButton onClick={() => setShowUntagged(!showUntagged)}>
+                <LabelOff sx={{ color: showUntagged ? "#9c27b0" : "grey" }} />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {includeLoansIcon && (
+            <Tooltip title={showLoans ? "Show all" : "Show items with outstanding loans"}>
+              <IconButton onClick={() => setShowLoans(!showLoans)}>
+                <AttachMoney sx={{ color: showLoans ? "primary.main" : "grey" }} />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {includeStarredControl && (
+            <Tooltip title={showStarred ? "Show all" : "Show only starred"}>
+              <IconButton onClick={toggleStarred}>
+                <StarIcon
+                  sx={{ opacity: showStarred ? 1 : 0.55, color: showStarred ? "#faaf00" : "inherit" }}
+                  fontSize="inherit"
+                />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Search />
+          <FormControl size="small">
+            <InputLabel id="demo-simple-select-label">Sort</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={sort}
+              label="Age"
+              onChange={(e) => setSort(e.target.value)}
+              sx={{ fontSize: "14px", width: "100px" }}
             >
-              <span>
-                <IconButton
-                  disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
-                  sx={{
-                    color: allInVault ? "#111316" : "#a6e3e0",
-                    background: allInVault ? "#a6e3e0" : "default",
-                    "&:hover": {
-                      color: "#a6e3e0",
-                    },
-                  }}
-                  onClick={lockUnlock}
-                >
-                  <SvgIcon>
-                    <VaultIcon />
-                  </SvgIcon>
-                </IconButton>
-              </span>
-            </Tooltip>
-
-            <Tooltip title="Show/hide tags menu">
-              <span>
-                <IconButton
-                  onClick={toggleShowTags}
-                  color="secondary"
-                  sx={{
-                    color: showTags ? "#111316" : "#9c27b0",
-                    background: showTags ? "#9c27b0" : "default",
-                    "&:hover": {
-                      color: "#9c27b0",
-                    },
-                  }}
-                >
-                  <SellIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-
-            {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
-          </>
-        ) : (
-          router.query.publicKey && (
-            <Typography variant="h5">{`Peeking in ${
-              isPublicKey(router.query.publicKey as string)
-                ? shorten(router.query.publicKey as string)
-                : `${router.query.publicKey}.sol`
-            }`}</Typography>
-          )
-        )}
+              {sortOptions.map((item, index) => (
+                <MenuItem key={index} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <IconButton onClick={toggleShowTags}>
+            {showTags ? <FilterAltOffIcon color="primary" /> : <FilterAltIcon color="primary" />}
+          </IconButton>
+        </Stack>
       </Stack>
-      <Stack spacing={2} direction="row" alignItems="center" sx={{ flexGrow: 1 }} justifyContent="flex-end">
-        {filtered.length !== nfts.length && (
-          <Typography fontWeight="bold">
-            Showing {filtered.length} of {nfts.length}
-          </Typography>
-        )}
-
-        <IconButton>
-          <FilterAltIcon />
-        </IconButton>
-
-        {includeLoansIcon && (
-          <Tooltip title={showLoans ? "Show all" : "Show items with outstanding loans"}>
-            <IconButton onClick={() => setShowLoans(!showLoans)}>
-              <AttachMoney sx={{ color: showLoans ? "primary.main" : "grey" }} />
-            </IconButton>
-          </Tooltip>
-        )}
-
-        {includeUnlabeledIcon && (
-          <Tooltip title={showUntagged ? "Show all" : "Show only untagged"}>
-            <IconButton onClick={() => setShowUntagged(!showUntagged)}>
-              <LabelOff sx={{ color: showUntagged ? "#9c27b0" : "grey" }} />
-            </IconButton>
-          </Tooltip>
-        )}
-
-        {includeStarredControl && (
-          <Tooltip title={showStarred ? "Show all" : "Show only starred"}>
-            <IconButton onClick={toggleStarred}>
-              <StarIcon
-                sx={{ opacity: showStarred ? 1 : 0.55, color: showStarred ? "#faaf00" : "inherit" }}
-                fontSize="inherit"
-              />
-            </IconButton>
-          </Tooltip>
-        )}
-        <Search />
-      </Stack>
+      <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
+        <Card>
+          <DialogTitle>Tag items</DialogTitle>
+          <DialogContent>
+            <TagList edit />
+          </DialogContent>
+        </Card>
+      </Dialog>
+      <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing}>
+        <Card>
+          <DialogTitle>Export collage</DialogTitle>
+          <DialogContent></DialogContent>
+        </Card>
+      </Dialog>
       <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
         <Card>
           <DialogTitle>Bulk send</DialogTitle>
@@ -905,6 +968,9 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
           </DialogActions>
         </Card>
       </Dialog>
+      <Stack direction="row" justifyContent="flex-end">
+        <Box>{showTags && <TagList clip />}</Box>
+      </Stack>
     </Stack>
   )
 }

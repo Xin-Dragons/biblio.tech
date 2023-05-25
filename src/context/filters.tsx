@@ -25,6 +25,10 @@ type FiltersContextProps = {
   setShowStarred: Function
   clearFilters: Function
   filtersActive: boolean
+  selectTag: Function
+  deselectTag: Function
+  selectedTags: string[]
+  clearSelectedTags: Function
 }
 
 const initial = {
@@ -41,6 +45,10 @@ const initial = {
   setShowStarred: noop,
   clearFilters: noop,
   filtersActive: false,
+  selectTag: noop,
+  deselectTag: noop,
+  selectedTags: [],
+  clearSelectedTags: noop,
 }
 
 export const FiltersContext = createContext<FiltersContextProps>(initial)
@@ -121,13 +129,35 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   const [showLoans, setShowLoans] = useState<boolean>(false)
   const [showStarred, setShowStarred] = useState<boolean>(false)
   const [showUntagged, setShowUntagged] = useState<boolean>(false)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const router = useRouter()
 
   function clearFilters() {
     setShowLoans(false)
     setShowStarred(false)
     setShowUntagged(false)
+    setSelectedTags([])
   }
+
+  function selectTag(tagId: string) {
+    setSelectedTags((prevState) => {
+      return [...selectedTags, tagId]
+    })
+  }
+
+  function deselectTag(tagId: string) {
+    setSelectedTags((prevState) => {
+      return prevState.filter((t) => t !== tagId)
+    })
+  }
+
+  function clearSelectedTags() {
+    setSelectedTags([])
+  }
+
+  useEffect(() => {
+    setSelectedFilters([])
+  }, [router.query, router.route])
 
   useEffect(() => {
     let type: Type
@@ -135,7 +165,7 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
     const isCollectionsIndex = !router.query.filter && !router.query.tag && !router.query.collectionId
     if (filter === "loans") {
       type = "loans"
-    } else if (["sft", "spl"].includes(filter)) {
+    } else if (["sfts", "spl"].includes(filter)) {
       type = "fungible"
     } else if (filter === "editions") {
       type = "editions"
@@ -170,7 +200,11 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
         showStarred,
         setShowStarred,
         clearFilters,
-        filtersActive: Boolean(search) || showLoans || showUntagged || showStarred,
+        filtersActive: Boolean(search || showLoans || showUntagged || showStarred || selectedTags.length),
+        selectTag,
+        deselectTag,
+        selectedTags,
+        clearSelectedTags,
       }}
     >
       {children}

@@ -70,6 +70,8 @@ interface CircularProgressWithLabelProps extends CircularProgressProps {
   children: ReactNode
 }
 
+const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+
 const CircularProgressWithLabel: FC<CircularProgressWithLabelProps> = (props) => {
   return (
     <Box sx={{ position: "relative", display: "inline-flex" }}>
@@ -340,7 +342,8 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 },
               }}
             >
-              <Asset asset={asset} />
+              {item.nftMint === USDC ? <img src="/usdc.png" width="100%" /> : <Asset asset={asset} />}
+
               {assets.length > 1 && (
                 <Stack
                   sx={{
@@ -825,7 +828,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
           >
             <img
               src={
-                item.json?.image
+                item.nftMint === USDC
+                  ? "/usdc.png"
+                  : item.json?.image
                   ? `https://img-cdn.magiceden.dev/${
                       layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"
                     }/plain/${item.json?.image}`

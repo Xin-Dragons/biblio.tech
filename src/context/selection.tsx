@@ -15,17 +15,17 @@ type SelectionProviderProps = {
 
 export const SelectionProvider: FC<SelectionProviderProps> = ({ children }) => {
   const [selected, setSelected] = useState<string[]>([])
-  const { nfts } = useNfts()
+  const { nfts, filtered } = useNfts()
   const router = useRouter()
 
   useEffect(() => {
-    const toRemove = selected.filter((item) => !nfts.map((n) => n.nftMint).includes(item))
+    const toRemove = selected.filter((item) => !filtered.map((n) => n.nftMint).includes(item))
     if (toRemove.length) {
       setSelected((prev: string[]) => {
         return prev.filter((item: any) => !toRemove.includes(item))
       })
     }
-  }, [nfts])
+  }, [filtered])
 
   return <SelectionContext.Provider value={{ selected, setSelected }}>{children}</SelectionContext.Provider>
 }
