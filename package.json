@@ -92,6 +92,7 @@
         "react-virtualized-auto-sizer": "^1.0.15",
         "react-window": "^1.8.9",
         "sass": "^1.59.3",
+        "socket.io": "^4.6.1",
         "tweetnacl": "^1.0.3",
         "uuid": "^9.0.0",
         "yarn": "^1.22.19"

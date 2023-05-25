@@ -14,6 +14,7 @@ import {
   Stack,
   SvgIcon,
   Table,
+  TableBody,
   TableCell,
   TableRow,
   Tooltip,
@@ -421,90 +422,92 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
               Details
             </Typography>
             <Table>
-              <TableRow>
-                <TableCell>
-                  <Typography fontWeight="bold" color="primary">
-                    Mint address
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ textAlign: "right" }}>
-                  <CopyAddress>{item.nftMint}</CopyAddress>
-                </TableCell>
-              </TableRow>
-              {[0, 1, 4].includes(unwrapSome(item.metadata.tokenStandard)!) && collection && (
+              <TableBody>
                 <TableRow>
                   <TableCell>
                     <Typography fontWeight="bold" color="primary">
-                      Collection
+                      Mint address
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <CopyAddress>{item.nftMint}</CopyAddress>
+                  </TableCell>
+                </TableRow>
+                {[0, 1, 4].includes(unwrapSome(item.metadata.tokenStandard)!) && collection && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Collection
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>
+                        <NextLink href={`${basePath}/collections/${collection.id}`} passHref>
+                          <Link underline="hover">{collection.collectionName}</Link>
+                        </NextLink>
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Token standard
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: "right" }}>
                     <Typography>
-                      <NextLink href={`${basePath}/collections/${collection.id}`} passHref>
-                        <Link underline="hover">{collection.collectionName}</Link>
-                      </NextLink>
+                      {unwrapSome(item.metadata.collectionDetails) && "Collection "}
+                      {tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}
                     </Typography>
                   </TableCell>
                 </TableRow>
-              )}
-              <TableRow>
-                <TableCell>
-                  <Typography fontWeight="bold" color="primary">
-                    Token standard
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ textAlign: "right" }}>
-                  <Typography>
-                    {unwrapSome(item.metadata.collectionDetails) && "Collection "}
-                    {tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-              {unwrapSome(item.metadata.tokenStandard) === TokenStandard.NonFungibleEdition && (
+                {unwrapSome(item.metadata.tokenStandard) === TokenStandard.NonFungibleEdition && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Edition #
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>
+                        {item.editionDetails?.edition.toString()} of {item.editionDetails?.supply.toString()}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
                 <TableRow>
                   <TableCell>
                     <Typography fontWeight="bold" color="primary">
-                      Edition #
+                      Royalties
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: "right" }}>
-                    <Typography>
-                      {item.editionDetails?.edition.toString()} of {item.editionDetails?.supply.toString()}
-                    </Typography>
+                    <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
                   </TableCell>
                 </TableRow>
-              )}
-              <TableRow>
-                <TableCell>
-                  <Typography fontWeight="bold" color="primary">
-                    Royalties
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ textAlign: "right" }}>
-                  <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
-                </TableCell>
-              </TableRow>
-              {item.status && (
-                <TableRow>
-                  <TableCell>
-                    <Typography fontWeight="bold" color="primary">
-                      Status
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <Typography>{statuses[item.status as keyof object]}</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
+                {item.status && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Status
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>{statuses[item.status as keyof object]}</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
 
-              {gate && (
-                <TableRow>
-                  <TableCell>gate</TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <CopyAddress>{gate}</CopyAddress>
-                  </TableCell>
-                </TableRow>
-              )}
+                {gate && (
+                  <TableRow>
+                    <TableCell>gate</TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <CopyAddress>{gate}</CopyAddress>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
             </Table>
             <Typography>{item.json?.description}</Typography>
             <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">

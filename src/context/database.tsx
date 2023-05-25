@@ -2,6 +2,9 @@ import { FC, ReactNode, createContext, useContext, useEffect, useState } from "r
 import { Collection, DB, Loan, Nft, NftMetadata, Rarity } from "../db"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useAccess } from "./access"
+import { io } from "socket.io-client"
+import { StreamClient } from "@hellomoon/api"
+
 import { noop, partition, uniqBy } from "lodash"
 import { NftEdition } from "@metaplex-foundation/js"
 import { toast } from "react-hot-toast"
@@ -11,6 +14,8 @@ import axios from "axios"
 export const MS_PER_DAY = 8.64e7
 
 const db = new DB()
+
+const client = new StreamClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY!)
 
 type DatabaseContextProps = {
   db: DB
@@ -199,6 +204,60 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       )
     })
   }
+
+  async function receivedTransfers(actions: any) {
+    console.log(actions)
+  }
+
+  useEffect(() => {
+    client
+      .connect((data) => {
+        // A fallback message catcher.  This shouldn't fire, but can be used for system messages come through
+        console.log(data)
+      })
+      .then(
+        (disconnect) => {
+          const unsubscribe = client.subscribe(process.env.NEXT_PUBLIC_TOKEN_TRANSFERS_WS_KEY!, (data) => {
+            // An array of streamed events
+            console.log(data)
+          })
+        },
+        (err) => {
+          // Handle error
+          console.log(err)
+        }
+      )
+      .catch(console.error)
+    // const socket = io("wss://kiki-stream.hellomoon.io", {
+    //   withCredentials: true,
+    //   extraHeaders: {
+    //     Authorization: `Bearer ${process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY}`,
+    //   },
+    // })
+
+    // socket.on("message", async (message: any) => {
+    //   if (!message || message.type !== "utf8") return
+    //   const data = JSON.parse(message.utf8Data)
+    //   if (data === "You have successfully subscribed") {
+    //     return
+    //   }
+
+    //   const actions = uniqBy(JSON.parse(message.utf8Data), (action: any) => action.mint)
+    //   try {
+    //     await receivedTransfers(actions)
+    //   } catch (err) {
+    //     console.log(err)
+    //   }
+    // })
+
+    // socket.emit(
+    //   JSON.stringify({
+    //     action: "subscribe",
+    //     apiKey: process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY,
+    //     subscriptionId: process.env.NEXT_PUBLIC_TOKEN_TRANSFERS_WS_KEY,
+    //   })
+    // )
+  })
 
   useEffect(() => {
     if (!isActive || !publicKey) return
