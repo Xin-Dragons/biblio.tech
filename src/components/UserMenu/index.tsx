@@ -253,7 +253,10 @@ export const UserMenu: FC = () => {
                   <ListItemText>Sign in</ListItemText>
                 </MenuItem>
               )}
-              <MenuItem onClick={() => setUsingLedger(!usingLedger)} disabled={isSigningIn}>
+              <MenuItem
+                onClick={() => setUsingLedger(!usingLedger, wallet.publicKey?.toBase58())}
+                disabled={isSigningIn}
+              >
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
                     checked={usingLedger}

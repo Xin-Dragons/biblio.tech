@@ -634,6 +634,8 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
     }
   }
 
+  console.log({ isAdmin, selection, collectionPage })
+
   async function burn() {
     try {
       toggleBurnOpen()
