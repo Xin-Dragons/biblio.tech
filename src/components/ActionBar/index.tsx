@@ -140,7 +140,7 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
   const { setTransactionInProgress, setTransactionErrors, setTransactionComplete, clearTransactions } =
     useTransactionStatus()
 
-  const collectionPage = !router.query.tags && !router.query.filter && !router.query.collectionId
+  const collectionPage = !router.query.tag && !router.query.filter && !router.query.collectionId
 
   const includeStarredControl = router.query.filter !== "starred"
 
@@ -633,8 +633,6 @@ export const ActionBar: FC<ActionBarProps> = ({ nfts = [], filtered }) => {
     } finally {
     }
   }
-
-  console.log({ isAdmin, selection, collectionPage })
 
   async function burn() {
     try {
