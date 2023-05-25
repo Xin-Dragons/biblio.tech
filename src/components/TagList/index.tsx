@@ -159,6 +159,14 @@ export const TagList: FC<TagListProps> = ({ edit, clip }) => {
         }}
         alignItems="center"
       >
+        {edit && (
+          <Chip
+            label="Add to new tag"
+            onClick={() => setOpen(true)}
+            onDelete={() => setOpen(true)}
+            deleteIcon={<AddCircleIcon />}
+          />
+        )}
         {tags
           .map((t) => {
             return {
