@@ -962,6 +962,12 @@ export const Actions: FC = () => {
                 Actions
               </Typography>
               <Stack direction={{ sm: "row", xs: "column" }} spacing={2} width="100%" sx={{ width: "100%" }}>
+                <Button onClick={toggleCollageModalShowing} disabled={!filtered.length} fullWidth variant="contained">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Image />
+                    <Typography>Export collage</Typography>
+                  </Stack>
+                </Button>
                 <Button
                   disabled={!selected.length || frozenSelected}
                   onClick={toggleBulkSendOpen}
