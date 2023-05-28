@@ -170,7 +170,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   useEffect(() => {
     setNfts([])
-  }, [router.query])
+  }, [router.query, publicKey])
 
   // if (collections.length && nfts.find((n) => !n.helloMoonCollectionId)) {
   //   collections.push({

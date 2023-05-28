@@ -23,7 +23,6 @@ type WalletSearchProps = {
 export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
   const [publicKey, setPublicKey] = useState("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
-  const { isActive } = useAccess()
   const router = useRouter()
 
   useEffect(() => {
@@ -69,7 +68,7 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
   }, [publicKey])
 
   function onSubmit() {
-    if (publicKeyError || !publicKey || !isActive) {
+    if (publicKeyError || !publicKey) {
       return
     }
 
@@ -106,7 +105,6 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       size={large ? "medium" : "small"}
-      disabled={!isActive}
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">

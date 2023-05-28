@@ -58,10 +58,6 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    if (!isActive && !isOffline) {
-      setPublicKey("")
-      return
-    }
     const publicKey = (router.query.publicKey as string) || wallet.publicKey?.toBase58()
     if (!publicKey) {
       setPublicKey("")

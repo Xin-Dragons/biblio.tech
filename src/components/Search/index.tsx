@@ -38,7 +38,7 @@ export const Search: FC<SearchProps> = ({ large }) => {
 
   return (
     <StyledTextField
-      label="Filter by anything"
+      label="Omnisearch"
       color="primary"
       value={search}
       onChange={(e) => setSearch(e.target.value)}

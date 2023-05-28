@@ -289,9 +289,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }, [publicKey, isOffline])
 
   useEffect(() => {
-    if (!isActive || !publicKey) return
+    if (!publicKey) return
     syncDataWorker()
-  }, [publicKey, isActive])
+  }, [publicKey])
 
   async function updateMetadata(metadata: any) {
     await db.nfts.bulkUpdate(
