@@ -25,6 +25,7 @@ import {
   useMediaQuery,
   Drawer,
   CardContent,
+  LinearProgress,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { shorten } from "../Item"
@@ -87,6 +88,7 @@ export const Actions: FC = () => {
   const [actionDrawerShowing, setActionDrawerShowing] = useState(false)
   const [image, setImage] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [generated, setGenerated] = useState(0)
   const umi = useUmi()
   const wallet = useWallet()
   const router = useRouter()
@@ -718,12 +720,14 @@ export const Actions: FC = () => {
   async function createCollage(rows: string[][]) {
     try {
       setGenerating(true)
+      setGenerated(0)
       const edge = Math.floor(1600 / rows[0].length)
       const jimps = await Promise.all(
         rows.map(async (row) => {
           const rowJimps = await Promise.all(
             row.map(async (img) => {
               const jimp = (await Jimp.read(img)).resize(edge, edge)
+              setGenerated((prev) => prev + 1)
               return jimp
             })
           )
@@ -865,6 +869,19 @@ export const Actions: FC = () => {
               {(selected.length || filtered.length) > 100 && (
                 <Alert severity="info">Exporting a large number of images, this may take a while!</Alert>
               )}
+              {generating && (
+                <>
+                  <Typography>
+                    {generated < (selected.length || filtered.length) ? generated : selected.length || filtered.length}{" "}
+                    / {selected.length || filtered.length}
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={(generated / (selected.length || filtered.length)) * 100}
+                  />
+                </>
+              )}
+
               <Stack direction="row" spacing={2} justifyContent="space-between">
                 <Button color="error" onClick={toggleCollageModalShowing} disabled={generating}>
                   Cancel
