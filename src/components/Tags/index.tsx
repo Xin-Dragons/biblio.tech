@@ -1,40 +1,18 @@
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  Radio,
-  RadioGroup,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material"
+import { Box, Button, Stack, Typography } from "@mui/material"
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline"
 import { useTags } from "../../context/tags"
 import Link from "next/link"
-import { FC, useEffect, useRef, useState } from "react"
-import DoneIcon from "@mui/icons-material/Done"
-import EditIcon from "@mui/icons-material/Edit"
-import { useDatabase } from "../../context/database"
-import { useLiveQuery } from "dexie-react-hooks"
-import { HexColorPicker } from "react-colorful"
+import { FC, useState } from "react"
 import { UpdateTag } from "../UpdateTag"
 import { useRouter } from "next/router"
-import { useWallet } from "@solana/wallet-adapter-react"
-import { useBasePath } from "../../context/base-path"
 import { useAccess } from "../../context/access"
-import { useSession } from "next-auth/react"
 import { Star } from "@mui/icons-material"
 import { Tag as TagType } from "../../db"
 
-export const Tag: FC<{ tag: TagType; selected?: boolean }> = ({ tag, selected }) => {
+export const Tag: FC<{ tag: TagType; selected?: boolean; large?: boolean }> = ({ tag, selected, large }) => {
   return (
     <Link href={`/tags/${tag.id}`} passHref key={tag.id}>
-      <Button variant={selected ? "contained" : "outlined"}>
+      <Button variant={selected ? "contained" : "outlined"} size={large ? "large" : "medium"}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Color color={tag.color as string} />
           <Typography>{tag.name}</Typography>
@@ -57,7 +35,11 @@ export const Color: FC<{ color: string }> = ({ color }) => {
   )
 }
 
-export const Tags: FC = () => {
+type TagsProps = {
+  large?: boolean
+}
+
+export const Tags: FC<TagsProps> = ({ large }) => {
   const router = useRouter()
   const { addTag, tags } = useTags()
   const [open, setOpen] = useState(false)
@@ -72,24 +54,27 @@ export const Tags: FC = () => {
   return (
     <Stack spacing={1}>
       <Link href={`/tags/untagged`} passHref>
-        <Button variant={tagId === "untagged" ? "contained" : "outlined"}>Untagged</Button>
+        <Button variant={tagId === "untagged" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+          Untagged
+        </Button>
       </Link>
       <Link href={"/starred"} passHref>
         <Button
           variant={router.asPath === "/starred" ? "contained" : "outlined"}
           startIcon={<Star sx={{ color: "#faaf00" }} />}
+          size={large ? "large" : "medium"}
         >
           Starred
         </Button>
       </Link>
       {tags.length ? (
-        tags.map((tag) => <Tag key={tag.id} tag={tag} selected={tagId === tag.id} />)
+        tags.map((tag) => <Tag key={tag.id} tag={tag} selected={tagId === tag.id} large={large} />)
       ) : (
         <Button disabled>No tags added yet</Button>
       )}
       {isAdmin && (
         <>
-          <Button startIcon={<AddCircleOutlineIcon />} onClick={() => setOpen(true)}>
+          <Button startIcon={<AddCircleOutlineIcon />} onClick={() => setOpen(true)} size={large ? "large" : "medium"}>
             New Tag
           </Button>
           <UpdateTag open={open} setOpen={setOpen} onUpdate={createTag} />

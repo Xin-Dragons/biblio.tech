@@ -44,7 +44,7 @@ import HowRare from "./howrare.svg"
 
 import { useAccess } from "../../context/access"
 import { useTransactionStatus } from "../../context/transactions"
-import PlaneIcon from "../ActionBar/plane.svg"
+import PlaneIcon from "../Actions/plane.svg"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
@@ -327,7 +327,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
 
   return (
     <Card sx={{ height: "100%", outline: "none !important", width: "100%", overflowY: "auto", padding: 2 }}>
-      <Stack direction="row">
+      <Stack direction={{ md: "row", sm: "column" }}>
         <Box sx={{ width: "100%" }}>
           <Stack spacing={2} justifyContent="center" alignItems="center">
             <Box
@@ -620,7 +620,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
-  const { isAdmin } = useAccess()
+  const { isAdmin, isOffline } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
 
   const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
@@ -629,6 +629,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const transaction = transactions.find((t) => t.nftMint === item.nftMint)
 
   async function loadNft() {
+    if (isOffline) {
+      return
+    }
     try {
       const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
       await updateItem({

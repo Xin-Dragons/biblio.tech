@@ -46,6 +46,10 @@ body {
 
 }
 
+.wallet-adapter-modal {
+  z-index: 10000000000;
+}
+
 .wallet-adapter-button-start-icon {
   display: none
 }

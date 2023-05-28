@@ -3,6 +3,7 @@ import ClearIcon from "@mui/icons-material/Clear"
 import { TextField, IconButton } from "@mui/material"
 import { useFilters } from "../../context/filters"
 import { useNfts } from "../../context/nfts"
+import { FC } from "react"
 
 const StyledTextField = styled(TextField)({
   "& label": {
@@ -28,7 +29,11 @@ const StyledTextField = styled(TextField)({
   },
 })
 
-export const Search = () => {
+type SearchProps = {
+  large?: boolean
+}
+
+export const Search: FC<SearchProps> = ({ large }) => {
   const { search, setSearch } = useFilters()
 
   return (
@@ -44,7 +49,8 @@ export const Search = () => {
           </IconButton>
         ),
       }}
-      size="small"
+      fullWidth={large}
+      size={large ? "medium" : "small"}
     />
   )
 }

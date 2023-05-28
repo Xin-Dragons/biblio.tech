@@ -7,18 +7,64 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore"
 import StarIcon from "@mui/icons-material/Star"
 import LockIcon from "@mui/icons-material/Lock"
 import DeleteIcon from "@mui/icons-material/Delete"
-import { Filters } from "../Filters"
+import { Filters } from "../_Filters"
 import { Sidebar } from "../Sidebar"
 import { useTags } from "../../context/tags"
 import { Tags } from "../Tags"
-import { FC } from "react"
+import { FC, ReactNode } from "react"
 import { useRouter } from "next/router"
 import { useBasePath } from "../../context/base-path"
-import VaultIcon from "../ActionBar/vault.svg"
+import VaultIcon from "../Actions/vault.svg"
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn"
 import { useAccess } from "../../context/access"
 
-export const SideMenu: FC = () => {
+type SideMenuProps = {
+  fullWidth?: boolean
+  noAccordions?: boolean
+  large?: boolean
+}
+
+type MenuSectionProps = {
+  accordion?: boolean
+  children: ReactNode
+  title: string
+}
+
+const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title }) => {
+  if (!accordion) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+          {title}
+        </Typography>
+        {children}
+      </Stack>
+    )
+  }
+
+  return (
+    <Accordion
+      defaultExpanded
+      sx={{
+        backgroundColor: "transparent",
+        backgroundImage: "none !important",
+        padding: "0 !important",
+      }}
+      disableGutters
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+          {title}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Stack spacing={2}>{children}</Stack>
+      </AccordionDetails>
+    </Accordion>
+  )
+}
+
+export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) => {
   const basePath = useBasePath()
   const router = useRouter()
   const { isAdmin } = useAccess()
@@ -30,107 +76,78 @@ export const SideMenu: FC = () => {
   const route = router.asPath.replace(basePath, "")
 
   return (
-    <Sidebar>
-      <Stack spacing={2}>
-        <Accordion
-          defaultExpanded
-          sx={{
-            backgroundColor: "transparent",
-            backgroundImage: "none !important",
-            padding: "0 !important",
-          }}
-          disableGutters
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="h6" fontWeight="bold">
-              SHOW
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Link href={relative("/")} passHref>
-                <Button variant={["/", ""].includes(route) ? "contained" : "outlined"}>Collections</Button>
-              </Link>
-              <Link href={relative("/nfts")} passHref>
-                <Button variant={route === "/nfts" ? "contained" : "outlined"}>NFTs</Button>
-              </Link>
-              <Link href={relative("/editions")} passHref>
-                <Button variant={route === "/editions" ? "contained" : "outlined"}>NFT Editions</Button>
-              </Link>
-              <Link href={relative("/sfts")} passHref>
-                <Button variant={route === "/sfts" ? "contained" : "outlined"}>SFTs</Button>
-              </Link>
-              <Link href={relative("/spl")} passHref>
-                <Button variant={route === "/spl" ? "contained" : "outlined"}>SPL Tokens</Button>
-              </Link>
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-        <Accordion
-          defaultExpanded
-          sx={{
-            backgroundColor: "transparent",
-            backgroundImage: "none !important",
-            padding: "0 !important",
-          }}
-          disableGutters
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="h6" fontWeight="bold">
-              GO TO
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              {!router.query.publicKey && isAdmin && (
-                <Link href={relative("/vault")} passHref>
-                  <Button
-                    variant={route === "/vault" ? "contained" : "outlined"}
-                    startIcon={
-                      <SvgIcon fontSize="large">
-                        <VaultIcon />
-                      </SvgIcon>
-                    }
-                  >
-                    The Vault
-                  </Button>
-                </Link>
-              )}
+    <Stack spacing={2}>
+      <MenuSection accordion={!noAccordions} title="Show">
+        <Link href={relative("/")} passHref>
+          <Button variant={["/", ""].includes(route) ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            Collections
+          </Button>
+        </Link>
+        <Link href={relative("/nfts")} passHref>
+          <Button variant={route === "/nfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            NFTs
+          </Button>
+        </Link>
+        <Link href={relative("/editions")} passHref>
+          <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            NFT Editions
+          </Button>
+        </Link>
+        <Link href={relative("/sfts")} passHref>
+          <Button variant={route === "/sfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            SFTs
+          </Button>
+        </Link>
+        <Link href={relative("/spl")} passHref>
+          <Button variant={route === "/spl" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            SPL Tokens
+          </Button>
+        </Link>
+      </MenuSection>
+      <MenuSection accordion={!noAccordions} title="Go to">
+        <Stack spacing={2}>
+          {!router.query.publicKey && isAdmin && (
+            <Link href={relative("/vault")} passHref>
+              <Button
+                variant={route === "/vault" ? "contained" : "outlined"}
+                startIcon={
+                  <SvgIcon fontSize="large">
+                    <VaultIcon />
+                  </SvgIcon>
+                }
+                size={large ? "large" : "medium"}
+              >
+                The Vault
+              </Button>
+            </Link>
+          )}
 
-              <Link href={relative("/loans")} passHref>
-                <Button variant={route === "/loans" ? "contained" : "outlined"} startIcon={<MonetizationOnIcon />}>
-                  Loans
-                </Button>
-              </Link>
-              <Link href={relative("/junk")} passHref>
-                <Button variant={route === "/junk" ? "contained" : "outlined"} startIcon={<DeleteIcon />}>
-                  Junk
-                </Button>
-              </Link>
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-        {!router.query.publicKey && isAdmin && (
-          <Accordion
-            defaultExpanded
-            sx={{
-              backgroundColor: "transparent",
-              backgroundImage: "none !important",
-              padding: "0 !important",
-            }}
-            disableGutters
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="h6" fontWeight="bold">
-                TAGS
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Tags />
-            </AccordionDetails>
-          </Accordion>
-        )}
-        {/* {filters && (
+          <Link href={relative("/loans")} passHref>
+            <Button
+              variant={route === "/loans" ? "contained" : "outlined"}
+              startIcon={<MonetizationOnIcon />}
+              size={large ? "large" : "medium"}
+            >
+              Loans
+            </Button>
+          </Link>
+          <Link href={relative("/junk")} passHref>
+            <Button
+              variant={route === "/junk" ? "contained" : "outlined"}
+              startIcon={<DeleteIcon />}
+              size={large ? "large" : "medium"}
+            >
+              Junk
+            </Button>
+          </Link>
+        </Stack>
+      </MenuSection>
+      {!router.query.publicKey && isAdmin && (
+        <MenuSection accordion={!noAccordions} title="Tags">
+          <Tags large={large} />
+        </MenuSection>
+      )}
+      {/* {filters && (
           <Accordion
             defaultExpanded
             sx={{
@@ -149,8 +166,7 @@ export const SideMenu: FC = () => {
           </Accordion>
         )} */}
 
-        <img src="/biblio-logo.png" style={{ opacity: 0.3, margin: 20 }} />
-      </Stack>
-    </Sidebar>
+      <img src="/biblio-logo.png" style={{ opacity: 0.3, margin: "auto" }} width="200px" />
+    </Stack>
   )
 }

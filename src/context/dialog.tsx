@@ -1,4 +1,5 @@
-import { Dialog } from "@mui/material"
+import { Close } from "@mui/icons-material"
+import { Dialog, IconButton, Theme, useMediaQuery } from "@mui/material"
 import { initial, noop } from "lodash"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 
@@ -22,10 +23,19 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
     setItem(<Component {...props} />)
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
   return (
     <DialogContext.Provider value={{ renderItem }}>
       {children}
-      <Dialog open={open} onClose={toggleOpen} maxWidth="lg">
+      <Dialog open={open} onClose={toggleOpen} maxWidth="lg" fullScreen={isXs}>
+        <IconButton
+          onClick={toggleOpen}
+          sx={{ position: "fixed", top: "0.25em", right: "0.25em", background: "#1f1f1f", zIndex: 1000 }}
+          size="large"
+        >
+          <Close fontSize="large" />
+        </IconButton>
         {item}
       </Dialog>
     </DialogContext.Provider>

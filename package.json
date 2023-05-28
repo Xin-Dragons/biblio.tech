@@ -39,7 +39,7 @@
         "@dnd-kit/sortable": "^7.0.2",
         "@emotion/react": "^11.10.6",
         "@emotion/styled": "^11.10.6",
-        "@hellomoon/api": "^1.15.7",
+        "@hellomoon/api": "^1.16.4",
         "@jup-ag/react-hook": "^4.0.0-beta.17",
         "@metaplex-foundation/js": "^0.19.3",
         "@metaplex-foundation/mpl-essentials": "^0.5.8",

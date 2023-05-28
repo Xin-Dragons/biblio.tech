@@ -5,7 +5,7 @@ import { useAccess } from "./access"
 import { io } from "socket.io-client"
 import { StreamClient } from "@hellomoon/api"
 
-import { noop, partition, uniqBy } from "lodash"
+import { includes, noop, partition, uniqBy } from "lodash"
 import { NftEdition } from "@metaplex-foundation/js"
 import { toast } from "react-hot-toast"
 import { useSession } from "next-auth/react"
@@ -14,8 +14,6 @@ import axios from "axios"
 export const MS_PER_DAY = 8.64e7
 
 const db = new DB()
-
-const client = new StreamClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY!)
 
 type DatabaseContextProps = {
   db: DB
@@ -62,7 +60,7 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey, isActive } = useAccess()
+  const { publicKey, isActive, isOffline } = useAccess()
   const [syncingData, setSyncingData] = useState(false)
   const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -164,24 +162,28 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
   }
 
-  async function addNftsToDb(nfts: Nft[], publicKey: string) {
+  async function addNftsToDb(nfts: Nft[], publicKey: string, remove?: boolean) {
     db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
 
-      const toRemove = fromDb.filter(
-        (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
-      )
+      if (remove) {
+        const toRemove = fromDb.filter(
+          (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
+        )
 
-      await db.nfts.bulkUpdate(
-        toRemove.map((item) => {
-          return {
-            key: item.nftMint,
-            changes: {
-              owner: null,
-            },
-          }
-        })
-      )
+        console.log({ toRemove })
+
+        await db.nfts.bulkUpdate(
+          toRemove.map((item) => {
+            return {
+              key: item.nftMint,
+              changes: {
+                owner: null,
+              },
+            }
+          })
+        )
+      }
 
       const [toAdd, toUpdate] = partition(
         uniqBy(nfts, (nft) => nft.nftMint),
@@ -205,59 +207,86 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
   }
 
-  async function receivedTransfers(actions: any) {
-    console.log(actions)
+  async function receivedTransfers(txns: any) {
+    if (!publicKey) {
+      return
+    }
+    const allMints = nfts.map((n) => n.nftMint)
+    const toUpdate = txns.filter((txn: any) => {
+      return txn.destinationOwner === publicKey || txn.sourceOwner === publicKey || allMints.includes(txn.mint)
+    })
+
+    if (!toUpdate.length) {
+      return
+    }
+
+    const [toAdd, toRemove] = partition(toUpdate, (txn: any) => {
+      if (!allMints.includes(txn.mint)) {
+        return true
+      }
+
+      if (txn.destinationOwner && txn.desitnationOwner === publicKey) {
+        return true
+      }
+
+      if (txn.sourceOwner && txn.sourceOwner === publicKey) {
+        return false
+      }
+
+      return true
+    })
+
+    if (toAdd.length) {
+      syncDataWorker(toAdd.map((txn: any) => txn.mint))
+    }
+
+    if (toRemove.length) {
+      await db.nfts.bulkUpdate(
+        toRemove.map((item) => {
+          return {
+            key: item.mint,
+            changes: {
+              owner: item.destinationOwner,
+            },
+          }
+        })
+      )
+    }
   }
 
   useEffect(() => {
-    client
-      .connect((data) => {
-        // A fallback message catcher.  This shouldn't fire, but can be used for system messages come through
-        console.log(data)
-      })
-      .then(
-        (disconnect) => {
-          const unsubscribe = client.subscribe(process.env.NEXT_PUBLIC_TOKEN_TRANSFERS_WS_KEY!, (data) => {
-            // An array of streamed events
-            console.log(data)
-          })
-        },
-        (err) => {
-          // Handle error
-          console.log(err)
-        }
-      )
-      .catch(console.error)
-    // const socket = io("wss://kiki-stream.hellomoon.io", {
-    //   withCredentials: true,
-    //   extraHeaders: {
-    //     Authorization: `Bearer ${process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY}`,
-    //   },
-    // })
+    let unsubscribe: Function | undefined = undefined
+    if (isOffline) {
+      return
+    }
+    // const client = new StreamClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY!)
+    // try {
+    //   client
+    //     .connect((data) => {
+    //       console.log(data)
+    //     })
+    //     .then(
+    //       (disconnect) => {
+    //         unsubscribe = client.subscribe(process.env.NEXT_PUBLIC_TOKEN_TRANSFERS_WS_KEY!, (data) => {
+    //           console.log("received message")
+    //           receivedTransfers(data)
+    //         })
+    //       },
+    //       (err) => {
+    //         // Handle error
+    //         console.log(err)
+    //       }
+    //     )
+    //     .catch(console.error)
+    // } catch {
+    //   console.log("Failed to authenticate")
+    // }
 
-    // socket.on("message", async (message: any) => {
-    //   if (!message || message.type !== "utf8") return
-    //   const data = JSON.parse(message.utf8Data)
-    //   if (data === "You have successfully subscribed") {
-    //     return
-    //   }
-
-    //   const actions = uniqBy(JSON.parse(message.utf8Data), (action: any) => action.mint)
-    //   try {
-    //     await receivedTransfers(actions)
-    //   } catch (err) {
-    //     console.log(err)
-    //   }
-    // })
-
-    // socket.emit(
-    //   JSON.stringify({
-    //     action: "subscribe",
-    //     apiKey: process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY,
-    //     subscriptionId: process.env.NEXT_PUBLIC_TOKEN_TRANSFERS_WS_KEY,
-    //   })
-    // )
-  })
+    // return () => {
+    //   unsubscribe && unsubscribe()
+    //   client.disconnect()
+    // }
+  }, [publicKey, isOffline])
 
   useEffect(() => {
     if (!isActive || !publicKey) return
@@ -279,6 +308,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function syncMetadataWorker(items: Nft[], force?: boolean) {
+    if (isOffline) {
+      return
+    }
     setSyncingMetadata(true)
     const worker = new Worker(new URL("../../public/get-metadata.worker.ts", import.meta.url))
     worker.addEventListener("message", async (event) => {
@@ -301,7 +333,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     worker.postMessage({ mints })
   }
 
-  function syncDataWorker(force?: boolean) {
+  function syncDataWorker(mints?: string[], force?: boolean) {
+    if (isOffline) {
+      return
+    }
     setSyncingData(true)
     const worker = new Worker(new URL("../../public/get-data.worker.ts", import.meta.url))
     worker.addEventListener("message", async (event) => {
@@ -312,7 +347,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       } else if (type === "done") {
         setSyncingData(false)
         await Promise.all([
-          addNftsToDb(event.data.nftsToAdd, publicKey!),
+          addNftsToDb(event.data.nftsToAdd, publicKey!, !mints),
           addCollectionsToDb(event.data.collectionsToAdd),
         ])
       } else if (type === "error") {
@@ -320,7 +355,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         worker.terminate()
       }
     })
-    worker.postMessage({ publicKey, force })
+    worker.postMessage({ publicKey, force, mints })
 
     worker.addEventListener("error", () => {
       worker.terminate()
@@ -334,6 +369,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function syncRoyaltiesWorker(nfts: Nft[], force?: boolean) {
+    if (isOffline) {
+      return
+    }
     const rarity = await db.rarity.toArray()
     const toUpdate = nfts.filter((n) => {
       const r = rarity.find((r) => r.nftMint === n.nftMint)
@@ -362,6 +400,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function updateRarity(updates: Rarity[]) {
+    console.log(updates)
     await db.transaction("rw", db.rarity, async () => {
       const all = await db.rarity
         .where("nftMint")
@@ -493,7 +532,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
 
-    syncDataWorker(true)
+    syncDataWorker(undefined, true)
   }
 
   async function updateItem(item: Nft) {

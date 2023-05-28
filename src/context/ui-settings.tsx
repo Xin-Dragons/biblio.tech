@@ -16,8 +16,8 @@ type UiSettingsContextProps = {
   setShowInfo: Function
   sort: string
   setSort: Function
-  usingLedger: boolean
-  setUsingLedger: Function
+  profileModalShowing: boolean
+  setProfileModalShowing: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -27,8 +27,8 @@ const initialProps: UiSettingsContextProps = {
   setShowInfo: noop,
   sort: "",
   setSort: noop,
-  usingLedger: false,
-  setUsingLedger: noop,
+  profileModalShowing: false,
+  setProfileModalShowing: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -38,6 +38,7 @@ type UiSettingsProviderProps = {
 }
 
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
+  const [profileModalShowing, setProfileModalShowing] = useState(false)
   const { nfts } = useNfts()
   const router = useRouter()
 
@@ -58,7 +59,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   const defaults = useLiveQuery(() => db.preferences.get("defaults"), [], {})
 
-  async function updatePreferences(key: string, value: any, isDefault = false, wallet?: string) {
+  async function updatePreferences(key: string, value: any, isDefault = false) {
     let page: string
     let { tag, collectionId, filter } = router.query
     if (!tag && !collectionId && !filter) {
@@ -70,9 +71,9 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await db.transaction("rw", db.preferences, async () => {
       const item = await db.preferences.get(page)
       if (item) {
-        await db.preferences.update(isDefault ? "defaults" : page, { [key]: value, wallet })
+        await db.preferences.update(isDefault ? "defaults" : page, { [key]: value })
       } else {
-        await db.preferences.add({ page: isDefault ? "defaults" : page, [key]: value, wallet } as any)
+        await db.preferences.add({ page: isDefault ? "defaults" : page, [key]: value } as any)
       }
     })
   }
@@ -90,7 +91,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       sort: "custom",
       showStarred: false,
       setShowUntagged: false,
-      usingLedger: false,
     }
   ) as {
     showInfo: boolean
@@ -98,7 +98,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     sort: string
     showStarred: boolean
     showUntagged: boolean
-    usingLedger: boolean
   }
 
   async function setSort(sort: string) {
@@ -111,10 +110,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   async function setShowInfo(show: boolean) {
     await updatePreferences("showInfo", show)
-  }
-
-  async function setUsingLedger(usingLedger: boolean, wallet: string) {
-    await updatePreferences("usingLedger", usingLedger, true, wallet)
   }
 
   useEffect(() => {
@@ -132,8 +127,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setShowInfo,
         sort: preferences.sort,
         setSort,
-        usingLedger: preferences.usingLedger,
-        setUsingLedger,
+        profileModalShowing,
+        setProfileModalShowing,
       }}
     >
       {children}

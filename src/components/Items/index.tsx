@@ -38,6 +38,10 @@ import { Nft } from "../../db"
 import { CollectionItem } from "../../pages/collections"
 import { useRouter } from "next/router"
 import { useFilters } from "../../context/filters"
+import { useAccess } from "../../context/access"
+import { useSession } from "next-auth/react"
+import { useDialog } from "../../context/dialog"
+import { Profile } from "../Profile"
 
 interface ItemsProps {
   items: Nft[] | CollectionItem[]
@@ -186,8 +190,8 @@ export const cols = {
   },
   xs: {
     small: 4,
-    medium: 2,
-    large: 1,
+    medium: 3,
+    large: 2,
   },
 }
 
@@ -244,6 +248,7 @@ export const Items: FC<ItemsProps> = ({
 }) => {
   const [activeId, setActiveId] = useState(null)
   const { layoutSize, sort } = useUiSettings()
+  const { renderItem } = useDialog()
   const { selected, setSelected } = useSelection()
   const { syncing } = useDatabase()
   const { loading } = useNfts()
@@ -251,6 +256,8 @@ export const Items: FC<ItemsProps> = ({
   const width = useWidth()
   const basePath = useBasePath()
   const { filtersActive, clearFilters } = useFilters()
+  const { isActive } = useAccess()
+  const { data: session } = useSession()
 
   const select = (nftMint: string) => {
     setSelected((selected: string[]) => {
@@ -356,6 +363,8 @@ export const Items: FC<ItemsProps> = ({
     )
   }
 
+  const noAccess = session?.publicKey && !isActive
+
   return !loading && items.length ? (
     <Box
       sx={{
@@ -412,12 +421,19 @@ export const Items: FC<ItemsProps> = ({
         ) : (
           <Stack spacing={2} className="no-items-wrap">
             <Typography variant="h5" textAlign="center" fontWeight="normal">
-              Nothing here yet...
+              {noAccess ? "Insufficient access" : "Nothing here yet..."}
             </Typography>
-            {filtersActive && <Button onClick={() => clearFilters()}>Clear filters</Button>}
-            <Link href={`${basePath}/`} passHref>
-              <Button>View all collections</Button>
-            </Link>
+            {noAccess ? (
+              <Button onClick={() => renderItem(Profile)}>View profile settings</Button>
+            ) : (
+              <>
+                {filtersActive && <Button onClick={() => clearFilters()}>Clear filters</Button>}
+                <Link href={`${basePath}/`} passHref>
+                  <Button>View all collections</Button>
+                </Link>
+              </>
+            )}
+
             <Typography textAlign="center">or</Typography>
             <WalletSearch />
           </Stack>

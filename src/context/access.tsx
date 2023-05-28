@@ -12,6 +12,7 @@ type AccessContextProps = {
   user: any
   isAdmin: boolean
   isActive: boolean
+  isOffline: boolean
   userId: string | null
 }
 
@@ -21,6 +22,7 @@ const initial = {
   user: null,
   isAdmin: false,
   isActive: false,
+  isOffline: false,
 }
 
 export const AccessContext = createContext<AccessContextProps>(initial)
@@ -34,6 +36,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const [userId, setUserId] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const wallet = useWallet()
   const { data: session } = useSession()
@@ -55,7 +58,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive && !isOffline) {
       setPublicKey("")
       return
     }
@@ -65,7 +68,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
     } else {
       getPublicKey(publicKey)
     }
-  }, [router.query.publicKey, wallet.publicKey, isActive])
+  }, [router.query.publicKey, wallet.publicKey, isActive, isOffline])
 
   async function getUser() {
     if (session?.user) {
@@ -82,14 +85,15 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }, [session?.user?.active])
 
   useEffect(() => {
-    const isActive = session?.user?.active
+    setIsOffline(Boolean(session?.user?.offline))
+    const isActive = session?.user?.active || session?.user?.offline
     const isLocalScope = !router.query.publicKey
     const isAdmin =
       (session?.user?.["biblio-wallets" as keyof object] || [])
         .map((wallet: any) => wallet.public_key)
         .includes(wallet.publicKey?.toBase58()) && session?.publicKey === wallet.publicKey?.toBase58()
 
-    setIsAdmin(Boolean(isAdmin && isLocalScope && isActive))
+    setIsAdmin(Boolean(isAdmin && isLocalScope && isActive) || isOffline)
   }, [session, user, wallet.publicKey, router.query])
 
   useEffect(() => {
@@ -97,7 +101,9 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }, [session?.user])
 
   return (
-    <AccessContext.Provider value={{ user, isAdmin, publicKey, isActive, userId }}>{children}</AccessContext.Provider>
+    <AccessContext.Provider value={{ user, isAdmin, publicKey, isActive, userId, isOffline }}>
+      {children}
+    </AccessContext.Provider>
   )
 }
 

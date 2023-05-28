@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Container,
   Dialog,
@@ -22,9 +23,7 @@ import {
 } from "@mui/material"
 import { ToggleButton } from "@mui/material"
 import Link from "next/link"
-import GridIcon from "./grid.svg"
-import GridIcon2 from "./grid-2.svg"
-import GridIcon3 from "./grid-3.svg"
+
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
 import ViewQuiltIcon from "@mui/icons-material/ViewQuilt"
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded"
@@ -39,11 +38,13 @@ import { UserMenu } from "../UserMenu"
 import { useNfts } from "../../context/nfts"
 import { useTags } from "../../context/tags"
 import { Color } from "../Tags"
-import { Edit, Info } from "@mui/icons-material"
+import { Dashboard, Edit, Info } from "@mui/icons-material"
 import { UpdateTag } from "../UpdateTag"
 import { FC, useState } from "react"
 import { useDatabase } from "../../context/database"
 import { useInfo } from "../../context/info"
+import { ViewMenu } from "../ViewMenu"
+import { ShowInfo } from "../ShowInfo"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   const { isAdmin } = useAccess()
@@ -52,6 +53,8 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   const { tag } = useTags()
   const isVault = router.query.filter === "vault"
   const { toggleInfo } = useInfo()
+
+  const breakLine = useMediaQuery("(max-width:500px)")
 
   let title
   if (router.query.tag && tag) {
@@ -92,7 +95,12 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   }
 
   return (
-    <Typography variant="h5" textTransform="uppercase">
+    <Typography
+      variant="h5"
+      textTransform="uppercase"
+      textAlign="center"
+      sx={{ whiteSpace: breakLine ? "auto" : "nowrap", fontSize: breakLine ? "5vw" : "parent" }}
+    >
       {title}
     </Typography>
   )
@@ -104,91 +112,40 @@ type AppBarProps = {
 }
 
 export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
-  const { layoutSize, showInfo, setShowInfo, setLayoutSize, sort, setSort } = useUiSettings()
-  const { filtered } = useNfts()
   const [open, setOpen] = useState(false)
-
   const { tag, updateTag } = useTags()
-  const router = useRouter()
-  const { isAdmin } = useAccess()
-  const {
-    query: { publicKey: scopedPublicKey },
-  } = useRouter()
-  const wallet = useWallet()
-
-  function toggleInfo() {
-    setShowInfo(!showInfo)
-  }
-
-  function handleSizeChange(e: any, value: LayoutSize) {
-    if (value !== null) {
-      setLayoutSize(value)
-    }
-  }
-
-  const showNavigation = useMediaQuery((theme: Theme) => theme.breakpoints.up("sm"))
 
   return (
     <MuiAppBar sx={{ background: "#111316", borderBottom: "1px solid #333" }} position="sticky" elevation={0}>
       <Container maxWidth={false}>
-        <Stack direction="row" justifyContent="space-between" padding={0} alignItems="center" spacing={2}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          padding={0}
+          alignItems="center"
+          spacing={2}
+          sx={{ overflow: "auto" }}
+        >
           <Link href="/">
             <img src="/logo-text-white.svg" width={75} height={75} style={{ cursor: "pointer" }} />
           </Link>
-          <Stack direction="row" sx={{ flexGrow: 1 }} justifyContent="space-between">
-            <WalletSearch />
-            {/* {
-              showNavigation && (
-                <Stack direction="row">
-                  <Link href="/" passHref>
-                    <Button size="large" sx={{ fontWeight: "bold" }}>Collections</Button>
-                  </Link>
-                  <Link href="/nfts" passHref>
-                    <Button size="large" sx={{ fontWeight: "bold" }}>NFTs</Button>
-                  </Link>
-                  <Link href="/wallet" passHref>
-                    <Button size="large" sx={{ fontWeight: "bold" }}>Wallets</Button>
-                  </Link>
-                </Stack>
-              )
-            } */}
+          {showMenu && <WalletSearch />}
 
+          <Box sx={{ flexGrow: 1 }}>
             <Title setOpen={setOpen} />
+          </Box>
 
+          {showMenu ? (
             <Stack direction="row" spacing={1} alignItems="center">
-              <Tooltip title="Toggle detailed view">
-                <IconButton onClick={toggleInfo}>{showInfo ? <VisibilityOffIcon /> : <VisibilityIcon />}</IconButton>
-              </Tooltip>
-              <ToggleButtonGroup
-                value={layoutSize}
-                exclusive
-                onChange={handleSizeChange}
-                aria-label="Layout size"
-                defaultValue={layoutSize}
-                size="small"
-              >
-                <ToggleButton value="small">
-                  <SvgIcon component={GridIcon3} inheritViewBox fontSize="small" />
-                </ToggleButton>
-                <ToggleButton value="medium">
-                  <SvgIcon component={GridIcon2} inheritViewBox fontSize="small" />
-                </ToggleButton>
-                <ToggleButton value="large">
-                  <SvgIcon component={GridIcon} inheritViewBox fontSize="small" />
-                </ToggleButton>
-                <ToggleButton value="collage" disabled={filtered.length > 500}>
-                  <ViewQuiltIcon inheritViewBox />
-                </ToggleButton>
-              </ToggleButtonGroup>
+              <ShowInfo />
+              <ViewMenu />
               <UserMenu />
-
-              {!showMenu && (
-                <IconButton onClick={toggleMenu as any}>
-                  <MenuRoundedIcon fontSize="large" />
-                </IconButton>
-              )}
             </Stack>
-          </Stack>
+          ) : (
+            <IconButton onClick={toggleMenu as any} size="large">
+              <MenuRoundedIcon fontSize="large" />
+            </IconButton>
+          )}
         </Stack>
       </Container>
       <UpdateTag open={open} setOpen={setOpen} id={tag?.id} name={tag?.name} color={tag?.color} onUpdate={updateTag} />

@@ -87,6 +87,14 @@ export interface Rarity {
   lastParsed?: number;
 }
 
+export interface Wallet {
+  publicKey: string;
+  isLedger?: boolean;
+  nickname?: string;
+  favourite?: boolean;
+  owned?: boolean;
+}
+
 export type RarityTier = "mythic" | "epic" | "legendary" | "rare" | "uncommon" | "common"
 
 export interface Preferences {
@@ -105,17 +113,19 @@ export class DB extends Dexie {
   taggedNfts!: Table<TaggedNft>;
   order!: Table<Order>;
   preferences!: Table<Preferences>;
+  wallets!: Table<Wallet>
 
   constructor() {
     super('biblio.tech');
-    this.version(1).stores({
+    this.version(2).stores({
       nfts: "nftMint,collectionId,owner",
       collections: "id,helloMoonCollectionId,collectionId,name",
       rarity: "nftMint,howRare,moonRank",
       tags: "id,name,color",
       taggedNfts: '[nftId+tagId],nftId,tagId,sortedIndex',
       order: "nftMint",
-      preferences: 'page'
+      preferences: 'page',
+      wallets: "publicKey"
     })
   }
 }

@@ -5,6 +5,7 @@ import { isArray, mergeWith, noop, uniq } from "lodash"
 import { usePrevious } from "../hooks/use-previous"
 import { useRouter } from "next/router"
 import { useUiSettings } from "./ui-settings"
+import { useAccess } from "./access"
 
 type Sort = {
   label: string
@@ -123,6 +124,7 @@ type SortType =
 
 export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   const [selectedFilters, setSelectedFilters] = useState({})
+  const { isAdmin } = useAccess()
   const [search, setSearch] = useState("")
   const [sortOptions, setSortOptions] = useState<Sort[]>([])
   const { sort, setSort } = useUiSettings()
@@ -141,7 +143,7 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
 
   function selectTag(tagId: string) {
     setSelectedTags((prevState) => {
-      return [...selectedTags, tagId]
+      return uniq([...prevState, tagId])
     })
   }
 
@@ -174,9 +176,13 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
     } else {
       type = "nonFungible"
     }
-    const options = sortOptionsConfig[type]
+    let options = sortOptionsConfig[type]
+
+    if (!isAdmin) {
+      // options = options.filter((opt) => opt !== "custom")
+    }
     setSortOptions(options.map((opt) => allOptions[opt as keyof object]))
-  }, [router.query])
+  }, [router.query, isAdmin])
 
   useEffect(() => {
     if (!sortOptions.length) return

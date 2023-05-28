@@ -1,4 +1,15 @@
-import { Box, Button, Dialog, IconButton, Stack, Theme, Typography, useMediaQuery } from "@mui/material"
+import {
+  Box,
+  Button,
+  Card,
+  Dialog,
+  IconButton,
+  Stack,
+  Theme,
+  Typography,
+  useMediaQuery,
+  AppBar as MuiAppBar,
+} from "@mui/material"
 import { Container } from "@mui/system"
 import Link from "next/link"
 import { Toaster } from "react-hot-toast"
@@ -21,6 +32,10 @@ import { useRouter } from "next/router"
 import { SignUp } from "../SignUp"
 import { Nft } from "../../db"
 import { CollectionItem } from "../../pages/collections"
+import { Sidebar } from "../Sidebar"
+import { UserMenu } from "../UserMenu"
+import { ViewMenu } from "../ViewMenu"
+import { ShowInfo } from "../ShowInfo"
 
 type LayoutProps = {
   nfts: Nft[] | CollectionItem[]
@@ -54,12 +69,16 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
         <link rel="preload" href="/Lato-Bold.woff2" as="font" crossOrigin="" type="font/woff2" />
       </Head>
       <Toaster />
-      <Stack height="100vh">
+      <Stack height="100vh" width="100vw">
         <AppBar showMenu={showMenu} toggleMenu={toggleMenu} />
-        <Box flexGrow={1} sx={{ overflow: "hidden" }}>
+        <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
           <Stack direction="row" spacing={2} sx={{ height: "100%", overflowY: "auto" }}>
-            {showMenu && <SideMenu />}
-            <Stack sx={{ flexGrow: 1 }}>
+            {showMenu && (
+              <Sidebar>
+                <SideMenu />
+              </Sidebar>
+            )}
+            <Stack sx={{ flexGrow: 1, overflow: "hidden" }}>
               <ActionBar nfts={nfts} filtered={filtered} />
               <Box
                 sx={{
@@ -68,6 +87,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
                   flexGrow: 1,
                   backgroundImage: "url(/books-lighter.svg)",
                   backgroundSize: "200px",
+                  paddingLeft: !showMenu ? 1 : 0,
                 }}
               >
                 {wallet.connected || router.query.publicKey ? (
@@ -105,31 +125,34 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
 
       {!showMenu && (
         <Dialog open={menuOpen} onClose={toggleMenu} fullScreen>
-          <Container>
-            <Stack>
-              <IconButton size="large" sx={{ position: "fixed", top: "0.25em", right: "0.25em" }} onClick={toggleMenu}>
-                <Close fontSize="large" />
-              </IconButton>
-              <img src="/biblio-logo.png" style={{ color: "red", margin: "0 auto" }} width="40%" />
-              <Link href="/collections" passHref>
-                <Button size="large" sx={{ fontWeight: "bold" }}>
-                  Collections
-                </Button>
-              </Link>
-              <Link href="/" passHref>
-                <Button size="large" sx={{ fontWeight: "bold" }}>
-                  NFTs
-                </Button>
-              </Link>
-              <Link href="/wallet" passHref>
-                <Button size="large" sx={{ fontWeight: "bold" }}>
-                  Wallets
-                </Button>
-              </Link>
-              <Typography variant="h5">Tags</Typography>
-              <Tags />
-            </Stack>
-          </Container>
+          <Card sx={{ overflowY: "auto" }}>
+            <MuiAppBar elevation={0} position="sticky" sx={{ height: "75px" }}>
+              <Container sx={{ height: "100%" }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" height="100%">
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <ViewMenu />
+                    <ShowInfo />
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <UserMenu large />
+                    <IconButton size="large" onClick={toggleMenu}>
+                      <Close fontSize="large" />
+                    </IconButton>
+                  </Stack>
+                </Stack>
+              </Container>
+            </MuiAppBar>
+            <Container>
+              <Stack spacing={2}>
+                <img src="/biblio-logo.png" style={{ color: "red", margin: "0 auto" }} width="40%" />
+                <Typography variant="h6" textTransform="uppercase" fontWeight="bold">
+                  Wallet search
+                </Typography>
+                <WalletSearch large />
+                <SideMenu noAccordions large />
+              </Stack>
+            </Container>
+          </Card>
         </Dialog>
       )}
       <SignUp />

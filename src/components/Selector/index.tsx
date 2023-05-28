@@ -101,7 +101,13 @@ export const Selector: FC<SelectorProps> = ({
         </>
       )}
 
-      <Stack direction="row" padding={4} sx={{ backgroundColor: "#111" }} spacing={1}>
+      <Stack
+        direction={{ sm: "row", xs: "column" }}
+        padding={4}
+        sx={{ backgroundColor: "#111" }}
+        spacing={1}
+        alignItems="center"
+      >
         <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           {linkedNft ? (
             <img

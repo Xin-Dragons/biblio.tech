@@ -5,7 +5,7 @@ import { LeaderboardStatsRequest, NftMintsByOwner, NftMintsByOwnerRequest, RestC
 import { partition, uniqBy, groupBy, findKey, size, uniq, chunk, flatten } from "lodash";
 import axios from "axios";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
-import { DigitalAsset, JsonMetadata, TokenStandard, fetchAllDigitalAssetByOwner, fetchDigitalAsset, fetchMasterEdition } from "@metaplex-foundation/mpl-token-metadata";
+import { DigitalAsset, JsonMetadata, TokenStandard, fetchAllDigitalAsset, fetchAllDigitalAssetByOwner, fetchDigitalAsset, fetchMasterEdition } from "@metaplex-foundation/mpl-token-metadata";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { base58PublicKey, isSome, publicKey, some, Option, unwrapSome } from "@metaplex-foundation/umi";
 
@@ -35,8 +35,6 @@ async function getTokenPrices(mints: string[]) {
       console.log(err)
     }
   })))
-
-  console.log({ results })
 
   return flatten(results).filter(Boolean)
 
@@ -116,10 +114,12 @@ async function getCollections(collectionIds: string[]) {
 
 self.addEventListener("message", async event => {
   try {
-    let { publicKey: owner, force } = event.data;
+    let { publicKey: owner, force, mints } = event.data;
 
     const [umiTokens, helloMoonNfts, loanStats, frozenStatus] = await Promise.all([
-      fetchAllDigitalAssetByOwner(umi, publicKey(owner), { tokenStrategy: "getProgramAccounts"}),
+      mints
+        ? fetchAllDigitalAsset(umi, mints.map((mint: string) => publicKey(mint))) 
+        : fetchAllDigitalAssetByOwner(umi, publicKey(owner), { tokenStrategy: "getProgramAccounts"}),
       getOwnedHelloMoonNfts(owner),
       getLoanSummaryForUser(owner),
       getFrozenStatus(owner)
@@ -274,7 +274,6 @@ self.addEventListener("message", async event => {
     ]
 
     const prices = await getTokenPrices(fungibles.map(n => n.nftMint))
-    console.log(prices)
 
     const fungiblesWithBalances = await Promise.all(fungibles.map(async item => {
       const ata = await getAssociatedTokenAddress(new PublicKey(item.nftMint), new PublicKey(owner));
@@ -287,8 +286,6 @@ self.addEventListener("message", async event => {
         price: price ? price.price / Math.pow(10, 6) : null
       }
     }))
-
-    console.log(fungiblesWithBalances)
 
     const editionsWithNumbers = await Promise.all((types[ExtendedTokenStandard.NonFungibleEdition] || []).map(async item => {
       if (item.edition?.isOriginal) {

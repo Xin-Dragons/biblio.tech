@@ -11,7 +11,9 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  Theme,
   Typography,
+  useMediaQuery,
 } from "@mui/material"
 import { useWallet } from "@solana/wallet-adapter-react"
 import axios from "axios"
@@ -31,10 +33,16 @@ export const SignUp: FC = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const wallet = useWallet()
+  const fullScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   useEffect(() => {
     const wallets = (session?.user?.["biblio-wallets"] || []).map((wallet) => wallet.public_key) || []
-    if (wallet.publicKey && status === "authenticated" && !wallets.includes(wallet.publicKey.toBase58())) {
+    if (
+      wallet.publicKey &&
+      status === "authenticated" &&
+      !wallets.includes(wallet.publicKey.toBase58()) &&
+      !session.user?.offline
+    ) {
       setIsOpen(true)
     } else {
       setIsOpen(false)
@@ -45,7 +53,9 @@ export const SignUp: FC = () => {
     if (status !== "authenticated") {
       return
     }
-    if (!wallet.publicKey || wallet.publicKey?.toBase58() !== session?.publicKey) {
+    if (wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
+      console.log("signing out when authenticated")
+      console.log(wallet?.publicKey?.toBase58(), session.publicKey)
       signOut({ redirect: false })
     }
   }, [wallet.publicKey])
@@ -91,6 +101,7 @@ export const SignUp: FC = () => {
   }
 
   async function signOutAndDisconnect() {
+    console.log("Signing out and disconnecting")
     await signOut({ redirect: false })
     wallet.disconnect()
     toast.success("Signed out")
@@ -107,16 +118,14 @@ export const SignUp: FC = () => {
     }
   }
 
-  console.log({ session })
-
   const maxWallets = session?.user?.access_nft?.collection?.["biblio-collections"].number_wallets || 0
   const linkedWallets = session?.user?.["biblio-wallets"]?.length || 0
 
   const canLink = linkedWallets >= maxWallets
 
   return (
-    <Dialog open={isOpen} fullWidth maxWidth="md">
-      <Card>
+    <Dialog open={isOpen} fullWidth maxWidth="md" fullScreen={fullScreen}>
+      <Card sx={{ overflowY: "auto", height: fullScreen ? "100vh" : "auto" }}>
         <CardContent>
           {session?.user?.id ? (
             <Stack spacing={2} justifyContent="center" alignItems="center">

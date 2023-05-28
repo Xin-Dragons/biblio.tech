@@ -11,7 +11,7 @@ import { useTheme } from "../../context/theme"
 import { Collection, Nft, Tag, Tag as TagType } from "../../db"
 import { ChipPropsColorOverrides } from "@mui/material/Chip"
 import { CollectionItem } from "../../pages/collections"
-import { noop, update } from "lodash"
+import { noop } from "lodash"
 import { useFilters } from "../../context/filters"
 import { useRouter } from "next/router"
 import { Close, LabelOff, TakeoutDining } from "@mui/icons-material"
@@ -28,6 +28,7 @@ type TagProps = {
 
 const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag, edit }) => {
   const { selectedTags, selectTag, deselectTag } = useFilters()
+  const { selected: selectedNfts } = useSelection()
   const theme = useTheme()
 
   if (!theme.palette[tag.id as keyof object]) {
@@ -57,7 +58,7 @@ const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag, edit }) =
         border: `1px solid`,
         borderColor: `${tag.id}.main`,
       }}
-      disabled={!update && !tag.numNfts}
+      disabled={(!edit && !tag.numNfts) || (edit && !selectedNfts.length)}
       //@ts-ignore
       color={tag.id}
     />
@@ -67,23 +68,23 @@ const Tag: FC<TagProps> = ({ isSelected, tag, addToTag, removeFromTag, edit }) =
 type TagListProps = {
   edit?: boolean
   clip?: boolean
+  clearAll?: boolean
 }
 
-export const TagList: FC<TagListProps> = ({ edit, clip }) => {
+export const TagList: FC<TagListProps> = ({ edit, clip, clearAll = true }) => {
   const { tags, addNftsToTag, removeNftsFromTag, addTag } = useTags()
   const { db } = useDatabase()
   const { selected } = useSelection()
   const { selectedTags, clearSelectedTags } = useFilters()
   const [open, setOpen] = useState(false)
   const { nfts, filtered } = useNfts()
+
   const taggedNfts =
     useLiveQuery(
       () => db.taggedNfts.filter((item) => nfts.map((n) => n.nftMint).includes(item.nftId)).toArray(),
       [filtered, nfts],
       []
     ) || []
-  const router = useRouter()
-  const includeUnlabeledIcon = router.query.filter !== "untagged"
 
   async function addToTag(tag: Tag) {
     try {
@@ -161,7 +162,7 @@ export const TagList: FC<TagListProps> = ({ edit, clip }) => {
       >
         {edit && (
           <Chip
-            label="Add to new tag"
+            label={`Add ${selected.length ? "to " : ""}new tag`}
             onClick={() => setOpen(true)}
             onDelete={() => setOpen(true)}
             deleteIcon={<AddCircleIcon />}
@@ -195,7 +196,7 @@ export const TagList: FC<TagListProps> = ({ edit, clip }) => {
             )
           })}
       </Stack>
-      {!edit && (
+      {!edit && clearAll && (
         <Tooltip title="Clear tag filters">
           <span>
             <IconButton onClick={() => clearSelectedTags()} disabled={!selectedTags.length}>

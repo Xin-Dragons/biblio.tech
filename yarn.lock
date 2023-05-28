@@ -1720,14 +1720,15 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@hellomoon/api@^1.15.7":
-  version "1.15.7"
-  resolved "https://registry.yarnpkg.com/@hellomoon/api/-/api-1.15.7.tgz#afc4719a9956db9d6ca8be6311fd600909b72654"
-  integrity sha512-BxixwDatgYhoYCGbJB2b5PGhSFmPQcqUMGYEKvgJ2MnLOiPTZHQoo6gS6pQ0ZT89b4Y+TNkQr7garvgPwQ6DqQ==
+"@hellomoon/api@^1.16.4":
+  version "1.16.4"
+  resolved "https://registry.yarnpkg.com/@hellomoon/api/-/api-1.16.4.tgz#fcf6b8afd7cab821ee307fd18521cc283fa69637"
+  integrity sha512-IXxlNB+XLBJjatxXQrvw674Afn8/lhwoinkHzbYqSQ8hwUBlsl0crP9LOBJGw5Bve4lcGYYHW4wnVp4kqstTbg==
   dependencies:
     axios "^1.2.6"
     dotenv "^16.0.3"
     ts-node "^10.9.1"
+    uuid "^9.0.0"
     websocket "^1.0.34"
 
 "@humanwhocodes/config-array@^0.10.4":

@@ -16,7 +16,11 @@ export async function getPublicKeyFromSolDomain(domain: string): Promise<string>
   return owner
 }
 
-export const WalletSearch: FC = () => {
+type WalletSearchProps = {
+  large?: boolean
+}
+
+export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
   const [publicKey, setPublicKey] = useState("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const { isActive } = useAccess()
@@ -99,10 +103,9 @@ export const WalletSearch: FC = () => {
       value={publicKey}
       onChange={(e) => setPublicKey(e.target.value)}
       helperText={publicKeyError}
-      sx={{ minWidth: "350px" }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
-      size="small"
+      size={large ? "medium" : "small"}
       disabled={!isActive}
       InputProps={{
         startAdornment: (

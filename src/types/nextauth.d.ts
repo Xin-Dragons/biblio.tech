@@ -19,7 +19,8 @@ interface User {
   active: boolean;
   "biblio-wallets": any[];
   id: string;
-  access_nft: Nft
+  access_nft: Nft;
+  offline?: boolean;
 }
 
 declare module "next-auth" {
@@ -32,13 +33,6 @@ declare module "next-auth" {
 
 import { JsonMetadata } from '@metaplex-foundation/mpl-token-metadata'
 import 'next-auth'
-
-/* Not sure if this is needed. */
-// declare module 'next-auth' {
-//   export interface Session {
-//     uid: string
-//   }
-// }
 
 declare module 'next-auth/client' {
   export interface Session {

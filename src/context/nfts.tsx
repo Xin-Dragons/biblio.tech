@@ -109,6 +109,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
                 item.jsonLoaded &&
                 // frozen things are probably cool
                 !item.status &&
+                // things that have a value aren't junk
+                !item.price &&
                 // NFT editions probably aren't junk
                 unwrapSome(item.metadata.tokenStandard) !== 3 &&
                 // missing json probably junk

@@ -103,16 +103,21 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
     callbacks: {
       async session({ session, token }) {
         // @ts-ignore
+        console.log("ok here")
         session.publicKey = token.sub;
         if (session.user) {
-          const headers = {
-            'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
+          try {
+            const headers = {
+              'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
+            }
+        
+            const { data: user } = await axios.get(`${process.env.API_URL}/biblio/${token.sub}`, { headers });
+            Object.assign(session.user, user)
+            const settings = user?.access_nft?.collection?.['biblio-collections']
+            session.user.active = !!(settings && settings.active && !settings.hours_active)
+          } catch {
+            session.user.offline = true;
           }
-      
-          const { data: user } = await axios.get(`${process.env.API_URL}/biblio/${token.sub}`, { headers });
-          Object.assign(session.user, user)
-          const settings = user?.access_nft?.collection?.['biblio-collections']
-          session.user.active = !!(settings && settings.active && !settings.hours_active)
         }
         return session;
       },

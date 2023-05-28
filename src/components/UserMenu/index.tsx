@@ -30,16 +30,21 @@ import { useUmi } from "../../context/umi"
 import { sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
 import { useRouter } from "next/router"
+import { useWallets } from "../../context/wallets"
 
-export const UserMenu: FC = () => {
+type UserMenuProps = {
+  large?: boolean
+}
+
+export const UserMenu: FC<UserMenuProps> = ({ large }) => {
   const { setVisible, visible } = useWalletModal()
   const [isSigningIn, setIsSigningIn] = useState(false)
   const { data: session, status } = useSession()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const [profileModalShowing, setProfileModalShowing] = useState(false)
+  const { profileModalShowing, setProfileModalShowing } = useUiSettings()
   const open = Boolean(anchorEl)
   const wallet = useWallet()
-  const { usingLedger, setUsingLedger } = useUiSettings()
+  const { isLedger, setIsLedger } = useWallets()
   const umi = useUmi()
   const router = useRouter()
 
@@ -60,8 +65,8 @@ export const UserMenu: FC = () => {
     }
   }, [wallet.publicKey])
 
-  async function walletSignIn(isUsingLedger: boolean = false): Promise<void> {
-    if (isUsingLedger) {
+  async function walletSignIn(isLedger: boolean = false): Promise<void> {
+    if (isLedger) {
       try {
         const txn = await addMemo(umi, {
           memo: "Sign in to Biblio",
@@ -73,10 +78,8 @@ export const UserMenu: FC = () => {
           redirect: false,
           rawTransaction: base58.encode(umi.transactions.serialize(signed)),
           publicKey: wallet.publicKey?.toBase58(),
-          usingLedger,
+          isLedger,
         })
-
-        console.log(result)
 
         if (!result?.ok) {
           throw new Error("Failed to sign in")
@@ -124,11 +127,12 @@ export const UserMenu: FC = () => {
           throw new Error("Failed to sign in")
         }
       } catch (err: any) {
+        console.log({ err })
         if (err.message.includes("Signing off chain messages with Ledger is not yet supported")) {
           toast(
             "Looks like you're using Ledger!\n\nLedger doesn't support offchain message signing (yet) so please sign this memo transaction to sign in."
           )
-          setUsingLedger(true, wallet.publicKey?.toBase58())
+          setIsLedger(true, wallet.publicKey?.toBase58())
           return await walletSignIn(true)
         }
         throw err
@@ -139,7 +143,7 @@ export const UserMenu: FC = () => {
   async function handleSignIn(): Promise<void> {
     try {
       setIsSigningIn(true)
-      const signInPromise = walletSignIn(usingLedger)
+      const signInPromise = walletSignIn(isLedger)
 
       toast.promise(signInPromise, {
         loading: "Signing in...",
@@ -192,7 +196,7 @@ export const UserMenu: FC = () => {
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
       >
-        <AccountBalanceWallet />
+        <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
       </IconButton>
       <Menu
         anchorEl={anchorEl}
@@ -253,14 +257,11 @@ export const UserMenu: FC = () => {
                   <ListItemText>Sign in</ListItemText>
                 </MenuItem>
               )}
-              <MenuItem
-                onClick={() => setUsingLedger(!usingLedger, wallet.publicKey?.toBase58())}
-                disabled={isSigningIn}
-              >
+              <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())} disabled={isSigningIn}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
-                    checked={usingLedger}
-                    onChange={(e) => setUsingLedger(e.target.checked, wallet.publicKey?.toBase58())}
+                    checked={isLedger}
+                    onChange={(e) => setIsLedger(e.target.checked, wallet.publicKey?.toBase58())}
                     inputProps={{ "aria-label": "controlled" }}
                     disabled={isSigningIn}
                     size="small"
