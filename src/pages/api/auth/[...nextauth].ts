@@ -103,7 +103,6 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
     callbacks: {
       async session({ session, token }) {
         // @ts-ignore
-        console.log("ok here")
         session.publicKey = token.sub;
         if (session.user) {
           try {

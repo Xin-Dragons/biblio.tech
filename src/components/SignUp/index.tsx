@@ -54,8 +54,6 @@ export const SignUp: FC = () => {
       return
     }
     if (wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
-      console.log("signing out when authenticated")
-      console.log(wallet?.publicKey?.toBase58(), session.publicKey)
       signOut({ redirect: false })
     }
   }, [wallet.publicKey])
@@ -101,7 +99,6 @@ export const SignUp: FC = () => {
   }
 
   async function signOutAndDisconnect() {
-    console.log("Signing out and disconnecting")
     await signOut({ redirect: false })
     wallet.disconnect()
     toast.success("Signed out")

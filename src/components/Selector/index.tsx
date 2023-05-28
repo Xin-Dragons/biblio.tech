@@ -57,7 +57,6 @@ export const Selector: FC<SelectorProps> = ({
       const { data } = await axios.get("/api/get-library-cards", {
         params: { publicKey: wallet.publicKey?.toBase58() },
       })
-      console.log({ data })
       setLibraryCards(data)
     } catch (err) {
       console.log(err)

@@ -1,6 +1,6 @@
 {
     "extends": "./tsconfig.root.json",
-    "include": ["src/types/next-env.d.ts", "**/*.ts", "**/*.tsx", "src/pages/api/auth/[...nextauth].ts"],
+    "include": ["src/types/next-env.d.ts", "**/*.ts", "**/*.tsx", "src/pages/api/auth/[...nextauth].ts", "node_modules/jimp*"],
     "compilerOptions": {
         "outDir": "lib",
         "target": "es6",
@@ -16,7 +16,8 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "jsx": "preserve",
-        "incremental": true
+        "incremental": true,
+        "allowSyntheticDefaultImports": true
     },
     "exclude": ["node_modules"]
 }

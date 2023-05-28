@@ -127,7 +127,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large }) => {
           throw new Error("Failed to sign in")
         }
       } catch (err: any) {
-        console.log({ err })
+        console.error(err)
         if (err.message.includes("Signing off chain messages with Ledger is not yet supported")) {
           toast(
             "Looks like you're using Ledger!\n\nLedger doesn't support offchain message signing (yet) so please sign this memo transaction to sign in."

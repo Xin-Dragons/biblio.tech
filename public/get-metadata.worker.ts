@@ -13,7 +13,6 @@ async function getItem(mint: string, retries = 3): Promise<any> {
     if (retries) {
       return getItem(mint, --retries);
     } else {
-      console.log('no')
       return null
     }
   }

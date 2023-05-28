@@ -33,7 +33,7 @@ import { TagList } from "../TagList"
 
 import VaultIcon from "./vault.svg"
 import PlaneIcon from "./plane.svg"
-import { Close, Label, LocalFireDepartment } from "@mui/icons-material"
+import { Close, Image, Label, LocalFireDepartment } from "@mui/icons-material"
 import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
@@ -47,6 +47,7 @@ import { useUmi } from "../../context/umi"
 import { useDatabase } from "../../context/database"
 import { useTransactionStatus } from "../../context/transactions"
 import { Metadata, toBigNumber } from "@metaplex-foundation/js"
+import Jimp from "jimp/es"
 import {
   DigitalAssetWithToken,
   TokenStandard,
@@ -65,6 +66,7 @@ import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-w
 import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
+import axios from "axios"
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -83,6 +85,8 @@ export const Actions: FC = () => {
   const metaplex = useMetaplex()
   const { connection } = useConnection()
   const [actionDrawerShowing, setActionDrawerShowing] = useState(false)
+  const [image, setImage] = useState(null)
+  const [generating, setGenerating] = useState(false)
   const umi = useUmi()
   const wallet = useWallet()
   const router = useRouter()
@@ -672,6 +676,84 @@ export const Actions: FC = () => {
     setActionDrawerShowing(!actionDrawerShowing)
   }
 
+  async function generateCollage() {
+    const mints = selected.length ? selected : filtered.map((n) => n.nftMint)
+    const images = mints.map((mint) => nfts.find((n) => n.nftMint === mint)?.json?.image).filter(Boolean)
+
+    const ratio = 16 / 9
+
+    const rows = Math.ceil((Math.sqrt(images.length) * 3) / 4)
+    const cols = Math.ceil(images.length / rows)
+    const output: string[][] = []
+    Array.from(new Array(rows).keys()).forEach(() => {
+      const row = images.splice(0, cols)
+      if (row.length < cols) {
+        Array.from(new Array(cols - row.length).keys()).forEach(() => {
+          row.push("/biblio-logo-small.png")
+        })
+      }
+      output.push(row)
+    })
+
+    const collagePromise = createCollage(output)
+
+    toast.promise(collagePromise, {
+      loading: "Creating collage",
+      success: "Created successfully",
+      error: "Something went wrong",
+    })
+  }
+
+  async function getEmptyJimp(width: number, height: number) {
+    return new Promise((resolve, reject) => {
+      new Jimp(width, height, (err, image) => {
+        if (err) {
+          return reject(err)
+        }
+        resolve(image)
+      })
+    })
+  }
+
+  async function createCollage(rows: string[][]) {
+    try {
+      setGenerating(true)
+      const edge = Math.floor(1600 / rows[0].length)
+      const jimps = await Promise.all(
+        rows.map(async (row) => {
+          const rowJimps = await Promise.all(
+            row.map(async (img) => {
+              const jimp = (await Jimp.read(img)).resize(edge, edge)
+              return jimp
+            })
+          )
+          return rowJimps
+        })
+      )
+      const canvas = await getEmptyJimp(edge * rows[0].length, edge * rows.length)
+      const image = jimps.reduce((img: any, row, rowIndex) => {
+        const compositeRow = row.reduce((item, image, index) => {
+          return item.composite(image, index * edge, rowIndex * edge)
+        }, img)
+        return compositeRow
+      }, canvas)
+
+      const base64Image = await image.getBase64Async(Jimp.MIME_PNG)
+      setImage(base64Image)
+    } catch (err: any) {
+      console.log(err)
+      toast.error(err.message)
+      console.error(err)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function closeImage() {
+    setImage(null)
+    setCollageModalShowing(false)
+  }
+
   return (
     <Stack spacing={2} direction="row" alignItems="center">
       {isAdmin && !collectionPage ? (
@@ -745,9 +827,9 @@ export const Actions: FC = () => {
               >
                 <Label />
               </IconButton>
-              {/* <IconButton onClick={toggleCollageModalShowing}>
-                <ImageIcon />
-              </IconButton> */}
+              <IconButton onClick={toggleCollageModalShowing} disabled={!filtered.length}>
+                <Image />
+              </IconButton>
 
               {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
             </>
@@ -776,8 +858,23 @@ export const Actions: FC = () => {
       </Dialog>
       <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing}>
         <Card>
-          <DialogTitle>Export collage</DialogTitle>
-          <DialogContent></DialogContent>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Export collage</Typography>
+              <Typography>Export a collage of {selected.length || filtered.length} items</Typography>
+              {(selected.length || filtered.length) > 100 && (
+                <Alert severity="info">Exporting a large number of images, this may take a while!</Alert>
+              )}
+              <Stack direction="row" spacing={2} justifyContent="space-between">
+                <Button color="error" onClick={toggleCollageModalShowing} disabled={generating}>
+                  Cancel
+                </Button>
+                <Button onClick={generateCollage} disabled={generating}>
+                  Generate collage
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
         </Card>
       </Dialog>
       <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
@@ -898,6 +995,24 @@ export const Actions: FC = () => {
           </CardContent>
         </Card>
       </Drawer>
+      <Dialog open={!!image} onClose={closeImage} fullScreen>
+        <IconButton
+          size="large"
+          sx={{
+            position: "fixed",
+            top: "0.25em",
+            right: "0.25em",
+            background: "#1f1f1f",
+            "&:hover": {
+              background: "#333",
+            },
+          }}
+          onClick={closeImage}
+        >
+          <Close fontSize="large" />
+        </IconButton>
+        <img src={image || ""} />
+      </Dialog>
     </Stack>
   )
 }

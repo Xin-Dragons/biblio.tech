@@ -171,8 +171,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
           (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
         )
 
-        console.log({ toRemove })
-
         await db.nfts.bulkUpdate(
           toRemove.map((item) => {
             return {
@@ -400,7 +398,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function updateRarity(updates: Rarity[]) {
-    console.log(updates)
     await db.transaction("rw", db.rarity, async () => {
       const all = await db.rarity
         .where("nftMint")

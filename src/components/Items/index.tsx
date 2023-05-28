@@ -339,8 +339,6 @@ export const Items: FC<ItemsProps> = ({
       },
     }
 
-    console.log((masonrySizes[width as keyof object] as any).cols)
-
     return (
       <Box
         sx={{

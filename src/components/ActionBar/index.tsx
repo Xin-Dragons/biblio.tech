@@ -30,25 +30,6 @@ export const ActionBar: FC<ActionBarProps> = () => {
     }
   }, [router.query])
 
-  // useEffect(() => {
-  //   const options = [];
-  //   const total = nfts.length;
-  //   for (let rows = 1; rows <= total; rows++) {
-  //     const cols = total / rows;
-  //     const remainder = total - (Math.floor(cols) * rows);
-  //     options.push([rows, Math.floor(cols), remainder])
-  //   }
-
-  //   setCollageOptions(options)
-  // }, [nfts.length])
-
-  // useEffect(() => {
-  //   const items = selected.length || filtered.length
-  //   const rows = Math.ceil(items / 3)
-  //   const cols = Math.ceil(items / rows)
-  //   console.log({ rows, cols })
-  // }, [filtered, selected])
-
   const filtersShowing = useMediaQuery("(min-width:1300px)")
 
   return (
