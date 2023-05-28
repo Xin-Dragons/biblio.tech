@@ -62,7 +62,7 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       title = "Untagged"
     } else {
       title = (
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" alignItems="center" spacing={1} justifyContent="center">
           <Typography variant="h5">TAGS - </Typography>
           <Color color={tag.color!} />
           <Typography variant="h5">{tag.name}</Typography>
@@ -79,8 +79,8 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
     title = collection?.collectionName || "Unknown collection"
   } else if (isVault) {
     title = (
-      <Stack direction="row" alignItems="center">
-        <Typography variant="h5" fontFamily="Lato" fontWeight="bold">
+      <Stack direction="row" alignItems="center" sx={{ width: "100%" }} justifyContent="center">
+        <Typography variant="h5" fontFamily="Lato" fontWeight="bold" textAlign="center">
           THE VAULT
         </Typography>
         <IconButton onClick={() => toggleInfo("vault")}>
