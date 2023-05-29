@@ -218,9 +218,9 @@ export const Selector: FC<SelectorProps> = ({
       <Dialog open={selectorOpen} onClose={toggleSelectorOpen} maxWidth="xl">
         <Card sx={{ padding: 2, overflow: "auto" }}>
           <Grid container spacing={2}>
-            {libraryCards.map((card: Nft) => {
+            {libraryCards.map((card: Nft, index) => {
               return (
-                <Grid item xs={6} sm={4} md={3} lg={2} xl={1}>
+                <Grid item xs={6} sm={4} md={3} lg={2} xl={1} key={index}>
                   <Card key={card.mint} sx={{ cursor: "pointer" }} onClick={() => onSelect(card)}>
                     <img src={card.metadata.image} width="100%" />
                     <CardContent>
