@@ -276,14 +276,19 @@ self.addEventListener("message", async event => {
     const prices = await getTokenPrices(fungibles.map(n => n.nftMint))
 
     const fungiblesWithBalances = await Promise.all(fungibles.map(async item => {
-      const ata = await getAssociatedTokenAddress(new PublicKey(item.nftMint), new PublicKey(owner));
-      const balance = await connection.getTokenAccountBalance(ata)
-      const price = prices.find(p => p.mints === item.nftMint);
-      return {
-        ...item,
-        supply: Number(item.mint.supply.toString()),
-        balance: balance.value.uiAmount,
-        price: price ? price.price / Math.pow(10, 6) : null
+      try {
+
+        const ata = await getAssociatedTokenAddress(new PublicKey(item.nftMint), new PublicKey(owner));
+        const balance = await connection.getTokenAccountBalance(ata)
+        const price = prices.find(p => p.mints === item.nftMint);
+        return {
+          ...item,
+          supply: Number(item.mint.supply.toString()),
+          balance: balance.value.uiAmount,
+          price: price ? price.price / Math.pow(10, 6) : null
+        }
+      } catch {
+        return item
       }
     }))
 

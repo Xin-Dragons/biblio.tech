@@ -258,6 +258,7 @@ export const Items: FC<ItemsProps> = ({
   const { filtersActive, clearFilters } = useFilters()
   const { isActive } = useAccess()
   const { data: session } = useSession()
+  const router = useRouter()
 
   const select = (nftMint: string) => {
     setSelected((selected: string[]) => {
@@ -361,7 +362,7 @@ export const Items: FC<ItemsProps> = ({
     )
   }
 
-  const noAccess = session?.publicKey && !isActive
+  const noAccess = session?.publicKey && !isActive && !router.query.publicKey
 
   return !loading && items.length ? (
     <Box
