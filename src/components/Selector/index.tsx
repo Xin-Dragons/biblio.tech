@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Dialog,
+  Grid,
   Stack,
   Table,
   TableBody,
@@ -215,19 +216,23 @@ export const Selector: FC<SelectorProps> = ({
       )}
 
       <Dialog open={selectorOpen} onClose={toggleSelectorOpen} maxWidth="xl">
-        <Card sx={{ padding: 2 }}>
-          {libraryCards.map((card: Nft) => {
-            return (
-              <Card key={card.mint} sx={{ width: "300px", cursor: "pointer" }} onClick={() => onSelect(card)}>
-                <img src={card.metadata.image} width="100%" />
-                <CardContent>
-                  <Typography variant="h6" fontWeight="bold" textAlign="center">
-                    {card.metadata.name}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <Card sx={{ padding: 2, overflow: "auto" }}>
+          <Grid container spacing={2}>
+            {libraryCards.map((card: Nft) => {
+              return (
+                <Grid item xs={6} sm={4} md={3} lg={2} xl={1}>
+                  <Card key={card.mint} sx={{ cursor: "pointer" }} onClick={() => onSelect(card)}>
+                    <img src={card.metadata.image} width="100%" />
+                    <CardContent>
+                      <Typography variant="h6" fontWeight="bold" textAlign="center">
+                        {card.metadata.name}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              )
+            })}
+          </Grid>
         </Card>
       </Dialog>
     </>
