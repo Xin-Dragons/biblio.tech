@@ -25,7 +25,7 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
           label: "Signature",
           type: "text",
         },
-        usingLedger: {
+        isLedger: {
           label: "Using ledger",
           type: "boolean"
         },
@@ -40,7 +40,7 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
       },
       async authorize(credentials, req) {
         try {
-          if (credentials?.usingLedger) {
+          if (credentials?.isLedger === 'true') {
             const txn = umi.transactions.deserialize(base58.decode(credentials?.rawTransaction));
             const web3txn = toWeb3JsTransaction(txn);
             const confirm = await connection.simulateTransaction(web3txn);
