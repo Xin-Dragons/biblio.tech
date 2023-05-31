@@ -86,14 +86,16 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       })
 
       toast.success("Loan repaid successfully!")
-      setTransactionComplete([mint])
+      await setTransactionComplete([mint])
+      await sleep(2000)
+      clearTransactions([mint])
       await settleLoan(nft)
     } catch (err: any) {
       toast.error(err.message)
-      setTransactionErrors([mint])
-    } finally {
+      await setTransactionErrors([mint])
       await sleep(2000)
       clearTransactions([mint])
+    } finally {
     }
   }
 
