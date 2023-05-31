@@ -74,7 +74,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     () => {
       const query = db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
-        return query.filter((item) => Boolean(item.loan)).toArray()
+        return query.filter((item) => Boolean(item.loan && item.loan.status === "active")).toArray()
       }
       if (router.query.filter === "sfts") {
         return query.filter((item) => unwrapSome(item.metadata.tokenStandard) === 1).toArray()

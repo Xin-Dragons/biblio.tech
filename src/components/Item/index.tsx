@@ -30,7 +30,7 @@ import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
 import { useDatabase } from "../../context/database"
 import axios from "axios"
-import { ArrowBackIosNew, ArrowForwardIos, Close, LocalFireDepartment } from "@mui/icons-material"
+import { ArrowBackIosNew, ArrowForwardIos, Close, LocalFireDepartment, Paid } from "@mui/icons-material"
 import { useDialog } from "../../context/dialog"
 import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
@@ -55,6 +55,7 @@ import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
 import { useNfts } from "../../context/nfts"
 import { useBasePath } from "../../context/base-path"
+import { useSharky } from "../../context/sharky"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 
@@ -96,6 +97,7 @@ const CircularProgressWithLabel: FC<CircularProgressWithLabelProps> = (props) =>
 }
 
 const Loan: FC<{ loan: Loan }> = ({ loan }) => {
+  const { repayLoan } = useSharky()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const { showInfo } = useUiSettings()
@@ -120,6 +122,20 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
     }
   }, [])
 
+  async function onRepayClick(e: any) {
+    e.stopPropagation()
+    await repayLoan(loan.collateralMint)
+  }
+
+  // async function onExtendClick(e: any) {
+  //   e.stopPropagation()
+  //   await extendLoan(loan.collateralMint)
+  // }
+
+  if (loan.status !== "active") {
+    return null
+  }
+
   return (
     <Stack
       sx={{
@@ -134,16 +150,29 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
       }}
       justifyContent="center"
       alignItems="center"
+      spacing={1}
     >
-      <Typography variant="h5">{loan.market}</Typography>
-      <Typography variant="h5">◎{(loan.amountToRepay / LAMPORTS_PER_SOL).toLocaleString()}</Typography>
-      <Typography
-        variant={urgent ? "h6" : "body2"}
-        color={urgent ? "error" : "inherit"}
-        fontWeight={urgent ? "bold" : "default"}
-      >
-        {timeRemaining}
-      </Typography>
+      <Stack justifyContent="center" alignItems="center">
+        <Typography variant="h5">{loan.market}</Typography>
+        <Typography variant="h5">◎{(loan.amountToRepay / LAMPORTS_PER_SOL).toLocaleString()}</Typography>
+        <Typography
+          variant={urgent ? "h6" : "body2"}
+          color={urgent ? "error" : "inherit"}
+          fontWeight={urgent ? "bold" : "default"}
+        >
+          {timeRemaining}
+        </Typography>
+      </Stack>
+      {loan.market === "Sharky" && (
+        <Stack direction="row" spacing={1}>
+          <Button onClick={onRepayClick} variant="contained" size="small">
+            Repay
+          </Button>
+          {/* <Button onClick={onExtendClick} size="small">
+            Extend
+          </Button> */}
+        </Stack>
+      )}
     </Stack>
   )
 }
@@ -709,6 +738,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     burn: <LocalFireDepartment />,
     freeze: <LockIcon />,
     thaw: <LockOpenIcon />,
+    repay: <Paid />,
   }
 
   const statusTitles = {

@@ -25,11 +25,10 @@ import {
   useMediaQuery,
   Drawer,
   CardContent,
-  LinearProgress,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { shorten } from "../Item"
-import { burn, createCloseAccountInstruction, getAssociatedTokenAddress } from "@solana/spl-token"
+// import { createCloseAccountInstruction, getAssociatedTokenAddress } from "@solana/spl-token"
 import { TagList } from "../TagList"
 
 import VaultIcon from "./vault.svg"
@@ -38,7 +37,7 @@ import { Close, Image, Label, LocalFireDepartment } from "@mui/icons-material"
 import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
-import { PublicKey } from "@solana/web3.js"
+import { PublicKey, Transaction as Web3Transaction } from "@solana/web3.js"
 import { flatten, uniq } from "lodash"
 import { toast } from "react-hot-toast"
 import { chunkBy } from "chunkier"
@@ -48,7 +47,6 @@ import { useUmi } from "../../context/umi"
 import { useDatabase } from "../../context/database"
 import { useTransactionStatus } from "../../context/transactions"
 import { Metadata, toBigNumber } from "@metaplex-foundation/js"
-import Jimp from "jimp/es"
 import {
   DigitalAssetWithToken,
   TokenStandard,
@@ -67,28 +65,30 @@ import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-w
 import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
+import PaidIcon from "@mui/icons-material/Paid"
 import axios from "axios"
+import { useSharky } from "../../context/sharky"
+import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export const Actions: FC = () => {
+  const { getRepayLoanInstructions } = useSharky()
   const { nfts, filtered } = useNfts()
   const { isAdmin } = useAccess()
   const { selected, setSelected } = useSelection()
-  const [collageOptions, setCollageOptions] = useState([])
+
   const [sending, setSending] = useState(false)
   const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
   const [recipient, setRecipient] = useState("")
   const [bulkSendOpen, setBulkSendOpen] = useState(false)
   const [burnOpen, setBurnOpen] = useState(false)
-  const [collageModalShowing, setCollageModalShowing] = useState(false)
+
   const [recipentError, setRecipientError] = useState<string | null>(null)
   const metaplex = useMetaplex()
   const { connection } = useConnection()
   const [actionDrawerShowing, setActionDrawerShowing] = useState(false)
-  const [image, setImage] = useState(null)
-  const [generating, setGenerating] = useState(false)
-  const [generated, setGenerated] = useState(0)
+
   const umi = useUmi()
   const wallet = useWallet()
   const router = useRouter()
@@ -110,6 +110,7 @@ export const Actions: FC = () => {
   const allInVault = selectedItems.every((item: any) => item.status === "inVault")
   const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
 
+  const outstandingLoansSelected = selectedItems.some((item: Nft) => item.loan?.status === "active")
   const canFreezeThaw = allInVault || noneInVault
 
   const mints = filtered.map((n: any) => n.nftMint)
@@ -172,12 +173,6 @@ export const Actions: FC = () => {
       return false
     }
   }
-
-  function toggleCollageModalShowing() {
-    setCollageModalShowing(!collageModalShowing)
-  }
-
-  async function exportCollage() {}
 
   type InstructionSet = {
     instructions: TransactionBuilder[]
@@ -326,19 +321,14 @@ export const Actions: FC = () => {
           )
 
           instSet.push(
-            transactionBuilder([
-              {
-                instruction: fromWeb3JsInstruction(
-                  createCloseAccountInstruction(
-                    await getAssociatedTokenAddress(item.mintAddress, wallet.publicKey!),
-                    wallet.publicKey!,
-                    wallet.publicKey!
-                  )
-                ),
-                signers: [umi.identity],
-                bytesCreatedOnChain: 0,
-              },
-            ])
+            closeToken(umi, {
+              account: findAssociatedTokenPda(umi, {
+                mint: fromWeb3JsPublicKey(item.mintAddress),
+                owner: umi.identity.publicKey,
+              }),
+              destination: umi.identity.publicKey,
+              owner: umi.identity,
+            })
           )
 
           return {
@@ -378,6 +368,45 @@ export const Actions: FC = () => {
       setBulkSendOpen(false)
     }
   }
+
+  // async function repayLoans() {
+  //   try {
+  //     if (!outstandingLoansSelected) {
+  //       throw new Error("No outstanding loans in selection")
+  //     }
+
+  //     const instructionSets = await getRepayLoanInstructions(selected)
+  //     const txn = new Web3Transaction().add(...instructionSets[0].instructions)
+  //     txn.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+  //     txn.feePayer = wallet.publicKey!
+
+  //     const signed = await wallet.signTransaction?.(txn)
+  //     // const chunks = getUmiChunks(instructionSets)
+
+  //     // console.log(chunks)
+  //     // const txns = await Promise.all(
+  //     //   chunks.map(async (builders) => {
+  //     //     const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
+  //     //     return {
+  //     //       txn: await txn.buildWithLatestBlockhash(umi),
+  //     //       mints: builders.map((b) => b.mint),
+  //     //     }
+  //     //   })
+  //     // )
+
+  //     // const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+
+  //     // await sendSignedTransactions(
+  //     //   signedTransactions,
+  //     //   txns.map((t) => t.mints),
+  //     //   "repayLoan"
+  //     // )
+  //   } catch (err: any) {
+  //     toast.error(err.message)
+  //     console.error(err)
+  //   } finally {
+  //   }
+  // }
 
   async function lockUnlock() {
     try {
@@ -587,12 +616,12 @@ export const Actions: FC = () => {
                 unwrapSome(digitalAsset.metadata.tokenStandard)!
               )
             ) {
-              const ata = await getAssociatedTokenAddress(
-                toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                toWeb3JsPublicKey(umi.identity.publicKey)
-              )
+              const ata = findAssociatedTokenPda(umi, {
+                mint: digitalAsset.mint.publicKey,
+                owner: umi.identity.publicKey,
+              })
 
-              const balance = await connection.getTokenAccountBalance(ata)
+              const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata))
               amount = BigInt(balance.value.amount)
             }
 
@@ -678,86 +707,6 @@ export const Actions: FC = () => {
     setActionDrawerShowing(!actionDrawerShowing)
   }
 
-  async function generateCollage() {
-    const mints = selected.length ? selected : filtered.map((n) => n.nftMint)
-    const images = mints.map((mint) => nfts.find((n) => n.nftMint === mint)?.json?.image).filter(Boolean)
-
-    const ratio = 16 / 9
-
-    const rows = Math.ceil((Math.sqrt(images.length) * 3) / 4)
-    const cols = Math.ceil(images.length / rows)
-    const output: string[][] = []
-    Array.from(new Array(rows).keys()).forEach(() => {
-      const row = images.splice(0, cols)
-      if (row.length < cols) {
-        Array.from(new Array(cols - row.length).keys()).forEach(() => {
-          row.push("/biblio-logo-small.png")
-        })
-      }
-      output.push(row)
-    })
-
-    const collagePromise = createCollage(output)
-
-    toast.promise(collagePromise, {
-      loading: "Creating collage",
-      success: "Created successfully",
-      error: "Something went wrong",
-    })
-  }
-
-  async function getEmptyJimp(width: number, height: number) {
-    return new Promise((resolve, reject) => {
-      new Jimp(width, height, (err, image) => {
-        if (err) {
-          return reject(err)
-        }
-        resolve(image)
-      })
-    })
-  }
-
-  async function createCollage(rows: string[][]) {
-    try {
-      setGenerating(true)
-      setGenerated(0)
-      const edge = Math.floor(1600 / rows[0].length)
-      const jimps = await Promise.all(
-        rows.map(async (row) => {
-          const rowJimps = await Promise.all(
-            row.map(async (img) => {
-              const jimp = (await Jimp.read(img)).resize(edge, edge)
-              setGenerated((prev) => prev + 1)
-              return jimp
-            })
-          )
-          return rowJimps
-        })
-      )
-      const canvas = await getEmptyJimp(edge * rows[0].length, edge * rows.length)
-      const image = jimps.reduce((img: any, row, rowIndex) => {
-        const compositeRow = row.reduce((item, image, index) => {
-          return item.composite(image, index * edge, rowIndex * edge)
-        }, img)
-        return compositeRow
-      }, canvas)
-
-      const base64Image = await image.getBase64Async(Jimp.MIME_PNG)
-      setImage(base64Image)
-    } catch (err: any) {
-      console.log(err)
-      toast.error(err.message)
-      console.error(err)
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  function closeImage() {
-    setImage(null)
-    setCollageModalShowing(false)
-  }
-
   return (
     <Stack spacing={2} direction="row" alignItems="center">
       {isAdmin && !collectionPage ? (
@@ -817,24 +766,21 @@ export const Actions: FC = () => {
                 </span>
               </Tooltip>
 
-              <IconButton
-                onClick={toggleTagMenuOpen}
-                color="secondary"
-                disabled={!selected.length}
-                // sx={{
-                //   color: showTags ? "#111316" : "#9c27b0",
-                //   background: showTags ? "#9c27b0" : "default",
-                //   "&:hover": {
-                //     color: "#9c27b0",
-                //   },
-                // }}
-              >
-                <Label />
-              </IconButton>
-              <IconButton onClick={toggleCollageModalShowing} disabled={!filtered.length}>
-                <Image />
-              </IconButton>
+              <Tooltip title="Toggle tag menu">
+                <span>
+                  <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
+                    <Label />
+                  </IconButton>
+                </span>
+              </Tooltip>
 
+              {/* <Tooltip title="Repay loans">
+                <span>
+                  <IconButton disabled={!outstandingLoansSelected} onClick={repayLoans}>
+                    <PaidIcon />
+                  </IconButton>
+                </span>
+              </Tooltip> */}
               {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
             </>
           ) : (
@@ -860,40 +806,7 @@ export const Actions: FC = () => {
           </DialogContent>
         </Card>
       </Dialog>
-      <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing}>
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h5">Export collage</Typography>
-              <Typography>Export a collage of {selected.length || filtered.length} items</Typography>
-              {(selected.length || filtered.length) > 100 && (
-                <Alert severity="info">Exporting a large number of images, this may take a while!</Alert>
-              )}
-              {generating && (
-                <>
-                  <Typography>
-                    {generated < (selected.length || filtered.length) ? generated : selected.length || filtered.length}{" "}
-                    / {selected.length || filtered.length}
-                  </Typography>
-                  <LinearProgress
-                    variant="determinate"
-                    value={(generated / (selected.length || filtered.length)) * 100}
-                  />
-                </>
-              )}
 
-              <Stack direction="row" spacing={2} justifyContent="space-between">
-                <Button color="error" onClick={toggleCollageModalShowing} disabled={generating}>
-                  Cancel
-                </Button>
-                <Button onClick={generateCollage} disabled={generating}>
-                  Generate collage
-                </Button>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Dialog>
       <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
         <Card>
           <DialogTitle>Bulk send</DialogTitle>
@@ -1018,24 +931,6 @@ export const Actions: FC = () => {
           </CardContent>
         </Card>
       </Drawer>
-      <Dialog open={!!image} onClose={closeImage} fullScreen>
-        <IconButton
-          size="large"
-          sx={{
-            position: "fixed",
-            top: "0.25em",
-            right: "0.25em",
-            background: "#1f1f1f",
-            "&:hover": {
-              background: "#333",
-            },
-          }}
-          onClick={closeImage}
-        >
-          <Close fontSize="large" />
-        </IconButton>
-        <img src={image || ""} />
-      </Dialog>
     </Stack>
   )
 }

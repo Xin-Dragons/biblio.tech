@@ -1,50 +1,21 @@
-import {
-  Box,
-  Button,
-  Container,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  IconButton,
-  InputLabel,
-  Menu,
-  MenuItem,
-  AppBar as MuiAppBar,
-  Select,
-  Stack,
-  SvgIcon,
-  TextField,
-  Theme,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-} from "@mui/material"
-import { ToggleButton } from "@mui/material"
+import { Box, Container, IconButton, AppBar as MuiAppBar, Stack, Typography, useMediaQuery } from "@mui/material"
 import Link from "next/link"
 
-import { LayoutSize, useUiSettings } from "../../context/ui-settings"
-import ViewQuiltIcon from "@mui/icons-material/ViewQuilt"
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded"
-import VisibilityIcon from "@mui/icons-material/Visibility"
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff"
-import { useFilters } from "../../context/filters"
 import { WalletSearch } from "../WalletSearch"
-import { useWallet } from "@solana/wallet-adapter-react"
 import { useAccess } from "../../context/access"
 import { useRouter } from "next/router"
 import { UserMenu } from "../UserMenu"
-import { useNfts } from "../../context/nfts"
 import { useTags } from "../../context/tags"
 import { Color } from "../Tags"
-import { Dashboard, Edit, Info } from "@mui/icons-material"
+import { Edit, Info } from "@mui/icons-material"
 import { UpdateTag } from "../UpdateTag"
 import { FC, useState } from "react"
 import { useDatabase } from "../../context/database"
 import { useInfo } from "../../context/info"
 import { ViewMenu } from "../ViewMenu"
 import { ShowInfo } from "../ShowInfo"
+import { Collage } from "../Collage"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   const { isAdmin } = useAccess()
@@ -137,6 +108,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
 
           {showMenu ? (
             <Stack direction="row" spacing={1} alignItems="center">
+              <Collage />
               <ShowInfo />
               <ViewMenu />
               <UserMenu />

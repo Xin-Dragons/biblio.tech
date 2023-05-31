@@ -211,7 +211,7 @@ const Cards: FC<CardsProps> = ({ cards, Component, select, squareChildren }) => 
     <Box sx={{ height: "100%" }}>
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
-          {({ width, height }) => {
+          {({ width, height }: { width: number; height: number }) => {
             const adjust = 80
             const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth

@@ -4,10 +4,12 @@ import { PublicKey } from "@solana/web3.js";
 import { LeaderboardStatsRequest, NftMintsByOwner, NftMintsByOwnerRequest, RestClient } from "@hellomoon/api";
 import { partition, uniqBy, groupBy, findKey, size, uniq, chunk, flatten } from "lodash";
 import axios from "axios";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { DigitalAsset, JsonMetadata, TokenStandard, fetchAllDigitalAsset, fetchAllDigitalAssetByOwner, fetchDigitalAsset, fetchMasterEdition } from "@metaplex-foundation/mpl-token-metadata";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { base58PublicKey, isSome, publicKey, some, Option, unwrapSome } from "@metaplex-foundation/umi";
+import { findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials";
+import { toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters";
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
 
@@ -278,8 +280,11 @@ self.addEventListener("message", async event => {
     const fungiblesWithBalances = await Promise.all(fungibles.map(async item => {
       try {
 
-        const ata = await getAssociatedTokenAddress(new PublicKey(item.nftMint), new PublicKey(owner));
-        const balance = await connection.getTokenAccountBalance(ata)
+        const ata = findAssociatedTokenPda(umi, {
+          mint: publicKey(item.nftMint),
+          owner: umi.identity.publicKey
+        })
+        const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata))
         const price = prices.find(p => p.mints === item.nftMint);
         return {
           ...item,

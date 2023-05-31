@@ -18,7 +18,7 @@ const initial = {
 
 export const TransactionStatusContext = createContext<TransactionStatusContextProps>(initial)
 
-type TransactionStatusType = "burn" | "lock" | "unlock" | "send"
+type TransactionStatusType = "burn" | "lock" | "unlock" | "send" | "repay"
 
 type TransactionStatus = {
   nftMint: string

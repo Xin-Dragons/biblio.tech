@@ -28,6 +28,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { AccountBalanceWallet } from "@mui/icons-material"
 import { useNfts } from "../../context/nfts"
+import { useLiveQuery } from "dexie-react-hooks"
 
 function Time() {
   const [time, setTime] = useState("")
@@ -165,6 +166,30 @@ export const Footer: FC = () => {
   const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
   const { filtered, nfts } = useNfts()
   const wallet = useWallet()
+  const { db } = useDatabase()
+  const collections = useLiveQuery(() => db.collections.toArray(), [], [])
+
+  useEffect(() => {
+    const value = nfts
+      .map((n) => {
+        const collection = collections.find((c) => c.id === n.collectionId)
+        if (!collection) {
+          return n
+        }
+        return {
+          ...n,
+          value: collection.floorPrice,
+        }
+      })
+      .reduce((sum, nft) => {
+        if (nft.value) {
+          return sum + nft.value
+        }
+        return sum
+      }, 0)
+
+    console.log(value / LAMPORTS_PER_SOL)
+  }, [nfts])
 
   useEffect(() => {
     if (!synced) return

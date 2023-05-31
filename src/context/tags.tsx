@@ -113,7 +113,7 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
     await db.taggedNfts.where({ tagId: "starred", nftId: mint }).delete()
   }
 
-  async function updateTag(id: typeof uuid, name: string, color: string) {
+  async function updateTag(id: string, name: string, color: string) {
     if (!userId) {
       throw new Error("User account not found")
     }

@@ -1,15 +1,9 @@
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { Collection, DB, Loan, Nft, NftMetadata, Rarity } from "../db"
+import { Collection, DB, Nft, NftMetadata, Rarity } from "../db"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useAccess } from "./access"
-import { io } from "socket.io-client"
-import { StreamClient } from "@hellomoon/api"
 
-import { includes, noop, partition, uniqBy } from "lodash"
-import { NftEdition } from "@metaplex-foundation/js"
-import { toast } from "react-hot-toast"
-import { useSession } from "next-auth/react"
-import axios from "axios"
+import { noop, partition, uniqBy } from "lodash"
 
 export const MS_PER_DAY = 8.64e7
 
@@ -32,6 +26,7 @@ type DatabaseContextProps = {
   stakeNft: Function
   unstakeNft: Function
   syncingMetadata: boolean
+  settleLoan: Function
 }
 
 const initial = {
@@ -51,6 +46,7 @@ const initial = {
   stakeNft: noop,
   unstakeNft: noop,
   syncingMetadata: false,
+  settleLoan: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -547,6 +543,20 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     await db.nfts.update(item.nftMint, changes)
   }
 
+  async function settleLoan(item: Nft) {
+    if (!item.loan) {
+      return
+    }
+    const changes = {
+      loan: {
+        ...item.loan,
+        status: "repaid",
+      },
+      status: null,
+    }
+    await db.nfts.update(item.nftMint, changes)
+  }
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -566,6 +576,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         stakeNft,
         unstakeNft,
         syncingMetadata,
+        settleLoan,
       }}
     >
       {children}
