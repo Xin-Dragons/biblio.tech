@@ -1,9 +1,10 @@
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { Collection, DB, Nft, NftMetadata, Rarity } from "../db"
+import { Collection, DB, Loan, Nft, NftMetadata, Rarity } from "../db"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useAccess } from "./access"
 
-import { noop, partition, uniqBy } from "lodash"
+import { merge, noop, partition, uniqBy } from "lodash"
+import { useUiSettings } from "./ui-settings"
 
 export const MS_PER_DAY = 8.64e7
 
@@ -26,7 +27,10 @@ type DatabaseContextProps = {
   stakeNft: Function
   unstakeNft: Function
   syncingMetadata: boolean
-  settleLoan: Function
+  settleLoans: Function
+  nftsDelisted: Function
+  nftsListed: Function
+  nftsSold: Function
 }
 
 const initial = {
@@ -46,7 +50,10 @@ const initial = {
   stakeNft: noop,
   unstakeNft: noop,
   syncingMetadata: false,
-  settleLoan: noop,
+  settleLoans: noop,
+  nftsDelisted: noop,
+  nftsListed: noop,
+  nftsSold: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -56,11 +63,20 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey, isActive, isOffline } = useAccess()
+  const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
+  const { showAllWallets } = useUiSettings()
   const [syncingData, setSyncingData] = useState(false)
   const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const nfts = useLiveQuery(() => db.nfts.where({ owner: publicKey }).toArray(), [publicKey], [])
+  const nfts = useLiveQuery(
+    () =>
+      (showAllWallets && isAdmin
+        ? db.nfts.where("owner").anyOf(publicKeys)
+        : db.nfts.where({ owner: publicKey })
+      ).toArray(),
+    [publicKey, publicKeys],
+    []
+  )
   const [syncingMetadata, setSyncingMetadata] = useState(false)
   const collections = useLiveQuery(
     () =>
@@ -190,7 +206,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
       await db.nfts.bulkUpdate(
         toUpdate.map((n) => {
-          const changes = n
+          const balance = fromDb.find((nft) => nft.nftMint === n.nftMint)?.balance
+          const changes = {
+            ...n,
+            balance: balance instanceof Number ? n.balance : merge(balance, n.balance || {}),
+          }
 
           return {
             key: n.nftMint,
@@ -231,7 +251,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
 
     if (toAdd.length) {
-      syncDataWorker(toAdd.map((txn: any) => txn.mint))
+      syncDataWorker(
+        publicKey,
+        toAdd.map((txn: any) => txn.mint)
+      )
     }
 
     if (toRemove.length) {
@@ -284,7 +307,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (!publicKey) return
-    syncDataWorker()
+    if (isAdmin && publicKeys.length) {
+      publicKeys.map((pk) => syncDataWorker(pk))
+    } else {
+      syncDataWorker(publicKey)
+    }
   }, [publicKey])
 
   async function updateMetadata(metadata: any) {
@@ -327,7 +354,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     worker.postMessage({ mints })
   }
 
-  function syncDataWorker(mints?: string[], force?: boolean) {
+  function syncDataWorker(publicKey: string, mints?: string[], force?: boolean) {
     if (isOffline) {
       return
     }
@@ -525,7 +552,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
 
-    syncDataWorker(undefined, true)
+    if (isAdmin && publicKeys.length > 1) {
+      publicKeys.map((pk) => syncDataWorker(pk, undefined, true))
+    } else {
+      syncDataWorker(publicKey, undefined, true)
+    }
   }
 
   async function updateItem(item: Nft) {
@@ -543,18 +574,73 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     await db.nfts.update(item.nftMint, changes)
   }
 
-  async function settleLoan(item: Nft) {
-    if (!item.loan) {
-      return
-    }
+  async function settleLoans(items: Nft[]) {
+    await db.nfts.bulkUpdate(
+      items
+        .filter((item) => item.loan)
+        .map((item) => {
+          const changes = {
+            loan: {
+              ...(item.loan as Loan),
+              status: "repaid",
+            },
+            status: null,
+          }
+          return {
+            key: item.nftMint,
+            changes,
+          }
+        })
+    )
+  }
+
+  async function nftsDelisted(items: Nft[]) {
     const changes = {
-      loan: {
-        ...item.loan,
-        status: "repaid",
-      },
+      listing: null,
       status: null,
     }
-    await db.nfts.update(item.nftMint, changes)
+
+    await db.nfts.bulkUpdate(
+      items.map((item) => {
+        return {
+          key: item.nftMint,
+          changes,
+        }
+      })
+    )
+  }
+
+  async function nftsListed(items: Nft[]) {
+    await db.nfts.bulkUpdate(
+      items.map((item) => {
+        const changes = {
+          listing: {
+            marketplace: "TensorSwap",
+            nftMint: item.nftMint,
+            price: item.listing?.price as number,
+          },
+          status: "listed",
+        }
+        return {
+          key: item.nftMint,
+          changes,
+        }
+      })
+    )
+  }
+
+  async function nftsSold(items: Nft[]) {
+    await db.nfts.bulkUpdate(
+      items.map((item) => {
+        const changes = {
+          owner: null,
+        }
+        return {
+          key: item.nftMint,
+          changes,
+        }
+      })
+    )
   }
 
   return (
@@ -576,7 +662,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         stakeNft,
         unstakeNft,
         syncingMetadata,
-        settleLoan,
+        settleLoans,
+        nftsDelisted,
+        nftsListed,
+        nftsSold,
       }}
     >
       {children}

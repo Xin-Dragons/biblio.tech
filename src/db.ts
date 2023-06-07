@@ -17,13 +17,16 @@ export interface Nft extends DigitalAsset {
   nftMint: string;
   helloMoonCollectionId: string;
   loan?: Loan | null;
+  listing?: Listing | null;
   owner?: string | null;
   collectionId?: string | null;
   json?: JsonMetadata;
   jsonLoaded?: boolean;
   status?: string | null;
   supply?: number;
-  balance?: number;
+  balance?: {
+    [key: string]: number
+  };
   editionDetails?: EditionDetails
   firstVerifiedCreator?: string
   collectionIdentifier?: string
@@ -50,6 +53,17 @@ export interface TaggedNft {
   id?: number;
   nftId: string;
   tagId: string;
+}
+
+export interface Listing {
+  blockTime?: number
+  helloMoonCollectionId?: string
+  marketplace: string
+  nftMint: string
+  ownerAccount?: string
+  price: number
+  seller?: string
+  transactionId?: string
 }
 
 export interface Loan {
@@ -102,7 +116,9 @@ export interface Preferences {
   layoutSize: 'small' | 'medium' | 'large' | 'collage';
   showInfo: boolean;
   darkMode?: boolean;
-  wallet?: string
+  wallet?: string;
+  payRoyalties: boolean;
+  showAllWallets: boolean;
 }
 
 export class DB extends Dexie {

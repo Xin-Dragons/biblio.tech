@@ -13,7 +13,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material"
-import { FC, ReactNode, useEffect, useState } from "react"
+import { FC, ReactNode, useEffect, useRef, useState } from "react"
 import WifiIcon from "@mui/icons-material/Wifi"
 import WifiOffIcon from "@mui/icons-material/WifiOff"
 import { useDatabase } from "../../context/database"
@@ -144,11 +144,19 @@ const Balance: FC = () => {
     }
   }
 
+  const interval = useRef<any>()
+
   useEffect(() => {
+    clearInterval(interval.current)
     if (wallet.publicKey) {
       getBalance()
+      interval.current = setInterval(getBalance, 1000)
     } else {
       setBalance(0)
+      clearInterval(interval.current)
+    }
+    return () => {
+      clearInterval(interval.current)
     }
   }, [wallet.publicKey])
 
@@ -159,7 +167,7 @@ const Balance: FC = () => {
   )
 }
 
-export const Footer: FC = () => {
+export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTransferOpen }) => {
   const [synced, setSynced] = useState(false)
   const { syncing, sync } = useDatabase()
   const previousLoading = usePrevious(syncing)
@@ -319,7 +327,13 @@ export const Footer: FC = () => {
             </FooterSection>
             {wallet.connected && !hideBalance && (
               <FooterSection right>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  onClick={() => toggleSolTransferOpen()}
+                  sx={{ cursor: "pointer" }}
+                >
                   <AccountBalanceWallet fontSize="small" />
                   <Balance />
                 </Stack>

@@ -16,10 +16,13 @@ import { useInfo } from "../../context/info"
 import { ViewMenu } from "../ViewMenu"
 import { ShowInfo } from "../ShowInfo"
 import { Collage } from "../Collage"
+import { useUiSettings } from "../../context/ui-settings"
+import { shorten } from "../../helpers/utils"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
-  const { isAdmin } = useAccess()
+  const { isAdmin, publicKey } = useAccess()
   const { collections } = useDatabase()
+  const { showAllWallets } = useUiSettings()
   const router = useRouter()
   const { tag } = useTags()
   const isVault = router.query.filter === "vault"
@@ -73,6 +76,9 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       sx={{ whiteSpace: breakLine ? "auto" : "nowrap", fontSize: breakLine ? "5vw" : "parent" }}
     >
       {title}
+      <Typography color="primary" variant="body2" textTransform="none">
+        Now viewing: {showAllWallets && isAdmin ? "all wallets" : shorten(publicKey!)}
+      </Typography>
     </Typography>
   )
 }
@@ -80,9 +86,10 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
 type AppBarProps = {
   showMenu?: boolean
   toggleMenu?: Function
+  toggleSolTransferOpen: Function
 }
 
-export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
+export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen }) => {
   const [open, setOpen] = useState(false)
   const { tag, updateTag } = useTags()
 
@@ -111,7 +118,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
               <Collage />
               <ShowInfo />
               <ViewMenu />
-              <UserMenu />
+              <UserMenu toggleSolTransferOpen={toggleSolTransferOpen} />
             </Stack>
           ) : (
             <IconButton onClick={toggleMenu as any} size="large">

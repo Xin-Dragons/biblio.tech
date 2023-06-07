@@ -1,25 +1,18 @@
-interface BiblioCollection {
-  active?: boolean
-  number_wallets?: number
-  hours_active?: number
-}
-
-interface Collection {
-  "biblio-collections": BiblioCollection
-  name: string
-}
-
 interface Nft {
   mint: string;
-  collection: Collection
+  collection_name: string
   metadata: JsonMetadata
+  active?: boolean
+  number_wallets: number
+  time_staked: number
+  hours_active: number | null
 }
 
 interface User {
   active: boolean;
-  "biblio-wallets": any[];
+  wallets: any[];
   id: string;
-  access_nft: Nft;
+  nfts: Nft[];
   offline?: boolean;
 }
 
@@ -27,7 +20,6 @@ declare module "next-auth" {
   interface Session extends DefaultSession {
     publicKey
     user?: User;
-    
   }
 }
 

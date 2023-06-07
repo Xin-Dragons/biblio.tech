@@ -14,6 +14,9 @@ const baseTheme = {
     text: {
       primary: "#faf7f2",
     },
+    gold: {
+      main: "#faaf00",
+    },
   },
   typography: {
     h1: {
@@ -59,7 +62,7 @@ type ThemeProviderProps = {
 }
 
 export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(createTheme(baseTheme as Theme))
+  const [theme, setTheme] = useState<Theme>(createTheme(baseTheme as any))
   const { tags } = useTags()
 
   useEffect(() => {
@@ -75,7 +78,7 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
           }),
         }
       }, {})
-    const theme = createTheme(merge({}, baseTheme, { palette: colors }) as Theme)
+    const theme = createTheme(merge({}, baseTheme, { palette: colors }) as any)
 
     setTheme(theme)
   }, [tags])

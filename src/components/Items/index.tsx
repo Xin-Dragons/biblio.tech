@@ -255,7 +255,7 @@ export const Items: FC<ItemsProps> = ({
   const [items, setItems] = useState(initialItems)
   const width = useWidth()
   const basePath = useBasePath()
-  const { filtersActive, clearFilters } = useFilters()
+  const { filtersActive, clearFilters, setSearch } = useFilters()
   const { isActive } = useAccess()
   const { data: session } = useSession()
   const router = useRouter()
@@ -364,6 +364,11 @@ export const Items: FC<ItemsProps> = ({
 
   const noAccess = session?.publicKey && !isActive && !router.query.publicKey
 
+  function clearAllFilters() {
+    clearFilters()
+    setSearch("")
+  }
+
   return !loading && items.length ? (
     <Box
       sx={{
@@ -426,7 +431,7 @@ export const Items: FC<ItemsProps> = ({
               <Button onClick={() => renderItem(Profile)}>View profile settings</Button>
             ) : (
               <>
-                {filtersActive && <Button onClick={() => clearFilters()}>Clear filters</Button>}
+                {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
                 <Link href={`${basePath}/`} passHref>
                   <Button>View all collections</Button>
                 </Link>

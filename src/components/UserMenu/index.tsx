@@ -1,5 +1,5 @@
-import { getCsrfToken, signIn, signOut, useSession } from "next-auth/react"
-import { AccountBalanceWallet } from "@mui/icons-material"
+import { useSession } from "next-auth/react"
+import { AccountBalanceWallet, MonetizationOn } from "@mui/icons-material"
 import {
   Box,
   Dialog,
@@ -15,9 +15,6 @@ import {
 import { FC, MouseEvent, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
-import base58 from "bs58"
-import { SigninMessage } from "../../utils/SigninMessge"
-import { shorten } from "../Item"
 import { Profile } from "../Profile"
 import PermIdentityIcon from "@mui/icons-material/PermIdentity"
 import LinkOffIcon from "@mui/icons-material/LinkOff"
@@ -31,17 +28,20 @@ import { sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { addMemo, transferSol } from "@metaplex-foundation/mpl-essentials"
 import { useRouter } from "next/router"
 import { useWallets } from "../../context/wallets"
+import { useAccess } from "../../context/access"
+import { shorten } from "../../helpers/utils"
 
 type UserMenuProps = {
   large?: boolean
+  toggleSolTransferOpen: Function
 }
 
-export const UserMenu: FC<UserMenuProps> = ({ large }) => {
+export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) => {
   const { setVisible, visible } = useWalletModal()
-  const [isSigningIn, setIsSigningIn] = useState(false)
+  const { multiWallet, signOut, signIn, isSigningIn, isAdmin } = useAccess()
   const { data: session, status } = useSession()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const { profileModalShowing, setProfileModalShowing } = useUiSettings()
+  const { profileModalShowing, setProfileModalShowing, showAllWallets, setShowAllWallets } = useUiSettings()
   const open = Boolean(anchorEl)
   const wallet = useWallet()
   const { isLedger, setIsLedger } = useWallets()
@@ -49,121 +49,24 @@ export const UserMenu: FC<UserMenuProps> = ({ large }) => {
   const router = useRouter()
 
   async function signOutIn() {
-    await signOut({ redirect: false })
-    await handleSignIn()
+    await signOut()
+    await signIn()
   }
 
   useEffect(() => {
-    if (wallet.publicKey && session?.publicKey && wallet.publicKey.toBase58() !== session?.publicKey) {
+    if (status !== "authenticated") {
+      return
+    }
+    if (!session?.user?.active && wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
       signOutIn()
     }
   }, [wallet.publicKey, session])
 
   useEffect(() => {
     if (wallet.connected && status === "unauthenticated" && document.hasFocus()) {
-      handleSignIn()
+      signIn()
     }
   }, [wallet.publicKey])
-
-  async function walletSignIn(isLedger: boolean = false): Promise<void> {
-    if (isLedger) {
-      try {
-        const txn = await addMemo(umi, {
-          memo: "Sign in to Biblio",
-        }).buildWithLatestBlockhash(umi)
-
-        const signed = await umi.identity.signTransaction(txn)
-
-        const result = await signIn("credentials", {
-          redirect: false,
-          rawTransaction: base58.encode(umi.transactions.serialize(signed)),
-          publicKey: wallet.publicKey?.toBase58(),
-          isLedger,
-        })
-
-        if (!result?.ok) {
-          throw new Error("Failed to sign in")
-        }
-      } catch (err: any) {
-        console.error(err)
-
-        if (err.message.includes("Something went wrong")) {
-          throw new Error(
-            "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
-          )
-        }
-
-        if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
-          throw new Error(
-            'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
-          )
-        }
-
-        throw err
-      }
-    } else {
-      try {
-        const csrf = await getCsrfToken()
-        if (!wallet.publicKey || !csrf || !wallet.signMessage) return
-
-        const message = new SigninMessage({
-          domain: window.location.host,
-          publicKey: wallet.publicKey?.toBase58(),
-          statement: `Sign this message to sign in to Biblio.\n\n`,
-          nonce: csrf,
-        })
-
-        const data = new TextEncoder().encode(message.prepare())
-        const signature = await wallet.signMessage(data)
-        const serializedSignature = base58.encode(signature)
-
-        const result = await signIn("credentials", {
-          message: JSON.stringify(message),
-          redirect: false,
-          signature: serializedSignature,
-        })
-
-        if (!result?.ok) {
-          throw new Error("Failed to sign in")
-        }
-      } catch (err: any) {
-        console.error(err)
-        if (err.message.includes("Signing off chain messages with Ledger is not yet supported")) {
-          toast(
-            "Looks like you're using Ledger!\n\nLedger doesn't support offchain message signing (yet) so please sign this memo transaction to sign in."
-          )
-          setIsLedger(true, wallet.publicKey?.toBase58())
-          return await walletSignIn(true)
-        }
-        throw err
-      }
-    }
-  }
-
-  async function handleSignIn(): Promise<void> {
-    try {
-      setIsSigningIn(true)
-      const signInPromise = walletSignIn(isLedger)
-
-      toast.promise(signInPromise, {
-        loading: "Signing in...",
-        success: "Signed in",
-        error: "Error signing in",
-      })
-
-      await signInPromise
-
-      router.push("/")
-    } catch (err: any) {
-      toast.error(err.message)
-    } finally {
-      setIsSigningIn(false)
-    }
-  }
-
-  async function handleSignOut() {
-    await signOut({ redirect: false })
-  }
 
   const toggleVisible = () => {
     handleClose()
@@ -213,7 +116,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large }) => {
       >
         <MenuList
           sx={{
-            width: "180px",
+            width: "220px",
           }}
         >
           <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }} disabled={isSigningIn}>
@@ -228,33 +131,18 @@ export const UserMenu: FC<UserMenuProps> = ({ large }) => {
           </MenuItem>
           {wallet.connected && (
             <div>
-              {session?.user && (
-                <MenuItem onClick={openProfile} disabled={isSigningIn}>
+              {multiWallet && isAdmin && (
+                <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
                   <ListItemIcon sx={{ width: "50px" }}>
-                    <PermIdentityIcon />
+                    <Switch
+                      checked={showAllWallets}
+                      onChange={(e) => setShowAllWallets(e.target.checked)}
+                      inputProps={{ "aria-label": "controlled" }}
+                      disabled={isSigningIn}
+                      size="small"
+                    />
                   </ListItemIcon>
-                  <ListItemText>Profile</ListItemText>
-                </MenuItem>
-              )}
-              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
-                <ListItemIcon sx={{ width: "50px" }}>
-                  <LinkOffIcon />
-                </ListItemIcon>
-                <ListItemText>Disconnect</ListItemText>
-              </MenuItem>
-              {session?.user ? (
-                <MenuItem onClick={handleSignOut} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign out</ListItemText>
-                </MenuItem>
-              ) : (
-                <MenuItem onClick={(e) => handleSignIn()} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LoginIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign in</ListItemText>
+                  <ListItemText>Show all wallets</ListItemText>
                 </MenuItem>
               )}
               <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())} disabled={isSigningIn}>
@@ -268,6 +156,42 @@ export const UserMenu: FC<UserMenuProps> = ({ large }) => {
                   />
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
+              </MenuItem>
+              {session?.user && (
+                <MenuItem onClick={openProfile} disabled={isSigningIn}>
+                  <ListItemIcon sx={{ width: "50px" }}>
+                    <PermIdentityIcon />
+                  </ListItemIcon>
+                  <ListItemText>Profile</ListItemText>
+                </MenuItem>
+              )}
+
+              <MenuItem onClick={() => toggleSolTransferOpen()}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <MonetizationOn />
+                </ListItemIcon>
+                <ListItemText>Transfer SOL</ListItemText>
+              </MenuItem>
+              {session?.user ? (
+                <MenuItem onClick={() => signOut()} disabled={isSigningIn}>
+                  <ListItemIcon sx={{ width: "50px" }}>
+                    <LogoutIcon />
+                  </ListItemIcon>
+                  <ListItemText>Sign out</ListItemText>
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={() => signIn()} disabled={isSigningIn}>
+                  <ListItemIcon sx={{ width: "50px" }}>
+                    <LoginIcon />
+                  </ListItemIcon>
+                  <ListItemText>Sign in</ListItemText>
+                </MenuItem>
+              )}
+              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <LinkOffIcon />
+                </ListItemIcon>
+                <ListItemText>Disconnect</ListItemText>
               </MenuItem>
             </div>
           )}

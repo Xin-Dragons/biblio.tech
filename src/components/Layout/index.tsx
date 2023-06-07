@@ -9,6 +9,8 @@ import {
   Typography,
   useMediaQuery,
   AppBar as MuiAppBar,
+  CardHeader,
+  CardContent,
 } from "@mui/material"
 import { Container } from "@mui/system"
 import Link from "next/link"
@@ -36,6 +38,8 @@ import { Sidebar } from "../Sidebar"
 import { UserMenu } from "../UserMenu"
 import { ViewMenu } from "../ViewMenu"
 import { ShowInfo } from "../ShowInfo"
+import { SolTransfer } from "../SolTransfer"
+import { Collage } from "../Collage"
 
 type LayoutProps = {
   nfts: Nft[] | CollectionItem[]
@@ -48,6 +52,7 @@ type LayoutProps = {
 export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
+  const [solTransferOpen, setSolTransferOpen] = useState(false)
 
   function toggleMenu() {
     setMenuOpen(!menuOpen)
@@ -58,6 +63,10 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
   const basePath = useBasePath()
 
   const showMenu = useMediaQuery((theme: Theme) => theme.breakpoints.up("md"))
+
+  function toggleSolTransferOpen() {
+    setSolTransferOpen(!solTransferOpen)
+  }
 
   return (
     <Box>
@@ -70,7 +79,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
       </Head>
       <Toaster />
       <Stack height="100vh" width="100vw">
-        <AppBar showMenu={showMenu} toggleMenu={toggleMenu} />
+        <AppBar showMenu={showMenu} toggleMenu={toggleMenu} toggleSolTransferOpen={toggleSolTransferOpen} />
         <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
           <Stack direction="row" spacing={2} sx={{ height: "100%", overflowY: "auto" }}>
             {showMenu && (
@@ -120,7 +129,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
             </Stack>
           </Stack>
         </Box>
-        <Footer />
+        <Footer toggleSolTransferOpen={toggleSolTransferOpen} />
       </Stack>
 
       {!showMenu && (
@@ -134,9 +143,10 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
                     <ShowInfo />
                   </Stack>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <UserMenu large />
-                    <IconButton size="large" onClick={toggleMenu}>
-                      <Close fontSize="large" />
+                    <Collage />
+                    <UserMenu toggleSolTransferOpen={toggleSolTransferOpen} />
+                    <IconButton onClick={toggleMenu}>
+                      <Close />
                     </IconButton>
                   </Stack>
                 </Stack>
@@ -155,6 +165,13 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
           </Card>
         </Dialog>
       )}
+      <Dialog open={solTransferOpen} onClose={toggleSolTransferOpen} fullWidth>
+        <Card>
+          <CardContent>
+            <SolTransfer onClose={toggleSolTransferOpen} />
+          </CardContent>
+        </Card>
+      </Dialog>
       <SignUp />
     </Box>
   )

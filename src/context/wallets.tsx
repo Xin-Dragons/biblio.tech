@@ -9,12 +9,18 @@ type WalletsContextProps = {
   wallets: Wallet[]
   setIsLedger: Function
   isLedger: boolean
+  addWallet: Function
+  deleteWallet: Function
+  updateWallet: Function
 }
 
 const initial = {
   wallets: [],
   setIsLedger: noop,
   isLedger: false,
+  addWallet: noop,
+  deleteWallet: noop,
+  updateWallet: noop,
 }
 
 export const WalletsContext = createContext<WalletsContextProps>(initial)
@@ -45,12 +51,31 @@ export const WalletsProvider: FC<WalletsProviderProps> = ({ children }) => {
     wallet.publicKey && (wallets.find((w) => w.publicKey === wallet.publicKey?.toBase58()) || {}).isLedger
   )
 
+  async function addWallet(publicKey: string, nickname?: string, owned?: boolean) {
+    await db.wallets.add({
+      publicKey,
+      nickname,
+      owned,
+    })
+  }
+
+  async function deleteWallet(publicKey: string) {
+    await db.wallets.delete(publicKey)
+  }
+
+  async function updateWallet(publicKey: string, nickname: string, owned: boolean) {
+    await db.wallets.update(publicKey, { nickname, owned })
+  }
+
   return (
     <WalletsContext.Provider
       value={{
         wallets,
         setIsLedger,
         isLedger,
+        addWallet,
+        deleteWallet,
+        updateWallet,
       }}
     >
       {children}

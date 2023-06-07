@@ -1,0 +1,351 @@
+import { AnchorProvider, BN, Wallet } from "@project-serum/anchor"
+import { LAMPORTS_PER_SOL, Transaction, VersionedTransaction } from "@solana/web3.js"
+import { TensorSwapSDK, TensorWhitelistSDK, castPoolConfigAnchor, findWhitelistPDA } from "@tensor-oss/tensorswap-sdk"
+import * as Tensor from "@tensor-oss/tensorswap-sdk"
+import { FC, ReactNode, createContext, useContext } from "react"
+import { useUmi } from "./umi"
+import {
+  fromWeb3JsInstruction,
+  fromWeb3JsLegacyTransaction,
+  fromWeb3JsPublicKey,
+  fromWeb3JsTransaction,
+  toWeb3JsInstruction,
+  toWeb3JsPublicKey,
+} from "@metaplex-foundation/umi-web3js-adapters"
+import { PublicKey } from "@solana/web3.js"
+import { findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
+import { Instruction, publicKey, transactionBuilder, unwrapSome } from "@metaplex-foundation/umi"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { flatten, noop } from "lodash"
+import { toast } from "react-hot-toast"
+import { useTransactionStatus } from "./transactions"
+import { useDatabase } from "./database"
+import { Nft } from "../db"
+import { useNfts } from "./nfts"
+import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-wallet-adapters"
+import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
+import axios, { AxiosError } from "axios"
+
+export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop })
+
+export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
+  const umi = useUmi()
+  const { sendSignedTransactions } = useTransactionStatus()
+  const { nftsDelisted, nftsListed, nftsSold } = useDatabase()
+  const wallet = useWallet()
+  const { connection } = useConnection()
+  const provider = new AnchorProvider(connection, wallet as any, {
+    commitment: "confirmed",
+  })
+  const { nfts } = useNfts()
+  const swapSdk = new TensorSwapSDK({ provider })
+  const wlSdk = new TensorWhitelistSDK({ provider })
+
+  async function getDelistInstructions(mints: string[]) {
+    return (
+      await Promise.all(
+        mints.map(async (mint) => {
+          const nft = nfts.find((n) => n.nftMint === mint) as Nft
+          console.log(nft)
+          if (nft.listing?.marketplace === "TensorSwap") {
+            const data = await swapSdk.delist({
+              owner: wallet.publicKey!,
+              nftMint: new PublicKey(mint),
+              nftDest: toWeb3JsPublicKey(
+                findAssociatedTokenPda(umi, {
+                  owner: umi.identity.publicKey,
+                  mint: publicKey(mint),
+                })
+              ),
+            })
+
+            const instructions = data.tx.ixs.map((instruction) => {
+              return transactionBuilder().add({
+                instruction: fromWeb3JsInstruction(instruction),
+                bytesCreatedOnChain: 0,
+                signers: [createSignerFromWalletAdapter(wallet)],
+              })
+            })
+
+            return {
+              instructions,
+              mint,
+            }
+          } else if (nft.listing?.marketplace === "MEv2") {
+            toast.error("Magic Eden delisting not yet available")
+            // const { data } = await axios.post("/api/get-me-delist-txn", {
+            //   mint,
+            //   seller: wallet.publicKey?.toBase58(),
+            //   priceLamports: `${nft.listing.price}`,
+            // })
+
+            // const transactions = data.txs.map((t) =>
+            //   t.txV0
+            //     ? fromWeb3JsTransaction(VersionedTransaction.deserialize(t.txV0.data))
+            //     : fromWeb3JsLegacyTransaction(Transaction.from(t.tx.data))
+            // )
+
+            // // const instructions = flatten(transactions.map((t) => t.instructions)).map((instruction) => {
+            // //   return transactionBuilder().add({
+            // //     instruction: fromWeb3JsInstruction(instruction),
+            // //     bytesCreatedOnChain: 0,
+            // //     signers: [createSignerFromWalletAdapter(wallet)],
+            // //   })
+            // // })
+
+            // return {
+            //   transactions,
+            //   mint,
+            // }
+          } else {
+            return null
+          }
+        })
+      )
+    ).filter(Boolean)
+  }
+
+  type ListingItem = {
+    mint: string
+    price: number
+  }
+
+  async function getListInstructions(items: ListingItem[]) {
+    return await Promise.all(
+      items.map(async (item) => {
+        const data = await swapSdk.list({
+          owner: wallet.publicKey!,
+          nftMint: new PublicKey(item.mint),
+          nftSource: toWeb3JsPublicKey(
+            findAssociatedTokenPda(umi, {
+              owner: umi.identity.publicKey,
+              mint: publicKey(item.mint),
+            })
+          ),
+          price: new BN(item.price * LAMPORTS_PER_SOL),
+        })
+
+        const instructions = data.tx.ixs.map((instruction) => {
+          return transactionBuilder().add({
+            instruction: fromWeb3JsInstruction(instruction),
+            bytesCreatedOnChain: 0,
+            signers: [createSignerFromWalletAdapter(wallet)],
+          })
+        })
+
+        return {
+          instructions,
+          mint: item.mint,
+        }
+      })
+    )
+  }
+
+  type SellItem = {
+    pool: string
+    mint: string
+    price: number
+    id: string
+    type: "trade" | "token"
+    royalties: boolean
+    slug: string
+  }
+
+  async function getSellInstructions(items: SellItem[]) {
+    const blockhash = await umi.rpc.getLatestBlockhash()
+    return flatten(
+      await Promise.all(
+        items.map(async (item) => {
+          const { data } = await axios.post("/api/get-tensor-sell-txn", {
+            seller: wallet.publicKey?.toBase58(),
+            minPriceLamports: item.price,
+            pool: item.pool,
+            mint: item.mint,
+            royalties: item.royalties,
+          })
+
+          const transactions = data.txs.map((t: any) => {
+            if (t.txV0) {
+              const txn = VersionedTransaction.deserialize(t.txV0.data)
+              txn.message.recentBlockhash = blockhash.blockhash
+              return fromWeb3JsTransaction(txn)
+            } else {
+              const txn = Transaction.from(t.tx.data)
+              txn.recentBlockhash = blockhash.blockhash
+              return fromWeb3JsLegacyTransaction(txn)
+            }
+          })
+
+          return transactions.map((transaction: any) => {
+            return {
+              transaction,
+              mint: item.mint,
+            }
+          })
+        })
+      )
+    )
+  }
+
+  // async function getSellInstructions(items: SellItem[]) {
+  //   console.log(items.filter((i) => i.type === "trade").length)
+  //   return await Promise.all(
+  //     items.map(async (item) => {
+  //       const uuid = TensorWhitelistSDK.nameToBuffer(item.id.replaceAll("-", ""))
+  //       const wlAddr = findWhitelistPDA({ uuid })[0]
+  //       const wl = await wlSdk.fetchWhitelist(wlAddr)
+  //       if (JSON.stringify(wl.rootHash) !== JSON.stringify(Array(32).fill(0))) {
+  //         // todo
+  //       }
+  //       const nft = nfts.find((n) => n.nftMint === item.mint) as Nft
+  //       const pool = await swapSdk.fetchPool(new PublicKey(item.pool))
+  //       const data = await swapSdk.sellNft({
+  //         type: item.type,
+  //         whitelist: wlAddr,
+  //         nftMint: new PublicKey(item.mint),
+  //         owner: pool.owner,
+  //         seller: wallet.publicKey!,
+  //         config: pool.config,
+  //         nftSellerAcc: toWeb3JsPublicKey(
+  //           findAssociatedTokenPda(umi, {
+  //             owner: umi.identity.publicKey,
+  //             mint: publicKey(item.mint),
+  //           })
+  //         ),
+  //         minPrice: new BN(item.price),
+  //         optionalRoyaltyPct: item.royalties ? 100 : null,
+  //         metaCreators: {
+  //           metadata: toWeb3JsPublicKey(nft.metadata.publicKey),
+  //           creators: unwrapSome(nft.metadata.creators)?.map((creator) => toWeb3JsPublicKey(creator.address))!,
+  //         },
+  //       })
+
+  //       const instructions = data.tx.ixs.map((instruction) => {
+  //         return transactionBuilder().add({
+  //           instruction: fromWeb3JsInstruction(instruction),
+  //           bytesCreatedOnChain: 0,
+  //           signers: [createSignerFromWalletAdapter(wallet)],
+  //         })
+  //       })
+
+  //       return {
+  //         instructions,
+  //         mint: item.mint,
+  //       }
+  //     })
+  //   )
+  // }
+
+  // async function sellNow(items: SellItem[]) {
+  //   try {
+  //     const instructionGroups = await getSellInstructions(items)
+  //     // const txns = await buildTransactions(
+  //     //   umi,
+  //     //   instructionGroups.map((item) => [item])
+  //     // )
+
+  //     const txns = await buildTransactions(
+  //       umi,
+  //       instructionGroups.map((group) => [group])
+  //     )
+
+  //     const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+
+  //     const { errs, successes } = await sendSignedTransactions(
+  //       signedTransactions,
+  //       txns.map((txn) => txn.mints),
+  //       "sell",
+  //       () => {}
+  //     )
+  //   } catch (err) {
+  //     console.log(err)
+  //   }
+  // }
+
+  async function sellNow(items: SellItem[]) {
+    try {
+      const txns = await getSellInstructions(items)
+
+      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
+      const { errs, successes } = await sendSignedTransactions(
+        signedTransactions,
+        txns.map((txn) => [txn.mint]),
+        "sell",
+        nftsSold
+      )
+
+      notifyStatus(errs, successes, "sell", "sold")
+    } catch (err: any) {
+      if (err instanceof AxiosError) {
+        const message = err.response?.data
+        if (message === "no active tswap pool found with address") {
+          toast.error("Tensor pool data stale, refresh and try again")
+        } else {
+          toast.error(message)
+        }
+      } else {
+        console.error(err)
+        toast.error(err.message || "Error selling")
+      }
+    }
+  }
+
+  async function delist(mints: string[]) {
+    try {
+      const instructionGroups = (await getDelistInstructions(mints)) as InstructionSet[]
+      // const chunks = getUmiChunks(umi, instructionGroups)
+
+      const txns = await buildTransactions(
+        umi,
+        instructionGroups.map((group) => [group])
+      )
+
+      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+      const { errs, successes } = await sendSignedTransactions(
+        signedTransactions,
+        txns.map((txn) => txn.mints),
+        "delist",
+        nftsDelisted
+      )
+
+      notifyStatus(errs, successes, "delist", "delisted")
+    } catch (err: any) {
+      toast.error(err.message || "Error delisting")
+    }
+  }
+
+  async function list(items: ListingItem[]) {
+    const listPromise = Promise.resolve().then(async () => {
+      const instructionGroups = await getListInstructions(items)
+      // const chunks = getUmiChunks(umi, instructionGroups)
+
+      const txns = await buildTransactions(
+        umi,
+        instructionGroups.map((group) => [group])
+      )
+
+      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+      const { errs, successes } = await sendSignedTransactions(
+        signedTransactions,
+        txns.map((txn) => txn.mints),
+        "list",
+        nftsListed
+      )
+      notifyStatus(errs, successes, "list", "listed")
+    })
+
+    toast.promise(listPromise, {
+      loading: `Listing ${items.length} item${items.length === 1 ? "" : "s"}`,
+      success: `Done`,
+      error: "Error listing",
+    })
+
+    await listPromise
+  }
+
+  return <TensorContext.Provider value={{ delist, list, sellNow }}>{children}</TensorContext.Provider>
+}
+
+export const useTensor = () => {
+  return useContext(TensorContext)
+}

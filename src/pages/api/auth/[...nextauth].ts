@@ -8,6 +8,7 @@ import base58 from "bs58";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { Connection } from "@solana/web3.js";
 import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters";
+import { Nft } from "../../../types/nextauth";
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" })
@@ -104,17 +105,30 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
       async session({ session, token }) {
         // @ts-ignore
         session.publicKey = token.sub;
+        console.log(session)
         if (session.user) {
           try {
             const headers = {
               'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
             }
-        
+
             const { data: user } = await axios.get(`${process.env.API_URL}/biblio/${token.sub}`, { headers });
             Object.assign(session.user, user)
-            const settings = user?.access_nft?.collection?.['biblio-collections']
-            session.user.active = !!(settings && settings.active && !settings.hours_active)
-          } catch {
+            session.user.active = user?.nfts?.some((item: Nft) => {
+              if (!item || !item.active) {
+                return false
+              }
+              if (!item.hours_active) {
+                return true;
+              }
+
+              const stakedHours = item.time_staked * 3600
+
+              return stakedHours < item.hours_active;
+            })
+            console.log(session.user)
+          } catch (err) {
+            console.log(err)
             session.user.offline = true;
           }
         }

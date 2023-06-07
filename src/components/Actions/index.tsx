@@ -25,15 +25,18 @@ import {
   useMediaQuery,
   Drawer,
   CardContent,
+  TableBody,
+  TableRow,
+  Table,
+  TableCell,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
-import { shorten } from "../Item"
 // import { createCloseAccountInstruction, getAssociatedTokenAddress } from "@solana/spl-token"
 import { TagList } from "../TagList"
 
 import VaultIcon from "./vault.svg"
 import PlaneIcon from "./plane.svg"
-import { Close, Image, Label, LocalFireDepartment } from "@mui/icons-material"
+import { Close, Image, Label, LocalFireDepartment, Sell } from "@mui/icons-material"
 import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
@@ -65,26 +68,27 @@ import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-w
 import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
-import PaidIcon from "@mui/icons-material/Paid"
-import axios from "axios"
 import { useSharky } from "../../context/sharky"
 import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
-
-export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
+import { Listing } from "../Listing"
+import { useTensor } from "../../context/tensor"
+import { shorten } from "../../helpers/utils"
+import { AddressSelector } from "../AddressSelector"
 
 export const Actions: FC = () => {
-  const { getRepayLoanInstructions } = useSharky()
-  const { nfts, filtered } = useNfts()
+  const [recipient, setRecipient] = useState<any>(null)
+  const [listOpen, setListOpen] = useState(false)
+  const { delist } = useTensor()
+  const { filtered } = useNfts()
   const { isAdmin } = useAccess()
   const { selected, setSelected } = useSelection()
 
   const [sending, setSending] = useState(false)
   const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
-  const [recipient, setRecipient] = useState("")
   const [bulkSendOpen, setBulkSendOpen] = useState(false)
   const [burnOpen, setBurnOpen] = useState(false)
 
-  const [recipentError, setRecipientError] = useState<string | null>(null)
   const metaplex = useMetaplex()
   const { connection } = useConnection()
   const [actionDrawerShowing, setActionDrawerShowing] = useState(false)
@@ -96,8 +100,7 @@ export const Actions: FC = () => {
   const showMinMenu = useMediaQuery("(max-width:1050px)")
 
   const { deleteNfts, updateOwnerForNfts, addNftsToVault, removeNftsFromVault } = useDatabase()
-  const { setTransactionInProgress, setTransactionErrors, setTransactionComplete, clearTransactions } =
-    useTransactionStatus()
+  const { sendSignedTransactions } = useTransactionStatus()
 
   const selectedItems = selected
     .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
@@ -107,11 +110,19 @@ export const Actions: FC = () => {
   })
 
   const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
+  const statusesSelected = selectedItems.some((item) => item.status)
+  const nonListedStatusSelected = selectedItems.some((item) => item.status && item.status !== "listed")
   const allInVault = selectedItems.every((item: any) => item.status === "inVault")
   const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
+  const nonOwnedSelected = selectedItems.some((item) => item.owner !== wallet.publicKey?.toBase58())
 
-  const outstandingLoansSelected = selectedItems.some((item: Nft) => item.loan?.status === "active")
   const canFreezeThaw = allInVault || noneInVault
+
+  const allListed = selectedItems.every((item) => item.status === "listed")
+  const allDelisted = selectedItems.every((item) => !item.status)
+  const listedSelected = selectedItems.some((item) => item.status === "listed")
+
+  const canList = allListed || allDelisted
 
   const mints = filtered.map((n: any) => n.nftMint)
 
@@ -119,22 +130,13 @@ export const Actions: FC = () => {
     setTagMenuOpen(!tagMenuOpen)
   }
 
+  function toggleListOpen() {
+    setListOpen(!listOpen)
+  }
+
   const collectionPage = !router.query.tag && !router.query.filter && !router.query.collectionId
 
   const allSelected = selected.length >= filtered.length
-
-  useEffect(() => {
-    if (!recipient) {
-      setRecipientError(null)
-      return
-    }
-    try {
-      new PublicKey(recipient)
-      setRecipientError(null)
-    } catch {
-      setRecipientError("Invalid recipient address")
-    }
-  }, [recipient])
 
   function selectAll() {
     setSelected((prevState: string[]) => {
@@ -156,7 +158,7 @@ export const Actions: FC = () => {
 
   function cancelSend() {
     toggleBulkSendOpen()
-    setRecipient("")
+    setRecipient(null)
     setSelected([])
   }
 
@@ -174,121 +176,14 @@ export const Actions: FC = () => {
     }
   }
 
-  type InstructionSet = {
-    instructions: TransactionBuilder[]
-    mint: string
-  }
-
-  function getUmiChunks(instructionSets: InstructionSet[]) {
-    return chunkBy(instructionSets, (ch: InstructionSet[], i: number) => {
-      if (!instructionSets[i + 1]) {
-        return true
-      }
-
-      const t = transactionBuilder()
-        .add(flatten(ch.map((c) => c.instructions)))
-        .add(flatten(instructionSets[i + 1].instructions))
-
-      return !t.fitsInOneTransaction(umi)
-    })
-  }
-
-  async function sendSignedTransactions(
-    signedTransactions: Transaction[],
-    txnMints: string[][],
-    type: string,
-    recipient = ""
-  ) {
-    const blockhash = await umi.rpc.getLatestBlockhash()
-    let errs: string[] = []
-    let successes: string[] = []
-    await Promise.all(
-      signedTransactions.map(async (transaction, index) => {
-        const mints = txnMints[index]
-        try {
-          setTransactionInProgress(mints, type)
-
-          const signature = await umi.rpc.sendTransaction(transaction)
-          const confirmed = await umi.rpc.confirmTransaction(signature, {
-            strategy: {
-              type: "blockhash",
-              ...blockhash,
-            },
-          })
-          if (confirmed.value.err) {
-            setTransactionErrors(mints)
-            await sleep(2000)
-
-            clearTransactions(mints)
-          } else {
-            setTransactionComplete(mints)
-            await sleep(2000)
-
-            clearTransactions(mints)
-            if (type === "burn") {
-              await deleteNfts(mints)
-            } else if (type === "freeze") {
-              await addNftsToVault(mints)
-            } else if (type === "thaw") {
-              await removeNftsFromVault(mints)
-            } else if (type === "send") {
-              await updateOwnerForNfts(mints, recipient)
-            }
-          }
-          successes = [...successes, ...mints]
-        } catch (err) {
-          console.error(err)
-          setTransactionErrors(mints)
-          successes = [...errs, ...mints]
-          await sleep(2000)
-
-          clearTransactions(mints)
-        }
-      })
-    )
-
-    const icons = {
-      burn: "🔥",
-      send: "✈️",
-      freeze: "🔒",
-      thaw: "🔓",
-    }
-
-    const pastTense = {
-      burn: "burned",
-      freeze: "frozen",
-      thaw: "thawed",
-      send: "sent",
-    }
-
-    if (errs.length && !successes.length) {
-      toast.error(
-        `Failed to ${type} ${errs.length} item${errs.length === 1 ? "" : "s"}. Check the console for more details`
-      )
-    } else if (errs.length && successes.length) {
-      toast(
-        `${successes.length} item${successes.length === 1 ? "" : "s"} ${
-          pastTense[type as keyof object]
-        } successfully, ${errs.length} failed to burn. Check the console for more details`
-      )
-    } else if (successes.length && !errs.length) {
-      toast.success(
-        `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense[type as keyof object]} successfully`,
-        {
-          icon: icons[type as keyof object],
-        }
-      )
-    }
-  }
-
   async function bulkSend() {
     try {
       setSending(true)
+      if (nonOwnedSelected) {
+        throw new Error("Some selected items are owned by a linked wallet")
+      }
       if (!recipient) {
         throw new Error("No recipient selected")
-      }
-      if (recipentError) {
-        throw new Error(recipentError)
       }
       if (frozenSelected) {
         throw new Error("Frozen NFTs in selection")
@@ -313,7 +208,7 @@ export const Actions: FC = () => {
           const instSet = []
           instSet.push(
             transferV1(umi, {
-              destinationOwner: publicKey(recipient),
+              destinationOwner: publicKey(recipient.publicKey),
               mint: fromWeb3JsPublicKey(item.mintAddress),
               tokenStandard: item.tokenStandard!,
               amount,
@@ -338,27 +233,22 @@ export const Actions: FC = () => {
         })
       )
 
-      const chunks = getUmiChunks(instructionSets)
-      const txns = await Promise.all(
-        chunks.map(async (builders) => {
-          const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
-          return {
-            txn: await txn.buildWithLatestBlockhash(umi),
-            mints: builders.map((b) => b.mint),
-          }
-        })
-      )
+      const chunks = getUmiChunks(umi, instructionSets)
+      const txns = await buildTransactions(umi, chunks)
 
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
 
       setBulkSendOpen(false)
 
-      await sendSignedTransactions(
+      const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
         txns.map((t) => t.mints),
         "send",
-        recipient
+        updateOwnerForNfts,
+        recipient.publicKey
       )
+
+      notifyStatus(errs, successes, "send", "sent")
     } catch (err: any) {
       console.log(err)
       toast.error(err.message)
@@ -410,6 +300,9 @@ export const Actions: FC = () => {
 
   async function lockUnlock() {
     try {
+      if (nonOwnedSelected) {
+        throw new Error("Some selected items are owned by a linked wallet")
+      }
       if (!canFreezeThaw) {
         throw new Error("Cannot freeze and thaw in same transaction")
       }
@@ -553,24 +446,19 @@ export const Actions: FC = () => {
             })
           )
 
-      const chunks = getUmiChunks(instructionGroups)
-      const txns = await Promise.all(
-        chunks.map(async (builders) => {
-          const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
-          return {
-            txn: await txn.buildWithLatestBlockhash(umi),
-            mints: builders.map((b) => b.mint),
-          }
-        })
-      )
+      const chunks = getUmiChunks(umi, instructionGroups)
+      const txns = await buildTransactions(umi, chunks)
 
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
 
-      await sendSignedTransactions(
+      const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
         txns.map((t) => t.mints),
-        frozenSelected ? "thaw" : "freeze"
+        frozenSelected ? "thaw" : "freeze",
+        frozenSelected ? removeNftsFromVault : addNftsToVault
       )
+
+      notifyStatus(errs, successes, "send", "sent")
     } catch (err) {
       console.log(err)
     } finally {
@@ -582,6 +470,9 @@ export const Actions: FC = () => {
       toggleBurnOpen()
       if (frozenSelected) {
         throw new Error("Frozen NFTs selected")
+      }
+      if (nonOwnedSelected) {
+        throw new Error("Some selected items are owned by a linked wallet")
       }
       const toBurn = await Promise.all(
         filtered
@@ -675,27 +566,20 @@ export const Actions: FC = () => {
             }
           })
       )
-
-      const chunks = getUmiChunks(toBurn as any)
-      const txns = await Promise.all(
-        chunks.map(async (builders) => {
-          const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
-          return {
-            txn: await txn.buildWithLatestBlockhash(umi),
-            mints: builders.map((b) => b.mint),
-          }
-        })
-      )
-
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-
       setBurnOpen(false)
 
-      await sendSignedTransactions(
+      const chunks = getUmiChunks(umi, toBurn as any)
+      const txns = await buildTransactions(umi, chunks)
+      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+
+      const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
         txns.map((t) => t.mints),
-        "burn"
+        "burn",
+        deleteNfts
       )
+
+      notifyStatus(errs, successes, "send", "sent")
     } catch (err: any) {
       console.error(err)
       toast.error(err.message)
@@ -703,34 +587,80 @@ export const Actions: FC = () => {
     }
   }
 
+  async function list() {
+    try {
+      if (nonOwnedSelected) {
+        throw new Error("Some selected items are owned by a linked wallet")
+      }
+      if (selected.length > 20) {
+        throw new Error("List only supported for up to 20 items")
+      }
+      toggleListOpen()
+    } catch (err: any) {
+      toast.error(err.message)
+    }
+  }
+
+  async function onDelist() {
+    await delist(selected)
+  }
+
   function toggleActionDrawer() {
     setActionDrawerShowing(!actionDrawerShowing)
   }
 
   return (
-    <Stack spacing={2} direction="row" alignItems="center">
+    <Stack spacing={1} direction="row" alignItems="center">
       {isAdmin && !collectionPage ? (
         <>
           {!showMinMenu ? (
             <>
-              <Button onClick={selectAll} disabled={!filtered.length || allSelected}>
+              <Button onClick={selectAll} disabled={!filtered.length || allSelected} size="small" variant="outlined">
                 Select all
               </Button>
-              <Button onClick={deselectAll} disabled={!filtered.length || !selected.length}>
+              <Button
+                onClick={deselectAll}
+                disabled={!filtered.length || !selected.length}
+                size="small"
+                variant="outlined"
+              >
                 Deselect all
               </Button>
-              <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Bulk send selected items"}>
+              <Tooltip
+                title={
+                  nonOwnedSelected
+                    ? "Some selected items are owned by a linked wallet"
+                    : statusesSelected
+                    ? "Selection contains items that cannot be sent"
+                    : "Bulk send selected items"
+                }
+              >
                 <span>
-                  <IconButton disabled={!selected.length || frozenSelected} onClick={toggleBulkSendOpen}>
+                  <IconButton
+                    disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                    onClick={toggleBulkSendOpen}
+                  >
                     <SvgIcon fontSize="small">
                       <PlaneIcon />
                     </SvgIcon>
                   </IconButton>
                 </span>
               </Tooltip>
-              <Tooltip title={frozenSelected ? "Selection contains frozen items" : "Burn selected items"}>
+              <Tooltip
+                title={
+                  nonOwnedSelected
+                    ? "Some selected items are owned by a linked wallet"
+                    : statusesSelected
+                    ? "Selection contains items that cannot be burnt"
+                    : "Burn selected items"
+                }
+              >
                 <span>
-                  <IconButton disabled={!selected.length || frozenSelected} color="error" onClick={toggleBurnOpen}>
+                  <IconButton
+                    disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                    color="error"
+                    onClick={toggleBurnOpen}
+                  >
                     <LocalFireDepartment />
                   </IconButton>
                 </span>
@@ -738,7 +668,45 @@ export const Actions: FC = () => {
 
               <Tooltip
                 title={
-                  onlyNftsSelected
+                  nonOwnedSelected
+                    ? "Some selected items are owned by a linked wallet"
+                    : nonListedStatusSelected
+                    ? "Selection contains items that cannot be listed"
+                    : onlyNftsSelected
+                    ? canList
+                      ? listedSelected
+                        ? "Delist selected items"
+                        : "List selected items"
+                      : "Cannot list and delist in same transaction"
+                    : "Only NFTs and pNFTs can be listed"
+                }
+              >
+                <span>
+                  <IconButton
+                    disabled={
+                      !selected.length || nonListedStatusSelected || !canList || !onlyNftsSelected || nonOwnedSelected
+                    }
+                    sx={{
+                      color: allInVault ? "#111316" : "#a6e3e0",
+                      background: allInVault ? "#a6e3e0" : "default",
+                      "&:hover": {
+                        color: "#a6e3e0",
+                      },
+                    }}
+                    onClick={listedSelected ? onDelist : list}
+                  >
+                    <Sell />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <Tooltip
+                title={
+                  nonOwnedSelected
+                    ? "Some selected items are owned by a linked wallet"
+                    : statusesSelected
+                    ? "Selection contains items that cannot be frozen/thawed"
+                    : onlyNftsSelected
                     ? canFreezeThaw
                       ? frozenSelected
                         ? "Remove selected items from vault"
@@ -749,7 +717,9 @@ export const Actions: FC = () => {
               >
                 <span>
                   <IconButton
-                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+                    disabled={
+                      !selected.length || !canFreezeThaw || !onlyNftsSelected || statusesSelected || nonOwnedSelected
+                    }
                     sx={{
                       color: allInVault ? "#111316" : "#a6e3e0",
                       background: allInVault ? "#a6e3e0" : "default",
@@ -807,17 +777,16 @@ export const Actions: FC = () => {
         </Card>
       </Dialog>
 
-      <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen}>
+      <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen} fullWidth>
         <Card>
           <DialogTitle>Bulk send</DialogTitle>
           <DialogContent>
-            <TextField
-              label="Recipient"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              sx={{ minWidth: "400px" }}
-              fullWidth
-            />
+            <Stack spacing={2}>
+              <Alert severity="info">
+                Sending {selected.length} item{selected.length === 1 ? "" : "s"}
+              </Alert>
+              <AddressSelector wallet={recipient} setWallet={setRecipient} />
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button onClick={cancelSend} color="error">
@@ -850,6 +819,13 @@ export const Actions: FC = () => {
           </DialogActions>
         </Card>
       </Dialog>
+
+      <Dialog open={listOpen} onClose={toggleListOpen} fullWidth maxWidth="md">
+        <Card sx={{ overflowY: "auto", height: "100vh" }}>
+          <Listing items={selectedItems} onClose={toggleListOpen} />
+        </Card>
+      </Dialog>
+
       <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
         <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
           <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>

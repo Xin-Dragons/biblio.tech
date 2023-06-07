@@ -5,27 +5,47 @@ import {
   CardActions,
   CardContent,
   Dialog,
+  IconButton,
   Stack,
   Tab,
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableRow,
   Tabs,
+  Tooltip,
   Typography,
+  Link,
+  TextField,
+  Switch,
+  FormControlLabel,
+  TableFooter,
+  Grid,
+  Alert,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
-import { shorten } from "../Item"
 import { useMetaplex } from "../../context/metaplex"
 import { PublicKey, Transaction } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
 import { useWallet } from "@solana/wallet-adapter-react"
-import axios from "axios"
+import axios, { AxiosError } from "axios"
 import base58 from "bs58"
 import { Selector } from "../Selector"
-import { useSession } from "next-auth/react"
+import { getCsrfToken, signOut, useSession } from "next-auth/react"
 import { useDatabase } from "../../context/database"
 import { User } from "../../types/nextauth"
+import { useWallets } from "../../context/wallets"
+import { sortBy, upperFirst } from "lodash"
+import { AddCircle, Delete, Edit, TramSharp, Update } from "@mui/icons-material"
+import { Wallet } from "../../db"
+import { default as NextLink } from "next/link"
+import { WalletMultiButtonDynamic } from "../ActionBar"
+import { shorten } from "../../helpers/utils"
+import { useAccess } from "../../context/access"
+import { useUmi } from "../../context/umi"
+import { addMemo } from "@metaplex-foundation/mpl-essentials"
+import { SigninMessage } from "../../utils/SigninMessge"
 
 type ProfileProps = {
   user: User
@@ -47,17 +67,17 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
   const user = session?.user
   const publicKey = session?.publicKey
 
-  async function unlinkNft() {
+  async function unlinkNft(mint: string) {
+    console.log("ok")
     try {
       setLoading(true)
       async function unlink() {
         const params = {
           publicKey: wallet.publicKey?.toBase58(),
-          mint: user?.access_nft.mint,
+          mint,
         }
         const { data } = await axios.post("/api/unlock-nft", params)
         if (data.resolved) {
-          toast.success("NFT unlinked")
           return
         }
         const txn = Transaction.from(base58.decode(data.txn))
@@ -77,7 +97,7 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
       })
 
       await unlinkPromise
-      await unstakeNft(user?.access_nft.mint)
+      await unstakeNft(mint)
       await update()
     } catch (err: any) {
       console.error(err)
@@ -97,7 +117,6 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
         }
         const { data } = await axios.post("/api/lock-nft", params)
         if (data.resolved) {
-          toast.success("NFT unlinked")
           return
         }
         const txn = Transaction.from(base58.decode(data.txn))
@@ -126,8 +145,12 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
     }
   }
 
+  if (!wallet.publicKey) {
+    return null
+  }
+
   return (
-    <Card sx={{ overflowY: "auto" }}>
+    <Card sx={{ overflowY: "auto", height: "80vh" }}>
       <CardContent>
         <Stack spacing={2} alignItems="center">
           <Stack>
@@ -135,34 +158,179 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
               Profile settings
             </Typography>
             <Typography variant="h6" color="primary" textAlign="center">
-              Connected with {shorten(publicKey)}
+              Connected with {shorten(wallet.publicKey?.toBase58())}
             </Typography>
           </Stack>
           <Tabs value={activeTab} onChange={onTabChange}>
             <Tab value="access" label="Access" />
+            <Tab value="wallets" label="Linked Wallets" />
+            <Tab value="address-book" label="Address book" />
             <Tab value="data" label="data" />
           </Tabs>
           {activeTab === "access" && (
             <>
               <Selector
-                linkedNft={user?.access_nft}
+                linkedNfts={user?.nfts || null}
                 onSubmit={linkNft}
-                onCancel={onClose}
+                unlinkNft={unlinkNft}
                 loading={loading}
                 submitLabel="Link NFT"
               />
-              {user?.access_nft && (
-                <Button onClick={unlinkNft} disabled={loading} variant="outlined" size="large">
-                  Unlink
-                </Button>
-              )}
             </>
           )}
 
+          {activeTab === "wallets" && <LinkedWallets />}
+
           {activeTab === "data" && <Data />}
+          {activeTab === "address-book" && <AddressBook />}
         </Stack>
       </CardContent>
     </Card>
+  )
+}
+
+function LinkedWallets() {
+  const { data: session, update } = useSession()
+  const { publicKeys, availableWallets } = useAccess()
+  const { wallets, isLedger } = useWallets()
+  const [loading, setLoading] = useState(false)
+  const umi = useUmi()
+  const wallet = useWallet()
+
+  const isMain = session?.user?.wallets.find((w) => w.public_key === wallet.publicKey?.toBase58())?.main
+
+  async function unlink(publicKey: string) {
+    try {
+      setLoading(true)
+      if (!isMain) {
+        throw new Error("Connect with main wallet in order to unlink additional wallets")
+      }
+
+      async function signMessage() {
+        if (isLedger) {
+          try {
+            const txn = await addMemo(umi, {
+              memo: "Add wallet to Biblio",
+            }).buildWithLatestBlockhash(umi)
+
+            const signed = await umi.identity.signTransaction(txn)
+
+            await axios.post("/api/remove-wallet", {
+              publicKey,
+              rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+              basePublicKey: wallet.publicKey?.toBase58(),
+              usingLedger: isLedger,
+            })
+          } catch (err: any) {
+            console.error(err)
+
+            if (err.message.includes("Something went wrong")) {
+              throw new Error(
+                "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+              )
+            }
+
+            if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+              throw new Error(
+                'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+              )
+            }
+
+            throw err
+          }
+        } else {
+          const csrf = await getCsrfToken()
+          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+
+          const message = new SigninMessage({
+            domain: window.location.host,
+            publicKey: wallet.publicKey.toBase58(),
+            statement: `Sign this message to unlink ${shorten(publicKey)} from Biblio.\n\n`,
+            nonce: csrf,
+          })
+
+          const data = new TextEncoder().encode(message.prepare())
+          const signature = await wallet.signMessage(data)
+          const serializedSignature = base58.encode(signature)
+
+          await axios.post("/api/remove-wallet", {
+            message: JSON.stringify(message),
+            signature: serializedSignature,
+            publicKey,
+            basePublicKey: wallet.publicKey.toBase58(),
+          })
+        }
+      }
+
+      const signMessagePromise = signMessage()
+      toast.promise(signMessagePromise, {
+        loading: "Unlinking wallet",
+        success: "Wallet unlinked",
+        error: "Error unlinking wallet",
+      })
+
+      await signMessagePromise
+
+      await update()
+    } catch (err: any) {
+      if (err instanceof AxiosError) {
+        toast.error(err.response?.data || "Error unlinking")
+      } else {
+        toast.error(err.message || "Error unlinking")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Stack spacing={2} width="100%">
+      <Typography>
+        {publicKeys.length < availableWallets ? (
+          <span>
+            You have <strong>{publicKeys.length}</strong> linked wallet{publicKeys.length === 1 ? "" : "s"}. You can
+            link up to <strong>{availableWallets}</strong>.
+            <br />
+            <br />
+            Connect to a new wallet while signed in to your main account and sign a message in order to link. You can
+            unlink additional wallets at any time.
+          </span>
+        ) : (
+          <Alert severity="info">
+            You have linked your maximum wallets. Link more Dandies or Biblio Passes to link additional wallets.
+          </Alert>
+        )}
+      </Typography>
+      <Table stickyHeader>
+        <TableHead>
+          <TableRow>
+            <TableCell>Address</TableCell>
+            <TableCell>Nickname</TableCell>
+            <TableCell>Type</TableCell>
+            <TableCell>Chain</TableCell>
+            <TableCell></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sortBy(session?.user?.wallets, (w) => w.main).map((wallet) => {
+            const nickname = wallets.find((w) => w.publicKey === wallet.public_key)?.nickname || "-"
+            return (
+              <TableRow key={wallet.public_key}>
+                <TableCell>{shorten(wallet.public_key)}</TableCell>
+                <TableCell>{nickname}</TableCell>
+                <TableCell>{wallet.main ? "Main" : "Linked"}</TableCell>
+                <TableCell>{upperFirst(wallet.chain)}</TableCell>
+                <TableCell width="100px">
+                  <Button onClick={() => unlink(wallet.public_key)} disabled={loading || wallet.main} color="error">
+                    Unlink
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </Stack>
   )
 }
 
@@ -173,7 +341,12 @@ function Data() {
   const [importFile, setImportFile] = useState(null)
   const [blob, setBlob] = useState<Blob | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteAllShowing, setDeleteAllShowing] = useState(false)
+  const [deleteAccountShowing, setDeleteAccountShowing] = useState(false)
+  const { isLedger } = useWallets()
   const wallet = useWallet()
+  const umi = useUmi()
 
   async function getStorage() {
     const storage = await navigator.storage.estimate()
@@ -289,61 +462,249 @@ function Data() {
     }
   }
 
+  const mainWallet = session?.user?.wallets.find((w) => w.main)?.public_key
+
+  function toggleDeleteAllShowing() {
+    setDeleteAllShowing(!deleteAllShowing)
+  }
+
+  function toggleDeleteAccountShowing() {
+    setDeleteAccountShowing(!deleteAccountShowing)
+  }
+
+  async function deleteAllData() {
+    if (window.confirm("Are you sure? This cannot be undone")) {
+      await db.delete()
+    }
+  }
+
+  async function deleteAccount() {
+    try {
+      setDeleting(true)
+      if (session?.user?.nfts?.length) {
+        throw new Error("Cannot delete account as there are still linked NFTs. Unlink these first")
+      }
+
+      async function signMessage() {
+        if (isLedger) {
+          try {
+            const txn = await addMemo(umi, {
+              memo: "Add wallet to Biblio",
+            }).buildWithLatestBlockhash(umi)
+
+            const signed = await umi.identity.signTransaction(txn)
+
+            await axios.post("/api/delete-account", {
+              publicKey: wallet.publicKey?.toBase58(),
+              rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+              usingLedger: isLedger,
+            })
+          } catch (err: any) {
+            console.error(err)
+
+            if (err.message.includes("Something went wrong")) {
+              throw new Error(
+                "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+              )
+            }
+
+            if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+              throw new Error(
+                'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+              )
+            }
+
+            throw err
+          }
+        } else {
+          const csrf = await getCsrfToken()
+          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+
+          const message = new SigninMessage({
+            domain: window.location.host,
+            publicKey: wallet.publicKey.toBase58(),
+            statement: `Sign this message to delete Biblio account: ${shorten(wallet.publicKey.toBase58())}.\n\n`,
+            nonce: csrf,
+          })
+
+          const data = new TextEncoder().encode(message.prepare())
+          const signature = await wallet.signMessage(data)
+          const serializedSignature = base58.encode(signature)
+
+          await axios.post("/api/delete-account", {
+            message: JSON.stringify(message),
+            signature: serializedSignature,
+            publicKey: wallet.publicKey.toBase58(),
+          })
+        }
+      }
+
+      const deletePromise = signMessage()
+
+      toast.promise(deletePromise, {
+        loading: "Deleting Biblio account...",
+        success: "Deleted successfully",
+        error: "Error deleting",
+      })
+
+      await deletePromise
+      await signOut()
+    } catch (err: any) {
+      toast.error(err.message || "Error deleting")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Box padding={4} sx={{ backgroundColor: "#111" }} width="90%">
-      <Table>
-        <TableBody>
-          <TableRow>
-            <TableCell>
-              <Typography variant="h6" fontWeight="bold" color="primary">
-                Local storage usage
-              </Typography>
-            </TableCell>
-            <TableCell>
-              <Typography textAlign="right">{(storage / 1_000_000).toLocaleString()} Mb</Typography>
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>
-              <Typography variant="h6" fontWeight="bold" color="primary">
-                Export data
-              </Typography>
-              <Typography>Export your data to use on another device</Typography>
-            </TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
-              <Button onClick={exportData}>export</Button>
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>
-              <Typography variant="h6" fontWeight="bold" color="primary">
-                Import data
-              </Typography>
-              <Typography>Upload .biblio file to import your preferences and settings</Typography>
-            </TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
-              <Button component="label">
-                Import
-                <input type="file" onChange={importData} hidden />
-              </Button>
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>
-              <Typography variant="h6" fontWeight="bold" color="primary">
-                Clear cache
-              </Typography>
-              <Typography>Free up space by deleting cached NFTs</Typography>
-            </TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
-              <Button onClick={clearUnonwned}>Not-owned</Button>
-              <Button onClick={clearAll} color="error">
-                All
-              </Button>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <Stack spacing={2}>
+        <Typography>
+          Biblio is fast. This is because we cache everything you view on your local device. You can use this menu to
+          manage your storage and to free up space if required.
+        </Typography>
+        <Typography>
+          Tags, address book, sort orders, and preferences will be preserved. Only NFT data cache will be cleared.
+        </Typography>
+        <Table>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <Typography variant="h6" fontWeight="bold" color="primary">
+                  Local storage usage
+                </Typography>
+              </TableCell>
+              <TableCell>
+                <Typography textAlign="right">{(storage / 1_000_000).toLocaleString()} Mb</Typography>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <Typography variant="h6" fontWeight="bold" color="primary">
+                  Export data
+                </Typography>
+                <Typography>Export your data to use on another device</Typography>
+              </TableCell>
+              <TableCell sx={{ textAlign: "right" }}>
+                <Button onClick={exportData}>export</Button>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <Typography variant="h6" fontWeight="bold" color="primary">
+                  Import data
+                </Typography>
+                <Typography>Upload .biblio file to import your preferences and settings</Typography>
+              </TableCell>
+              <TableCell sx={{ textAlign: "right" }}>
+                <Button component="label">
+                  Import
+                  <input type="file" onChange={importData} hidden />
+                </Button>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <Typography variant="h6" fontWeight="bold" color="primary">
+                  Clear cache
+                </Typography>
+                <Typography>Free up space by deleting cached NFTs</Typography>
+              </TableCell>
+              <TableCell sx={{ textAlign: "right" }}>
+                <Tooltip title="Clear all cached NFTs">
+                  <Button onClick={clearAll} color="error">
+                    All
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Clear cached NFTs from other wallets you have visited">
+                  <Button onClick={clearUnonwned}>Not-owned</Button>
+                </Tooltip>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <Alert severity="error">
+          <Stack spacing="2">
+            <Typography variant="h5">Danger zone</Typography>
+            <Table>
+              <TableBody>
+                <TableRow>
+                  <TableCell>
+                    <Typography variant="h6" fontWeight="bold" sx={{ color: "rgb(244, 199, 199)" }}>
+                      Delete all data
+                    </Typography>
+                    <Typography>
+                      Clear your entire local database, including settings, orders, tags, address book
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <Button color="error" variant="outlined" onClick={toggleDeleteAllShowing}>
+                      Delete data
+                    </Button>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>
+                    <Typography variant="h6" fontWeight="bold" sx={{ color: "rgb(244, 199, 199)" }}>
+                      Delete Biblio account
+                    </Typography>
+                    <Typography>
+                      Delete your Biblio account. Do this if you need to link {shorten(mainWallet)} to another Biblio
+                      account.
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      sx={{ whiteSpace: "nowrap" }}
+                      onClick={toggleDeleteAccountShowing}
+                    >
+                      Delete account
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </Stack>
+        </Alert>
+      </Stack>
+      <Dialog open={deleteAllShowing} onClose={toggleDeleteAllShowing}>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Delete all local settings</Typography>
+              <Alert severity="error">This will delete ALL local settings, for EVERY Biblio account.</Alert>
+              <Stack direction="row" spacing={2} justifyContent="space-between">
+                <Button variant="outlined" color="primary" onClick={toggleDeleteAllShowing}>
+                  Cancel
+                </Button>
+                <Button variant="contained" onClick={deleteAllData} color="error">
+                  Delete all data
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
+      <Dialog open={deleteAccountShowing} onClose={toggleDeleteAccountShowing}>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Delete Biblio account {shorten(mainWallet)}</Typography>
+              <Alert severity="error">You will need to create a new account to continue using Biblio</Alert>
+              <Stack direction="row" spacing={2} justifyContent="space-between">
+                <Button variant="outlined" color="primary" onClick={toggleDeleteAccountShowing}>
+                  Cancel
+                </Button>
+                <Button variant="contained" onClick={deleteAccount} color="error" disabled={deleting}>
+                  Delete account
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
       <Dialog open={!!blob} onClose={() => setBlob(null)}>
         <Card>
           <CardContent>
@@ -367,5 +728,270 @@ function Data() {
         </Card>
       </Dialog>
     </Box>
+  )
+}
+
+export const AddressBook = () => {
+  const { data: session } = useSession()
+  const { wallets, addWallet } = useWallets()
+  const [adding, setAdding] = useState(false)
+  const [publicKey, setPublicKey] = useState("")
+  const [nickname, setNickname] = useState("")
+  const [owned, setOwned] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
+
+  function toggleAdding() {
+    setAdding(!adding)
+  }
+
+  useEffect(() => {
+    if (!publicKey) {
+      setPublicKeyError(null)
+      return
+    }
+
+    if (wallets.map((w) => w.publicKey).includes(publicKey)) {
+      setPublicKeyError("Address already exists")
+    }
+
+    try {
+      const pk = new PublicKey(publicKey)
+      setPublicKeyError(null)
+    } catch {
+      setPublicKeyError("Invalid public key")
+    }
+  }, [publicKey])
+
+  const linkedWallets = session?.user?.wallets.map((wallet) => wallet.public_key)
+
+  function handleClose() {
+    setPublicKey("")
+    setNickname("")
+    setOwned(false)
+    setPublicKeyError(null)
+    toggleAdding()
+  }
+
+  async function handleAdd() {
+    try {
+      setLoading(true)
+      await addWallet(publicKey, nickname, owned)
+      handleClose()
+    } catch (err: any) {
+      toast.error(err.message || "Error adding")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <Table stickyHeader>
+        <TableHead>
+          <TableRow>
+            <TableCell>
+              <Stack>
+                <Typography>Address</Typography>
+              </Stack>
+            </TableCell>
+            <TableCell>Nickname</TableCell>
+            <TableCell>Owned</TableCell>
+            <TableCell>Linked</TableCell>
+            <TableCell sx={{ width: "150px" }}>Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sortBy(wallets, (wallet) => !linkedWallets?.includes(wallet.publicKey)).map((wallet) => (
+            <Wallet
+              key={wallet.publicKey}
+              wallet={wallet}
+              isLinked={Boolean(linkedWallets?.includes(wallet.publicKey))}
+            />
+          ))}
+        </TableBody>
+        <TableFooter sx={{ position: "sticky", bottom: 0, background: "#121212", zIndex: 10 }}>
+          <TableRow>
+            <TableCell colSpan={5} sx={{ textAlign: "center" }}>
+              <Button variant="contained" onClick={toggleAdding}>
+                <Stack direction="row" spacing={0.5}>
+                  <AddCircle />
+                  <Typography>Add new</Typography>
+                </Stack>
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+      <Dialog open={adding} fullWidth onClose={handleClose}>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Add wallet to address book</Typography>
+              <TextField
+                label="Public key"
+                value={publicKey}
+                onChange={(e) => setPublicKey(e.target.value)}
+                error={!!publicKeyError}
+                helperText={publicKeyError}
+              />
+              <TextField label="Nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
+              <FormControlLabel
+                label="Owned"
+                control={<Switch checked={owned} onChange={(e) => setOwned(e.target.checked)} />}
+              />
+              <Stack direction="row" justifyContent="space-between" spacing={2}>
+                <Button onClick={handleClose} variant="outlined" color="error">
+                  Cancel
+                </Button>
+                <Button onClick={handleAdd} variant="contained" disabled={loading}>
+                  Add wallet
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
+    </>
+  )
+}
+
+type WalletProps = {
+  wallet: Wallet
+  isLinked: boolean
+}
+
+const Wallet: FC<WalletProps> = ({ wallet, isLinked }) => {
+  const [nickname, setNickname] = useState(wallet.nickname || "")
+  const [deleteShowing, setDeleteShowing] = useState(false)
+  const [updateShowing, setUpdateShowing] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [owned, setOwned] = useState(Boolean(wallet.owned))
+  const { deleteWallet, updateWallet } = useWallets()
+
+  useEffect(() => {
+    setNickname(wallet.nickname || "")
+    setOwned(Boolean(wallet.owned))
+  }, [wallet])
+
+  function toggleDeleteShowing() {
+    setDeleteShowing(!deleteShowing)
+  }
+
+  function toggleUpdateShowing() {
+    setUpdateShowing(!updateShowing)
+  }
+
+  async function handleDelete() {
+    try {
+      setLoading(true)
+      await deleteWallet(wallet.publicKey)
+      toast.success("Wallet removed successfully")
+      toggleDeleteShowing()
+    } catch (err: any) {
+      toast.error(err.message || "Error deleting")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleUpdate() {
+    try {
+      setLoading(true)
+      await updateWallet(wallet.publicKey, nickname, owned)
+      toast.success("Wallet updated successfully")
+      toggleUpdateShowing()
+    } catch (err: any) {
+      toast.error(err.message || "Error updating")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleUpdateClose() {
+    setOwned(Boolean(wallet.owned))
+    setNickname(wallet.nickname || "")
+    toggleUpdateShowing()
+  }
+
+  return (
+    <>
+      <TableRow>
+        <TableCell>
+          <Tooltip title={wallet.publicKey}>
+            <NextLink passHref href={`/wallet/${wallet.publicKey}`}>
+              <Link>{shorten(wallet.publicKey)}</Link>
+            </NextLink>
+          </Tooltip>
+        </TableCell>
+        <TableCell>{wallet.nickname || "-"}</TableCell>
+        <TableCell>{wallet.owned ? "Yes" : "No"}</TableCell>
+        <TableCell>{isLinked ? "Yes" : "No"}</TableCell>
+        <TableCell>
+          <Tooltip title={isLinked ? "Cannot remove linked wallet, unlink first" : "Remove wallet from address book"}>
+            <span>
+              <IconButton disabled={isLinked} color="error" onClick={toggleDeleteShowing}>
+                <Delete />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Update wallet">
+            <span>
+              <IconButton color="primary" onClick={toggleUpdateShowing}>
+                <Edit />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </TableCell>
+      </TableRow>
+      <Dialog open={deleteShowing} onClose={toggleDeleteShowing}>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Remove wallet</Typography>
+              <Typography>Are you sure you want to remove this wallet from your address book?</Typography>
+              <Stack direction="row" justifyContent="space-between">
+                <Button onClick={toggleDeleteShowing} variant="outlined" color="error">
+                  Cancel
+                </Button>
+                <Button onClick={handleDelete} variant="contained" disabled={loading}>
+                  Remove wallet
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
+      <Dialog open={updateShowing} fullWidth onClose={handleUpdateClose}>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Update wallet</Typography>
+              <TextField label="Public key" value={wallet.publicKey} disabled />
+              <TextField label="Nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
+              <FormControlLabel
+                label="Owned"
+                disabled={isLinked}
+                control={
+                  <Switch
+                    disabled={isLinked}
+                    checked={isLinked || owned}
+                    onChange={(e) => setOwned(e.target.checked)}
+                  />
+                }
+              />
+              <Stack direction="row" justifyContent="space-between" spacing={2}>
+                <Button onClick={handleUpdateClose} variant="outlined" color="error">
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdate} variant="contained" disabled={loading}>
+                  Save changes
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
+    </>
   )
 }

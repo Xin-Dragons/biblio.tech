@@ -5,12 +5,11 @@ import { noop, update } from "lodash"
 import { FC, ReactNode, createContext, useContext } from "react"
 import { toast } from "react-hot-toast"
 import { useNfts } from "./nfts"
-import { fromWeb3JsInstruction } from "@metaplex-foundation/umi-web3js-adapters"
 import { useUmi } from "./umi"
 import { useTransactionStatus } from "./transactions"
 import { Nft } from "../db"
-import { sleep } from "../components/Actions"
 import { useDatabase } from "./database"
+import { sleep } from "../helpers/utils"
 
 type SharkyContextProps = {
   repayLoan: Function
@@ -31,7 +30,7 @@ type SharkyProviderProps = {
 export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   const { connection } = useConnection()
   const wallet = useWallet()
-  const { settleLoan } = useDatabase()
+  const { settleLoans } = useDatabase()
   const provider = createProvider(connection, wallet as any)
   const sharkyClient = createSharkyClient(provider)
   const { nfts } = useNfts()
@@ -89,7 +88,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       await setTransactionComplete([mint])
       await sleep(2000)
       clearTransactions([mint])
-      await settleLoan(nft)
+      await settleLoans([nft])
     } catch (err: any) {
       toast.error(err.message)
       await setTransactionErrors([mint])

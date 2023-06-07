@@ -24,6 +24,7 @@ import { Session } from "next-auth"
 import { InfoProvider } from "../context/info"
 import { WalletsProvider } from "../context/wallets"
 import { SharkyProvider } from "../context/sharky"
+import { TensorProvider } from "../context/tensor"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -46,48 +47,50 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <SessionProvider session={session}>
-          <AccessProvider>
-            <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+          <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+            <AccessProvider>
               <BasePathProvider publicKey={pageProps.publicKey}>
-                <TransactionStatusProvider>
-                  <DatabaseProvider>
-                    <WalletsProvider>
-                      <UiSettingsProvider>
-                        <FiltersProvider>
-                          <NftsProvider>
+                <DatabaseProvider>
+                  <WalletsProvider>
+                    <UiSettingsProvider>
+                      <FiltersProvider>
+                        <NftsProvider>
+                          <TransactionStatusProvider>
                             <WalletModalProvider>
                               <MetaplexProvider>
                                 <TagsProvider>
                                   <ThemeProvider>
                                     <SharkyProvider>
-                                      <InfoProvider>
-                                        <Script
-                                          async
-                                          strategy="afterInteractive"
-                                          type="module"
-                                          src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                        />
-                                        <CssBaseline />
-                                        <SelectionProvider>
-                                          <DialogProvider>
-                                            <Component {...pageProps} />
-                                          </DialogProvider>
-                                        </SelectionProvider>
-                                      </InfoProvider>
+                                      <TensorProvider>
+                                        <InfoProvider>
+                                          <Script
+                                            async
+                                            strategy="afterInteractive"
+                                            type="module"
+                                            src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                          />
+                                          <CssBaseline />
+                                          <SelectionProvider>
+                                            <DialogProvider>
+                                              <Component {...pageProps} />
+                                            </DialogProvider>
+                                          </SelectionProvider>
+                                        </InfoProvider>
+                                      </TensorProvider>
                                     </SharkyProvider>
                                   </ThemeProvider>
                                 </TagsProvider>
                               </MetaplexProvider>
                             </WalletModalProvider>
-                          </NftsProvider>
-                        </FiltersProvider>
-                      </UiSettingsProvider>
-                    </WalletsProvider>
-                  </DatabaseProvider>
-                </TransactionStatusProvider>
+                          </TransactionStatusProvider>
+                        </NftsProvider>
+                      </FiltersProvider>
+                    </UiSettingsProvider>
+                  </WalletsProvider>
+                </DatabaseProvider>
               </BasePathProvider>
-            </UmiProvider>
-          </AccessProvider>
+            </AccessProvider>
+          </UmiProvider>
         </SessionProvider>
       </WalletProvider>
     </ConnectionProvider>

@@ -1,4 +1,10 @@
+import { Transaction } from "@metaplex-foundation/umi"
 import { FC, ReactElement, createContext, useContext, useEffect, useState } from "react"
+import { useUmi } from "./umi"
+import { sleep } from "../helpers/utils"
+import { noop, uniq } from "lodash"
+import { toast } from "react-hot-toast"
+import { useNfts } from "./nfts"
 
 type TransactionStatusContextProps = {
   transactions: TransactionStatus[]
@@ -6,19 +12,21 @@ type TransactionStatusContextProps = {
   setTransactionErrors: Function
   setTransactionComplete: Function
   clearTransactions: Function
+  sendSignedTransactions: Function
 }
 
 const initial = {
   transactions: [],
-  setTransactionInProgress: () => {},
-  setTransactionErrors: () => {},
-  setTransactionComplete: () => {},
-  clearTransactions: () => {},
+  setTransactionInProgress: noop,
+  setTransactionErrors: noop,
+  setTransactionComplete: noop,
+  clearTransactions: noop,
+  sendSignedTransactions: noop,
 }
 
 export const TransactionStatusContext = createContext<TransactionStatusContextProps>(initial)
 
-type TransactionStatusType = "burn" | "lock" | "unlock" | "send" | "repay"
+type TransactionStatusType = "burn" | "lock" | "unlock" | "send" | "repay" | "list" | "delist"
 
 type TransactionStatus = {
   nftMint: string
@@ -32,6 +40,68 @@ type TransactionProviderProps = {
 
 export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ children }) => {
   const [transactions, setTransactions] = useState<TransactionStatus[]>([])
+  const umi = useUmi()
+  const { nfts } = useNfts()
+
+  async function sendSignedTransactions(
+    signedTransactions: Transaction[],
+    txnMints: string[][],
+    type: TransactionStatusType,
+    onSuccess?: Function,
+    recipient = ""
+  ) {
+    const blockhash = await umi.rpc.getLatestBlockhash()
+    console.log({ blockhash })
+    let errs: string[] = []
+    let successes: string[] = []
+    await Promise.all(
+      signedTransactions.map(async (transaction, index) => {
+        const mints = txnMints[index]
+        try {
+          setTransactionInProgress(mints, type)
+
+          const signature = await umi.rpc.sendTransaction(transaction)
+          const confirmed = await umi.rpc.confirmTransaction(signature, {
+            strategy: {
+              type: "blockhash",
+              ...blockhash,
+            },
+          })
+          console.log(confirmed.value)
+          if (confirmed.value.err) {
+            setTransactionErrors(mints)
+            await sleep(2000)
+
+            clearTransactions(mints)
+          } else {
+            setTransactionComplete(mints)
+            onSuccess &&
+              (await onSuccess(
+                nfts.filter((n) => mints.includes(n.nftMint)),
+                recipient
+              ))
+
+            await sleep(2000)
+
+            clearTransactions(mints)
+          }
+          successes = [...successes, ...mints]
+        } catch (err) {
+          console.error(err)
+          setTransactionErrors(mints)
+          errs = [...errs, ...mints]
+          await sleep(2000)
+
+          clearTransactions(mints)
+        }
+      })
+    )
+
+    return {
+      errs: uniq(errs),
+      successes: uniq(successes),
+    }
+  }
 
   function setTransactionInProgress(nftMints: string[], type: TransactionStatusType) {
     setTransactions((prevState: TransactionStatus[]) => {
@@ -90,6 +160,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         setTransactionComplete,
         setTransactionErrors,
         clearTransactions,
+        sendSignedTransactions,
       }}
     >
       {children}

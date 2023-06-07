@@ -35,8 +35,8 @@ type NftsProviderProps = {
 
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
-  const { publicKey, userId } = useAccess()
-  const { sort } = useUiSettings()
+  const { publicKey, userId, publicKeys, isAdmin } = useAccess()
+  const { sort, showAllWallets } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
   const {} = useFilters()
   const [nfts, setNfts] = useState<Nft[]>([])
@@ -72,7 +72,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   const nftsFromDb = useLiveQuery(
     () => {
-      const query = db.nfts.where({ owner: publicKey })
+      console.log(publicKeys)
+      const query =
+        showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
         return query.filter((item) => Boolean(item.loan && item.loan.status === "active")).toArray()
       }
@@ -93,6 +95,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       if (router.query.filter === "vault") {
         return query.filter((item) => item.status === "inVault").toArray()
+      }
+      if (router.query.filter === "listings") {
+        return query.filter((item) => item.status === "listed").toArray()
       }
       if (!router.query.filter && !router.query.collectionId && !router.query.tag) {
         return query.filter((item) => [0, 4, 5].includes(unwrapSome(item.metadata.tokenStandard)!)).toArray()
@@ -160,7 +165,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       return []
     },
-    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts],
+    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets],
     []
   )
 
@@ -249,13 +254,28 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     filtered = sortBy(filtered, (item) => rarity.find((r) => r.nftMint === item.nftMint)?.moonRank)
   }
 
+  if (sort === "howRareDesc") {
+    filtered = sortBy(filtered, (item) => rarity.find((r) => r.nftMint === item.nftMint)?.howRare).reverse()
+  }
+
+  if (sort === "moonRankDesc") {
+    filtered = sortBy(filtered, (item) => rarity.find((r) => r.nftMint === item.nftMint)?.moonRank).reverse()
+  }
+
   if (sort === "outstanding") {
     filtered = sortBy(filtered, (item) => item.loan?.amountToRepay || 0).reverse()
   }
 
   if (sort === "value") {
     filtered = sortBy(filtered, (item) => {
-      return item.balance && item.price ? item.price * item.balance : 0
+      const balance =
+        (isAdmin && showAllWallets
+          ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
+          : item.balance?.[publicKey as keyof object]) || 0
+
+      const price = item.price || 0
+      const value = price * balance
+      return value || 0
     }).reverse()
   }
 
@@ -264,7 +284,13 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   }
 
   if (sort === "balance") {
-    filtered = sortBy(filtered, (item) => item.balance || 0).reverse()
+    filtered = sortBy(filtered, (item) => {
+      const balance =
+        (isAdmin && showAllWallets
+          ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
+          : item.balance?.[publicKey as keyof object]) || 0
+      return balance
+    }).reverse()
   }
 
   if (sort === "creator") {

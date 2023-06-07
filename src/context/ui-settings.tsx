@@ -18,6 +18,10 @@ type UiSettingsContextProps = {
   setSort: Function
   profileModalShowing: boolean
   setProfileModalShowing: Function
+  payRoyalties: boolean
+  setPayRoyalties: Function
+  showAllWallets: boolean
+  setShowAllWallets: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -29,6 +33,10 @@ const initialProps: UiSettingsContextProps = {
   setSort: noop,
   profileModalShowing: false,
   setProfileModalShowing: noop,
+  payRoyalties: true,
+  setPayRoyalties: noop,
+  showAllWallets: true,
+  setShowAllWallets: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -57,19 +65,24 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     {}
   )
 
-  const defaults = useLiveQuery(() => db.preferences.get("defaults"), [], {})
+  const defaults = useLiveQuery(() => db.preferences.get("defaults"), [])
+
+  console.log({ uiSettings, defaults })
 
   async function updatePreferences(key: string, value: any, isDefault = false) {
     let page: string
     let { tag, collectionId, filter } = router.query
-    if (!tag && !collectionId && !filter) {
+    if (isDefault || (!tag && !collectionId && !filter)) {
       page = "defaults"
     } else {
       page = (filter as string) || (tag as string) || (collectionId as string)
     }
 
+    console.log("updateing", page)
+
     await db.transaction("rw", db.preferences, async () => {
       const item = await db.preferences.get(page)
+      console.log(item, isDefault)
       if (item) {
         await db.preferences.update(isDefault ? "defaults" : page, { [key]: value })
       } else {
@@ -91,6 +104,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       sort: "custom",
       showStarred: false,
       setShowUntagged: false,
+      payRoyalties: true,
+      setShowAllWallets: true,
     }
   ) as {
     showInfo: boolean
@@ -98,6 +113,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     sort: string
     showStarred: boolean
     showUntagged: boolean
+    payRoyalties: boolean
+    showAllWallets: boolean
   }
 
   async function setSort(sort: string) {
@@ -112,11 +129,13 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("showInfo", show)
   }
 
-  useEffect(() => {
-    if (nfts.length > 500 && preferences.layoutSize === "collage") {
-      setLayoutSize("large")
-    }
-  }, [nfts, preferences.layoutSize])
+  async function setPayRoyalties(pay: boolean) {
+    await updatePreferences("payRoyalties", pay, true)
+  }
+
+  async function setShowAllWallets(show: boolean) {
+    await updatePreferences("showAllWallets", show, true)
+  }
 
   return (
     <UiSettingsContext.Provider
@@ -129,6 +148,10 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setSort,
         profileModalShowing,
         setProfileModalShowing,
+        payRoyalties: Boolean(defaults?.payRoyalties),
+        setPayRoyalties,
+        showAllWallets: Boolean(defaults?.showAllWallets),
+        setShowAllWallets,
       }}
     >
       {children}

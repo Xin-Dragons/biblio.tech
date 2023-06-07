@@ -11,6 +11,7 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  Tooltip,
   Typography,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
@@ -18,6 +19,8 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import axios from "axios"
 import { Items } from "../Items"
 import { Nft } from "../../types/nextauth"
+import { useNfts } from "../../context/nfts"
+import { shorten } from "../../helpers/utils"
 
 const Nft: FC<{ item: Nft; select: Function }> = ({ item, select }) => {
   return (
@@ -32,19 +35,21 @@ const Nft: FC<{ item: Nft; select: Function }> = ({ item, select }) => {
 }
 
 type SelectorProps = {
-  linkedNft?: Nft
+  linkedNfts?: Nft[] | null
   onSubmit: Function
-  onCancel: Function
-  loading: boolean
+  onCancel?: Function
+  loading?: boolean
   submitLabel?: string
+  unlinkNft?: Function
 }
 
 export const Selector: FC<SelectorProps> = ({
-  linkedNft,
+  linkedNfts,
   onSubmit,
   onCancel,
   loading,
   submitLabel = "Create account",
+  unlinkNft,
 }) => {
   const [selected, setSelected] = useState<Nft | null>(null)
   const [nftsLoading, setNftsLoading] = useState(false)
@@ -81,6 +86,11 @@ export const Selector: FC<SelectorProps> = ({
     setSelectorOpen(!selectorOpen)
   }
 
+  function cancel() {
+    setSelected(null)
+    setSelectorOpen(false)
+  }
+
   async function submit() {
     if (!selected) return
     await onSubmit(selected.mint)
@@ -89,7 +99,7 @@ export const Selector: FC<SelectorProps> = ({
 
   return (
     <>
-      {!linkedNft && (
+      {!linkedNfts?.length ? (
         <>
           {" "}
           <Typography color="primary">Choose a Dandy or a Library Card to gain access to Biblio</Typography>
@@ -99,142 +109,199 @@ export const Selector: FC<SelectorProps> = ({
             You can unlock and pause your Biblio access at any time
           </Typography>
         </>
+      ) : (
+        <Typography>Link multiple Dandies or Biblio Passes to use Biblio with multiple wallets.</Typography>
+      )}
+      {nftsLoading ? (
+        <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }}>
+          <img src="/loading-slow.gif" width="100%" />
+        </Box>
+      ) : libraryCards.length ? (
+        selected ? (
+          <LinkedNft
+            nft={selected}
+            onClick={toggleSelectorOpen}
+            submit={submit}
+            submitLabel={submitLabel}
+            onCancel={onCancel || cancel}
+          />
+        ) : (
+          <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }}>
+            <Button
+              onClick={toggleSelectorOpen}
+              variant="contained"
+              size="large"
+              sx={{ marginTop: 5, marginBottom: 5 }}
+            >
+              Choose NFT
+            </Button>
+          </Box>
+        )
+      ) : (
+        <Stack spacing={2}>
+          <Alert severity="error">No eligible Library Cards or Dandies detected</Alert>
+          <Button
+            variant="contained"
+            size="large"
+            sx={{ fontWeight: "bold" }}
+            href="https://www.tensor.trade/trade/dandies"
+          >
+            Buy a Dandy
+          </Button>
+        </Stack>
       )}
 
-      <Stack
-        direction={{ sm: "row", xs: "column" }}
-        padding={4}
-        sx={{ backgroundColor: "#111" }}
-        spacing={1}
-        alignItems="center"
-      >
-        <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {linkedNft ? (
-            <img
-              src={`https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${linkedNft?.metadata?.image}`}
-              width="100%"
-              style={{ display: "block" }}
-            />
-          ) : nftsLoading ? (
-            <img src="/loading-slow.gif" width="100%" />
-          ) : libraryCards.length ? (
-            selected ? (
-              <img
-                src={`https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${selected?.metadata?.image}`}
-                width="100%"
-                style={{ display: "block", cursor: "pointer" }}
-                onClick={toggleSelectorOpen}
-              />
-            ) : (
-              <Button
-                onClick={toggleSelectorOpen}
-                variant="contained"
-                size="large"
-                sx={{ marginTop: 5, marginBottom: 5 }}
-              >
-                Choose NFT
-              </Button>
-            )
-          ) : (
-            <Stack spacing={2}>
-              <Alert severity="error">No eligible Library Cards or Dandies detected</Alert>
-              <Button
-                variant="contained"
-                size="large"
-                sx={{ fontWeight: "bold" }}
-                href="https://www.tensor.trade/trade/dandies"
-              >
-                Buy a Dandy
-              </Button>
-            </Stack>
-          )}
-        </Box>
-        {(selected || linkedNft) && (
-          <Table>
-            <TableBody>
-              <TableRow>
-                <TableCell>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    NFT Status
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography textAlign="right">
-                    {(linkedNft || selected)?.collection["biblio-collections"].active ? "Active" : "Inactive"}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    Collection
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography textAlign="right">{(linkedNft || selected)?.collection.name}</Typography>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    Number of wallets
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography textAlign="right">
-                    {(linkedNft || selected)?.collection["biblio-collections"].number_wallets}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ border: "none" }}>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    Access length
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ border: "none" }}>
-                  <Typography textAlign="right">
-                    {(linkedNft || selected)?.collection["biblio-collections"].hours_active
-                      ? `${(linkedNft || selected)?.collection["biblio-collections"].hours_active! / 24} days`
-                      : "Unlimited"}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        )}
-      </Stack>
-      {!linkedNft && (
-        <Stack direction="row" spacing={2}>
-          <Button variant="outlined" color="error" onClick={onCancel as any} disabled={loading}>
-            Cancel
-          </Button>
-          <Button disabled={!selected || loading} variant="outlined" onClick={submit}>
-            {submitLabel}
-          </Button>
+      {linkedNfts?.length && (
+        <Stack spacing={2}>
+          <Typography variant="h5">Linked NFTs ({linkedNfts.length})</Typography>
+          <Grid container spacing={2} sx={{ paddingRight: "16px" }}>
+            {linkedNfts?.length &&
+              linkedNfts?.map((nft, index) => (
+                <Grid item md={6} sm={12} key={index}>
+                  <LinkedNft nft={nft} unlinkNft={unlinkNft} loading={loading} small />
+                </Grid>
+              ))}
+          </Grid>
         </Stack>
       )}
 
       <Dialog open={selectorOpen} onClose={toggleSelectorOpen} maxWidth="xl">
         <Card sx={{ padding: 2, overflow: "auto" }}>
           <Grid container spacing={2}>
-            {libraryCards.map((card: Nft, index) => {
-              return (
-                <Grid item xs={6} sm={4} md={3} lg={2} xl={1} key={index}>
-                  <Card key={card.mint} sx={{ cursor: "pointer" }} onClick={() => onSelect(card)}>
-                    <img src={card.metadata.image} width="100%" />
-                    <CardContent>
-                      <Typography variant="h6" fontWeight="bold" textAlign="center">
-                        {card.metadata.name}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              )
-            })}
+            {libraryCards
+              .filter((l: any) => !linkedNfts?.map((n) => n.mint).includes(l.mint))
+              .map((card: Nft, index) => {
+                return (
+                  <Grid item xs={6} sm={4} md={3} lg={2} xl={1} key={index}>
+                    <Card key={card.mint} sx={{ cursor: "pointer" }} onClick={() => onSelect(card)}>
+                      <img src={card.metadata.image} width="100%" />
+                      <CardContent>
+                        <Typography fontWeight="bold" textAlign="center">
+                          {card.metadata.name}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )
+              })}
           </Grid>
         </Card>
       </Dialog>
     </>
+  )
+}
+
+type LinkedNftProps = {
+  nft: Nft
+  onClick?: Function
+  unlinkNft?: Function
+  loading?: boolean
+  submit?: Function
+  submitLabel?: string
+  onCancel?: Function
+  small?: boolean
+}
+
+const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submit, submitLabel, onCancel, small }) => {
+  const { nfts } = useNfts()
+  const wallet = useWallet()
+  const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
+  const isOwned = owner === wallet.publicKey?.toBase58()
+  return (
+    <Stack spacing={1} sx={{ backgroundColor: "#111" }} alignItems="center" padding={small ? 2 : 4}>
+      <Stack direction={{ sm: "row", xs: "column" }} spacing={1} alignItems={small ? "flex-start" : "center"}>
+        <Stack spacing={2} justifyContent="space-between">
+          <img
+            src={`https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${nft?.metadata?.image}`}
+            width="100%"
+            style={{ display: "block", cursor: "pointer" }}
+            onClick={() => onClick?.()}
+          />
+          {unlinkNft && (
+            <Tooltip
+              title={
+                isOwned
+                  ? "Unlink NFT from Biblio. Your maximum linked wallets will decrease"
+                  : `This NFT is owned by ${shorten(owner)}. Connect with that wallet to unlink it`
+              }
+            >
+              <span>
+                <Button
+                  onClick={() => unlinkNft(nft.mint)}
+                  disabled={loading || !isOwned}
+                  variant="outlined"
+                  size="large"
+                  color="error"
+                >
+                  Unlink
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+        <Table>
+          <TableBody>
+            <TableRow>
+              <TableCell>
+                <Typography variant={small ? "body2" : "h6"} fontWeight="bold" color="primary">
+                  NFT Status
+                </Typography>
+              </TableCell>
+              <TableCell>
+                <Typography textAlign="right" variant={small ? "body2" : "body1"}>
+                  {nft?.active ? "Active" : "Inactive"}
+                </Typography>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <Typography variant={small ? "body2" : "h6"} fontWeight="bold" color="primary">
+                  Collection
+                </Typography>
+              </TableCell>
+              <TableCell>
+                <Typography textAlign="right" variant={small ? "body2" : "body1"}>
+                  {nft?.collection_name}
+                </Typography>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>
+                <Typography variant={small ? "body2" : "h6"} fontWeight="bold" color="primary">
+                  Wallets
+                </Typography>
+              </TableCell>
+              <TableCell>
+                <Typography textAlign="right" variant={small ? "body2" : "body1"}>
+                  {nft.number_wallets}
+                </Typography>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ border: "none" }}>
+                <Typography variant={small ? "body2" : "h6"} fontWeight="bold" color="primary">
+                  Time remaining
+                </Typography>
+              </TableCell>
+              <TableCell sx={{ border: "none" }}>
+                <Typography textAlign="right" variant={small ? "body2" : "body1"}>
+                  {nft?.hours_active ? `${nft?.hours_active! - nft.time_staked / 3600} hours` : "Unlimited"}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </Stack>
+      {!unlinkNft && (
+        <Stack direction="row" spacing={2}>
+          <Button variant="outlined" color="error" onClick={onCancel && (onCancel as any)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button disabled={!nft || loading} variant="outlined" onClick={() => submit && submit()}>
+            {submitLabel}
+          </Button>
+        </Stack>
+      )}
+    </Stack>
   )
 }

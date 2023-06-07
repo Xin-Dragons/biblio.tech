@@ -5,8 +5,10 @@ import {
   Card,
   CardContent,
   Dialog,
+  FormControlLabel,
   Link,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -16,15 +18,20 @@ import {
   useMediaQuery,
 } from "@mui/material"
 import { useWallet } from "@solana/wallet-adapter-react"
-import axios from "axios"
+import axios, { Axios, AxiosError } from "axios"
 import { FC, useEffect, useState } from "react"
-import { shorten } from "../Item"
 import { toast } from "react-hot-toast"
 import { Transaction } from "@solana/web3.js"
 import base58 from "bs58"
-import { signOut, useSession } from "next-auth/react"
+import { getCsrfToken, useSession } from "next-auth/react"
 import { Selector } from "../Selector"
 import { useDatabase } from "../../context/database"
+import { SigninMessage } from "../../utils/SigninMessge"
+import { addMemo } from "@metaplex-foundation/mpl-essentials"
+import { useUmi } from "../../context/umi"
+import { shorten } from "../../helpers/utils"
+import { useWallets } from "../../context/wallets"
+import { useAccess } from "../../context/access"
 
 export const SignUp: FC = () => {
   const { stakeNft } = useDatabase()
@@ -33,10 +40,14 @@ export const SignUp: FC = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const wallet = useWallet()
+  const { isLedger, setIsLedger } = useWallets()
+  const umi = useUmi()
   const fullScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+  const { signOut, signIn } = useAccess()
 
   useEffect(() => {
-    const wallets = (session?.user?.["biblio-wallets"] || []).map((wallet) => wallet.public_key) || []
+    const wallets = (session?.user?.wallets || []).map((wallet) => wallet.public_key) || []
+    console.log(wallets)
     if (
       wallet.publicKey &&
       status === "authenticated" &&
@@ -47,16 +58,7 @@ export const SignUp: FC = () => {
     } else {
       setIsOpen(false)
     }
-  }, [session, wallet.publicKey])
-
-  useEffect(() => {
-    if (status !== "authenticated") {
-      return
-    }
-    if (wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
-      signOut({ redirect: false })
-    }
-  }, [wallet.publicKey])
+  }, [session, wallet.publicKey, status])
 
   async function createAccount(mint: string) {
     try {
@@ -107,7 +109,80 @@ export const SignUp: FC = () => {
   async function addWallet() {
     try {
       setAdding(true)
+
+      async function linkWallet() {
+        if (isLedger) {
+          try {
+            const txn = await addMemo(umi, {
+              memo: "Add wallet to Biblio",
+            }).buildWithLatestBlockhash(umi)
+
+            const signed = await umi.identity.signTransaction(txn)
+
+            const result = await axios.post("/api/add-wallet", {
+              publicKey: wallet.publicKey?.toBase58(),
+              rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+              basePublicKey: session?.publicKey,
+              isLedger,
+            })
+          } catch (err: any) {
+            console.error(err)
+
+            if (err.message.includes("Something went wrong")) {
+              throw new Error(
+                "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+              )
+            }
+
+            if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+              throw new Error(
+                'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+              )
+            }
+
+            throw err
+          }
+        } else {
+          const csrf = await getCsrfToken()
+          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+
+          const message = new SigninMessage({
+            domain: window.location.host,
+            publicKey: wallet.publicKey?.toBase58(),
+            statement: `Sign this message to sign in to Biblio.\n\n`,
+            nonce: csrf,
+          })
+
+          const data = new TextEncoder().encode(message.prepare())
+          const signature = await wallet.signMessage(data)
+          const serializedSignature = base58.encode(signature)
+
+          const result = await axios.post("/api/add-wallet", {
+            message: JSON.stringify(message),
+            signature: serializedSignature,
+            publicKey: wallet.publicKey.toBase58(),
+            basePublicKey: session?.publicKey,
+          })
+        }
+      }
+
+      const linkWalletPromise = linkWallet()
+
+      toast.promise(linkWalletPromise, {
+        loading: "Linking wallet",
+        success: "Wallet linked",
+        error: "Error linking wallet",
+      })
+
+      await linkWalletPromise
+
+      await signOut()
+      await signIn()
     } catch (err: any) {
+      if (err instanceof AxiosError) {
+        toast.error(err.response?.data || "Error linking wallet")
+        return
+      }
       console.log(err)
       toast.error(err.message)
     } finally {
@@ -115,10 +190,25 @@ export const SignUp: FC = () => {
     }
   }
 
-  const maxWallets = session?.user?.access_nft?.collection?.["biblio-collections"].number_wallets || 0
-  const linkedWallets = session?.user?.["biblio-wallets"]?.length || 0
+  const maxWallets =
+    (session?.user?.nfts || [])
+      .filter((item) => {
+        if (!item || !item.active) {
+          return false
+        }
+        if (!item.hours_active) {
+          return true
+        }
 
-  const canLink = linkedWallets >= maxWallets
+        const stakedHours = item.time_staked * 3600
+
+        return stakedHours < item.hours_active
+      })
+      .reduce((sum, item) => sum + item.number_wallets, 0) || 0
+
+  const linkedWallets = session?.user?.wallets?.length || 0
+
+  const canLink = linkedWallets < maxWallets
 
   return (
     <Dialog open={isOpen} fullWidth maxWidth="md" fullScreen={fullScreen}>
@@ -128,11 +218,19 @@ export const SignUp: FC = () => {
             <Stack spacing={2} justifyContent="center" alignItems="center">
               <Typography variant="h4">Add wallet - {shorten(wallet.publicKey?.toBase58())}</Typography>
               <Typography variant="h6">You are signed in as {shorten(session.publicKey)}</Typography>
-              {!canLink && (
+              {!canLink ? (
                 <Alert severity="error">
                   Your account only permits linking {maxWallets} wallet{maxWallets === 1 ? "" : "s"}
                 </Alert>
+              ) : (
+                <Alert severity="info">
+                  You can link {maxWallets - linkedWallets} more wallet{maxWallets - linkedWallets === 1 ? "" : "s"}
+                </Alert>
               )}
+              <FormControlLabel
+                label="Using ledger?"
+                control={<Switch value={isLedger} onChange={(e) => setIsLedger(e.target.checked)} />}
+              />
 
               <Stack direction="row" spacing={2}>
                 <Button variant="outlined" color="error" onClick={signOutAndDisconnect} disabled={adding}>

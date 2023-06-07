@@ -41,6 +41,7 @@ import useOnScreen from "../../hooks/use-on-screen"
 import { useMetaplex } from "../../context/metaplex"
 import { PublicKey } from "@metaplex-foundation/js"
 import HowRare from "./howrare.svg"
+import CornerRibbon from "react-corner-ribbon"
 
 import { useAccess } from "../../context/access"
 import { useTransactionStatus } from "../../context/transactions"
@@ -50,14 +51,26 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
 import LockOpenIcon from "@mui/icons-material/LockOpen"
 import { unwrapSome } from "@metaplex-foundation/umi"
-import { Loan, Nft, RarityTier, Tag } from "../../db"
+import { Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
 import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
 import { useNfts } from "../../context/nfts"
 import { useBasePath } from "../../context/base-path"
 import { useSharky } from "../../context/sharky"
+import { useTheme } from "../../context/theme"
+import { useTensor } from "../../context/tensor"
+import SellIcon from "@mui/icons-material/Sell"
+import { lamportsToSol } from "../../helpers/utils"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
+
+const statusTitles = {
+  staked: "Staked",
+  inVault: "In Vault",
+  frozen: "Frozen",
+  listed: "Listed",
+  loaned: "Loaned",
+}
 
 const tokenStandards = {
   0: "NFT",
@@ -98,6 +111,7 @@ const CircularProgressWithLabel: FC<CircularProgressWithLabelProps> = (props) =>
 
 const Loan: FC<{ loan: Loan }> = ({ loan }) => {
   const { repayLoan } = useSharky()
+  const { isAdmin } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const { showInfo } = useUiSettings()
@@ -145,8 +159,9 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
         right: 0,
         bottom: 0,
         background: "rgba(20, 20, 20, 0.8)",
-        opacity: showInfo ? 1 : 0,
+        opacity: urgent ? 1 : 0,
         transition: "opacity 0.2s",
+        zIndex: 1000,
       }}
       justifyContent="center"
       alignItems="center"
@@ -163,7 +178,7 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
           {timeRemaining}
         </Typography>
       </Stack>
-      {loan.market === "Sharky" && (
+      {loan.market === "Sharky" && isAdmin && (
         <Stack direction="row" spacing={1}>
           <Button onClick={onRepayClick} variant="contained" size="small">
             Repay
@@ -186,10 +201,6 @@ function getMultimediaType(ext: string): Category {
     vr: ["glb", "gltf"],
   }
   return findKey(types, (items) => items.includes(ext)) as Category
-}
-
-export function shorten(address: string) {
-  return `${address.substring(0, 4)}...${address.substring(address.length - 4, address.length)}`
 }
 
 export interface ItemProps {
@@ -347,12 +358,6 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   }
 
   const collection = collections.find((c) => c.id === item.collectionIdentifier)
-
-  const statuses = {
-    staked: "Staked",
-    frozen: "Frozen",
-    inVault: "In Vault",
-  }
 
   return (
     <Card sx={{ height: "100%", outline: "none !important", width: "100%", overflowY: "auto", padding: 2 }}>
@@ -523,7 +528,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
-                      <Typography>{statuses[item.status as keyof object]}</Typography>
+                      <Typography>{statusTitles[item.status as keyof object]}</Typography>
                     </TableCell>
                   </TableRow>
                 )}
@@ -644,12 +649,13 @@ const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
 }
 
 export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
+  const theme = useTheme()
   const { updateItem } = useDatabase()
-  const { layoutSize, showInfo } = useUiSettings()
+  const { layoutSize, showInfo, showAllWallets } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
-  const { isAdmin, isOffline } = useAccess()
+  const { isAdmin, isOffline, publicKey, publicKeys } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
 
   const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
@@ -727,11 +733,6 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   }
 
   const infoShowing = showInfo && layoutSize !== "collage"
-  const colors = {
-    frozen: "#c8ad7f",
-    inVault: "#a6e3e0",
-    staked: "#ffffff",
-  }
 
   const transactionIcons = {
     send: <PlaneIcon />,
@@ -739,13 +740,26 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     freeze: <LockIcon />,
     thaw: <LockOpenIcon />,
     repay: <Paid />,
+    delist: <SellIcon />,
+    list: <SellIcon />,
+    sell: <SellIcon />,
   }
 
-  const statusTitles = {
-    staked: "Staked",
-    inVault: "In Vault",
-    frozen: "Frozen",
+  const statusColors = {
+    listed: theme.palette.primary.dark,
+    loaned: theme.palette.error.dark,
+    staked: theme.palette.secondary.dark,
+    inVault: theme.palette.success.dark,
+    frozen: theme.palette.warning.dark,
   }
+
+  const balance =
+    (isAdmin && showAllWallets
+      ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
+      : item.balance?.[publicKey as keyof object]) || 0
+
+  const price = item.price || 0
+  const value = price * balance
 
   return (
     <Card
@@ -812,7 +826,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
             sx={{
               position: infoShowing ? "static" : "absolute",
               top: 0,
-              zIndex: 1,
+              zIndex: 100000,
               overflow: "visible",
               width: "100%",
               padding: "0.5em",
@@ -860,6 +874,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               position: "relative",
               backgroundImage: "url(/loading-slow.gif)",
               backgroundSize: "100%",
+              borderRadius: "4px",
             }}
           >
             <img
@@ -874,15 +889,15 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               }
               onError={(e: any) => (e.target.src = "/books-lighter.svg")}
               width="100%"
-              style={{ display: "block", background: "#121212" }}
+              style={{ display: "block", background: "#121212", borderRadius: infoShowing ? 0 : "4px" }}
             />
             {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
               <Stack>
-                {item.price && item.balance ? (
+                {value ? (
                   <>
                     <Chip
                       avatar={<Avatar src="/birdeye.png" />}
-                      label={`$${(item.price * item.balance).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                      label={`$${value.toLocaleString()}`}
                       component="a"
                       href={`https://birdeye.so/token/${item.nftMint}`}
                       target="_blank"
@@ -905,7 +920,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   </>
                 ) : null}
                 <Chip
-                  label={(item.balance || 1).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  label={balance.toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}
                   sx={{
                     position: "absolute",
                     backgroundColor: "rgba(0, 0, 0, 0.8)",
@@ -916,7 +933,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 />
               </Stack>
             )}
-            {item.status && (
+            {/* {item.status && ["frozen", "staked", "inVault"].includes(item.status) && (
               <Box
                 sx={{
                   position: "absolute",
@@ -942,6 +959,36 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   </SvgIcon>
                 </Tooltip>
               </Box>
+            )} */}
+            {item.status && (
+              <CornerRibbon
+                style={{ textTransform: "uppercase" }}
+                backgroundColor={statusColors[item.status as keyof object]}
+              >
+                {statusTitles[item.status as keyof object]}
+              </CornerRibbon>
+            )}
+            {item.status === "listed" && ["MEv2", "TensorSwap"].includes(item.listing?.marketplace!) && (
+              <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    position: "absolute",
+                    top: "0.25em",
+                    left: "0.25em",
+                    width: "40px",
+                    height: "40px",
+                    padding: "7px",
+                    borderRadius: "100%",
+                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                  }}
+                >
+                  {item.listing?.marketplace === "MEv2" && <img src="/me.png" width="100%" />}
+                  {item.listing?.marketplace === "TensorSwap" && <img src="/tensor.svg" width="100%" />}
+                </Box>
+              </Tooltip>
             )}
             {item.loan && <Loan loan={item.loan} />}
           </Box>

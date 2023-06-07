@@ -1,4 +1,13 @@
-import { Accordion, AccordionDetails, AccordionSummary, Button, SvgIcon, Typography } from "@mui/material"
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Button,
+  FormControlLabel,
+  SvgIcon,
+  Switch,
+  Typography,
+} from "@mui/material"
 import { Box, Stack } from "@mui/system"
 import Link from "next/link"
 
@@ -17,6 +26,8 @@ import { useBasePath } from "../../context/base-path"
 import VaultIcon from "../Actions/vault.svg"
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn"
 import { useAccess } from "../../context/access"
+import { Sell } from "@mui/icons-material"
+import { useUiSettings } from "../../context/ui-settings"
 
 type SideMenuProps = {
   fullWidth?: boolean
@@ -129,6 +140,15 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
               size={large ? "large" : "medium"}
             >
               Loans
+            </Button>
+          </Link>
+          <Link href={relative("/listings")} passHref>
+            <Button
+              variant={route === "/listings" ? "contained" : "outlined"}
+              startIcon={<Sell />}
+              size={large ? "large" : "medium"}
+            >
+              Listings
             </Button>
           </Link>
           <Link href={relative("/junk")} passHref>

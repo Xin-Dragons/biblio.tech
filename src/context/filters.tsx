@@ -72,12 +72,20 @@ const allOptions = {
     value: "name",
   },
   howRare: {
-    label: "How Rare",
+    label: "How Rare [rare to common]",
     value: "howRare",
   },
+  howRareDesc: {
+    label: "How Rare [common to rare]",
+    value: "howRareDesc",
+  },
   moonRank: {
-    label: "Moon Rank",
+    label: "Moon Rank [rare to common]",
     value: "moonRank",
+  },
+  moonRankDesc: {
+    label: "Moon Rank [common to rare]",
+    value: "moonRankDesc",
   },
   balance: {
     label: "Balance",
@@ -99,7 +107,7 @@ const allOptions = {
 
 const sortOptionsConfig = {
   loans: ["expiring", "outstanding", "name"],
-  nonFungible: ["custom", "name", "howRare", "moonRank"],
+  nonFungible: ["custom", "name", "howRare", "howRareDesc", "moonRank", "moonRankDesc"],
   fungible: ["value", "custom", "balance", "name"],
   editions: ["custom", "name", "creator"],
   collections: ["value", "name", "holdings"],
