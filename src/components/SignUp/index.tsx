@@ -47,7 +47,6 @@ export const SignUp: FC = () => {
 
   useEffect(() => {
     const wallets = (session?.user?.wallets || []).map((wallet) => wallet.public_key) || []
-    console.log(wallets)
     if (
       wallet.publicKey &&
       status === "authenticated" &&
@@ -69,25 +68,36 @@ export const SignUp: FC = () => {
         throw new Error("No NFT selected")
       }
       setLoading(true)
-      const params = {
-        publicKey: wallet.publicKey?.toBase58(),
-        mint,
-      }
-      const { data } = await axios.post("/api/create-user", params)
-      if (data.resolved) {
-        toast.success("Account created")
-        return
-      }
 
-      const txn = Transaction.from(base58.decode(data.txn))
-      const signed = (await wallet.signTransaction?.(txn)) as Transaction
+      const createPromise = Promise.resolve().then(async () => {
+        const params = {
+          publicKey: wallet.publicKey?.toBase58(),
+          mint,
+        }
+        const { data } = await axios.post("/api/create-user", params)
+        if (data.resolved) {
+          toast.success("Account created")
+          return
+        }
 
-      await axios.post("/api/send-create-user", {
-        ...params,
-        rawTransaction: base58.encode(signed.serialize()),
+        const txn = Transaction.from(base58.decode(data.txn))
+        const signed = (await wallet.signTransaction?.(txn)) as Transaction
+
+        await axios.post("/api/send-create-user", {
+          ...params,
+          rawTransaction: base58.encode(signed.serialize()),
+        })
+        await stakeNft(mint)
+        await update()
       })
-      await stakeNft(mint)
-      await update()
+
+      toast.promise(createPromise, {
+        loading: "Creating Biblio account...",
+        success: "Biblio account created",
+        error: "Error creating account",
+      })
+
+      await createPromise
     } catch (err: any) {
       console.log(err)
       toast.error(err.response?.data?.message || err.message || "Error creating account")
