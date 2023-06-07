@@ -36,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return null;
       }
 
-      const csrfToken = req.cookies["next-auth.csrf-token"]?.split("|")[0]
+      // const csrfToken = req.cookies["next-auth.csrf-token"]?.split("|")[0]
+      const csrfToken = await getCsrfToken({ req: { ...req, body: null } });
       if (signinMessage.nonce !== csrfToken) {
         return null;
       }
