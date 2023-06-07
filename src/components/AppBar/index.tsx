@@ -76,9 +76,11 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       sx={{ whiteSpace: breakLine ? "auto" : "nowrap", fontSize: breakLine ? "5vw" : "parent" }}
     >
       {title}
-      <Typography color="primary" variant="body2" textTransform="none">
-        Now viewing: {showAllWallets && isAdmin ? "all wallets" : shorten(publicKey!)}
-      </Typography>
+      {publicKey && (
+        <Typography color="primary" variant="body2" textTransform="none">
+          Now viewing: {showAllWallets && isAdmin ? "all wallets" : shorten(publicKey!)}
+        </Typography>
+      )}
     </Typography>
   )
 }
