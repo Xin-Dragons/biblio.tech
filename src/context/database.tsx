@@ -442,10 +442,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
   }
 
-  async function deleteNfts(nfts: string[]) {
+  async function deleteNfts(nfts: Nft[]) {
     const a = await db.nfts
       .where("nftMint")
-      .anyOf(...nfts)
+      .anyOf(...nfts.map((n) => n.nftMint))
       .delete()
   }
 
@@ -461,11 +461,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     )
   }
 
-  async function updateOwnerForNfts(mints: string[], owner: string) {
+  async function updateOwnerForNfts(mints: Nft[], owner: string) {
     await db.nfts.bulkUpdate(
       mints.map((mint) => {
         return {
-          key: mint,
+          key: mint.nftMint,
           changes: {
             owner,
           },
@@ -486,11 +486,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
   }
 
-  async function addNftsToVault(mints: string[], owner: string) {
+  async function addNftsToVault(nfts: Nft[], owner: string) {
     await db.nfts.bulkUpdate(
-      mints.map((mint) => {
+      nfts.map((nft) => {
         return {
-          key: mint,
+          key: nft.nftMint,
           changes: {
             status: "inVault",
           },
@@ -499,11 +499,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     )
   }
 
-  async function removeNftsFromVault(mints: string[], owner: string) {
+  async function removeNftsFromVault(nfts: Nft[], owner: string) {
     await db.nfts.bulkUpdate(
-      mints.map((mint) => {
+      nfts.map((nft) => {
         return {
-          key: mint,
+          key: nft.nftMint,
           changes: {
             status: null,
           },
