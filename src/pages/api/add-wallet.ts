@@ -36,8 +36,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return null;
       }
 
+      console.log(req.cookies["next-auth.csrf-token"]?.split("|")[0])
       // const csrfToken = req.cookies["next-auth.csrf-token"]?.split("|")[0]
       const csrfToken = await getCsrfToken({ req: { ...req, body: null } });
+      console.log(csrfToken)
+      console.log(signinMessage.nonce)
       if (signinMessage.nonce !== csrfToken) {
         return null;
       }
@@ -60,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { data } = await axios.post(`${process.env.API_URL}/biblio/${basePublicKey}/add-wallet/${publicKey}`, { publicKey }, { headers })
       res.status(200).json({ok: true})
     } else {
-      throw new Error("Invalid");
+      throw new Error("Unauthorised");
     }
 
   } catch (err: any) {
