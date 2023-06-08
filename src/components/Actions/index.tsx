@@ -77,6 +77,7 @@ import { shorten } from "../../helpers/utils"
 import { AddressSelector } from "../AddressSelector"
 
 export const Actions: FC = () => {
+  const { nfts } = useNfts()
   const [recipient, setRecipient] = useState<any>(null)
   const [listOpen, setListOpen] = useState(false)
   const { delist } = useTensor()
@@ -299,7 +300,7 @@ export const Actions: FC = () => {
   //   }
   // }
 
-  async function lockUnlock() {
+  async function lockUnlock(all: boolean = false) {
     try {
       if (nonOwnedSelected) {
         throw new Error("Some selected items are owned by a linked wallet")
@@ -308,9 +309,13 @@ export const Actions: FC = () => {
         throw new Error("Cannot freeze and thaw in same transaction")
       }
 
+      const items = all ? nfts : selectedItems
+
+      const frozenSelected = items.some((item) => item.status === "inVault")
+
       const instructionGroups = frozenSelected
         ? await Promise.all(
-            selectedItems.map(async (nft: any) => {
+            items.map(async (nft: any) => {
               const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
               const instructions = []
               if (unwrapSome(digitalAsset.metadata.tokenStandard) === 4) {
@@ -376,7 +381,7 @@ export const Actions: FC = () => {
             })
           )
         : await Promise.all(
-            selectedItems.map(async (nft: any) => {
+            items.map(async (nft: any) => {
               const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
               const instructions = []
               if (unwrapSome(digitalAsset.metadata.tokenStandard) === 4) {
@@ -612,6 +617,41 @@ export const Actions: FC = () => {
 
   return (
     <Stack spacing={1} direction="row" alignItems="center">
+      {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
+        <Tooltip
+          title={
+            nonOwnedSelected
+              ? "Some selected items are owned by a linked wallet"
+              : nonInVaultStatusesSelected
+              ? "Selection contains items that cannot be frozen/thawed"
+              : onlyNftsSelected
+              ? canFreezeThaw
+                ? nfts.some((n) => n.status === "inVault")
+                  ? "Remove selected items from vault"
+                  : "Login to add items to vault"
+                : "Cannot freeze and thaw in same transaction"
+              : "Only NFTs and pNFTs can be locked in the vault"
+          }
+        >
+          <span>
+            <IconButton
+              disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault"))}
+              sx={{
+                color: allInVault ? "#111316" : "#a6e3e0",
+                background: allInVault ? "#a6e3e0" : "default",
+                "&:hover": {
+                  color: "#a6e3e0",
+                },
+              }}
+              onClick={() => lockUnlock(true)}
+            >
+              <SvgIcon>
+                <VaultIcon />
+              </SvgIcon>
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
       {isAdmin && !collectionPage ? (
         <>
           {!showMinMenu ? (
@@ -732,7 +772,7 @@ export const Actions: FC = () => {
                         color: "#a6e3e0",
                       },
                     }}
-                    onClick={lockUnlock}
+                    onClick={() => lockUnlock()}
                   >
                     <SvgIcon>
                       <VaultIcon />
