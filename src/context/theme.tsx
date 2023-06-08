@@ -66,7 +66,7 @@ type ThemeProviderProps = {
 
 export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
   const { lightMode } = useUiSettings()
-  const [theme, setTheme] = useState<Theme>(createTheme(getTheme("light") as any))
+  const [theme, setTheme] = useState<Theme>(createTheme(getTheme("dark") as any))
   const { tags } = useTags()
 
   useEffect(() => {
