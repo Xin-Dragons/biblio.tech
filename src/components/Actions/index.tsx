@@ -931,7 +931,7 @@ export const Actions: FC = () => {
                 </Button>
                 <Button
                   disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
-                  onClick={lockUnlock}
+                  onClick={() => lockUnlock()}
                   fullWidth
                   variant="contained"
                   size="large"
