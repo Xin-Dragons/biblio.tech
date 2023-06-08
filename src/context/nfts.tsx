@@ -234,7 +234,11 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       if (s.includes("traits:")) {
         const num = parseInt(s.split(":")[1])
         if (num) {
-          return nft.json?.attributes?.length === num
+          return (
+            nft.json?.attributes?.filter(
+              (att) => att && att.value !== "none" && att.value !== "None" && att.value !== "NONE"
+            ).length === num
+          )
         }
       }
 
