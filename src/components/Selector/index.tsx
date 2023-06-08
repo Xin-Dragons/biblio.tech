@@ -206,6 +206,7 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
   const { nfts } = useNfts()
   const wallet = useWallet()
   const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
+  console.log({ owner })
   const isOwned = owner === wallet.publicKey?.toBase58()
   return (
     <Stack spacing={1} sx={{ backgroundColor: "#111" }} alignItems="center" padding={small ? 2 : 4}>
@@ -222,7 +223,9 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
               title={
                 isOwned
                   ? "Unlink NFT from Biblio. Your maximum linked wallets will decrease"
-                  : `This NFT is owned by ${shorten(owner)}. Connect with that wallet to unlink it`
+                  : `This NFT is owned by ${
+                      owner ? shorten(owner) : "another wallet"
+                    }. Connect with that wallet to unlink it`
               }
             >
               <span>

@@ -68,7 +68,6 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
   const publicKey = session?.publicKey
 
   async function unlinkNft(mint: string) {
-    console.log("ok")
     try {
       setLoading(true)
       async function unlink() {
