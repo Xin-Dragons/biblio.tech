@@ -1,5 +1,5 @@
 import { NftMintsByOwner } from "@hellomoon/api"
-import { Box, Card, CardContent, Chip, Stack, Typography } from "@mui/material"
+import { Box, Card, CardContent, Chip, Stack, Typography, alpha } from "@mui/material"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import type { NextPage } from "next"
@@ -17,6 +17,7 @@ import { useNfts } from "../../context/nfts"
 import { difference, flatten, sortBy } from "lodash"
 import { Nft } from "../../db"
 import { useAccess } from "../../context/access"
+import { useTheme } from "../../context/theme"
 
 type CollectionProps = {
   item: any
@@ -33,9 +34,10 @@ export type CollectionItem = {
 }
 
 export const Collection: FC<CollectionProps> = ({ item, selected }) => {
-  const { showInfo } = useUiSettings()
+  const { showInfo, lightMode } = useUiSettings()
   const basePath = useBasePath()
   const nfts = item.nfts
+  const theme = useTheme()
 
   return (
     <Link href={`${basePath}/collections/${item.id}`}>
@@ -58,8 +60,14 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
           }}
         >
           <img
-            onError={(e: any) => (e.target.src = "/books.svg")}
-            src={item.image ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image}` : "/books.svg"}
+            onError={(e: any) => (e.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg")}
+            src={
+              item.image
+                ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image}`
+                : lightMode
+                ? "/books-lightest.svg"
+                : "/books-lighter.svg"
+            }
             width="100%"
             style={{ display: "block", aspectRatio: "1 / 1" }}
           />
@@ -67,7 +75,8 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
             label={nfts.length}
             sx={{
               position: "absolute",
-              backgroundColor: "rgba(0, 0, 0, 0.8)",
+              backgroundColor: alpha(theme.palette.background.default, 0.8),
+              fontWeight: "bold",
               right: "0.5em",
               top: "0.5em",
             }}
@@ -83,8 +92,8 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              color: "white",
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              color: "fontColor",
+              backgroundColor: alpha(theme.palette.background.default, 0.8),
               opacity: 0,
               transition: "opacity 0.2s",
               cursor: "pointer",

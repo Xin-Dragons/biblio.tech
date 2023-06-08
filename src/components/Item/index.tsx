@@ -19,6 +19,7 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  alpha,
 } from "@mui/material"
 import { default as NextLink } from "next/link"
 import { findKey, uniq } from "lodash"
@@ -30,7 +31,7 @@ import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
 import { useDatabase } from "../../context/database"
 import axios from "axios"
-import { ArrowBackIosNew, ArrowForwardIos, Close, LocalFireDepartment, Paid } from "@mui/icons-material"
+import { ArrowBackIosNew, ArrowForwardIos, Close, LightMode, LocalFireDepartment, Paid } from "@mui/icons-material"
 import { useDialog } from "../../context/dialog"
 import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
@@ -61,6 +62,8 @@ import { useTheme } from "../../context/theme"
 import { useTensor } from "../../context/tensor"
 import SellIcon from "@mui/icons-material/Sell"
 import { lamportsToSol } from "../../helpers/utils"
+import ExchangeArt from "./exchange-art.svg"
+import Tensor from "./tensor.svg"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 
@@ -115,6 +118,7 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const { showInfo } = useUiSettings()
+  const theme = useTheme()
 
   function getTimeRemaining() {
     const seconds = loan.defaults - Date.now() / 1000
@@ -158,7 +162,8 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        background: "rgba(20, 20, 20, 0.8)",
+        background: alpha(theme.palette.background.default, 0.8),
+        borderRadius: "4px",
         opacity: urgent ? 1 : 0,
         transition: "opacity 0.2s",
         zIndex: 1000,
@@ -217,9 +222,14 @@ type Asset = {
 }
 
 export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
+  const { lightMode } = useUiSettings()
   if (!asset) {
     return (
-      <img src="/loading-slow.gif" width="100%" style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }} />
+      <img
+        src={lightMode ? "/books-lightest.svg" : "/books-lighter.svg"}
+        width="100%"
+        style={{ display: "block", width: "100%", aspectRatio: "1 / 1" }}
+      />
     )
   }
   const multimediaType = getMultimediaType(asset.type.split("/")[1].split(";")[0]) || "image"
@@ -298,12 +308,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
   const { isAdmin } = useAccess()
   const router = useRouter()
-  const { connection } = useConnection()
   const { collections } = useDatabase()
-  const metaplex = useMetaplex()
-  const wallet = useWallet()
-  const [gate, setgate] = useState(null)
   const basePath = useBasePath()
+  const { lightMode } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
 
   function toggleMetadataShowing() {
@@ -532,15 +539,6 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-
-                {gate && (
-                  <TableRow>
-                    <TableCell>gate</TableCell>
-                    <TableCell sx={{ textAlign: "right" }}>
-                      <CopyAddress>{gate}</CopyAddress>
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
             <Typography>{item.json?.description}</Typography>
@@ -598,9 +596,10 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
         <Card
           sx={{
             overflow: "auto",
-            backgroundColor: "#111",
-            backgroundImage: "url(/books-lighter.svg)",
+            backgroundColor: "background.default",
+            backgroundImage: lightMode ? "url(/tapestry.svg)" : "url(/tapestry-dark.svg)",
             backgroundAttachment: "fixed",
+            backgroundSize: "100px",
             height: "100vh",
             borderRadius: 0,
           }}
@@ -642,7 +641,11 @@ const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
     <Chip
       icon={type === "howRare" ? <HowRare style={{ marginLeft: "0.5em" }} /> : undefined}
       label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
-      sx={{ backgroundColor: colors[tier as keyof object], fontSize: sizes[layoutSize as keyof object] || "inherit" }}
+      sx={{
+        backgroundColor: colors[tier as keyof object],
+        fontSize: sizes[layoutSize as keyof object] || "inherit",
+        color: "white",
+      }}
       size={"small"}
     />
   )
@@ -651,7 +654,7 @@ const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
 export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const theme = useTheme()
   const { updateItem } = useDatabase()
-  const { layoutSize, showInfo, showAllWallets } = useUiSettings()
+  const { layoutSize, showInfo, showAllWallets, lightMode } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
@@ -764,10 +767,11 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   return (
     <Card
       sx={{
-        outline: selected && layoutSize !== "collage" ? `${layoutSize === "small" ? 2 : 3}px solid white` : "none",
+        outline: selected && layoutSize !== "collage" ? `${layoutSize === "small" ? 2 : 3}px solid` : "none",
         // outlineOffset: "-2px",
         cursor: "pointer",
         position: "relative",
+        color: "primary.main",
         margin: margins[layoutSize],
         userSelect: "none",
         overflow: "visible",
@@ -783,7 +787,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
       {transaction && (
         <Box
           sx={{
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            backgroundColor: alpha(theme.palette.background.default, 0.8),
             position: "absolute",
             top: 0,
             left: 0,
@@ -830,12 +834,14 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               overflow: "visible",
               width: "100%",
               padding: "0.5em",
-              background: "rgba(20, 20, 20, 0.8)",
+              background: alpha(theme.palette.background.default, 0.8),
               opacity: infoShowing || (layoutSize === "collage" && selected) ? 1 : 0,
               transition: infoShowing ? "none" : "opacity 0.2s",
+              borderTopLeftRadius: "4px",
+              borderTopRightRadius: "4px",
               "&:hover": {
                 ".plus-minus.MuiSvgIcon-root": {
-                  color: "white",
+                  color: alpha(theme.palette.text.disabled, 0.7),
                 },
               },
               // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
@@ -856,7 +862,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 className="plus-minus"
                 sx={{
                   fontSize: fontSizes[layoutSize],
-                  color: "grey",
+                  color: theme.palette.text.disabled,
                 }}
               />
             </Tooltip>
@@ -872,7 +878,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               justifyContent: "center",
               alignItems: "center",
               position: "relative",
-              backgroundImage: "url(/loading-slow.gif)",
+              backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
               backgroundSize: "100%",
               borderRadius: "4px",
             }}
@@ -885,11 +891,17 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   ? `https://img-cdn.magiceden.dev/${
                       layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"
                     }/plain/${item.json?.image}`
+                  : lightMode
+                  ? "/books-lightest.svg"
                   : "/books-lighter.svg"
               }
-              onError={(e: any) => (e.target.src = "/books-lighter.svg")}
+              onError={(e: any) => (e.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg")}
               width="100%"
-              style={{ display: "block", background: "#121212", borderRadius: infoShowing ? 0 : "4px" }}
+              style={{
+                display: "block",
+                backgroundColor: alpha(theme.palette.background.default, 0.8),
+                borderRadius: infoShowing ? 0 : "4px",
+              }}
             />
             {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
               <Stack>
@@ -907,13 +919,13 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                       }}
                       sx={{
                         position: "absolute",
-                        backgroundColor: "rgba(0, 0, 0, 0.8)",
+                        backgroundColor: alpha(theme.palette.background.default, 0.8),
                         right: "0.5em",
                         top: "0.5em",
                         fontWeight: "bold",
                         cursor: "pointer",
                         "&:hover": {
-                          backgroundColor: "rgba(0, 0, 0, 0.5)!important",
+                          backgroundColor: alpha(theme.palette.background.default, 0.5),
                         },
                       }}
                     />
@@ -925,7 +937,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   })}
                   sx={{
                     position: "absolute",
-                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    backgroundColor: alpha(theme.palette.background.default, 0.8),
                     right: "0.5em",
                     bottom: "0.5em",
                     fontWeight: "bold",
@@ -982,12 +994,36 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                     height: "40px",
                     padding: "7px",
                     borderRadius: "100%",
-                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    backgroundColor: alpha(theme.palette.background.default, 0.8),
                   }}
                 >
-                  {item.listing?.marketplace === "MEv2" && <img src="/me.png" width="100%" />}
-                  {item.listing?.marketplace === "TensorSwap" && <img src="/tensor.svg" width="100%" />}
-                  {item.listing?.marketplace === "ExchangeArt" && <img src="/exchange-art.svg" width="70%" />}
+                  {item.listing?.marketplace === "MEv2" && (
+                    <Link
+                      href={`https://magiceden.io/item-details/${item.nftMint}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <img src="/me.png" width="100%" style={{ display: "block" }} />
+                    </Link>
+                  )}
+                  {item.listing?.marketplace === "TensorSwap" && (
+                    <SvgIcon sx={{ color: "text.primary" }}>
+                      <Tensor />
+                    </SvgIcon>
+                  )}
+                  {item.listing?.marketplace === "ExchangeArt" && (
+                    <Link
+                      href={`https://exchange.art/single/${item.nftMint}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <SvgIcon sx={{ color: "text.primary", padding: "4px" }}>
+                        <ExchangeArt />
+                      </SvgIcon>
+                    </Link>
+                  )}
                 </Box>
               </Tooltip>
             )}

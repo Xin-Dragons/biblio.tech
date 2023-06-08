@@ -680,6 +680,7 @@ export const Actions: FC = () => {
                   <IconButton
                     disabled={!selected.length || statusesSelected || nonOwnedSelected}
                     onClick={toggleBulkSendOpen}
+                    color="primary"
                   >
                     <SvgIcon fontSize="small">
                       <PlaneIcon />
@@ -727,13 +728,7 @@ export const Actions: FC = () => {
                     disabled={
                       !selected.length || nonListedStatusSelected || !canList || !onlyNftsSelected || nonOwnedSelected
                     }
-                    sx={{
-                      color: allInVault ? "#111316" : "#a6e3e0",
-                      background: allInVault ? "#a6e3e0" : "default",
-                      "&:hover": {
-                        color: "#a6e3e0",
-                      },
-                    }}
+                    color="info"
                     onClick={listedSelected ? onDelist : list}
                   >
                     <Sell />
@@ -766,7 +761,7 @@ export const Actions: FC = () => {
                       nonOwnedSelected
                     }
                     sx={{
-                      color: allInVault ? "#111316" : "#a6e3e0",
+                      color: allInVault ? "text.primary" : "#a6e3e0",
                       background: allInVault ? "#a6e3e0" : "default",
                       "&:hover": {
                         color: "#a6e3e0",

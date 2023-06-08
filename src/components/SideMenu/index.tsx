@@ -60,15 +60,19 @@ const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title }) => {
         backgroundColor: "transparent",
         backgroundImage: "none !important",
         padding: "0 !important",
+        borderBottom: 1,
+        borderColor: "divider",
+        borderTop: 0,
       }}
       disableGutters
+      elevation={0}
     >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ border: 0 }}>
         <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
           {title}
         </Typography>
       </AccordionSummary>
-      <AccordionDetails>
+      <AccordionDetails sx={{ border: 0 }}>
         <Stack spacing={2}>{children}</Stack>
       </AccordionDetails>
     </Accordion>

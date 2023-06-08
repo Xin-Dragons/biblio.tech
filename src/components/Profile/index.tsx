@@ -23,6 +23,7 @@ import {
   TableFooter,
   Grid,
   Alert,
+  darken,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { useMetaplex } from "../../context/metaplex"
@@ -46,6 +47,7 @@ import { useAccess } from "../../context/access"
 import { useUmi } from "../../context/umi"
 import { addMemo } from "@metaplex-foundation/mpl-essentials"
 import { SigninMessage } from "../../utils/SigninMessge"
+import { useTheme } from "../../context/theme"
 
 type ProfileProps = {
   user: User
@@ -346,6 +348,7 @@ function Data() {
   const { isLedger } = useWallets()
   const wallet = useWallet()
   const umi = useUmi()
+  const theme = useTheme()
 
   async function getStorage() {
     const storage = await navigator.storage.estimate()
@@ -556,7 +559,7 @@ function Data() {
   }
 
   return (
-    <Box padding={4} sx={{ backgroundColor: "#111" }} width="90%">
+    <Box padding={4} sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }} width="90%">
       <Stack spacing={2}>
         <Typography>
           Biblio is fast. This is because we cache everything you view on your local device. You can use this menu to
@@ -622,14 +625,14 @@ function Data() {
             </TableRow>
           </TableBody>
         </Table>
-        <Alert severity="error">
+        <Alert severity="error" sx={{ border: 1, borderColor: "error" }}>
           <Stack spacing="2">
             <Typography variant="h5">Danger zone</Typography>
             <Table>
               <TableBody>
                 <TableRow>
                   <TableCell>
-                    <Typography variant="h6" fontWeight="bold" sx={{ color: "rgb(244, 199, 199)" }}>
+                    <Typography variant="h6" fontWeight="bold">
                       Delete all data
                     </Typography>
                     <Typography>
@@ -644,7 +647,7 @@ function Data() {
                 </TableRow>
                 <TableRow>
                   <TableCell>
-                    <Typography variant="h6" fontWeight="bold" sx={{ color: "rgb(244, 199, 199)" }}>
+                    <Typography variant="h6" fontWeight="bold">
                       Delete Biblio account
                     </Typography>
                     <Typography>
@@ -809,7 +812,7 @@ export const AddressBook = () => {
             />
           ))}
         </TableBody>
-        <TableFooter sx={{ position: "sticky", bottom: 0, background: "#121212", zIndex: 10 }}>
+        <TableFooter sx={{ position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }}>
           <TableRow>
             <TableCell colSpan={5} sx={{ textAlign: "center" }}>
               <Button variant="contained" onClick={toggleAdding}>

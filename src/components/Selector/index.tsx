@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Dialog,
   Grid,
   Stack,
@@ -13,6 +14,7 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  darken,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
@@ -21,6 +23,7 @@ import { Items } from "../Items"
 import { Nft } from "../../types/nextauth"
 import { useNfts } from "../../context/nfts"
 import { shorten } from "../../helpers/utils"
+import { useTheme } from "../../context/theme"
 
 const Nft: FC<{ item: Nft; select: Function }> = ({ item, select }) => {
   return (
@@ -56,6 +59,8 @@ export const Selector: FC<SelectorProps> = ({
   const wallet = useWallet()
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [libraryCards, setLibraryCards] = useState([])
+
+  const theme = useTheme()
 
   async function getLibraryCards() {
     try {
@@ -113,8 +118,17 @@ export const Selector: FC<SelectorProps> = ({
         <Typography>Link multiple Dandies or Biblio Passes to use Biblio with multiple wallets.</Typography>
       )}
       {nftsLoading ? (
-        <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }}>
-          <img src="/loading-slow.gif" width="100%" />
+        <Box
+          width={300}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: darken(theme.palette.background.default, 0.1),
+            padding: 5,
+          }}
+        >
+          <CircularProgress />
         </Box>
       ) : libraryCards.length ? (
         selected ? (
@@ -126,7 +140,15 @@ export const Selector: FC<SelectorProps> = ({
             onCancel={onCancel || cancel}
           />
         ) : (
-          <Box width={300} sx={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#111" }}>
+          <Box
+            width={300}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: darken(theme.palette.background.default, 0.1),
+            }}
+          >
             <Button
               onClick={toggleSelectorOpen}
               variant="contained"
@@ -205,11 +227,18 @@ type LinkedNftProps = {
 const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submit, submitLabel, onCancel, small }) => {
   const { nfts } = useNfts()
   const wallet = useWallet()
+  const theme = useTheme()
   const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
-  console.log({ owner })
+
   const isOwned = owner === wallet.publicKey?.toBase58()
+
   return (
-    <Stack spacing={1} sx={{ backgroundColor: "#111" }} alignItems="center" padding={small ? 2 : 4}>
+    <Stack
+      spacing={1}
+      sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }}
+      alignItems="center"
+      padding={small ? 2 : 4}
+    >
       <Stack direction={{ sm: "row", xs: "column" }} spacing={1} alignItems={small ? "flex-start" : "center"}>
         <Stack spacing={2} justifyContent="space-between">
           <img

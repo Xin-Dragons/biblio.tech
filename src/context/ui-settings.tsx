@@ -22,6 +22,8 @@ type UiSettingsContextProps = {
   setPayRoyalties: Function
   showAllWallets: boolean
   setShowAllWallets: Function
+  lightMode: boolean
+  setLightMode: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -37,6 +39,8 @@ const initialProps: UiSettingsContextProps = {
   setPayRoyalties: noop,
   showAllWallets: true,
   setShowAllWallets: noop,
+  lightMode: false,
+  setLightMode: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -102,6 +106,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       setShowUntagged: false,
       payRoyalties: true,
       setShowAllWallets: true,
+      lightMode: false,
     }
   ) as {
     showInfo: boolean
@@ -111,6 +116,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     showUntagged: boolean
     payRoyalties: boolean
     showAllWallets: boolean
+    lightMode: boolean
   }
 
   async function setSort(sort: string) {
@@ -133,6 +139,10 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("showAllWallets", show, true)
   }
 
+  async function setLightMode(lightMode: boolean) {
+    await updatePreferences("lightMode", lightMode, true)
+  }
+
   return (
     <UiSettingsContext.Provider
       value={{
@@ -148,6 +158,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setPayRoyalties,
         showAllWallets: Boolean(defaults?.showAllWallets),
         setShowAllWallets,
+        lightMode: Boolean(defaults?.lightMode),
+        setLightMode,
       }}
     >
       {children}

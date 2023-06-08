@@ -11,6 +11,7 @@ import {
   AppBar as MuiAppBar,
   CardHeader,
   CardContent,
+  SvgIcon,
 } from "@mui/material"
 import { Container } from "@mui/system"
 import Link from "next/link"
@@ -40,6 +41,8 @@ import { ViewMenu } from "../ViewMenu"
 import { ShowInfo } from "../ShowInfo"
 import { SolTransfer } from "../SolTransfer"
 import { Collage } from "../Collage"
+import { LightDarkMode } from "../LightDarkMode"
+import Logo from "../AppBar/logo.svg"
 
 type LayoutProps = {
   nfts: Nft[] | CollectionItem[]
@@ -53,6 +56,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
   const [solTransferOpen, setSolTransferOpen] = useState(false)
+  const { lightMode } = useUiSettings()
 
   function toggleMenu() {
     setMenuOpen(!menuOpen)
@@ -81,7 +85,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
       <Stack height="100vh" width="100vw">
         <AppBar showMenu={showMenu} toggleMenu={toggleMenu} toggleSolTransferOpen={toggleSolTransferOpen} />
         <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
-          <Stack direction="row" spacing={2} sx={{ height: "100%", overflowY: "auto" }}>
+          <Stack direction="row" sx={{ height: "100%", overflowY: "auto" }}>
             {showMenu && (
               <Sidebar>
                 <SideMenu />
@@ -94,9 +98,9 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
                   width: "100%",
                   overflowY: "auto",
                   flexGrow: 1,
-                  backgroundImage: "url(/books-lighter.svg)",
-                  backgroundSize: "200px",
-                  paddingLeft: !showMenu ? 1 : 0,
+                  backgroundImage: lightMode ? "url(/tapestry.svg)" : "url(/tapestry-dark.svg)",
+                  backgroundSize: "100px",
+                  paddingLeft: !showMenu ? 1 : 2,
                 }}
               >
                 {wallet.connected || router.query.publicKey ? (
@@ -135,15 +139,13 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
       {!showMenu && (
         <Dialog open={menuOpen} onClose={toggleMenu} fullScreen>
           <Card sx={{ overflowY: "auto" }}>
-            <MuiAppBar elevation={0} position="sticky" sx={{ height: "75px" }}>
+            <MuiAppBar elevation={0} position="sticky" sx={{ height: "75px" }} color="default">
               <Container sx={{ height: "100%" }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" height="100%">
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <ViewMenu />
-                    <ShowInfo />
                   </Stack>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <Collage />
                     <UserMenu toggleSolTransferOpen={toggleSolTransferOpen} />
                     <IconButton onClick={toggleMenu}>
                       <Close />
@@ -153,8 +155,26 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
               </Container>
             </MuiAppBar>
             <Container>
+              <Stack direction="row" justifyContent="space-between">
+                <Stack direction="row">
+                  <LightDarkMode />
+                  <ShowInfo />
+                </Stack>
+                <Collage />
+              </Stack>
               <Stack spacing={2}>
-                <img src="/biblio-logo.png" style={{ color: "red", margin: "0 auto" }} width="40%" />
+                <SvgIcon
+                  fontSize="large"
+                  sx={{
+                    width: "50%",
+                    height: "20%",
+                    cursor: "pointer",
+                    textAlign: "center",
+                    margin: "-20px auto 0 auto",
+                  }}
+                >
+                  <Logo fontSize="large" />
+                </SvgIcon>
                 <Typography variant="h6" textTransform="uppercase" fontWeight="bold">
                   Wallet search
                 </Typography>

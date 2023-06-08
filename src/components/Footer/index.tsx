@@ -118,8 +118,9 @@ const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean;
   return (
     <Box
       sx={{
-        borderRight: right ? "none" : "1px solid #333",
-        borderLeft: right ? "1px solid #333" : "none",
+        borderRight: right ? 0 : 1,
+        borderLeft: right ? 1 : 0,
+        borderColor: "divider",
         paddingLeft: first ? 0 : 2,
         paddingRight: right ? (last ? 0 : 2) : 2,
         verticalAlign: "middle",
@@ -223,7 +224,7 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
   const hideWeb = useMediaQuery("(max-width:1100px)")
 
   return (
-    <Box sx={{ borderTop: "1px solid #333" }} component="footer" color="grey">
+    <Box sx={{ borderTop: 1, borderColor: "divider" }} component="footer" color="grey">
       <Container maxWidth={false}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" height="34px">
           {isMobile ? (

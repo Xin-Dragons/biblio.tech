@@ -119,6 +119,7 @@ export interface Preferences {
   wallet?: string;
   payRoyalties: boolean;
   showAllWallets: boolean;
+  lightMode: boolean;
 }
 
 export class DB extends Dexie {

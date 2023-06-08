@@ -33,7 +33,7 @@ export const ActionBar: FC<ActionBarProps> = () => {
   const filtersShowing = useMediaQuery("(min-width:1300px)")
 
   return (
-    <Container maxWidth={false} sx={{ paddingLeft: "0 !important" }}>
+    <Container maxWidth={false} sx={{ borderBottom: 1, borderColor: "divider", paddingLeft: `0.75em !important` }}>
       <Stack direction="column">
         <Stack
           direction="row"

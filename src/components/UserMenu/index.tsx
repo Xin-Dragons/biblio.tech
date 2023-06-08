@@ -11,6 +11,7 @@ import {
   MenuItem,
   MenuList,
   Switch,
+  darken,
 } from "@mui/material"
 import { FC, MouseEvent, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
@@ -30,6 +31,7 @@ import { useRouter } from "next/router"
 import { useWallets } from "../../context/wallets"
 import { useAccess } from "../../context/access"
 import { shorten } from "../../helpers/utils"
+import { useTheme } from "../../context/theme"
 
 type UserMenuProps = {
   large?: boolean
@@ -45,6 +47,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
   const open = Boolean(anchorEl)
   const wallet = useWallet()
   const { isLedger, setIsLedger } = useWallets()
+  const theme = useTheme()
   const umi = useUmi()
   const router = useRouter()
 
@@ -110,7 +113,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
         }}
         sx={{
           "& .MuiMenuItem-root: hover": {
-            backgroundColor: "#1f1f1f",
+            backgroundColor: darken(theme.palette.background.default, 0.1),
           },
         }}
       >

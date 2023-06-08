@@ -1,4 +1,13 @@
-import { Box, Container, IconButton, AppBar as MuiAppBar, Stack, Typography, useMediaQuery } from "@mui/material"
+import {
+  Box,
+  Container,
+  IconButton,
+  AppBar as MuiAppBar,
+  Stack,
+  SvgIcon,
+  Typography,
+  useMediaQuery,
+} from "@mui/material"
 import Link from "next/link"
 
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded"
@@ -18,6 +27,8 @@ import { ShowInfo } from "../ShowInfo"
 import { Collage } from "../Collage"
 import { useUiSettings } from "../../context/ui-settings"
 import { shorten } from "../../helpers/utils"
+import { LightDarkMode } from "../LightDarkMode"
+import Logo from "./logo.svg"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
   const { isAdmin, publicKey } = useAccess()
@@ -96,7 +107,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
   const { tag, updateTag } = useTags()
 
   return (
-    <MuiAppBar sx={{ background: "#111316", borderBottom: "1px solid #333" }} position="sticky" elevation={0}>
+    <MuiAppBar sx={{ borderBottom: 1, borderColor: "divider" }} position="sticky" elevation={0} color="default">
       <Container maxWidth={false}>
         <Stack
           direction="row"
@@ -107,7 +118,9 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           sx={{ overflow: "auto" }}
         >
           <Link href="/">
-            <img src="/logo-text-white.svg" width={75} height={75} style={{ cursor: "pointer" }} />
+            <SvgIcon fontSize="large" sx={{ width: "75px", height: "75px", cursor: "pointer" }}>
+              <Logo fontSize="large" />
+            </SvgIcon>
           </Link>
           {showMenu && <WalletSearch />}
 
@@ -118,6 +131,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           {showMenu ? (
             <Stack direction="row" spacing={1} alignItems="center">
               <Collage />
+              <LightDarkMode />
               <ShowInfo />
               <ViewMenu />
               <UserMenu toggleSolTransferOpen={toggleSolTransferOpen} />

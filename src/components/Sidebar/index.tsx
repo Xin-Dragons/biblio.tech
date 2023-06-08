@@ -1,7 +1,5 @@
-import { Box, IconButton } from "@mui/material"
-import { FC, ReactNode, useEffect, useState } from "react"
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew"
-import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos"
+import { Box } from "@mui/material"
+import { FC, ReactNode } from "react"
 
 type SidebarProps = {
   children: ReactNode
@@ -13,7 +11,8 @@ export const Sidebar: FC<SidebarProps> = ({ children }) => {
       sx={{
         position: "relative",
         width: "220px",
-        borderRight: "1px solid #333",
+        borderRight: 1,
+        borderColor: "divider",
       }}
     >
       <Box

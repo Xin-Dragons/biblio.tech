@@ -5,29 +5,29 @@ import { useFilters } from "../../context/filters"
 import { useNfts } from "../../context/nfts"
 import { FC } from "react"
 
-const StyledTextField = styled(TextField)({
-  "& label": {
-    color: "#6cbec9",
-  },
-  "& label.Mui-focused": {
-    color: "#6cbec9",
-  },
-  "& .MuiInput-underline:after": {
-    borderBottomColor: "#6cbec9",
-  },
-  "& .MuiOutlinedInput-root": {
-    "& fieldset": {
-      borderColor: "#6cbec9",
-    },
-    "&:hover fieldset": {
-      borderColor: "#6cbec9",
-      borderWidth: 2,
-    },
-    "&.Mui-focused fieldset": {
-      borderColor: "#6cbec9",
-    },
-  },
-})
+// const StyledTextField = styled(TextField)(theme =>{
+//   "& label": {
+//     color: theme.palette.primary.main,
+//   },
+//   "& label.Mui-focused": {
+//     color: theme.palette.primary.main,
+//   },
+//   "& .MuiInput-underline:after": {
+//     borderBottomColor: theme.palette.primary.main,
+//   },
+//   "& .MuiOutlinedInput-root": {
+//     "& fieldset": {
+//       borderColor: theme.palette.primary.main,
+//     },
+//     "&:hover fieldset": {
+//       borderColor: theme.palette.primary.main,
+//       borderWidth: 2,
+//     },
+//     "&.Mui-focused fieldset": {
+//       borderColor: theme.palette.primary.main,
+//     },
+//   },
+// })
 
 type SearchProps = {
   large?: boolean
@@ -37,7 +37,7 @@ export const Search: FC<SearchProps> = ({ large }) => {
   const { search, setSearch } = useFilters()
 
   return (
-    <StyledTextField
+    <TextField
       label="Omnisearch"
       color="primary"
       value={search}
