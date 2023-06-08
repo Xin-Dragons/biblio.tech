@@ -111,6 +111,7 @@ export const Actions: FC = () => {
 
   const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
   const statusesSelected = selectedItems.some((item) => item.status)
+  const nonInVaultStatusesSelected = selectedItems.some((item) => item.status && item.status !== "inVault")
   const nonListedStatusSelected = selectedItems.some((item) => item.status && item.status !== "listed")
   const allInVault = selectedItems.every((item: any) => item.status === "inVault")
   const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
@@ -704,7 +705,7 @@ export const Actions: FC = () => {
                 title={
                   nonOwnedSelected
                     ? "Some selected items are owned by a linked wallet"
-                    : statusesSelected
+                    : nonInVaultStatusesSelected
                     ? "Selection contains items that cannot be frozen/thawed"
                     : onlyNftsSelected
                     ? canFreezeThaw
@@ -718,7 +719,11 @@ export const Actions: FC = () => {
                 <span>
                   <IconButton
                     disabled={
-                      !selected.length || !canFreezeThaw || !onlyNftsSelected || statusesSelected || nonOwnedSelected
+                      !selected.length ||
+                      !canFreezeThaw ||
+                      !onlyNftsSelected ||
+                      nonInVaultStatusesSelected ||
+                      nonOwnedSelected
                     }
                     sx={{
                       color: allInVault ? "#111316" : "#a6e3e0",

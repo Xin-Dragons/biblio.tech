@@ -26,6 +26,8 @@ async function getListings(owner: string) {
     isListed: true
   }))
 
+  console.log(result.data)
+
   return result.data
 }
 

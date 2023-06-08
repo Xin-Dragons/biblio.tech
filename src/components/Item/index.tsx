@@ -968,7 +968,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 {statusTitles[item.status as keyof object]}
               </CornerRibbon>
             )}
-            {item.status === "listed" && ["MEv2", "TensorSwap"].includes(item.listing?.marketplace!) && (
+            {item.status === "listed" && ["MEv2", "TensorSwap", "ExchangeArt"].includes(item.listing?.marketplace!) && (
               <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
                 <Box
                   sx={{
@@ -987,6 +987,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 >
                   {item.listing?.marketplace === "MEv2" && <img src="/me.png" width="100%" />}
                   {item.listing?.marketplace === "TensorSwap" && <img src="/tensor.svg" width="100%" />}
+                  {item.listing?.marketplace === "ExchangeArt" && <img src="/exchange-art.svg" width="70%" />}
                 </Box>
               </Tooltip>
             )}
