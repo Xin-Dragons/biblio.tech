@@ -67,8 +67,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   const defaults = useLiveQuery(() => db.preferences.get("defaults"), [])
 
-  console.log({ uiSettings, defaults })
-
   async function updatePreferences(key: string, value: any, isDefault = false) {
     let page: string
     let { tag, collectionId, filter } = router.query
@@ -77,8 +75,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     } else {
       page = (filter as string) || (tag as string) || (collectionId as string)
     }
-
-    console.log("updateing", page)
 
     await db.transaction("rw", db.preferences, async () => {
       const item = await db.preferences.get(page)

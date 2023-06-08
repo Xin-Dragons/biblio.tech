@@ -72,7 +72,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   const nftsFromDb = useLiveQuery(
     () => {
-      console.log(publicKeys)
       const query =
         showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
@@ -231,6 +230,14 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       const name = nft.json?.name || nft.metadata.name || ""
       const symbol = nft.json?.symbol || nft.metadata.symbol || ""
       const description = nft.json?.description || ""
+
+      if (s.includes("traits:")) {
+        const num = parseInt(s.split(":")[1])
+        if (num) {
+          return nft.json?.attributes?.length === num
+        }
+      }
+
       const values = (nft.json?.attributes || []).map((att: any) => `${att.value || ""}`.toLowerCase())
       return (
         nft.nftMint === search ||
