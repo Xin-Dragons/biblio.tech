@@ -13,10 +13,15 @@ import {
   toWeb3JsPublicKey,
 } from "@metaplex-foundation/umi-web3js-adapters"
 import { PublicKey } from "@solana/web3.js"
-import { findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
-import { Instruction, publicKey, transactionBuilder, unwrapSome } from "@metaplex-foundation/umi"
+import {
+  createAssociatedToken,
+  findAssociatedTokenPda,
+  initializeMint,
+  initializeToken,
+} from "@metaplex-foundation/mpl-essentials"
+import { Instruction, base58PublicKey, publicKey, transactionBuilder, unwrapSome } from "@metaplex-foundation/umi"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { flatten, noop } from "lodash"
+import { flatten, groupBy, noop } from "lodash"
 import { toast } from "react-hot-toast"
 import { useTransactionStatus } from "./transactions"
 import { useDatabase } from "./database"
@@ -46,7 +51,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
       await Promise.all(
         mints.map(async (mint) => {
           const nft = nfts.find((n) => n.nftMint === mint) as Nft
-          console.log(nft)
           if (nft.listing?.marketplace === "TensorSwap") {
             const data = await swapSdk.delist({
               owner: wallet.publicKey!,
@@ -71,34 +75,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
               instructions,
               mint,
             }
-          } else if (nft.listing?.marketplace === "MEv2") {
-            toast.error("Magic Eden delisting not yet available")
-            // const { data } = await axios.post("/api/get-me-delist-txn", {
-            //   mint,
-            //   seller: wallet.publicKey?.toBase58(),
-            //   priceLamports: `${nft.listing.price}`,
-            // })
-
-            // const transactions = data.txs.map((t) =>
-            //   t.txV0
-            //     ? fromWeb3JsTransaction(VersionedTransaction.deserialize(t.txV0.data))
-            //     : fromWeb3JsLegacyTransaction(Transaction.from(t.tx.data))
-            // )
-
-            // // const instructions = flatten(transactions.map((t) => t.instructions)).map((instruction) => {
-            // //   return transactionBuilder().add({
-            // //     instruction: fromWeb3JsInstruction(instruction),
-            // //     bytesCreatedOnChain: 0,
-            // //     signers: [createSignerFromWalletAdapter(wallet)],
-            // //   })
-            // // })
-
-            // return {
-            //   transactions,
-            //   mint,
-            // }
           } else {
-            return null
+            toast.error("Marketplace action not supported yet!")
           }
         })
       )
@@ -292,15 +270,49 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   async function delist(mints: string[]) {
     try {
-      const instructionGroups = (await getDelistInstructions(mints)) as InstructionSet[]
-      // const chunks = getUmiChunks(umi, instructionGroups)
+      const byMarketplace = groupBy(mints, (mint) => {
+        const nft = nfts.find((nft) => nft.nftMint === mint) as Nft
+        return nft.listing?.marketplace
+      })
 
-      const txns = await buildTransactions(
-        umi,
-        instructionGroups.map((group) => [group])
-      )
+      let txns: any[] = []
 
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+      if (byMarketplace.TensorSwap) {
+        const instructionGroups = (await getDelistInstructions(byMarketplace.TensorSwap)) as InstructionSet[]
+        // const chunks = getUmiChunks(umi, instructionGroups)
+
+        const tensorTxns = await buildTransactions(
+          umi,
+          instructionGroups.map((group) => [group])
+        )
+
+        txns = [...txns, ...tensorTxns]
+      }
+
+      if (byMarketplace.MEv2) {
+        const meTxns = await Promise.all(
+          byMarketplace.MEv2.map(async (mint) => {
+            const nft = nfts.find((n) => n.nftMint === mint)
+            const { data } = await axios.post("/api/get-me-delist-txn", {
+              tokenMint: mint,
+              seller: wallet.publicKey?.toBase58(),
+            })
+
+            const txn = fromWeb3JsTransaction(VersionedTransaction.deserialize(data.v0.txSigned.data))
+
+            return {
+              txn: txn,
+              mints: [mint],
+            }
+          })
+        )
+
+        txns = [...txns, ...meTxns]
+      }
+
+      console.log(flatten(txns.map((t) => t.txn)))
+
+      const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
       const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
         txns.map((txn) => txn.mints),
@@ -310,6 +322,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
       notifyStatus(errs, successes, "delist", "delisted")
     } catch (err: any) {
+      console.log(err)
       toast.error(err.message || "Error delisting")
     }
   }
