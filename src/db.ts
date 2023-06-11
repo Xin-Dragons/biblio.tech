@@ -31,6 +31,7 @@ export interface Nft extends DigitalAsset {
   firstVerifiedCreator?: string
   collectionIdentifier?: string
   price?: number
+  value?: number
 }
 
 export interface Collection {

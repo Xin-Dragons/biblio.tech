@@ -31,12 +31,12 @@ import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-w
 import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
 import axios, { AxiosError } from "axios"
 
-export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop })
+export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop, buy: noop })
 
 export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const umi = useUmi()
   const { sendSignedTransactions } = useTransactionStatus()
-  const { nftsDelisted, nftsListed, nftsSold } = useDatabase()
+  const { nftsDelisted, nftsListed, nftsSold, nftsBought } = useDatabase()
   const wallet = useWallet()
   const { connection } = useConnection()
   const provider = new AnchorProvider(connection, wallet as any, {
@@ -127,6 +127,67 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     type: "trade" | "token"
     royalties: boolean
     slug: string
+  }
+
+  type BuyItem = {
+    maxPrice: number
+    mint: string
+    owner: string
+    royalties: boolean
+    marketplace: string
+  }
+
+  async function getBuyInstructions(items: BuyItem[]) {
+    const blockhash = await umi.rpc.getLatestBlockhash()
+    return flatten(
+      await Promise.all(
+        items.map(async (item) => {
+          if (item.marketplace === "TensorSwap") {
+            const { data } = await axios.post("/api/get-tensor-buy-txn", {
+              buyer: base58PublicKey(umi.identity.publicKey),
+              maxPrice: `${item.maxPrice}`,
+              mint: item.mint,
+              owner: item.owner,
+              royalties: item.royalties,
+            })
+
+            const transactions = data.txs.map((t: any) => {
+              if (t.txV0) {
+                const txn = VersionedTransaction.deserialize(t.txV0.data)
+                txn.message.recentBlockhash = blockhash.blockhash
+                return fromWeb3JsTransaction(txn)
+              } else {
+                const txn = Transaction.from(t.tx.data)
+                txn.recentBlockhash = blockhash.blockhash
+                return fromWeb3JsLegacyTransaction(txn)
+              }
+            })
+
+            return transactions.map((transaction: any) => {
+              return {
+                transaction,
+                mint: item.mint,
+              }
+            })
+          } else if (item.marketplace === "MEv2") {
+            const { data } = await axios.post("/api/get-me-buy-txn", {
+              buyer: base58PublicKey(umi.identity.publicKey),
+              seller: item.owner,
+              tokenMint: item.mint,
+              royalties: item.royalties,
+            })
+            const transaction = fromWeb3JsTransaction(VersionedTransaction.deserialize(data.v0.txSigned.data))
+
+            return {
+              transaction,
+              mint: item.mint,
+            }
+          } else {
+            throw new Error("Marketplace not supported")
+          }
+        })
+      )
+    )
   }
 
   async function getSellInstructions(items: SellItem[]) {
@@ -268,6 +329,20 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
   }
 
+  async function buy(items: BuyItem[]) {
+    const txns = await getBuyInstructions(items)
+
+    const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
+    const { errs, successes } = await sendSignedTransactions(
+      signedTransactions,
+      txns.map((txn) => [txn.mint]),
+      "buy",
+      nftsBought
+    )
+
+    notifyStatus(errs, successes, "buy", "bought")
+  }
+
   async function delist(mints: string[]) {
     try {
       const byMarketplace = groupBy(mints, (mint) => {
@@ -292,7 +367,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
       if (byMarketplace.MEv2) {
         const meTxns = await Promise.all(
           byMarketplace.MEv2.map(async (mint) => {
-            const nft = nfts.find((n) => n.nftMint === mint)
             const { data } = await axios.post("/api/get-me-delist-txn", {
               tokenMint: mint,
               seller: wallet.publicKey?.toBase58(),
@@ -310,8 +384,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         txns = [...txns, ...meTxns]
       }
 
-      console.log(flatten(txns.map((t) => t.txn)))
-
       const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
       const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
@@ -327,24 +399,61 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
   }
 
-  async function list(items: ListingItem[]) {
+  async function list(items: ListingItem[], marketplace = "tensor") {
     const listPromise = Promise.resolve().then(async () => {
-      const instructionGroups = await getListInstructions(items)
-      // const chunks = getUmiChunks(umi, instructionGroups)
+      if (marketplace === "tensor") {
+        const instructionGroups = await getListInstructions(items)
+        // const chunks = getUmiChunks(umi, instructionGroups)
 
-      const txns = await buildTransactions(
-        umi,
-        instructionGroups.map((group) => [group])
-      )
+        const txns = await buildTransactions(
+          umi,
+          instructionGroups.map((group) => [group])
+        )
 
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-      const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
-        txns.map((txn) => txn.mints),
-        "list",
-        nftsListed
-      )
-      notifyStatus(errs, successes, "list", "listed")
+        const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+        const { errs, successes } = await sendSignedTransactions(
+          signedTransactions,
+          txns.map((txn) => txn.mints),
+          "list",
+          (mints: string[]) => nftsListed(mints, "TensorSwap")
+        )
+        notifyStatus(errs, successes, "list", "listed")
+      } else if (marketplace === "me") {
+        const txns = await Promise.all(
+          items.map(async (item) => {
+            const { data } = await axios.post("/api/get-me-list-txn", {
+              tokenMint: item.mint,
+              price: item.price,
+              seller: wallet.publicKey?.toBase58(),
+              tokenAccount: base58PublicKey(
+                findAssociatedTokenPda(umi, {
+                  mint: publicKey(item.mint),
+                  owner: umi.identity.publicKey,
+                })
+              ),
+            })
+
+            const txn = fromWeb3JsTransaction(VersionedTransaction.deserialize(data.v0.txSigned.data))
+
+            return {
+              txn: txn,
+              mints: [item.mint],
+            }
+          })
+        )
+
+        const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
+        const { errs, successes } = await sendSignedTransactions(
+          signedTransactions,
+          txns.map((txn) => txn.mints),
+          "list",
+          (mints: string[]) => nftsListed(mints, "MEv2")
+        )
+
+        notifyStatus(errs, successes, "list", "listed")
+      } else {
+        throw new Error("Marketplace not supported")
+      }
     })
 
     toast.promise(listPromise, {
@@ -356,7 +465,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     await listPromise
   }
 
-  return <TensorContext.Provider value={{ delist, list, sellNow }}>{children}</TensorContext.Provider>
+  return <TensorContext.Provider value={{ delist, list, sellNow, buy }}>{children}</TensorContext.Provider>
 }
 
 export const useTensor = () => {

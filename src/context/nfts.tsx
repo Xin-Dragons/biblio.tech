@@ -16,6 +16,7 @@ type NftsContextProps = {
   filtered: any[]
   loading: boolean
   rarity: Rarity[]
+  allNfts: any[]
 }
 
 const initial = {
@@ -25,6 +26,7 @@ const initial = {
   filtered: [],
   loading: false,
   rarity: [],
+  allNfts: [],
 }
 
 export const NftsContext = createContext<NftsContextProps>(initial)
@@ -69,6 +71,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     [],
     []
   )
+
+  const allNfts = useLiveQuery(() => db.nfts.toArray(), [], [])
 
   const nftsFromDb = useLiveQuery(
     () => {
@@ -335,6 +339,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         filtered,
         loading: !nfts,
         rarity,
+        allNfts,
       }}
     >
       {children}

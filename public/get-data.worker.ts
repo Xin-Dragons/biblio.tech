@@ -341,17 +341,10 @@ self.addEventListener("message", async event => {
 
     const fungiblesWithBalances = await Promise.all(fungibles.map(async item => {
       try {
-        if (item.nftMint === "souk5R3HCYiJZL3Y2mTS4i5oMLbfchCfF7D3qwMF4mn") {
-          console.log("OK HI THEN")
-        }
-
         const ata = findAssociatedTokenPda(umi, {
           mint: publicKey(item.nftMint),
           owner: publicKey(owner)
         })
-        if (item.nftMint === "souk5R3HCYiJZL3Y2mTS4i5oMLbfchCfF7D3qwMF4mn") {
-          console.log({ ata })
-        }
         const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata))
         const price = prices.find(p => p.mints === item.nftMint);
         return {
@@ -363,12 +356,9 @@ self.addEventListener("message", async event => {
           price: price ? price.price / Math.pow(10, 6) : null
         }
       } catch (err) {
-        console.log(err, "FUUFUF")
         return item
       }
     }))
-
-    console.log(fungiblesWithBalances.find(n => n.nftMint === 'souk5R3HCYiJZL3Y2mTS4i5oMLbfchCfF7D3qwMF4mn'))
 
     const editionsWithNumbers = await Promise.all((types[ExtendedTokenStandard.NonFungibleEdition] || []).map(async item => {
       if (item.edition?.isOriginal) {

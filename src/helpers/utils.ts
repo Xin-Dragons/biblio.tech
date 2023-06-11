@@ -16,7 +16,7 @@ export const lamportsToSol = (lamports: string | number | null | BN) => {
   try {
     const input = (typeof lamports === "string") ? parseInt(lamports) : lamports;
     const num = new BN(input || 0).toNumber() / LAMPORTS_PER_SOL;
-    return num.toLocaleString();
+    return num.toLocaleString(undefined, { minimumSignificantDigits: 1});
   } catch {
     return 0
   }

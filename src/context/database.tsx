@@ -5,6 +5,7 @@ import { useAccess } from "./access"
 
 import { merge, noop, partition, uniqBy } from "lodash"
 import { useUiSettings } from "./ui-settings"
+import { useWallet } from "@solana/wallet-adapter-react"
 
 export const MS_PER_DAY = 8.64e7
 
@@ -31,6 +32,7 @@ type DatabaseContextProps = {
   nftsDelisted: Function
   nftsListed: Function
   nftsSold: Function
+  nftsBought: Function
 }
 
 const initial = {
@@ -54,6 +56,7 @@ const initial = {
   nftsDelisted: noop,
   nftsListed: noop,
   nftsSold: noop,
+  nftsBought: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -68,6 +71,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const [syncingData, setSyncingData] = useState(false)
   const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const wallet = useWallet()
   const nfts = useLiveQuery(
     () =>
       (showAllWallets && isAdmin
@@ -610,12 +614,12 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     )
   }
 
-  async function nftsListed(items: Nft[]) {
+  async function nftsListed(items: Nft[], marketplace: string) {
     await db.nfts.bulkUpdate(
       items.map((item) => {
         const changes = {
           listing: {
-            marketplace: "TensorSwap",
+            marketplace,
             nftMint: item.nftMint,
             price: item.listing?.price as number,
           },
@@ -634,6 +638,21 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       items.map((item) => {
         const changes = {
           owner: null,
+        }
+        return {
+          key: item.nftMint,
+          changes,
+        }
+      })
+    )
+  }
+
+  async function nftsBought(items: Nft[]) {
+    await db.nfts.bulkUpdate(
+      items.map((item) => {
+        const changes = {
+          owner: wallet.publicKey?.toBase58(),
+          listing: null,
         }
         return {
           key: item.nftMint,
@@ -666,6 +685,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         nftsDelisted,
         nftsListed,
         nftsSold,
+        nftsBought,
       }}
     >
       {children}

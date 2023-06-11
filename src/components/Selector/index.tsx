@@ -225,10 +225,12 @@ type LinkedNftProps = {
 }
 
 const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submit, submitLabel, onCancel, small }) => {
-  const { nfts } = useNfts()
+  const { allNfts: nfts } = useNfts()
   const wallet = useWallet()
   const theme = useTheme()
   const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
+
+  console.log(owner, wallet.publicKey?.toBase58())
 
   const isOwned = owner === wallet.publicKey?.toBase58()
 

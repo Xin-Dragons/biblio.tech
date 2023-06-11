@@ -24,6 +24,8 @@ import {
   Grid,
   Alert,
   darken,
+  FormHelperText,
+  SvgIcon,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { useMetaplex } from "../../context/metaplex"
@@ -48,6 +50,8 @@ import { useUmi } from "../../context/umi"
 import { addMemo } from "@metaplex-foundation/mpl-essentials"
 import { SigninMessage } from "../../utils/SigninMessge"
 import { useTheme } from "../../context/theme"
+import { useUiSettings } from "../../context/ui-settings"
+import Crown from "../Listing/crown.svg"
 
 type ProfileProps = {
   user: User
@@ -167,6 +171,7 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
             <Tab value="wallets" label="Linked Wallets" />
             <Tab value="address-book" label="Address book" />
             <Tab value="data" label="data" />
+            <Tab value="settings" label="Settings" />
           </Tabs>
           {activeTab === "access" && (
             <>
@@ -180,6 +185,8 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
             </>
           )}
 
+          {activeTab === "settings" && <Settings />}
+
           {activeTab === "wallets" && <LinkedWallets />}
 
           {activeTab === "data" && <Data />}
@@ -187,6 +194,40 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
         </Stack>
       </CardContent>
     </Card>
+  )
+}
+
+const Settings: FC = () => {
+  const { payRoyalties, setPayRoyalties } = useUiSettings()
+  return (
+    <Table>
+      <TableBody>
+        <TableRow>
+          <TableCell>
+            <Stack>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Typography variant="h6" color="primary" textTransform="uppercase" fontWeight="bold">
+                  Pay royalties
+                </Typography>
+                <SvgIcon
+                  // @ts-ignore
+                  color="gold"
+                >
+                  <Crown />
+                </SvgIcon>
+              </Stack>
+              <Typography>Pay full royalties when buying or instant-selling</Typography>
+              <FormHelperText>
+                You can still choose whether to pay royalties for each individual transaction
+              </FormHelperText>
+            </Stack>
+          </TableCell>
+          <TableCell sx={{ textAlign: "right" }}>
+            <Switch checked={payRoyalties} onChange={(e) => setPayRoyalties(e.target.checked)} />
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
   )
 }
 

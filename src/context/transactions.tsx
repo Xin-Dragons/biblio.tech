@@ -51,7 +51,6 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     recipient = ""
   ) {
     const blockhash = await umi.rpc.getLatestBlockhash()
-    console.log({ blockhash })
     let errs: string[] = []
     let successes: string[] = []
     await Promise.all(
@@ -60,14 +59,13 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         try {
           setTransactionInProgress(mints, type)
 
-          const signature = await umi.rpc.sendTransaction(transaction)
+          const signature = await umi.rpc.sendTransaction(transaction, { skipPreflight: true })
           const confirmed = await umi.rpc.confirmTransaction(signature, {
             strategy: {
               type: "blockhash",
               ...blockhash,
             },
           })
-          console.log(confirmed.value)
           if (confirmed.value.err) {
             setTransactionErrors(mints)
             await sleep(2000)

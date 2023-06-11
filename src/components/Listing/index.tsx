@@ -19,8 +19,11 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
+  darken,
 } from "@mui/material"
 import { FC, useEffect, useRef, useState } from "react"
 import { Nft } from "../../db"
@@ -42,6 +45,7 @@ import Crown from "./crown.svg"
 import Solana from "./solana.svg"
 import { useUiSettings } from "../../context/ui-settings"
 import { useSelection } from "../../context/selection"
+import { useTheme } from "../../context/theme"
 
 type ListingProps = {
   items: Nft[]
@@ -77,6 +81,18 @@ type ListingPrice = {
   price: string
 }
 
+type MeFloorPrice = {
+  symbol: string
+  floorPrice: number
+  listedCount: number
+  volumeAll: number
+  collectionId: string
+}
+
+type MeFloorPricesByCollection = {
+  [key: string]: MeFloorPrice
+}
+
 export const Listing: FC<ListingProps> = ({ onClose }) => {
   const { selected, setSelected } = useSelection()
   const { nfts, filtered } = useNfts()
@@ -85,12 +101,15 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(false)
   const { payRoyalties, setPayRoyalties } = useUiSettings()
   const [isActive, setIsActive] = useState(false)
+  const [marketplace, setMarketplace] = useState("me")
 
   const items = selected.map((nftMint) => nfts.find((n) => n.nftMint === nftMint)).filter(Boolean)
   const [pools, setPools] = useState<PoolsByCollection>({})
   const [floorPrices, setFloorPrices] = useState<FloorPricesByCollection>({})
   const [allRoyalties, setAllRoyalties] = useState<any[]>([])
   const [totalSellNow, setTotalSellNow] = useState(new BN(0))
+  const [meFloorPrices, setMeFloorPrices] = useState<MeFloorPricesByCollection>({})
+  const theme = useTheme()
   const [listingPrice, setListingPrice] = useState<ListingPrice[]>(
     selected.map((nftMint) => {
       return {
@@ -126,17 +145,35 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   async function getFloorPrices() {
     try {
       setLoading(true)
-      const { data } = await axios.post("/api/get-tensor-fp", {
-        mints: items.map((item) => {
-          return {
-            mint: item.nftMint,
-            collectionId: item.collectionId || item.firstVerifiedCreator,
-          }
-        }),
-      })
+      const [tensor, me] = await Promise.all([
+        Promise.resolve().then(async () => {
+          const { data } = await axios.post("/api/get-tensor-fp", {
+            mints: items.map((item) => {
+              return {
+                mint: item.nftMint,
+                collectionId: item.collectionId || item.firstVerifiedCreator,
+              }
+            }),
+          })
 
-      setPools(data.pools)
-      setFloorPrices(data.floorPrices)
+          return data
+        }),
+        Promise.resolve().then(async () => {
+          const { data } = await axios.post("/api/get-me-fp", {
+            mints: items.map((item) => {
+              return {
+                mint: item.nftMint,
+                collectionId: item.collectionId || item.firstVerifiedCreator,
+              }
+            }),
+          })
+          return data
+        }),
+      ])
+
+      setPools(tensor.pools)
+      setFloorPrices(tensor.floorPrices)
+      setMeFloorPrices(me)
     } catch (err: any) {
       if (err instanceof AxiosError) {
         const message = err.response?.data
@@ -154,7 +191,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   useEffect(() => {
     const updates = items.map((nft) => {
       const identifier = nft.collectionId || nft.firstVerifiedCreator
-      const fp = ((floorPrices[identifier as keyof object] || {}).floorPrice || 0) / LAMPORTS_PER_SOL
+      const fps = marketplace === "tensor" ? floorPrices : meFloorPrices
+      const fp = ((fps[identifier as keyof object] || {}).floorPrice || 0) / LAMPORTS_PER_SOL
       const item = listingPrice.find((l) => l.nftMint === nft.nftMint)
 
       if (!item || !item.price || Number(item.price) < fp) {
@@ -167,7 +205,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
       return item
     })
     setListingPrice(updates)
-  }, [selected])
+  }, [selected, floorPrices, meFloorPrices])
 
   function updateListingPrice(mint: string, price: string) {
     setListingPrice((prevState) => {
@@ -185,7 +223,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
   function updateAllListingPrice(percent?: number) {
     const prices = items.map((item) => {
-      let price = floorPrices[(item.collectionId || item.firstVerifiedCreator) as keyof object].floorPrice
+      const fps = marketplace === "tensor" ? floorPrices : meFloorPrices
+      let price = fps[(item.collectionId || item.firstVerifiedCreator) as keyof object].floorPrice
       if (percent) {
         const adjust = new BN(price).div(new BN(100)).mul(new BN(percent))
         price = new BN(price).add(adjust).toNumber()
@@ -228,12 +267,15 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
         throw new Error("Dont list beneath the floor you bozo.")
       }
 
-      await list([
-        {
-          mint: item?.nftMint,
-          price: item?.price,
-        },
-      ])
+      await list(
+        [
+          {
+            mint: item?.nftMint,
+            price: item?.price,
+          },
+        ],
+        marketplace
+      )
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -278,7 +320,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
         })
       )
 
-      await list(toList)
+      await list(toList, marketplace)
     } catch (err: any) {
       toast.error(err.message)
       console.error(err)
@@ -455,11 +497,16 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
   return (
     <>
-      <Alert severity="info">Subject to Tensor API rate limits. If you are hitting limits please try again later</Alert>
+      {marketplace === "tensor" && (
+        <Alert severity="info">
+          Subject to Tensor API rate limits. If you are hitting limits please try again later
+        </Alert>
+      )}
+
       <Table stickyHeader>
         <TableHead>
           <TableRow>
-            <TableCell>
+            <TableCell colSpan={2}>
               <Typography variant="h5">
                 Showing {items.length} item{items.length === 1 ? "" : "s"}
               </Typography>
@@ -470,7 +517,6 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                 max={20}
               />
             </TableCell>
-            <TableCell />
             <TableCell>
               <Stack direction="row" spacing={1}>
                 <Chip
@@ -479,6 +525,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                   color="primary"
                   variant="outlined"
                   onClick={() => updateAllListingPrice()}
+                  disabled={loading}
                   sx={{ fontSize: "10px", textTransform: "uppercase" }}
                 />
                 <Chip
@@ -487,6 +534,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                   color="primary"
                   variant="outlined"
                   onClick={() => updateAllListingPrice(10)}
+                  disabled={loading}
                   sx={{ fontSize: "10px", textTransform: "uppercase" }}
                 />
                 <Chip
@@ -495,6 +543,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                   color="primary"
                   variant="outlined"
                   onClick={() => updateAllListingPrice(20)}
+                  disabled={loading}
                   sx={{ fontSize: "10px", textTransform: "uppercase" }}
                 />
                 <Chip
@@ -503,9 +552,27 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                   color="primary"
                   variant="outlined"
                   onClick={() => updateAllListingPrice(30)}
+                  disabled={loading}
                   sx={{ fontSize: "10px", textTransform: "uppercase" }}
                 />
               </Stack>
+            </TableCell>
+            <TableCell sx={{ textAlign: "right" }}>
+              <ToggleButtonGroup
+                value={marketplace}
+                exclusive
+                onChange={(e, value) => setMarketplace(value)}
+                aria-label="text alignment"
+              >
+                <ToggleButton value="tensor" aria-label="left aligned">
+                  <SvgIcon>
+                    <Tensor />
+                  </SvgIcon>
+                </ToggleButton>
+                <ToggleButton value="me" aria-label="centered">
+                  <img src="/me.png" width="30px" />
+                </ToggleButton>
+              </ToggleButtonGroup>
             </TableCell>
           </TableRow>
         </TableHead>
@@ -514,7 +581,10 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
             const isDisabled = loading || transactions.map((t) => t.nftMint).includes(item.nftMint) || !!item.status
             const identifier = item.collectionId || item.firstVerifiedCreator
             const price = floorPrices[identifier as keyof object] || {}
-            const { name, floorPrice } = price
+            const mePrice = meFloorPrices[identifier as keyof object] || {}
+            const { name, floorPrice: tensorFloorPrice } = price
+            const { floorPrice: meFloorPrice } = mePrice
+            const floorPrice = marketplace === "tensor" ? tensorFloorPrice : meFloorPrice
             const royaltiesEnforced = unwrapSome(item.metadata.tokenStandard) === 4
             const poolsForCollection = pools[identifier as keyof object] || {}
             const pool = (poolsForCollection.pools || [])[0]
@@ -524,7 +594,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
             return (
               <TableRow key={item.nftMint}>
-                <TableCell>
+                <TableCell colSpan={marketplace === "me" ? 2 : 1}>
                   <Stack direction="row" spacing={2} alignItems="center">
                     <img
                       src={`https://img-cdn.magiceden.dev/rs:fill:100:100:0:0/plain/${item?.json?.image}`}
@@ -551,84 +621,99 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                     </Stack>
                   </Stack>
                 </TableCell>
-                <TableCell>
-                  <Stack spacing={0.5}>
-                    <Button
-                      sx={{ whiteSpace: "nowrap", height: "40px" }}
-                      variant="outlined"
-                      disabled={isDisabled || !Number(pool?.price)}
-                      onClick={() => onSellNowClick(item.nftMint)}
-                    >
-                      <Stack direction="row" spacing={0.5}>
-                        <Typography>Sell now</Typography>
-                        <SvgIcon>
-                          <Tensor />
-                        </SvgIcon>
-                      </Stack>
-                    </Button>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" alignItems="center" spacing={0.5}>
-                        {pool ? (
-                          <>
-                            <Typography fontWeight="bold" variant="body2" fontSize="1em">
-                              {sellNowPrice}
-                            </Typography>
-                            <SvgIcon fontSize="inherit">
-                              <Solana />
-                            </SvgIcon>
-                          </>
-                        ) : (
-                          <Typography fontWeight="bold" variant="body2" fontSize="1em">
-                            No pool
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      <FormHelperText>
-                        <Tooltip title="Royalties paid to project">
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            sx={{ background: "#333", padding: "2px 5px 2px 0px", borderRadius: "10px" }}
-                          >
-                            <SvgIcon
-                              // @ts-ignore
-                              color="gold"
-                              fontSize="small"
-                              sx={{ height: "10px" }}
-                            >
-                              <Crown fontSize="small" />
-                            </SvgIcon>
-                            <Stack spacing={0.5} direction="row">
-                              <span style={{ lineHeight: "1em" }}>
-                                {royaltiesEnforced || payRoyalties ? lamportsToSol(royalties) : 0}
-                              </span>
+                {marketplace === "tensor" && (
+                  <TableCell>
+                    <Stack spacing={0.5}>
+                      <Button
+                        sx={{ whiteSpace: "nowrap", height: "40px" }}
+                        variant="outlined"
+                        disabled={isDisabled || !Number(pool?.price)}
+                        onClick={() => onSellNowClick(item.nftMint)}
+                      >
+                        <Stack direction="row" spacing={0.5}>
+                          <Typography>Sell now</Typography>
+                          <SvgIcon>
+                            <Tensor />
+                          </SvgIcon>
+                        </Stack>
+                      </Button>
+                      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          {pool ? (
+                            <>
+                              <Typography fontWeight="bold" variant="body2" fontSize="1em">
+                                {sellNowPrice}
+                              </Typography>
                               <SvgIcon fontSize="inherit">
                                 <Solana />
                               </SvgIcon>
+                            </>
+                          ) : (
+                            <Typography fontWeight="bold" variant="body2" fontSize="1em">
+                              No pool
+                            </Typography>
+                          )}
+                        </Stack>
+
+                        <FormHelperText>
+                          <Tooltip title="Royalties paid to project">
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              sx={{
+                                background: darken(theme.palette.background.default, 0.1),
+                                padding: "2px 5px 2px 0px",
+                                borderRadius: "10px",
+                              }}
+                            >
+                              <SvgIcon
+                                // @ts-ignore
+                                color="gold"
+                                fontSize="small"
+                                sx={{ height: "10px" }}
+                              >
+                                <Crown fontSize="small" />
+                              </SvgIcon>
+                              <Stack spacing={0.5} direction="row">
+                                <span style={{ lineHeight: "1em" }}>
+                                  {royaltiesEnforced || payRoyalties ? lamportsToSol(royalties) : 0}
+                                </span>
+                                <SvgIcon fontSize="inherit">
+                                  <Solana />
+                                </SvgIcon>
+                              </Stack>
                             </Stack>
-                          </Stack>
-                        </Tooltip>
-                      </FormHelperText>
+                          </Tooltip>
+                        </FormHelperText>
+                      </Stack>
                     </Stack>
-                  </Stack>
-                </TableCell>
-                <TableCell>
+                  </TableCell>
+                )}
+                <TableCell colSpan={2}>
                   <Stack spacing={0.5}>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} justifyContent="space-between">
                       <TextField
                         label="List for"
                         size="small"
                         onChange={(e) => updateListingPrice(item.nftMint, e.target.value)}
                         value={listingPriceItem}
                         disabled={isDisabled}
+                        fullWidth
                       />
-                      <Button variant="outlined" onClick={() => onListClick(item.nftMint)} disabled={isDisabled}>
-                        <Stack direction="row" spacing={0.5}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => onListClick(item.nftMint)}
+                        disabled={isDisabled}
+                        fullWidth
+                      >
+                        <Stack direction="row" spacing={0.5} alignItems="center">
                           <Typography>List</Typography>
-                          <SvgIcon>
-                            <Tensor />
-                          </SvgIcon>
+                          {marketplace === "tensor" && (
+                            <SvgIcon>
+                              <Tensor />
+                            </SvgIcon>
+                          )}
+                          {marketplace === "me" && <img src="/me.png" height="18px" />}
                         </Stack>
                       </Button>
                       <IconButton color="error" onClick={() => removeItem(item.nftMint)}>
@@ -656,9 +741,9 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
             )
           })}
         </TableBody>
-        <TableFooter sx={{ position: "sticky", bottom: 0, background: "#121212", zIndex: 10 }}>
+        <TableFooter sx={{ position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }}>
           <TableRow>
-            <TableCell>
+            <TableCell colSpan={marketplace === "me" ? 2 : 1}>
               <Button
                 color="error"
                 disabled={Boolean(transactions.length)}
@@ -668,58 +753,64 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                 Cancel
               </Button>
             </TableCell>
-            <TableCell>
-              <Stack spacing={1}>
-                <Button
-                  variant="contained"
-                  onClick={onSellAllClick}
-                  disabled={loading || Boolean(transactions.length) || !Boolean(Number(totalSellNow))}
-                >
-                  <Stack direction="row" spacing={0.5}>
-                    <Typography>Sell all</Typography>
-                    <SvgIcon>
-                      <Tensor />
-                    </SvgIcon>
-                  </Stack>
-                </Button>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <Typography fontWeight="bold" variant="body2" fontSize="1em">
-                      {lamportsToSol(totalSellNow)}
-                    </Typography>
-                    <SvgIcon fontSize="inherit">
-                      <Solana />
-                    </SvgIcon>
-                  </Stack>
+            {marketplace === "tensor" && (
+              <TableCell>
+                <Stack spacing={1}>
+                  <Button
+                    variant="contained"
+                    onClick={onSellAllClick}
+                    disabled={loading || Boolean(transactions.length) || !Boolean(Number(totalSellNow))}
+                  >
+                    <Stack direction="row" spacing={0.5}>
+                      <Typography>Sell all</Typography>
+                      <SvgIcon>
+                        <Tensor />
+                      </SvgIcon>
+                    </Stack>
+                  </Button>
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Typography fontWeight="bold" variant="body2" fontSize="1em">
+                        {lamportsToSol(totalSellNow)}
+                      </Typography>
+                      <SvgIcon fontSize="inherit">
+                        <Solana />
+                      </SvgIcon>
+                    </Stack>
 
-                  <FormHelperText>
-                    <Tooltip title="Royalties paid to project">
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        sx={{ background: "#333", padding: "2px 5px 2px 0px", borderRadius: "10px" }}
-                      >
-                        <SvgIcon
-                          // @ts-ignore
-                          color="gold"
-                          fontSize="small"
-                          sx={{ height: "10px" }}
+                    <FormHelperText>
+                      <Tooltip title="Royalties paid to project">
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          sx={{
+                            background: darken(theme.palette.background.default, 0.1),
+                            padding: "2px 5px 2px 0px",
+                            borderRadius: "10px",
+                          }}
                         >
-                          <Crown fontSize="small" />
-                        </SvgIcon>
-                        <Stack spacing={0.5} direction="row">
-                          <span style={{ lineHeight: "1em" }}>{lamportsToSol(totalRoyalties)}</span>
-                          <SvgIcon fontSize="inherit">
-                            <Solana />
+                          <SvgIcon
+                            // @ts-ignore
+                            color="gold"
+                            fontSize="small"
+                            sx={{ height: "10px" }}
+                          >
+                            <Crown fontSize="small" />
                           </SvgIcon>
+                          <Stack spacing={0.5} direction="row">
+                            <span style={{ lineHeight: "1em" }}>{lamportsToSol(totalRoyalties)}</span>
+                            <SvgIcon fontSize="inherit">
+                              <Solana />
+                            </SvgIcon>
+                          </Stack>
                         </Stack>
-                      </Stack>
-                    </Tooltip>
-                  </FormHelperText>
+                      </Tooltip>
+                    </FormHelperText>
+                  </Stack>
                 </Stack>
-              </Stack>
-            </TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
+              </TableCell>
+            )}
+            <TableCell sx={{ textAlign: "right" }} colSpan={2}>
               <Stack direction="row" spacing={2} alignItems="flex">
                 <TextField
                   label="Total"
@@ -732,18 +823,23 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                       WebkitTextFillColor: "white",
                     },
                   }}
+                  fullWidth
                 />
 
                 <Button
                   variant="contained"
                   onClick={onListAllClick}
                   disabled={loading || Boolean(transactions.length) || !totalListings}
+                  fullWidth
                 >
-                  <Stack direction="row" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
                     <Typography sx={{ whiteSpace: "nowrap" }}>List all</Typography>
-                    <SvgIcon>
-                      <Tensor />
-                    </SvgIcon>
+                    {marketplace === "tensor" && (
+                      <SvgIcon>
+                        <Tensor />
+                      </SvgIcon>
+                    )}
+                    {marketplace === "me" && <img src="/me.png" height="18px" />}
                   </Stack>
                 </Button>
               </Stack>

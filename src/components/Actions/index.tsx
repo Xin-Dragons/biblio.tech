@@ -615,6 +615,10 @@ export const Actions: FC = () => {
     setActionDrawerShowing(!actionDrawerShowing)
   }
 
+  function returnToWallet() {
+    router.push("/")
+  }
+
   return (
     <Stack spacing={1} direction="row" alignItems="center">
       {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
@@ -801,11 +805,18 @@ export const Actions: FC = () => {
         </>
       ) : (
         router.query.publicKey && (
-          <Typography variant="h5">{`Peeking in ${
-            isPublicKey(router.query.publicKey as string)
-              ? shorten(router.query.publicKey as string)
-              : `${router.query.publicKey}.sol`
-          }`}</Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="h6" color="primary" fontWeight="bold">{`Peeking in ${
+              isPublicKey(router.query.publicKey as string)
+                ? shorten(router.query.publicKey as string)
+                : `${(router.query.publicKey as string).replace(".sol", "")}.sol`
+            }`}</Typography>
+            <Tooltip title="Return to own wallet">
+              <IconButton onClick={returnToWallet}>
+                <Close />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         )
       )}
       <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>

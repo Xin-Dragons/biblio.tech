@@ -126,7 +126,6 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
 
               return stakedHours < item.hours_active;
             })
-            console.log(session.user)
           } catch (err) {
             console.log(err)
             session.user.offline = true;

@@ -1,4 +1,5 @@
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -8,11 +9,13 @@ import {
   CircularProgress,
   CircularProgressProps,
   Dialog,
+  FormControlLabel,
   IconButton,
   Link,
   Rating,
   Stack,
   SvgIcon,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -22,7 +25,7 @@ import {
   alpha,
 } from "@mui/material"
 import { default as NextLink } from "next/link"
-import { findKey, uniq } from "lodash"
+import { findKey, isEmpty, uniq } from "lodash"
 import { useUiSettings } from "../../context/ui-settings"
 import { FC, MouseEvent, ReactElement, ReactNode, SyntheticEvent, useEffect, useState } from "react"
 import Frozen from "@mui/icons-material/AcUnit"
@@ -52,7 +55,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
 import LockOpenIcon from "@mui/icons-material/LockOpen"
 import { unwrapSome } from "@metaplex-foundation/umi"
-import { Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
+import { Listing, Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
 import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
 import { useNfts } from "../../context/nfts"
@@ -64,6 +67,8 @@ import SellIcon from "@mui/icons-material/Sell"
 import { lamportsToSol } from "../../helpers/utils"
 import ExchangeArt from "./exchange-art.svg"
 import Tensor from "./tensor.svg"
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
+import Crown from "../Listing/crown.svg"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 
@@ -300,6 +305,112 @@ async function getType(uri: string) {
   }
 }
 
+const Listing = ({
+  listing,
+  sellerFeeBasisPoints,
+  defaultPayRoyalties,
+  royaltiesEnforced,
+}: {
+  listing: Listing
+  defaultPayRoyalties: boolean
+  sellerFeeBasisPoints: number
+  royaltiesEnforced: boolean
+}) => {
+  const [payRoyalties, setPayRoyalties] = useState(royaltiesEnforced || defaultPayRoyalties)
+  const [loading, setLoading] = useState(false)
+  const { buy } = useTensor()
+
+  async function buyItem() {
+    try {
+      setLoading(true)
+      const buyPromise = buy([
+        {
+          owner: listing.seller,
+          maxPrice: listing.price,
+          mint: listing.nftMint,
+          royalties: payRoyalties,
+          marketplace: listing.marketplace,
+        },
+      ]) as unknown as Promise<void>
+
+      toast.promise(buyPromise, {
+        loading: "Buying item",
+        success: "Item bought successfully",
+        error: "Error buying item",
+      })
+
+      await buyPromise
+    } catch (err: any) {
+      toast.error(err.message || "Error buying item")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const price = listing?.price || 0
+  const fee = (price / 100) * 1.5
+  const rent = 2030000
+  const royalties = ((listing?.price || 0) / 10000) * sellerFeeBasisPoints
+  const total = payRoyalties ? price + fee + rent + royalties : price + fee + rent
+
+  return (
+    <Stack spacing={2} width="100%">
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="h5">Listed for sale:</Typography>
+        <Typography color="primary" variant="h5">
+          {lamportsToSol(price)} SOL
+        </Typography>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <FormControlLabel
+          label="Pay full royalties"
+          control={
+            <Switch
+              checked={payRoyalties}
+              onChange={(e) => setPayRoyalties(e.target.checked)}
+              disabled={royaltiesEnforced}
+            />
+          }
+        />
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <SvgIcon
+            // @ts-ignore
+            color={payRoyalties ? "gold" : "disabled"}
+          >
+            <Crown />
+          </SvgIcon>
+          <Typography variant="h6" color="primary">
+            {lamportsToSol(royalties)}
+          </Typography>
+        </Stack>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <Typography>Marketplace fee (1.5%)</Typography>
+        <Typography color="primary">{lamportsToSol(fee)}</Typography>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <Typography>Account opening rent</Typography>
+        <Typography color="primary">{lamportsToSol(rent)}</Typography>
+      </Stack>
+      <Button size="large" variant="contained" onClick={buyItem} disabled={loading}>
+        <Stack direction={"row"} spacing={1} alignItems="center">
+          <Typography>BUY NOW for {lamportsToSol(total)}</Typography>
+          {listing?.marketplace === "MEv2" && <img src="/me.png" height="18px" />}
+          {listing?.marketplace === "TensorSwap" && (
+            <SvgIcon>
+              <Tensor />
+            </SvgIcon>
+          )}
+        </Stack>
+      </Button>
+      <Alert severity="info">
+        Marketplace fee assumed to be 1.5% but is subject to change. The actual total including marketplace fee can be
+        seen in your wallet simulation
+      </Alert>
+    </Stack>
+  )
+}
+
 export const ItemDetails = ({ item }: { item: Nft }) => {
   const [assetIndex, setAssetIndex] = useState(0)
   const [assets, setAssets] = useState<Asset[]>([])
@@ -310,7 +421,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const router = useRouter()
   const { collections } = useDatabase()
   const basePath = useBasePath()
-  const { lightMode } = useUiSettings()
+  const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
 
   function toggleMetadataShowing() {
@@ -440,14 +551,22 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             </Box>
             <Stack direction="row" spacing={2}>
               {asset && (
-                <Button href={asset.uri} target="_blank" rel="noreferrer" variant="contained" size="large">
+                <Button href={asset.uri} target="_blank" rel="noreferrer" variant="outlined" size="large">
                   View full asset
                 </Button>
               )}
-              <Button size="large" onClick={toggleMetadataShowing}>
+              <Button size="large" onClick={toggleMetadataShowing} variant="outlined">
                 {metadataShowing ? "View image" : "View metadata"}
               </Button>
             </Stack>
+            {item.listing && ["MEv2", "TensorSwap"].includes(item.listing?.marketplace as string) && (
+              <Listing
+                listing={item.listing}
+                defaultPayRoyalties={payRoyalties}
+                sellerFeeBasisPoints={item.metadata.sellerFeeBasisPoints}
+                royaltiesEnforced={[4, 5].includes(unwrapSome(item.metadata.tokenStandard) || 0)}
+              />
+            )}
           </Stack>
         </Box>
         <CardContent sx={{ width: "100%" }}>
@@ -746,6 +865,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     delist: <SellIcon />,
     list: <SellIcon />,
     sell: <SellIcon />,
+    buy: <ShoppingCartIcon />,
   }
 
   const statusColors = {
@@ -1018,8 +1138,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
+                      sx={{ display: "block", height: "100%" }}
                     >
-                      <SvgIcon sx={{ color: "text.primary", padding: "4px" }}>
+                      <SvgIcon sx={{ color: "text.primary", padding: "4px", height: "100%" }}>
                         <ExchangeArt />
                       </SvgIcon>
                     </Link>
