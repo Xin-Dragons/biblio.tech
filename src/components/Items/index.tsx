@@ -12,6 +12,7 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -275,12 +276,22 @@ export const Items: FC<ItemsProps> = ({
     large: 2,
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
+  function isTouchDevice() {
+    return "ontouchstart" in window || navigator.maxTouchPoints > 0
+  }
+
+  let sensors: any
+
+  if (isTouchDevice()) {
+    sensors = useSensors(useSensor(TouchSensor))
+  } else {
+    sensors = useSensors(
+      useSensor(PointerSensor),
+      useSensor(KeyboardSensor, {
+        coordinateGetter: sortableKeyboardCoordinates,
+      })
+    )
+  }
 
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id)
