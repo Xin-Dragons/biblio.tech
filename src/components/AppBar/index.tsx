@@ -136,7 +136,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           </Link>
           {showMenu && <WalletSearch />}
 
-          <Box sx={{ flexGrow: breakLine ? 1 : 0 }}>
+          <Box sx={{ flexGrow: breakLine ? 0 : 1 }}>
             <Title setOpen={setOpen} />
           </Box>
 
