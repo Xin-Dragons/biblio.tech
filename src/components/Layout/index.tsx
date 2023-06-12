@@ -133,7 +133,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
             </Stack>
           </Stack>
         </Box>
-        <Footer toggleSolTransferOpen={toggleSolTransferOpen} />
+        {showMenu && <Footer toggleSolTransferOpen={toggleSolTransferOpen} />}
       </Stack>
 
       {!showMenu && (
@@ -183,6 +183,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
               </Stack>
             </Container>
           </Card>
+          <Footer toggleSolTransferOpen={toggleSolTransferOpen} />
         </Dialog>
       )}
       <Dialog open={solTransferOpen} onClose={toggleSolTransferOpen} fullWidth>

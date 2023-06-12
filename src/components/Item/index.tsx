@@ -26,8 +26,8 @@ import {
 } from "@mui/material"
 import { default as NextLink } from "next/link"
 import { findKey, isEmpty, uniq } from "lodash"
-import { useUiSettings } from "../../context/ui-settings"
-import { FC, MouseEvent, ReactElement, ReactNode, SyntheticEvent, useEffect, useState } from "react"
+import { LayoutSize, useUiSettings } from "../../context/ui-settings"
+import { FC, MouseEvent, ReactElement, ReactNode, SyntheticEvent, useEffect, useRef, useState } from "react"
 import Frozen from "@mui/icons-material/AcUnit"
 import LockIcon from "@mui/icons-material/Lock"
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
@@ -69,6 +69,7 @@ import ExchangeArt from "./exchange-art.svg"
 import Tensor from "./tensor.svg"
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
 import Crown from "../Listing/crown.svg"
+import { useSelection } from "../../context/selection"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 
@@ -215,10 +216,11 @@ function getMultimediaType(ext: string): Category {
 
 export interface ItemProps {
   item: Nft
-  select?: Function
-  selected?: boolean
   DragHandle?: ReactNode
   lazyLoad?: boolean
+  showInfo?: boolean
+  enlarged?: boolean
+  layoutSize?: LayoutSize
 }
 
 type Asset = {
@@ -770,15 +772,28 @@ const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
   )
 }
 
-export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
+export const Item: FC<ItemProps> = ({
+  item,
+  DragHandle,
+  showInfo: defaultShowInfo,
+  layoutSize: defaultLayoutSize,
+  enlarged,
+}) => {
+  const { selected, select } = useSelection()
   const theme = useTheme()
   const { updateItem } = useDatabase()
-  const { layoutSize, showInfo, showAllWallets, lightMode } = useUiSettings()
+  const { layoutSize: settingsLayoutSize, showInfo: settingsShowInfo, showAllWallets, lightMode } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
   const { isAdmin, isOffline, publicKey, publicKeys } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
+  const [isTouchDevice, setIsTouchDevice] = useState(false)
+
+  const isSelected = selected.includes(item.nftMint)
+
+  const showInfo = defaultShowInfo || settingsShowInfo
+  const layoutSize = defaultLayoutSize || settingsLayoutSize
 
   const itemRarity = rarity.find((r) => r.nftMint === item.nftMint)
 
@@ -802,6 +817,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   }
 
   function onItemClick(e: any) {
+    console.log("clicked")
     renderItem(ItemDetails, { item })
   }
 
@@ -828,7 +844,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     if (["LABEL", "INPUT"].includes(target.tagName)) {
       return
     }
-    select?.(item.nftMint)
+    select(item.nftMint)
   }
 
   const fontSizes = {
@@ -845,7 +861,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
     collage: "24px",
   }
 
-  const RadioIndicator = selected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
+  const RadioIndicator = isSelected ? RadioButtonCheckedIcon : RadioButtonUncheckedIcon
 
   const margins = {
     small: 0.5,
@@ -884,10 +900,25 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
   const price = item.price || 0
   const value = price * balance
 
+  function enlarge(e: any) {
+    if (enlarged) {
+      return true
+    }
+    e.preventDefault()
+    e.stopPropagation()
+    renderItem(Item, { item, showInfo: true, layoutSize: "large", enlarged: true }, true)
+  }
+
+  useEffect(() => {
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0
+    setIsTouchDevice(isTouchDevice)
+  }, [])
+
   return (
     <Card
       sx={{
-        outline: selected && layoutSize !== "collage" ? `${layoutSize === "small" ? 2 : 3}px solid` : "none",
+        outline:
+          isSelected && layoutSize !== "collage" && !enlarged ? `${layoutSize === "small" ? 2 : 3}px solid` : "none",
         // outlineOffset: "-2px",
         cursor: "pointer",
         position: "relative",
@@ -895,6 +926,11 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
         margin: margins[layoutSize],
         userSelect: "none",
         overflow: "visible",
+        "-webkit-touch-callout": "none !important",
+        "*": {
+          MozUserSelect: "none !important",
+          WebkitTouchCallout: "none !important",
+        },
 
         "&:hover": {
           ".MuiStack-root, .MuiSvgIcon-root": {
@@ -903,6 +939,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
         },
       }}
       onClick={onItemClick}
+      onContextMenu={enlarge}
     >
       {transaction && (
         <Box
@@ -941,7 +978,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
         </Box>
       )}
       <>
-        {isAdmin && (
+        {isAdmin && (!isTouchDevice || showInfo) && (
           <Stack
             direction="row"
             justifyContent="space-between"
@@ -955,7 +992,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
               width: "100%",
               padding: "0.5em",
               background: alpha(theme.palette.background.default, 0.8),
-              opacity: infoShowing || (layoutSize === "collage" && selected) ? 1 : 0,
+              opacity: infoShowing || (layoutSize === "collage" && isSelected) ? 1 : 0,
               transition: infoShowing ? "none" : "opacity 0.2s",
               borderTopLeftRadius: "4px",
               borderTopRightRadius: "4px",
@@ -977,7 +1014,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
             </Tooltip>
             {DragHandle && <Tooltip title="Drag to reorder">{DragHandle as ReactElement}</Tooltip>}
 
-            <Tooltip title={selected ? "Remove from selection" : "Add to selection"}>
+            <Tooltip title={isSelected ? "Remove from selection" : "Add to selection"}>
               <RadioIndicator
                 className="plus-minus"
                 sx={{
@@ -1009,7 +1046,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                   ? "/usdc.png"
                   : item.json?.image
                   ? `https://img-cdn.magiceden.dev/${
-                      layoutSize === "collage" ? "rs:fill:600" : "rs:fill:400:400:0:0"
+                      layoutSize === "collage" || enlarged ? "rs:fill:600" : "rs:fill:400:400:0:0"
                     }/plain/${item.json?.image}`
                   : lightMode
                   ? "/books-lightest.svg"
@@ -1023,6 +1060,7 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 borderRadius: infoShowing ? 0 : "4px",
               }}
             />
+
             {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
               <Stack>
                 {value ? (
@@ -1065,6 +1103,9 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 />
               </Stack>
             )}
+            {isAdmin && DragHandle && isTouchDevice && !showInfo && (
+              <Box sx={{ position: "absolute", zIndex: 10, top: 0 }}>{DragHandle}</Box>
+            )}
             {/* {item.status && ["frozen", "staked", "inVault"].includes(item.status) && (
               <Box
                 sx={{
@@ -1092,62 +1133,67 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 </Tooltip>
               </Box>
             )} */}
-            {item.status && (
+            {item.status && showInfo && (
               <CornerRibbon
-                style={{ textTransform: "uppercase" }}
+                style={{
+                  textTransform: "uppercase",
+                  fontSize: { small: "10px", medium: "12px", large: "14px", collage: "16px" }[layoutSize],
+                }}
                 backgroundColor={statusColors[item.status as keyof object]}
               >
                 {statusTitles[item.status as keyof object]}
               </CornerRibbon>
             )}
-            {item.status === "listed" && ["MEv2", "TensorSwap", "ExchangeArt"].includes(item.listing?.marketplace!) && (
-              <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    position: "absolute",
-                    top: "0.25em",
-                    left: "0.25em",
-                    width: "40px",
-                    height: "40px",
-                    padding: "7px",
-                    borderRadius: "100%",
-                    backgroundColor: alpha(theme.palette.background.default, 0.8),
-                  }}
-                >
-                  {item.listing?.marketplace === "MEv2" && (
-                    <Link
-                      href={`https://magiceden.io/item-details/${item.nftMint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <img src="/me.png" width="100%" style={{ display: "block" }} />
-                    </Link>
-                  )}
-                  {item.listing?.marketplace === "TensorSwap" && (
-                    <SvgIcon sx={{ color: "text.primary" }}>
-                      <Tensor />
-                    </SvgIcon>
-                  )}
-                  {item.listing?.marketplace === "ExchangeArt" && (
-                    <Link
-                      href={`https://exchange.art/single/${item.nftMint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      sx={{ display: "block", height: "100%" }}
-                    >
-                      <SvgIcon sx={{ color: "text.primary", padding: "4px", height: "100%" }}>
-                        <ExchangeArt />
+            {showInfo &&
+              item.status === "listed" &&
+              ["MEv2", "TensorSwap", "ExchangeArt"].includes(item.listing?.marketplace!) && (
+                <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      position: "absolute",
+                      top: "0.25em",
+                      left: "0.25em",
+                      width: "40px",
+                      height: "40px",
+                      padding: "7px",
+                      borderRadius: "100%",
+                      backgroundColor: alpha(theme.palette.background.default, 0.8),
+                    }}
+                  >
+                    {item.listing?.marketplace === "MEv2" && (
+                      <Link
+                        href={`https://magiceden.io/item-details/${item.nftMint}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <img src="/me.png" width="100%" style={{ display: "block" }} />
+                      </Link>
+                    )}
+                    {item.listing?.marketplace === "TensorSwap" && (
+                      <SvgIcon sx={{ color: "text.primary" }}>
+                        <Tensor />
                       </SvgIcon>
-                    </Link>
-                  )}
-                </Box>
-              </Tooltip>
-            )}
+                    )}
+                    {item.listing?.marketplace === "ExchangeArt" && (
+                      <Link
+                        href={`https://exchange.art/single/${item.nftMint}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ display: "block", height: "100%" }}
+                      >
+                        <SvgIcon sx={{ color: "text.primary", padding: "4px", height: "100%" }}>
+                          <ExchangeArt />
+                        </SvgIcon>
+                      </Link>
+                    )}
+                  </Box>
+                </Tooltip>
+              )}
             {item.loan && <Loan loan={item.loan} />}
           </Box>
         ) : (
@@ -1188,19 +1234,18 @@ export const Item: FC<ItemProps> = ({ item, selected, select, DragHandle }) => {
                 )}
               </Typography>
             </Tooltip>
-            {itemRarity && (
+            {itemRarity && layoutSize !== "small" && (
               <Stack
                 sx={{
                   position: "absolute",
-                  top: layoutSize === "small" ? "-15px" : "-15px",
+                  top: "-15px",
                   width: "calc(100% - 1em)",
-                  right: layoutSize === "small" ? "unset" : "0.5em",
-                  left: layoutSize === "small" ? "3px" : "unset",
+                  right: "0.5em",
                 }}
-                direction={layoutSize === "small" ? "row" : "row"}
-                justifyContent={layoutSize === "small" ? "flex-start" : "space-between"}
-                alignItems={layoutSize === "small" ? "flex-start" : "center"}
-                spacing={layoutSize === "small" ? 0.25 : 1}
+                direction={"row"}
+                justifyContent={"space-between"}
+                alignItems={"center"}
+                spacing={1}
               >
                 {itemRarity.howRare ? (
                   <Rarity type="howRare" rank={itemRarity.howRare} tier={itemRarity.howRareTier!} />

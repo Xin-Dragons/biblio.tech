@@ -6,7 +6,7 @@ import type { NextPage } from "next"
 import Link from "next/link"
 import React, { FC } from "react"
 import { Layout } from "../../components/Layout"
-import { useUiSettings } from "../../context/ui-settings"
+import { LayoutSize, useUiSettings } from "../../context/ui-settings"
 import { Items } from "../../components/Items"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useDatabase } from "../../context/database"
@@ -34,10 +34,45 @@ export type CollectionItem = {
 }
 
 export const Collection: FC<CollectionProps> = ({ item, selected }) => {
-  const { showInfo, lightMode } = useUiSettings()
+  const { showInfo, lightMode, layoutSize } = useUiSettings()
   const basePath = useBasePath()
   const nfts = item.nfts
   const theme = useTheme()
+
+  const margins = {
+    small: 1,
+    medium: 1.25,
+    large: 1.5,
+    collage: 5,
+  }
+
+  const fontSizes = (layoutSize: LayoutSize) => {
+    const sizes = {
+      small: {
+        xs: "3vw",
+        sm: "2vw",
+        md: "1.5vw",
+        lg: "1.25vw",
+        xl: "1vw",
+      },
+      medium: {
+        xs: "5vw",
+        sm: "3vw",
+        md: "1.75vw",
+        lg: "1.5vw",
+        xl: "1.25vw",
+      },
+      large: {
+        xs: "8vw",
+        sm: "4vw",
+        md: "2.5vw",
+        lg: "2vw",
+        xl: "1.5vw",
+      },
+    }
+
+    return sizes[layoutSize as keyof object]
+  }
 
   return (
     <Link href={`${basePath}/collections/${item.id}`}>
@@ -46,7 +81,7 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
           position: "relative",
           cursor: "pointer",
           outline: selected ? "2px solid white" : "none",
-          margin: 1,
+          margin: margins[layoutSize],
         }}
       >
         <Box
@@ -71,16 +106,19 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
             width="100%"
             style={{ display: "block", aspectRatio: "1 / 1" }}
           />
-          <Chip
-            label={nfts.length}
-            sx={{
-              position: "absolute",
-              backgroundColor: alpha(theme.palette.background.default, 0.8),
-              fontWeight: "bold",
-              right: "0.5em",
-              top: "0.5em",
-            }}
-          />
+          {showInfo && (
+            <Chip
+              label={nfts.length}
+              sx={{
+                position: "absolute",
+                backgroundColor: alpha(theme.palette.background.default, 0.8),
+                right: "0.5em",
+                top: "0.5em",
+                // fontSize: fontSizes(layoutSize),
+              }}
+            />
+          )}
+
           <Box
             sx={{
               position: "absolute",
@@ -104,8 +142,10 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
             }}
           >
             <Stack>
-              <Typography textAlign="center">Estimated value</Typography>
-              <Typography variant="h6" textAlign="center">
+              <Typography textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
+                Estimated value
+              </Typography>
+              <Typography variant="h6" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
                 {item.id === "unknown" || item.value === 0
                   ? "Unknown"
                   : `◎${item.value.toLocaleString(undefined, { minimumFractionDrgits: 4 })}`}
@@ -114,10 +154,16 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
           </Box>
         </Box>
         {showInfo && (
-          <CardContent>
+          <CardContent sx={{ padding: { xs: 1 } }}>
             <Typography
               variant="h6"
-              sx={{ whiteSpace: "nowrap", textOverflow: "ellipsis", width: "100%", overflow: "hidden" }}
+              sx={{
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                width: "100%",
+                overflow: "hidden",
+                fontSize: fontSizes(layoutSize),
+              }}
             >
               {item.name || "Unknown collection"}
             </Typography>

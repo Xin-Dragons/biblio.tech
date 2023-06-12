@@ -4,16 +4,29 @@ import { Connection, PublicKey } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { FC, useEffect, useState } from "react"
 import BinocularsIcon from "./binoculars.svg"
-import { getDomainKeySync, NameRegistryState } from "@bonfida/spl-name-service"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { useAccess } from "../../context/access"
+import { getDomainKeySync, NameRegistryState, getTwitterRegistry } from "@bonfida/spl-name-service"
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" })
 
 export async function getPublicKeyFromSolDomain(domain: string): Promise<string> {
-  const { pubkey } = getDomainKeySync(domain)
-  const owner = (await NameRegistryState.retrieve(connection, pubkey)).registry.owner.toBase58()
-  return owner
+  try {
+    const { pubkey } = getDomainKeySync(domain)
+    const owner = (await NameRegistryState.retrieve(connection, pubkey)).registry.owner.toBase58()
+    console.log({ owner })
+    return owner
+  } catch {
+    try {
+      console.log("looking up", domain)
+      const registry = await getTwitterRegistry(connection, domain)
+      console.log(registry)
+      const owner = registry.owner.toBase58()
+      console.log({ owner })
+      return owner
+    } catch (err) {
+      console.log(err)
+      throw new Error("Nope")
+    }
+  }
 }
 
 type WalletSearchProps = {
@@ -45,7 +58,8 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
         }
         console.log(err)
         return false
-      } catch {
+      } catch (err) {
+        console.log(err)
         setPublicKeyError("Invalid publicKey")
       }
     }
@@ -105,6 +119,7 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       size={large ? "medium" : "small"}
+      sx={{ minWidth: "150px" }}
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">

@@ -2,7 +2,6 @@ import { Box, Button, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "../../context/ui-settings"
 import { Item } from "../Item"
 import { ElementType, FC, useEffect, useState } from "react"
-import { useSelection } from "../../context/selection"
 import Masonry from "@mui/lab/Masonry"
 import { useDatabase } from "../../context/database"
 import { sample } from "lodash"
@@ -11,6 +10,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MouseSensor,
   PointerSensor,
   TouchSensor,
   closestCenter,
@@ -37,7 +37,7 @@ import Link from "next/link"
 import { useNfts } from "../../context/nfts"
 import { Nft } from "../../db"
 import { CollectionItem } from "../../pages/collections"
-import { useRouter } from "next/router"
+import { Router, useRouter } from "next/router"
 import { useFilters } from "../../context/filters"
 import { useAccess } from "../../context/access"
 import { useSession } from "next-auth/react"
@@ -49,7 +49,6 @@ interface ItemsProps {
   Component?: FC<any>
   updateOrder?: Function
   sortable?: boolean
-  onSelect?: Function
   squareChildren?: boolean
 }
 
@@ -90,11 +89,9 @@ type SortableItemProps = {
   Component: React.ElementType
   item: any
   affected: any
-  select?: Function
 }
 
 const SortableItem: FC<SortableItemProps> = (props) => {
-  const { selected } = useSelection()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id })
 
   const style = {
@@ -110,7 +107,7 @@ const SortableItem: FC<SortableItemProps> = (props) => {
     <DragHandleIcon
       sx={{
         cursor: "grab",
-        color: "#666",
+        color: "rgba(255, 255, 255, 0.5)",
         userSelect: "none",
         outline: "0 !important",
         "&:active": {
@@ -125,13 +122,7 @@ const SortableItem: FC<SortableItemProps> = (props) => {
   return (
     <div ref={setNodeRef} style={style}>
       <Box>
-        <Child
-          item={props.item}
-          DragHandle={DragHandle}
-          affected={props.affected}
-          select={props.select}
-          selected={selected.includes(props.item.nftMint)}
-        />
+        <Child item={props.item} DragHandle={DragHandle} affected={props.affected} />
       </Box>
     </div>
   )
@@ -145,75 +136,63 @@ type CellProps = {
 }
 
 const Cell: FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
-  const { selected } = useSelection()
-
   const { cards, columnCount, Component, select } = data
   const singleColumnIndex = columnIndex + rowIndex * columnCount
   const card = cards[singleColumnIndex]
   const Child = Component || Item
 
   return (
-    <div style={style}>
-      {card && (
-        <Child
-          item={card}
-          id={card.nftMint}
-          index={card.nftMint}
-          key={card.nftMint}
-          select={select}
-          selected={selected.includes(card.nftMint)}
-        />
-      )}
-    </div>
+    <div style={style}>{card && <Child item={card} id={card.nftMint} index={card.nftMint} key={card.nftMint} />}</div>
   )
 }
 
 export const cols = {
   xl: {
-    small: 12,
-    medium: 9,
-    large: 6,
-  },
-  lg: {
     small: 10,
     medium: 7,
+    large: 5,
+  },
+  lg: {
+    small: 7,
+    medium: 6,
     large: 4,
   },
   md: {
-    small: 8,
+    small: 6,
     medium: 5,
     large: 3,
   },
   sm: {
-    small: 6,
+    small: 5,
     medium: 4,
     large: 2,
   },
   xs: {
-    small: 4,
-    medium: 3,
-    large: 2,
+    small: 3,
+    medium: 2,
+    large: 1,
   },
 }
 
 type CardsProps = {
   cards: any[]
   Component: ElementType
-  select?: Function
   squareChildren?: boolean
 }
 
-const Cards: FC<CardsProps> = ({ cards, Component, select, squareChildren }) => {
-  const theme = useTheme()
+const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
+  const { isAdmin } = useAccess()
   const { layoutSize, showInfo } = useUiSettings()
   const pageWidth = useWidth()
+  const router = useRouter()
 
   return (
     <Box sx={{ height: "100%" }}>
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }: { width: number; height: number }) => {
-            const adjust = 80
+            const isCollectionsView = !router.query.filter && !router.query.collectionId && !router.query.tag
+            const adjust = isCollectionsView ? 40 : isAdmin ? 90 : 70
             const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
             const columnCount = Math.floor(width! / cardWidth)
@@ -227,7 +206,7 @@ const Cards: FC<CardsProps> = ({ cards, Component, select, squareChildren }) => 
                 columnWidth={cardWidth!}
                 rowCount={rowCount!}
                 rowHeight={cardHeight!}
-                itemData={{ cards, columnCount, Component, select }}
+                itemData={{ cards, columnCount, Component }}
               >
                 {Cell}
               </FixedSizeGrid>
@@ -244,13 +223,11 @@ export const Items: FC<ItemsProps> = ({
   Component,
   sortable = false,
   updateOrder,
-  onSelect,
   squareChildren,
 }) => {
   const [activeId, setActiveId] = useState(null)
   const { layoutSize, sort } = useUiSettings()
   const { renderItem } = useDialog()
-  const { selected, setSelected } = useSelection()
   const { syncing } = useDatabase()
   const { loading } = useNfts()
   const [items, setItems] = useState(initialItems)
@@ -260,15 +237,6 @@ export const Items: FC<ItemsProps> = ({
   const { isActive } = useAccess()
   const { data: session } = useSession()
   const router = useRouter()
-
-  const select = (nftMint: string) => {
-    setSelected((selected: string[]) => {
-      if (selected.includes(nftMint)) {
-        return selected.filter((s) => nftMint !== s)
-      }
-      return [...selected, nftMint]
-    })
-  }
 
   const sizes = {
     small: 1,
@@ -280,18 +248,13 @@ export const Items: FC<ItemsProps> = ({
     return "ontouchstart" in window || navigator.maxTouchPoints > 0
   }
 
-  let sensors: any
-
-  if (isTouchDevice()) {
-    sensors = useSensors(useSensor(TouchSensor))
-  } else {
-    sensors = useSensors(
-      useSensor(PointerSensor),
-      useSensor(KeyboardSensor, {
-        coordinateGetter: sortableKeyboardCoordinates,
-      })
-    )
-  }
+  const sensors = useSensors(
+    useSensor(TouchSensor),
+    useSensor(MouseSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id)
@@ -366,7 +329,7 @@ export const Items: FC<ItemsProps> = ({
           defaultColumns={5}
         >
           {items.map((item: any) => (
-            <Child key={item.nftMint} item={item} select={select} selected={selected.includes(item.nftMint)} lazyLoad />
+            <Child key={item.nftMint} item={item} lazyLoad />
           ))}
         </Masonry>
       </Box>
@@ -396,7 +359,7 @@ export const Items: FC<ItemsProps> = ({
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
         >
-          <Cards cards={items} Component={SortableItem} select={onSelect || select} squareChildren={squareChildren} />
+          <Cards cards={items} Component={SortableItem} squareChildren={squareChildren} />
           <DragOverlay>
             {activeId ? (
               <Child
@@ -405,7 +368,7 @@ export const Items: FC<ItemsProps> = ({
                   <DragHandleIcon
                     sx={{
                       cursor: "grabbing",
-                      color: "#666",
+                      color: "rgba(255, 255, 255, 0.5)",
                       userSelect: "none",
                       outline: "0 !important",
                     }}
@@ -416,7 +379,7 @@ export const Items: FC<ItemsProps> = ({
           </DragOverlay>
         </DndContext>
       ) : (
-        <Cards cards={items} Component={Component as any} select={onSelect || select} squareChildren={squareChildren} />
+        <Cards cards={items} Component={Component as any} squareChildren={squareChildren} />
       )}
     </Box>
   ) : (

@@ -620,7 +620,7 @@ export const Actions: FC = () => {
   }
 
   return (
-    <Stack spacing={1} direction="row" alignItems="center">
+    <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
       {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
         <Tooltip
           title={
@@ -805,8 +805,20 @@ export const Actions: FC = () => {
         </>
       ) : (
         router.query.publicKey && (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="h6" color="primary" fontWeight="bold">{`Peeking in ${
+          <Stack direction="row" spacing={1} alignItems="center" maxWidth="100%">
+            <Typography
+              variant="h6"
+              color="primary"
+              fontWeight="bold"
+              sx={{
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                overflow: "hidden",
+                fontSize: {
+                  xs: "18px",
+                },
+              }}
+            >{`Peeking in ${
               isPublicKey(router.query.publicKey as string)
                 ? shorten(router.query.publicKey as string)
                 : `${(router.query.publicKey as string).replace(".sol", "")}.sol`

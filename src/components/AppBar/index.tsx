@@ -84,7 +84,12 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       variant="h5"
       textTransform="uppercase"
       textAlign="center"
-      sx={{ whiteSpace: breakLine ? "auto" : "nowrap", fontSize: breakLine ? "5vw" : "parent" }}
+      sx={{
+        whiteSpace: "auto",
+        fontSize: breakLine ? "5vw" : "parent",
+        overflow: "hidden",
+        flexShrink: 1,
+      }}
     >
       {title}
       {publicKey && (
@@ -105,9 +110,15 @@ type AppBarProps = {
 export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen }) => {
   const [open, setOpen] = useState(false)
   const { tag, updateTag } = useTags()
+  const breakLine = useMediaQuery("(max-width:500px)")
 
   return (
-    <MuiAppBar sx={{ borderBottom: 1, borderColor: "divider" }} position="sticky" elevation={0} color="default">
+    <MuiAppBar
+      sx={{ borderBottom: 1, borderColor: "divider", maxWidth: "100%", overflow: "hidden" }}
+      position="sticky"
+      elevation={0}
+      color="default"
+    >
       <Container maxWidth={false}>
         <Stack
           direction="row"
@@ -115,7 +126,8 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           padding={0}
           alignItems="center"
           spacing={2}
-          sx={{ overflow: "auto" }}
+          overflow="hidden"
+          maxWidth="100%"
         >
           <Link href="/">
             <SvgIcon fontSize="large" sx={{ width: "75px", height: "75px", cursor: "pointer" }}>
@@ -124,7 +136,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           </Link>
           {showMenu && <WalletSearch />}
 
-          <Box sx={{ flexGrow: 1 }}>
+          <Box sx={{ flexGrow: breakLine ? 1 : 0 }}>
             <Title setOpen={setOpen} />
           </Box>
 

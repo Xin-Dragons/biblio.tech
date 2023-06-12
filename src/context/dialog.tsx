@@ -9,6 +9,7 @@ export const DialogContext = createContext<{ renderItem: Function }>({ renderIte
 export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [open, setOpen] = useState(false)
   const [item, setItem] = useState<any>(null)
+  const [disableFullscreen, setDisableFullscreen] = useState(false)
   const theme = useTheme()
 
   useEffect(() => {
@@ -21,8 +22,9 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
     setOpen(!open)
   }
 
-  function renderItem(Component: React.ElementType, props: any) {
+  function renderItem(Component: React.ElementType, props: any, disableFullscreen?: boolean) {
     setItem(<Component {...props} />)
+    setDisableFullscreen(!!disableFullscreen)
   }
 
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
@@ -30,7 +32,7 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <DialogContext.Provider value={{ renderItem }}>
       {children}
-      <Dialog open={open} onClose={toggleOpen} maxWidth="lg" fullScreen={isXs}>
+      <Dialog open={open} onClose={toggleOpen} maxWidth="lg" fullScreen={isXs && !disableFullscreen}>
         <IconButton
           onClick={toggleOpen}
           sx={{
