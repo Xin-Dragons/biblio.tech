@@ -13,6 +13,7 @@ import { toast } from "react-hot-toast"
 import base58 from "bs58"
 import { SigninMessage } from "../utils/SigninMessge"
 import { useWallets } from "./wallets"
+import { useWalletBypass } from "./wallet-bypass"
 
 type AccessContextProps = {
   publicKey: string | null
@@ -51,6 +52,7 @@ type AccessProviderProps = {
 }
 
 export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
+  const { bypassWallet } = useWalletBypass()
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [multiWallet, setMultiWallet] = useState(false)
@@ -83,13 +85,16 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
+    if (bypassWallet) {
+      return
+    }
     const publicKey = (router.query.publicKey as string) || wallet.publicKey?.toBase58()
     if (!publicKey) {
       setPublicKey("")
     } else {
       getPublicKey(publicKey)
     }
-  }, [router.query.publicKey, wallet.publicKey, isActive, isOffline])
+  }, [router.query.publicKey, wallet.publicKey, isActive, isOffline, bypassWallet])
 
   async function getUser() {
     if (session?.user) {

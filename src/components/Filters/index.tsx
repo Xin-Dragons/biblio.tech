@@ -49,7 +49,7 @@ const StaticFilters: FC<StaticFiltersProps> = ({ fullSize }) => {
   }
 
   return (
-    <Stack spacing={2} direction={{ sm: "row", xs: "column" }} alignItems="center">
+    <Stack direction={{ sm: "row", xs: "column" }} alignItems="center">
       {includeUnlabeledIcon &&
         (fullSize ? (
           <Button

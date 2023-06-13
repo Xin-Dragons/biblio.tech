@@ -13,7 +13,6 @@ import { FiltersProvider } from "../context/filters"
 import Script from "next/script"
 import { DialogProvider } from "../context/dialog"
 import { ThemeProvider } from "../context/theme"
-import { PublicKey } from "@metaplex-foundation/js"
 import { BasePathProvider } from "../context/base-path"
 import { AccessProvider } from "../context/access"
 import { UmiProvider } from "../context/umi"
@@ -25,6 +24,7 @@ import { InfoProvider } from "../context/info"
 import { WalletsProvider } from "../context/wallets"
 import { SharkyProvider } from "../context/sharky"
 import { TensorProvider } from "../context/tensor"
+import { WalletBypassProvider } from "../context/wallet-bypass"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -46,52 +46,54 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <SessionProvider session={session}>
-          <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
-            <AccessProvider>
-              <BasePathProvider publicKey={pageProps.publicKey}>
-                <DatabaseProvider>
-                  <WalletsProvider>
-                    <UiSettingsProvider>
-                      <FiltersProvider>
-                        <NftsProvider>
-                          <TransactionStatusProvider>
-                            <WalletModalProvider>
-                              <MetaplexProvider>
-                                <TagsProvider>
-                                  <ThemeProvider>
-                                    <SharkyProvider>
-                                      <TensorProvider>
-                                        <InfoProvider>
-                                          <Script
-                                            async
-                                            strategy="afterInteractive"
-                                            type="module"
-                                            src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                          />
-                                          <CssBaseline />
-                                          <SelectionProvider>
-                                            <DialogProvider>
-                                              <Component {...pageProps} />
-                                            </DialogProvider>
-                                          </SelectionProvider>
-                                        </InfoProvider>
-                                      </TensorProvider>
-                                    </SharkyProvider>
-                                  </ThemeProvider>
-                                </TagsProvider>
-                              </MetaplexProvider>
-                            </WalletModalProvider>
-                          </TransactionStatusProvider>
-                        </NftsProvider>
-                      </FiltersProvider>
-                    </UiSettingsProvider>
-                  </WalletsProvider>
-                </DatabaseProvider>
-              </BasePathProvider>
-            </AccessProvider>
-          </UmiProvider>
-        </SessionProvider>
+        <WalletBypassProvider>
+          <SessionProvider session={session}>
+            <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+              <AccessProvider>
+                <BasePathProvider publicKey={pageProps.publicKey}>
+                  <DatabaseProvider>
+                    <WalletsProvider>
+                      <UiSettingsProvider>
+                        <FiltersProvider>
+                          <NftsProvider>
+                            <TransactionStatusProvider>
+                              <WalletModalProvider>
+                                <MetaplexProvider>
+                                  <TagsProvider>
+                                    <ThemeProvider>
+                                      <SharkyProvider>
+                                        <TensorProvider>
+                                          <InfoProvider>
+                                            <Script
+                                              async
+                                              strategy="afterInteractive"
+                                              type="module"
+                                              src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                            />
+                                            <CssBaseline />
+                                            <SelectionProvider>
+                                              <DialogProvider>
+                                                <Component {...pageProps} />
+                                              </DialogProvider>
+                                            </SelectionProvider>
+                                          </InfoProvider>
+                                        </TensorProvider>
+                                      </SharkyProvider>
+                                    </ThemeProvider>
+                                  </TagsProvider>
+                                </MetaplexProvider>
+                              </WalletModalProvider>
+                            </TransactionStatusProvider>
+                          </NftsProvider>
+                        </FiltersProvider>
+                      </UiSettingsProvider>
+                    </WalletsProvider>
+                  </DatabaseProvider>
+                </BasePathProvider>
+              </AccessProvider>
+            </UmiProvider>
+          </SessionProvider>
+        </WalletBypassProvider>
       </WalletProvider>
     </ConnectionProvider>
   )
