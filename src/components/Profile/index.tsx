@@ -172,110 +172,104 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
       >
         <Close fontSize="large" />
       </IconButton>
-      <CardContent>
-        <Stack spacing={2} alignItems="center">
-          <Stack>
-            <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
-              Profile settings
-            </Typography>
-            <Typography variant="h6" color="primary" textAlign="center">
-              Connected with {shorten(wallet.publicKey?.toBase58())}
-            </Typography>
-          </Stack>
-          {isXs ? (
-            <Stack width="100%">
-              <Accordion
-                expanded={activeTab === "access"}
-                onChange={onAccordionChange("access")}
-                sx={{ width: "100%" }}
-              >
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" color="primary">
-                    Access
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Selector
-                    linkedNfts={user?.nfts || null}
-                    onSubmit={linkNft}
-                    unlinkNft={unlinkNft}
-                    loading={loading}
-                    submitLabel="Link NFT"
-                  />
-                </AccordionDetails>
-              </Accordion>
-              <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" color="primary">
-                    Linked Wallets
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <LinkedWallets />
-                </AccordionDetails>
-              </Accordion>
-              <Accordion expanded={activeTab === "address-book"} onChange={onAccordionChange("address-book")}>
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" color="primary">
-                    Address Book
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <AddressBook />
-                </AccordionDetails>
-              </Accordion>
-              <Accordion expanded={activeTab === "data"} onChange={onAccordionChange("data")}>
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" color="primary">
-                    Data
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Data />
-                </AccordionDetails>
-              </Accordion>
-              <Accordion expanded={activeTab === "settings"} onChange={onAccordionChange("settings")}>
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" color="primary">
-                    Settings
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Settings />
-                </AccordionDetails>
-              </Accordion>
-            </Stack>
-          ) : (
-            <>
-              <Tabs value={activeTab} onChange={onTabChange}>
-                <Tab value="access" label="Access" />
-                <Tab value="wallets" label="Linked Wallets" />
-                <Tab value="address-book" label="Address book" />
-                <Tab value="data" label="Data" />
-                <Tab value="settings" label="Settings" />
-              </Tabs>
-              {activeTab === "access" && (
-                <>
-                  <Selector
-                    linkedNfts={user?.nfts || null}
-                    onSubmit={linkNft}
-                    unlinkNft={unlinkNft}
-                    loading={loading}
-                    submitLabel="Link NFT"
-                  />
-                </>
-              )}
-
-              {activeTab === "settings" && <Settings />}
-
-              {activeTab === "wallets" && <LinkedWallets />}
-
-              {activeTab === "data" && <Data />}
-              {activeTab === "address-book" && <AddressBook />}
-            </>
-          )}
+      <Stack spacing={2} alignItems="center">
+        <Stack>
+          <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
+            Profile settings
+          </Typography>
+          <Typography variant="h6" color="primary" textAlign="center">
+            Connected with {shorten(wallet.publicKey?.toBase58())}
+          </Typography>
         </Stack>
-      </CardContent>
+        {isXs ? (
+          <Stack width="100%">
+            <Accordion expanded={activeTab === "access"} onChange={onAccordionChange("access")} sx={{ width: "100%" }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="primary">
+                  Access
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Selector
+                  linkedNfts={user?.nfts || null}
+                  onSubmit={linkNft}
+                  unlinkNft={unlinkNft}
+                  loading={loading}
+                  submitLabel="Link NFT"
+                />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="primary">
+                  Linked Wallets
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <LinkedWallets />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion expanded={activeTab === "address-book"} onChange={onAccordionChange("address-book")}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="primary">
+                  Address Book
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <AddressBook />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion expanded={activeTab === "data"} onChange={onAccordionChange("data")}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="primary">
+                  Data
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Data />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion expanded={activeTab === "settings"} onChange={onAccordionChange("settings")}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6" color="primary">
+                  Settings
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Settings />
+              </AccordionDetails>
+            </Accordion>
+          </Stack>
+        ) : (
+          <CardContent>
+            <Tabs value={activeTab} onChange={onTabChange}>
+              <Tab value="access" label="Access" />
+              <Tab value="wallets" label="Linked Wallets" />
+              <Tab value="address-book" label="Address book" />
+              <Tab value="data" label="Data" />
+              <Tab value="settings" label="Settings" />
+            </Tabs>
+            {activeTab === "access" && (
+              <>
+                <Selector
+                  linkedNfts={user?.nfts || null}
+                  onSubmit={linkNft}
+                  unlinkNft={unlinkNft}
+                  loading={loading}
+                  submitLabel="Link NFT"
+                />
+              </>
+            )}
+
+            {activeTab === "settings" && <Settings />}
+
+            {activeTab === "wallets" && <LinkedWallets />}
+
+            {activeTab === "data" && <Data />}
+            {activeTab === "address-book" && <AddressBook />}
+          </CardContent>
+        )}
+      </Stack>
     </Card>
   )
 }
@@ -719,7 +713,7 @@ function Data() {
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   return (
-    <Box padding={4} sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }} width="90%">
+    <Box padding={{ xs: 2, sm: 4 }} sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }}>
       <Stack spacing={2}>
         <Typography>
           Biblio is fast. This is because we cache everything you view on your local device. You can use this menu to
