@@ -26,6 +26,11 @@ import {
   darken,
   FormHelperText,
   SvgIcon,
+  useMediaQuery,
+  Theme,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import { useMetaplex } from "../../context/metaplex"
@@ -40,7 +45,7 @@ import { useDatabase } from "../../context/database"
 import { User } from "../../types/nextauth"
 import { useWallets } from "../../context/wallets"
 import { sortBy, upperFirst } from "lodash"
-import { AddCircle, Delete, Edit, TramSharp, Update } from "@mui/icons-material"
+import { AddCircle, Close, Delete, Edit, ExpandMore, TramSharp, Update } from "@mui/icons-material"
 import { Wallet } from "../../db"
 import { default as NextLink } from "next/link"
 import { WalletMultiButtonDynamic } from "../ActionBar"
@@ -63,12 +68,14 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
   const { update, data: session } = useSession()
   const [loading, setLoading] = useState(false)
   const { stakeNft, unstakeNft } = useDatabase()
-  const [activeTab, setActiveTab] = useState("access")
+  const [activeTab, setActiveTab] = useState<string | null>("access")
   const wallet = useWallet()
 
   function onTabChange(e: any, tab: string) {
     setActiveTab(tab)
   }
+
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   const user = session?.user
   const publicKey = session?.publicKey
@@ -154,8 +161,17 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
     return null
   }
 
+  const onAccordionChange = (panel: string) => (e: any, isExpanded: boolean) => setActiveTab(isExpanded ? panel : null)
+
   return (
-    <Card sx={{ overflowY: "auto", height: "80vh" }}>
+    <Card sx={{ overflowY: "auto", minHeight: "80vh" }}>
+      <IconButton
+        size="large"
+        sx={{ position: "fixed", top: "0.25em", right: "0.25em", zIndex: 10000 }}
+        onClick={() => onClose()}
+      >
+        <Close fontSize="large" />
+      </IconButton>
       <CardContent>
         <Stack spacing={2} alignItems="center">
           <Stack>
@@ -166,31 +182,98 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
               Connected with {shorten(wallet.publicKey?.toBase58())}
             </Typography>
           </Stack>
-          <Tabs value={activeTab} onChange={onTabChange}>
-            <Tab value="access" label="Access" />
-            <Tab value="wallets" label="Linked Wallets" />
-            <Tab value="address-book" label="Address book" />
-            <Tab value="data" label="data" />
-            <Tab value="settings" label="Settings" />
-          </Tabs>
-          {activeTab === "access" && (
+          {isXs ? (
+            <Stack width="100%">
+              <Accordion
+                expanded={activeTab === "access"}
+                onChange={onAccordionChange("access")}
+                sx={{ width: "100%" }}
+              >
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Access
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Selector
+                    linkedNfts={user?.nfts || null}
+                    onSubmit={linkNft}
+                    unlinkNft={unlinkNft}
+                    loading={loading}
+                    submitLabel="Link NFT"
+                  />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Linked Wallets
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <LinkedWallets />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "address-book"} onChange={onAccordionChange("address-book")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Address Book
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <AddressBook />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "data"} onChange={onAccordionChange("data")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Data
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Data />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "settings"} onChange={onAccordionChange("settings")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Settings
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Settings />
+                </AccordionDetails>
+              </Accordion>
+            </Stack>
+          ) : (
             <>
-              <Selector
-                linkedNfts={user?.nfts || null}
-                onSubmit={linkNft}
-                unlinkNft={unlinkNft}
-                loading={loading}
-                submitLabel="Link NFT"
-              />
+              <Tabs value={activeTab} onChange={onTabChange}>
+                <Tab value="access" label="Access" />
+                <Tab value="wallets" label="Linked Wallets" />
+                <Tab value="address-book" label="Address book" />
+                <Tab value="data" label="Data" />
+                <Tab value="settings" label="Settings" />
+              </Tabs>
+              {activeTab === "access" && (
+                <>
+                  <Selector
+                    linkedNfts={user?.nfts || null}
+                    onSubmit={linkNft}
+                    unlinkNft={unlinkNft}
+                    loading={loading}
+                    submitLabel="Link NFT"
+                  />
+                </>
+              )}
+
+              {activeTab === "settings" && <Settings />}
+
+              {activeTab === "wallets" && <LinkedWallets />}
+
+              {activeTab === "data" && <Data />}
+              {activeTab === "address-book" && <AddressBook />}
             </>
           )}
-
-          {activeTab === "settings" && <Settings />}
-
-          {activeTab === "wallets" && <LinkedWallets />}
-
-          {activeTab === "data" && <Data />}
-          {activeTab === "address-book" && <AddressBook />}
         </Stack>
       </CardContent>
     </Card>
@@ -325,6 +408,8 @@ function LinkedWallets() {
     }
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
   return (
     <Stack spacing={2} width="100%">
       <Typography>
@@ -343,27 +428,59 @@ function LinkedWallets() {
           </Alert>
         )}
       </Typography>
+
       <Table stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>Address</TableCell>
-            <TableCell>Nickname</TableCell>
-            <TableCell>Type</TableCell>
-            <TableCell>Chain</TableCell>
-            <TableCell></TableCell>
-          </TableRow>
-        </TableHead>
+        {!isXs && (
+          <TableHead>
+            <TableRow>
+              <TableCell>Address</TableCell>
+              <TableCell>Nickname</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Chain</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableHead>
+        )}
+
         <TableBody>
           {sortBy(session?.user?.wallets, (w) => w.main).map((wallet) => {
             const nickname = wallets.find((w) => w.publicKey === wallet.public_key)?.nickname || "-"
             return (
-              <TableRow key={wallet.public_key}>
-                <TableCell>{shorten(wallet.public_key)}</TableCell>
-                <TableCell>{nickname}</TableCell>
-                <TableCell>{wallet.main ? "Main" : "Linked"}</TableCell>
-                <TableCell>{upperFirst(wallet.chain)}</TableCell>
-                <TableCell width="100px">
-                  <Button onClick={() => unlink(wallet.public_key)} disabled={loading || wallet.main} color="error">
+              <TableRow
+                key={wallet.public_key}
+                sx={
+                  isXs
+                    ? {
+                        display: "flex",
+                        flexDirection: "column",
+                        td: {
+                          textAlign: "right",
+                          display: "flex",
+                          justifyContent: "space-between",
+                        },
+                        "td[data-th]": {
+                          border: 0,
+                          "&:before": {
+                            content: "attr(data-th)",
+                            fontWeight: "bold",
+                          },
+                        },
+                      }
+                    : {}
+                }
+              >
+                <TableCell data-th="Address">{shorten(wallet.public_key)}</TableCell>
+                <TableCell data-th="Nickname">{nickname}</TableCell>
+                <TableCell data-th="Type">{wallet.main ? "Main" : "Linked"}</TableCell>
+                <TableCell data-th="Chain">{upperFirst(wallet.chain)}</TableCell>
+                <TableCell style={{ width: isXs ? "100%" : "100px" }}>
+                  <Button
+                    onClick={() => unlink(wallet.public_key)}
+                    disabled={loading || wallet.main}
+                    color="error"
+                    fullWidth
+                    variant="outlined"
+                  >
                     Unlink
                   </Button>
                 </TableCell>
@@ -599,6 +716,8 @@ function Data() {
     }
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
   return (
     <Box padding={4} sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }} width="90%">
       <Stack spacing={2}>
@@ -611,68 +730,76 @@ function Data() {
         </Typography>
         <Table>
           <TableBody>
-            <TableRow>
-              <TableCell>
+            <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+              <TableCell sx={isXs ? { border: 0 } : {}}>
                 <Typography variant="h6" fontWeight="bold" color="primary">
                   Local storage usage
                 </Typography>
               </TableCell>
               <TableCell>
-                <Typography textAlign="right">{(storage / 1_000_000).toLocaleString()} Mb</Typography>
+                <Typography textAlign={{ xs: "center", sm: "right" }}>
+                  {(storage / 1_000_000).toLocaleString()} Mb
+                </Typography>
               </TableCell>
             </TableRow>
-            <TableRow>
-              <TableCell>
+            <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+              <TableCell sx={isXs ? { border: 0 } : {}}>
                 <Typography variant="h6" fontWeight="bold" color="primary">
                   Export data
                 </Typography>
                 <Typography>Export your data to use on another device</Typography>
               </TableCell>
               <TableCell sx={{ textAlign: "right" }}>
-                <Button onClick={exportData}>export</Button>
+                <Button onClick={exportData} fullWidth variant="outlined">
+                  export
+                </Button>
               </TableCell>
             </TableRow>
-            <TableRow>
-              <TableCell>
+            <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+              <TableCell sx={isXs ? { border: 0 } : {}}>
                 <Typography variant="h6" fontWeight="bold" color="primary">
                   Import data
                 </Typography>
                 <Typography>Upload .biblio file to import your preferences and settings</Typography>
               </TableCell>
               <TableCell sx={{ textAlign: "right" }}>
-                <Button component="label">
+                <Button component="label" fullWidth variant="outlined">
                   Import
                   <input type="file" onChange={importData} hidden />
                 </Button>
               </TableCell>
             </TableRow>
-            <TableRow>
-              <TableCell>
+            <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+              <TableCell sx={isXs ? { border: 0 } : {}}>
                 <Typography variant="h6" fontWeight="bold" color="primary">
                   Clear cache
                 </Typography>
                 <Typography>Free up space by deleting cached NFTs</Typography>
               </TableCell>
               <TableCell sx={{ textAlign: "right" }}>
-                <Tooltip title="Clear all cached NFTs">
-                  <Button onClick={clearAll} color="error">
-                    All
-                  </Button>
-                </Tooltip>
-                <Tooltip title="Clear cached NFTs from other wallets you have visited">
-                  <Button onClick={clearUnonwned}>Not-owned</Button>
-                </Tooltip>
+                <Stack spacing={1} direction={{ xs: "column", sm: "row" }}>
+                  <Tooltip title="Clear cached NFTs from other wallets you have visited">
+                    <Button onClick={clearUnonwned} fullWidth variant="outlined">
+                      Not-owned
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Clear all cached NFTs">
+                    <Button onClick={clearAll} color="error" fullWidth variant="outlined">
+                      All
+                    </Button>
+                  </Tooltip>
+                </Stack>
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
         <Alert severity="error" sx={{ border: 1, borderColor: "error" }}>
-          <Stack spacing="2">
+          <Stack spacing={2}>
             <Typography variant="h5">Danger zone</Typography>
             <Table>
-              <TableBody>
-                <TableRow>
-                  <TableCell>
+              <TableBody sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+                <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+                  <TableCell sx={isXs ? { border: 0 } : {}}>
                     <Typography variant="h6" fontWeight="bold">
                       Delete all data
                     </Typography>
@@ -681,13 +808,13 @@ function Data() {
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: "right" }}>
-                    <Button color="error" variant="outlined" onClick={toggleDeleteAllShowing}>
+                    <Button color="error" variant="outlined" onClick={toggleDeleteAllShowing} fullWidth>
                       Delete data
                     </Button>
                   </TableCell>
                 </TableRow>
-                <TableRow>
-                  <TableCell>
+                <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+                  <TableCell sx={isXs ? { border: 0 } : {}}>
                     <Typography variant="h6" fontWeight="bold">
                       Delete Biblio account
                     </Typography>
@@ -702,6 +829,7 @@ function Data() {
                       variant="outlined"
                       sx={{ whiteSpace: "nowrap" }}
                       onClick={toggleDeleteAccountShowing}
+                      fullWidth
                     >
                       Delete account
                     </Button>
@@ -828,23 +956,27 @@ export const AddressBook = () => {
     }
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
   return (
     <>
       <Table stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>
-              <Stack>
-                <Typography>Address</Typography>
-              </Stack>
-            </TableCell>
-            <TableCell>Nickname</TableCell>
-            <TableCell>Owned</TableCell>
-            <TableCell>Linked</TableCell>
-            <TableCell sx={{ width: "150px" }}>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
+        {!isXs && (
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                <Stack>
+                  <Typography>Address</Typography>
+                </Stack>
+              </TableCell>
+              <TableCell>Nickname</TableCell>
+              <TableCell>Owned</TableCell>
+              <TableCell>Linked</TableCell>
+              <TableCell sx={{ width: "150px" }}>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+        )}
+        <TableBody sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
           {sortBy(wallets, (wallet) => !linkedWallets?.includes(wallet.publicKey)).map((wallet) => (
             <Wallet
               key={wallet.publicKey}
@@ -957,34 +1089,72 @@ const Wallet: FC<WalletProps> = ({ wallet, isLinked }) => {
     toggleUpdateShowing()
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
   return (
     <>
-      <TableRow>
-        <TableCell>
+      <TableRow
+        sx={
+          isXs
+            ? {
+                display: "flex",
+                flexDirection: "column",
+                td: {
+                  textAlign: "right",
+                  display: "flex",
+                  justifyContent: "space-between",
+                },
+                "td[data-th]": {
+                  border: 0,
+                  "&:before": {
+                    content: "attr(data-th)",
+                    fontWeight: "bold",
+                  },
+                },
+              }
+            : {}
+        }
+      >
+        <TableCell data-th="Address">
           <Tooltip title={wallet.publicKey}>
             <NextLink passHref href={`/wallet/${wallet.publicKey}`}>
               <Link>{shorten(wallet.publicKey)}</Link>
             </NextLink>
           </Tooltip>
         </TableCell>
-        <TableCell>{wallet.nickname || "-"}</TableCell>
-        <TableCell>{wallet.owned ? "Yes" : "No"}</TableCell>
-        <TableCell>{isLinked ? "Yes" : "No"}</TableCell>
+        <TableCell data-th="Nickname">{wallet.nickname || "-"}</TableCell>
+        <TableCell data-th="Owned">{wallet.owned ? "Yes" : "No"}</TableCell>
+        <TableCell data-th="Linked">{isLinked ? "Yes" : "No"}</TableCell>
         <TableCell>
-          <Tooltip title={isLinked ? "Cannot remove linked wallet, unlink first" : "Remove wallet from address book"}>
-            <span>
-              <IconButton disabled={isLinked} color="error" onClick={toggleDeleteShowing}>
-                <Delete />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Update wallet">
-            <span>
-              <IconButton color="primary" onClick={toggleUpdateShowing}>
-                <Edit />
-              </IconButton>
-            </span>
-          </Tooltip>
+          {isXs ? (
+            <Stack direction="column" width="100%" spacing={1}>
+              <Button fullWidth variant="outlined">
+                Edit
+              </Button>
+              <Button fullWidth variant="outlined" color="error">
+                Delete
+              </Button>
+            </Stack>
+          ) : (
+            <Stack direction="row">
+              <Tooltip
+                title={isLinked ? "Cannot remove linked wallet, unlink first" : "Remove wallet from address book"}
+              >
+                <span>
+                  <IconButton disabled={isLinked} color="error" onClick={toggleDeleteShowing}>
+                    <Delete />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Update wallet">
+                <span>
+                  <IconButton color="primary" onClick={toggleUpdateShowing}>
+                    <Edit />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
+          )}
         </TableCell>
       </TableRow>
       <Dialog open={deleteShowing} onClose={toggleDeleteShowing}>

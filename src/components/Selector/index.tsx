@@ -103,7 +103,7 @@ export const Selector: FC<SelectorProps> = ({
   }
 
   return (
-    <>
+    <Stack spacing={2}>
       {!linkedNfts?.length ? (
         <>
           {" "}
@@ -146,6 +146,7 @@ export const Selector: FC<SelectorProps> = ({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              margin: "1em auto !important",
               background: darken(theme.palette.background.default, 0.1),
             }}
           >
@@ -209,7 +210,7 @@ export const Selector: FC<SelectorProps> = ({
           </Grid>
         </Card>
       </Dialog>
-    </>
+    </Stack>
   )
 }
 
@@ -230,8 +231,6 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
   const theme = useTheme()
   const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
 
-  console.log(owner, wallet.publicKey?.toBase58())
-
   const isOwned = owner === wallet.publicKey?.toBase58()
 
   return (
@@ -240,9 +239,15 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
       sx={{ backgroundColor: darken(theme.palette.background.default, 0.1) }}
       alignItems="center"
       padding={small ? 2 : 4}
+      width="100%"
     >
-      <Stack direction={{ sm: "row", xs: "column" }} spacing={1} alignItems={small ? "flex-start" : "center"}>
-        <Stack spacing={2} justifyContent="space-between">
+      <Stack
+        direction={{ sm: "row", xs: "column" }}
+        spacing={1}
+        alignItems={small ? "flex-start" : "center"}
+        width="100%"
+      >
+        <Stack spacing={2} justifyContent="space-between" width="100%">
           <img
             src={`https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${nft?.metadata?.image}`}
             width="100%"

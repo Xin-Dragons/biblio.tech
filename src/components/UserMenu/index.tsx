@@ -11,7 +11,9 @@ import {
   MenuItem,
   MenuList,
   Switch,
+  Theme,
   darken,
+  useMediaQuery,
 } from "@mui/material"
 import { FC, MouseEvent, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
@@ -92,6 +94,8 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
     setProfileModalShowing(true)
     handleClose()
   }
+
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   return (
     <Box>
@@ -201,7 +205,13 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
         </MenuList>
       </Menu>
       {session?.user?.id && (
-        <Dialog open={profileModalShowing} onClose={toggleProfileModal} fullWidth={true} maxWidth="md">
+        <Dialog
+          open={profileModalShowing}
+          onClose={toggleProfileModal}
+          fullWidth={true}
+          maxWidth="md"
+          fullScreen={isXs}
+        >
           <Profile user={session.user} publicKey={session.publicKey} onClose={toggleProfileModal} />
         </Dialog>
       )}

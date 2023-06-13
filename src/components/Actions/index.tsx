@@ -29,6 +29,8 @@ import {
   TableRow,
   Table,
   TableCell,
+  Theme,
+  Slider,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 // import { createCloseAccountInstruction, getAssociatedTokenAddress } from "@solana/spl-token"
@@ -619,6 +621,12 @@ export const Actions: FC = () => {
     router.push("/")
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
+  function handleSelectionChange(value: number) {
+    setSelected(filtered.slice(0, value).map((item) => item.nftMint))
+  }
+
   return (
     <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
       {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
@@ -883,7 +891,7 @@ export const Actions: FC = () => {
         </Card>
       </Dialog>
 
-      <Dialog open={listOpen} onClose={toggleListOpen} fullWidth maxWidth="md">
+      <Dialog open={listOpen} onClose={toggleListOpen} fullWidth maxWidth="md" fullScreen={isXs}>
         <Card sx={{ overflowY: "auto", height: "100vh" }}>
           <Listing items={selectedItems} onClose={toggleListOpen} />
         </Card>
@@ -897,6 +905,15 @@ export const Actions: FC = () => {
           <CardContent>
             <Stack spacing={2}>
               <Typography variant="h5">Selection</Typography>
+              <Stack>
+                <Slider
+                  aria-label="Selection"
+                  value={selected.length}
+                  onChange={(e, value) => handleSelectionChange(value as number)}
+                  max={filtered.length}
+                />
+                <Typography textAlign="right">{selected.length} selected</Typography>
+              </Stack>
               <Stack direction="row" spacing={2}>
                 <Button onClick={selectAll} disabled={!filtered.length || allSelected} fullWidth variant="outlined">
                   Select all
@@ -959,6 +976,25 @@ export const Actions: FC = () => {
                       <VaultIcon />
                     </SvgIcon>
                     <Typography>{frozenSelected ? "Remove from vault" : "Add to vault"}</Typography>
+                  </Stack>
+                </Button>
+                <Button
+                  disabled={
+                    !selected.length ||
+                    nonListedStatusSelected ||
+                    !canList ||
+                    !onlyNftsSelected ||
+                    nonOwnedSelected ||
+                    selected.length > 20
+                  }
+                  onClick={listedSelected ? onDelist : list}
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                >
+                  <Stack direction="row" spacing={1}>
+                    <Sell />
+                    <Typography>Sell / List selected</Typography>
                   </Stack>
                 </Button>
               </Stack>

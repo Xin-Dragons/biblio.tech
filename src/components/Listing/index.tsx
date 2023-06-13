@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Button,
+  CardContent,
   Chip,
   CircularProgress,
   FormControlLabel,
@@ -19,11 +20,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Theme,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
   Typography,
   darken,
+  useMediaQuery,
 } from "@mui/material"
 import { FC, useEffect, useRef, useState } from "react"
 import { Nft } from "../../db"
@@ -99,7 +102,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   const { list, sellNow } = useTensor()
   const { transactions } = useTransactionStatus()
   const [loading, setLoading] = useState(false)
-  const { payRoyalties, setPayRoyalties } = useUiSettings()
+  const { payRoyalties: globalPayRoyalties } = useUiSettings()
   const [isActive, setIsActive] = useState(false)
   const [marketplace, setMarketplace] = useState("me")
 
@@ -118,6 +121,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
       }
     })
   )
+
+  const [payRoyalties, setPayRoyalties] = useState(globalPayRoyalties)
 
   useEffect(() => {
     const updates = selected
@@ -495,6 +500,33 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
     )
   }
 
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"))
+  const moveMarketplace = useMediaQuery("(max-width:400px)")
+
+  const marketplaceSelector = (
+    <ToggleButtonGroup
+      value={marketplace}
+      exclusive
+      onChange={(e, value) => setMarketplace(value)}
+      aria-label="text alignment"
+    >
+      <ToggleButton value="tensor" aria-label="left aligned">
+        <SvgIcon>
+          <Tensor />
+        </SvgIcon>
+      </ToggleButton>
+      <ToggleButton value="me" aria-label="centered">
+        <img src="/me.png" width="30px" />
+      </ToggleButton>
+    </ToggleButtonGroup>
+  )
+
+  const showing = (
+    <Typography variant="h6">
+      Showing {items.length} item{items.length === 1 ? "" : "s"}
+    </Typography>
+  )
+
   return (
     <>
       {marketplace === "tensor" && (
@@ -505,78 +537,81 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
       <Table stickyHeader>
         <TableHead>
-          <TableRow>
-            <TableCell colSpan={2}>
-              <Typography variant="h5">
-                Showing {items.length} item{items.length === 1 ? "" : "s"}
-              </Typography>
-              <Slider
-                aria-label="Selection"
-                value={selected.length}
-                onChange={(e, value) => handleSelectionChange(value as number)}
-                max={20}
-              />
-            </TableCell>
-            <TableCell>
-              <Stack direction="row" spacing={1}>
-                <Chip
-                  size="small"
-                  label="Set all FP"
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => updateAllListingPrice()}
-                  disabled={loading}
-                  sx={{ fontSize: "10px", textTransform: "uppercase" }}
-                />
-                <Chip
-                  size="small"
-                  label="10% FP"
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => updateAllListingPrice(10)}
-                  disabled={loading}
-                  sx={{ fontSize: "10px", textTransform: "uppercase" }}
-                />
-                <Chip
-                  size="small"
-                  label="20% FP"
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => updateAllListingPrice(20)}
-                  disabled={loading}
-                  sx={{ fontSize: "10px", textTransform: "uppercase" }}
-                />
-                <Chip
-                  size="small"
-                  label="30% FP"
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => updateAllListingPrice(30)}
-                  disabled={loading}
-                  sx={{ fontSize: "10px", textTransform: "uppercase" }}
-                />
+          <TableRow sx={isXs ? { display: "flex", flexDirection: "column", width: "100%" } : {}}>
+            <TableCell colSpan={2} sx={isXs ? { display: "flex", position: "static" } : {}}>
+              <Stack width="100%">
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} width="100%">
+                  <Slider
+                    aria-label="Selection"
+                    value={selected.length}
+                    onChange={(e, value) => handleSelectionChange(value as number)}
+                    max={filtered.length < 20 ? filtered.length : 20}
+                  />
+                  {isXs && marketplaceSelector}
+                </Stack>
+                {!isXs && showing}
               </Stack>
             </TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
-              <ToggleButtonGroup
-                value={marketplace}
-                exclusive
-                onChange={(e, value) => setMarketplace(value)}
-                aria-label="text alignment"
+            <TableCell sx={isXs ? { display: "flex", position: "static" } : {}}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                alignItems="center"
+                justifyContent="space-between"
+                width="100%"
+                spacing={1}
               >
-                <ToggleButton value="tensor" aria-label="left aligned">
-                  <SvgIcon>
-                    <Tensor />
-                  </SvgIcon>
-                </ToggleButton>
-                <ToggleButton value="me" aria-label="centered">
-                  <img src="/me.png" width="30px" />
-                </ToggleButton>
-              </ToggleButtonGroup>
+                {isXs && showing}
+
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Chip
+                    size="small"
+                    label="Set all FP"
+                    color="primary"
+                    variant="outlined"
+                    onClick={() => updateAllListingPrice()}
+                    disabled={loading}
+                    sx={{ fontSize: "10px", textTransform: "uppercase" }}
+                  />
+                  <Chip
+                    size="small"
+                    label="10% FP"
+                    color="primary"
+                    variant="outlined"
+                    onClick={() => updateAllListingPrice(10)}
+                    disabled={loading}
+                    sx={{ fontSize: "10px", textTransform: "uppercase" }}
+                  />
+                  <Chip
+                    size="small"
+                    label="20% FP"
+                    color="primary"
+                    variant="outlined"
+                    onClick={() => updateAllListingPrice(20)}
+                    disabled={loading}
+                    sx={{ fontSize: "10px", textTransform: "uppercase" }}
+                  />
+                  <Chip
+                    size="small"
+                    label="30% FP"
+                    color="primary"
+                    variant="outlined"
+                    onClick={() => updateAllListingPrice(30)}
+                    disabled={loading}
+                    sx={{ fontSize: "10px", textTransform: "uppercase" }}
+                  />
+                </Stack>
+              </Stack>
             </TableCell>
+            {!isXs && (
+              <TableCell
+                sx={isXs ? { textAlign: "right", display: "flex", position: "static" } : { textAlign: "right" }}
+              >
+                {marketplaceSelector}
+              </TableCell>
+            )}
           </TableRow>
         </TableHead>
-        <TableBody>
+        <TableBody sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
           {items.map((item: Nft) => {
             const isDisabled = loading || transactions.map((t) => t.nftMint).includes(item.nftMint) || !!item.status
             const identifier = item.collectionId || item.firstVerifiedCreator
@@ -594,41 +629,49 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
             return (
               <TableRow key={item.nftMint}>
-                <TableCell colSpan={marketplace === "me" ? 2 : 1}>
-                  <Stack direction="row" spacing={2} alignItems="center">
-                    <img
-                      src={`https://img-cdn.magiceden.dev/rs:fill:100:100:0:0/plain/${item?.json?.image}`}
-                      width={50}
-                    />
-                    <Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography color="primary" fontWeight="bold">
-                          {name}
-                        </Typography>
-                        {royaltiesEnforced && (
-                          <Tooltip title="Enforced royalties">
-                            <SvgIcon
-                              // @ts-ignore
-                              color="gold"
-                              fontSize="small"
-                            >
-                              <Crown />
-                            </SvgIcon>
-                          </Tooltip>
-                        )}
+                <TableCell colSpan={marketplace === "me" ? 2 : 1} sx={isXs ? { display: "flex", border: 0 } : {}}>
+                  <Stack direction="row" justifyContent="space-between" width="100%" alignItems="flex-start">
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <img
+                        src={`https://img-cdn.magiceden.dev/rs:fill:100:100:0:0/plain/${item?.json?.image}`}
+                        width={50}
+                      />
+                      <Stack>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography color="primary" fontWeight="bold">
+                            {name}
+                          </Typography>
+                          {royaltiesEnforced && (
+                            <Tooltip title="Enforced royalties">
+                              <SvgIcon
+                                // @ts-ignore
+                                color="gold"
+                                fontSize="small"
+                              >
+                                <Crown />
+                              </SvgIcon>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                        <Typography variant="body2">{item.json?.name || item.metadata.name}</Typography>
                       </Stack>
-                      <Typography variant="body2">{item.json?.name || item.metadata.name}</Typography>
                     </Stack>
+                    {isXs && (
+                      <IconButton color="error" onClick={() => removeItem(item.nftMint)}>
+                        <HighlightOffIcon />
+                      </IconButton>
+                    )}
                   </Stack>
                 </TableCell>
                 {marketplace === "tensor" && (
-                  <TableCell>
-                    <Stack spacing={0.5}>
+                  <TableCell sx={isXs ? { display: "flex", borderBottom: 0 } : {}}>
+                    <Stack spacing={0.5} width="100%">
                       <Button
                         sx={{ whiteSpace: "nowrap", height: "40px" }}
                         variant="outlined"
                         disabled={isDisabled || !Number(pool?.price)}
                         onClick={() => onSellNowClick(item.nftMint)}
+                        fullWidth
                       >
                         <Stack direction="row" spacing={0.5}>
                           <Typography>Sell now</Typography>
@@ -689,8 +732,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                     </Stack>
                   </TableCell>
                 )}
-                <TableCell colSpan={2}>
-                  <Stack spacing={0.5}>
+                <TableCell colSpan={2} sx={isXs ? { display: "flex" } : {}}>
+                  <Stack spacing={0.5} width="100%">
                     <Stack direction="row" spacing={1} justifyContent="space-between">
                       <TextField
                         label="List for"
@@ -716,9 +759,11 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                           {marketplace === "me" && <img src="/me.png" height="18px" />}
                         </Stack>
                       </Button>
-                      <IconButton color="error" onClick={() => removeItem(item.nftMint)}>
-                        <HighlightOffIcon />
-                      </IconButton>
+                      {!isXs && (
+                        <IconButton color="error" onClick={() => removeItem(item.nftMint)}>
+                          <HighlightOffIcon />
+                        </IconButton>
+                      )}
                     </Stack>
                     {lamportsToSol(floorPrice) === listingPriceItem ? (
                       <FormHelperText>Floor price: {lamportsToSol(floorPrice)} SOL</FormHelperText>
@@ -741,21 +786,36 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
             )
           })}
         </TableBody>
-        <TableFooter sx={{ position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }}>
-          <TableRow>
-            <TableCell colSpan={marketplace === "me" ? 2 : 1}>
-              <Button
-                color="error"
-                disabled={Boolean(transactions.length)}
-                onClick={() => onClose()}
-                variant="outlined"
-              >
-                Cancel
-              </Button>
-            </TableCell>
+        <TableFooter
+          sx={
+            isXs
+              ? {
+                  display: "flex",
+                  flexDirection: "column",
+                  position: "sticky",
+                  bottom: 0,
+                  backgroundColor: "background.default",
+                  zIndex: 10,
+                }
+              : { position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }
+          }
+        >
+          <TableRow sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+            {!isXs && (
+              <TableCell colSpan={marketplace === "me" ? 2 : 1} sx={isXs ? { display: "flex" } : {}}>
+                <Button
+                  color="error"
+                  disabled={Boolean(transactions.length)}
+                  onClick={() => onClose()}
+                  variant="outlined"
+                >
+                  Cancel
+                </Button>
+              </TableCell>
+            )}
             {marketplace === "tensor" && (
-              <TableCell>
-                <Stack spacing={1}>
+              <TableCell sx={isXs ? { display: "flex" } : {}}>
+                <Stack spacing={1} width="100%">
                   <Button
                     variant="contained"
                     onClick={onSellAllClick}
@@ -810,8 +870,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                 </Stack>
               </TableCell>
             )}
-            <TableCell sx={{ textAlign: "right" }} colSpan={2}>
-              <Stack direction="row" spacing={2} alignItems="flex">
+            <TableCell sx={isXs ? { display: "flex", textAlign: "right" } : { textAlign: "right" }} colSpan={2}>
+              <Stack direction="row" spacing={2} alignItems="flex" width="100%">
                 <TextField
                   label="Total"
                   value={lamportsToSol(totalListings)}
@@ -845,33 +905,43 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
               </Stack>
             </TableCell>
           </TableRow>
-          <TableRow>
-            <TableCell colSpan={4}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
-                <Stack>
-                  <FormControlLabel
-                    control={<Switch checked={payRoyalties} onChange={(e) => setPayRoyalties(e.target.checked)} />}
-                    label={
-                      <Stack>
-                        <Typography>Pay full royalties</Typography>
-                        <FormHelperText sx={{ lineHeight: "0.5em" }}>
-                          Pay full royalties on non-enforced collections when using instant-sell
-                        </FormHelperText>
-                      </Stack>
-                    }
-                  />
+          <TableRow sx={isXs ? { display: "flex" } : {}}>
+            <TableCell colSpan={4} sx={isXs ? { display: "flex", width: "100%" } : {}}>
+              <Stack spacing={2}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-end" width="100%">
+                  <Stack width="100%">
+                    <FormControlLabel
+                      control={<Switch checked={payRoyalties} onChange={(e) => setPayRoyalties(e.target.checked)} />}
+                      label={
+                        <Stack>
+                          <Typography>Pay full royalties</Typography>
+                          <FormHelperText sx={{ lineHeight: "1em" }}>
+                            Pay full royalties on non-enforced collections when using instant-sell
+                          </FormHelperText>
+                        </Stack>
+                      }
+                    />
+                  </Stack>
+                  <Box>
+                    {loading ? (
+                      <CircularProgress />
+                    ) : (
+                      <Tooltip title="Refetch latest prices">
+                        <IconButton onClick={getFloorPrices}>
+                          <Sync />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Stack>
-                <Box>
-                  {loading ? (
-                    <CircularProgress />
-                  ) : (
-                    <Tooltip title="Refetch latest prices">
-                      <IconButton onClick={getFloorPrices}>
-                        <Sync />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
+                <Button
+                  color="error"
+                  disabled={Boolean(transactions.length)}
+                  onClick={() => onClose()}
+                  variant="outlined"
+                >
+                  Cancel
+                </Button>
               </Stack>
             </TableCell>
           </TableRow>
