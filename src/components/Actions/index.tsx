@@ -719,7 +719,7 @@ export const Actions: FC = () => {
         </Card>
       </Dialog>
 
-      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth>
+      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth maxWidth="md">
         <Card sx={{ overflowY: "auto" }}>
           <Vault onClose={() => setVaultShowing(false)} />
         </Card>

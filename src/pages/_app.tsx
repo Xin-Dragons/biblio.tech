@@ -20,7 +20,6 @@ import { TransactionStatusProvider } from "../context/transactions"
 import { SessionProvider } from "next-auth/react"
 import { NftsProvider } from "../context/nfts"
 import { Session } from "next-auth"
-import { InfoProvider } from "../context/info"
 import { WalletsProvider } from "../context/wallets"
 import { SharkyProvider } from "../context/sharky"
 import { TensorProvider } from "../context/tensor"
@@ -63,20 +62,18 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
                                     <ThemeProvider>
                                       <SharkyProvider>
                                         <TensorProvider>
-                                          <InfoProvider>
-                                            <Script
-                                              async
-                                              strategy="afterInteractive"
-                                              type="module"
-                                              src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                            />
-                                            <CssBaseline />
-                                            <SelectionProvider>
-                                              <DialogProvider>
-                                                <Component {...pageProps} />
-                                              </DialogProvider>
-                                            </SelectionProvider>
-                                          </InfoProvider>
+                                          <Script
+                                            async
+                                            strategy="afterInteractive"
+                                            type="module"
+                                            src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                          />
+                                          <CssBaseline />
+                                          <SelectionProvider>
+                                            <DialogProvider>
+                                              <Component {...pageProps} />
+                                            </DialogProvider>
+                                          </SelectionProvider>
                                         </TensorProvider>
                                       </SharkyProvider>
                                     </ThemeProvider>
