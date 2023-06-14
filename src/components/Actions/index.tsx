@@ -119,7 +119,9 @@ export const Actions: FC = () => {
   const nonListedStatusSelected = selectedItems.some((item) => item.status && item.status !== "listed")
   const allInVault = selectedItems.every((item: any) => item.status === "inVault")
   const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
-  const nonOwnedSelected = selectedItems.some((item) => item.owner !== wallet.publicKey?.toBase58())
+  const nonOwnedSelected = selectedItems.some((item) => {
+    return item.owner !== wallet.publicKey?.toBase58() && item.delegate !== wallet.publicKey?.toBase58()
+  })
 
   const [vaultShowing, setVaultShowing] = useState(false)
 
@@ -469,7 +471,7 @@ export const Actions: FC = () => {
         <Tooltip
           title={
             nonOwnedSelected
-              ? "Some selected items are owned by a linked wallet"
+              ? "Some selected items are owned by or delegated to linked wallet"
               : nonInVaultStatusesSelected
               ? "Selection contains items that cannot be frozen/thawed"
               : onlyNftsSelected
@@ -485,11 +487,7 @@ export const Actions: FC = () => {
             <IconButton
               disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault"))}
               sx={{
-                color: allInVault ? "#111316" : "#a6e3e0",
-                background: allInVault ? "#a6e3e0" : "default",
-                "&:hover": {
-                  color: "#a6e3e0",
-                },
+                color: "#a6e3e0",
               }}
               onClick={() => toggleVaultShowing()}
             >
@@ -586,9 +584,7 @@ export const Actions: FC = () => {
 
               <Tooltip
                 title={
-                  nonOwnedSelected
-                    ? "Some selected items are owned by a linked wallet"
-                    : nonInVaultStatusesSelected
+                  nonInVaultStatusesSelected
                     ? "Selection contains items that cannot be frozen/thawed"
                     : onlyNftsSelected
                     ? canFreezeThaw
@@ -601,19 +597,9 @@ export const Actions: FC = () => {
               >
                 <span>
                   <IconButton
-                    disabled={
-                      !selected.length ||
-                      !canFreezeThaw ||
-                      !onlyNftsSelected ||
-                      nonInVaultStatusesSelected ||
-                      nonOwnedSelected
-                    }
+                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected || nonInVaultStatusesSelected}
                     sx={{
-                      color: allInVault ? "text.primary" : "#a6e3e0",
-                      background: allInVault ? "#a6e3e0" : "default",
-                      "&:hover": {
-                        color: "#a6e3e0",
-                      },
+                      color: "#a6e3e0",
                     }}
                     onClick={() => toggleVaultShowing()}
                   >
@@ -733,9 +719,9 @@ export const Actions: FC = () => {
         </Card>
       </Dialog>
 
-      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth maxWidth="md">
+      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth>
         <Card sx={{ overflowY: "auto" }}>
-          <Vault />
+          <Vault onClose={() => setVaultShowing(false)} />
         </Card>
       </Dialog>
 

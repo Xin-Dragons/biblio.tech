@@ -64,7 +64,7 @@ import { useSharky } from "../../context/sharky"
 import { useTheme } from "../../context/theme"
 import { useTensor } from "../../context/tensor"
 import SellIcon from "@mui/icons-material/Sell"
-import { lamportsToSol } from "../../helpers/utils"
+import { lamportsToSol, shorten } from "../../helpers/utils"
 import ExchangeArt from "./exchange-art.svg"
 import Tensor from "./tensor.svg"
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
@@ -649,16 +649,28 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                   </TableCell>
                 </TableRow>
                 {item.status && (
-                  <TableRow>
-                    <TableCell>
-                      <Typography fontWeight="bold" color="primary">
-                        Status
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ textAlign: "right" }}>
-                      <Typography>{statusTitles[item.status as keyof object]}</Typography>
-                    </TableCell>
-                  </TableRow>
+                  <>
+                    <TableRow>
+                      <TableCell>
+                        <Typography fontWeight="bold" color="primary">
+                          Status
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right" }}>
+                        <Typography>{statusTitles[item.status as keyof object]}</Typography>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>
+                        <Typography fontWeight="bold" color="primary">
+                          Delegate
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right" }}>
+                        <Typography>{item.delegate ? shorten(item.delegate) : "-"}</Typography>
+                      </TableCell>
+                    </TableRow>
+                  </>
                 )}
               </TableBody>
             </Table>

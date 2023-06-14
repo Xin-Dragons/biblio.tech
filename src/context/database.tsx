@@ -380,7 +380,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         worker.terminate()
       }
     })
-    worker.postMessage({ publicKey, force, mints })
+    worker.postMessage({ publicKey, force, mints, publicKeys })
 
     worker.addEventListener("error", () => {
       worker.terminate()

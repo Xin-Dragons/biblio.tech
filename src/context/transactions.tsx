@@ -59,7 +59,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         try {
           setTransactionInProgress(mints, type)
 
-          const signature = await umi.rpc.sendTransaction(transaction, { skipPreflight: false })
+          const signature = await umi.rpc.sendTransaction(transaction, { skipPreflight: true })
           const confirmed = await umi.rpc.confirmTransaction(signature, {
             strategy: {
               type: "blockhash",

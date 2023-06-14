@@ -1,4 +1,4 @@
-import { Card, CardContent, Dialog, Stack, Typography } from "@mui/material"
+import { Card, CardContent, Dialog, List, ListItem, Stack, Typography } from "@mui/material"
 import { noop } from "lodash"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 
@@ -25,17 +25,47 @@ const information: Information = {
   vault: {
     title: "The Vault",
     content: [
-      `The Vault is a self-custodial locking system for NFTs, pNFTs and NFT Editions.`,
-      `Adding items to The Vault can help to protect them from wallet drains when interacting with malicious dApps. Items
-      in The Vault are frozen so if you accidentally sign a transaction to transfer assets, it will fail unless they are
-      first unfrozen.`,
-      `The Vault works in the same way as locked staking or borrowing from Sharky or Frakt, however the authority is
-      delegated to the holding wallet so the items can be unlocked without needing to trust any third party program.`,
-      `The Vault will not protect your assets in the event of your private key being compromised as the malicious user
-      will have the same access to unlock any items locked in the Vault, however it may buy enough time to be able to
-      transfer them to a new wallet.`,
-      `The Vault V2 will be coming soon, this builds on the same trustless self custodial locking, but increases security
-      exponentially, even in the case of your private key being compromised.`,
+      <Typography>
+        The Vault is a{" "}
+        <Typography color="primary" fontWeight="bold" display="inline">
+          self-custodial locking system
+        </Typography>{" "}
+        for NFTs, pNFTs and NFT Editions.
+      </Typography>,
+      <Typography>
+        Adding items to The Vault can help{" "}
+        <Typography color="primary" fontWeight="bold" display="inline">
+          protect them from wallet drains
+        </Typography>{" "}
+        when interacting with malicious dApps.
+      </Typography>,
+      <Typography>
+        <Typography color="primary" fontWeight="bold" display="inline">
+          Items in The Vault are frozen
+        </Typography>{" "}
+        so if you accidentally sign a transaction to transfer assets, it will fail unless they are first unfrozen.
+      </Typography>,
+      <Typography>
+        The Vault works in the same way as locked staking or borrowing from Sharky or Frakt, however the authority is
+        delegated to a wallet of your choosing so the items can be unlocked{" "}
+        <Typography color="primary" fontWeight="bold" display="inline">
+          without needing to trust any third party program.
+        </Typography>
+      </Typography>,
+      <Typography>
+        You can choose to freeze with any of your linked wallets. Freeze with a wallet that doesn't contain the NFTs in
+        order to{" "}
+        <Typography color="primary" fontWeight="bold" display="inline">
+          amplify the security of your assets
+        </Typography>{" "}
+        (it is far less likely for two of your wallets to both become compromised)
+      </Typography>,
+      <Typography>
+        <Typography color="primary" display="inline">
+          <strong>THE VAULT IS 100% TRUSTLESS</strong>
+        </Typography>{" "}
+        - it is simply a utility tool to allow you to transfer authority between wallets you own
+      </Typography>,
     ],
   },
 }
@@ -60,19 +90,13 @@ export const InfoProvider: FC<{ children: ReactNode }> = ({ children }) => {
           <CardContent>
             <Stack spacing={2}>
               <Typography variant="h4">{info?.title}</Typography>
-              <Typography variant="h6">
+              <List>
                 {info?.content?.map((line, index) => (
-                  <>
-                    {index !== 0 && (
-                      <>
-                        <br />
-                        <br />
-                      </>
-                    )}
-                    <span key={index}>{line}</span>
-                  </>
+                  <ListItem>
+                    <Typography key={index}>{line}</Typography>
+                  </ListItem>
                 ))}
-              </Typography>
+              </List>
             </Stack>
           </CardContent>
         </Card>
