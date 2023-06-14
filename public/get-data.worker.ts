@@ -26,8 +26,6 @@ async function getListings(owner: string) {
     isListed: true
   }))
 
-  console.log(result.data)
-
   return result.data
 }
 
@@ -77,27 +75,39 @@ async function getLoanSummaryForUser(publicKey: string, paginationToken?: string
   return data.data
 }
 
-async function getFrozenStatus(publicKey: string) {
+async function getStatus(publicKey: string, publicKeys: string[]) {
   const accounts = await connection.getParsedTokenAccountsByOwner(new PublicKey(publicKey), {
     programId: TOKEN_PROGRAM_ID,
   });
   const items = accounts.value.filter(
     (account) => account.account.data.parsed.info.state === 'frozen' && account.account.data.parsed.info.delegate
-  );
+  ).map(item => {
+    return {
+      mint: item.account.data.parsed.info.mint,
+      delegate: item.account.data.parsed.info.delegate
+    }
+  });
   const [inVault, locked] = partition(
     items,
-    (item: any) => item.account.data.parsed.info.delegate === publicKey
+    (item: any) => publicKeys.includes(item.delegate)
   );
   const [staked, frozen] = partition(locked, (item: any) =>
     [process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET, process.env.NEXT_PUBLIC_BIBLIO_LOCKING_WALLET].includes(
-      item.account.data.parsed.info.delegate
+      item.delegate
     )
   );
-  return {
-    staked: staked.map((item: any) => item.account.data.parsed.info.mint),
-    frozen: frozen.map((item: any) => item.account.data.parsed.info.mint),
-    inVault: inVault.map((item: any) => item.account.data.parsed.info.mint),
+  const statuses = {
+    inVault: inVault.map(item => item.mint),
+    staked: staked.map(item => item.mint),
+    frozen: frozen.map(item => item.mint)
   }
+  return items.map(item => {
+    const status = findKey(statuses, mints => mints.includes(item.mint))
+    return {
+      ...item,
+      status
+    }
+  })
 }
 
 async function getOwnedHelloMoonNfts(ownerAccount: string, paginationToken?: string): Promise<NftMintsByOwner[]> {
@@ -129,15 +139,15 @@ async function getCollections(collectionIds: string[]) {
 
 self.addEventListener("message", async event => {
   try {
-    let { publicKey: owner, force, mints } = event.data;
+    let { publicKey: owner, force, mints, publicKeys } = event.data;
 
-    let [umiTokens, helloMoonNfts, loanStats, frozenStatus, listings] = await Promise.all([
+    let [umiTokens, helloMoonNfts, loanStats, status, listings] = await Promise.all([
       mints
         ? fetchAllDigitalAsset(umi, mints.map((mint: string) => publicKey(mint))) 
         : fetchAllDigitalAssetByOwner(umi, publicKey(owner), { tokenStrategy: "getProgramAccounts"}),
       getOwnedHelloMoonNfts(owner),
       getLoanSummaryForUser(owner),
-      getFrozenStatus(owner),
+      getStatus(owner, publicKeys),
       getListings(owner)
     ])
 
@@ -223,7 +233,7 @@ self.addEventListener("message", async event => {
       .map((item) => {
         const loan = loanStats.find((l: Loan) => l.collateralMint === item.nftMint);
         const listing = listings.find((l: any) => l.nftMint === item.nftMint)
-        const status = item.status || findKey(frozenStatus, mints => mints.includes(item.nftMint));
+        const nftStatus = status.find(i => i.mint === item.nftMint);
         if (loan) {
           loan.defaults = loan.acceptBlocktime + loan.loanDurationSeconds;
         }
@@ -239,7 +249,8 @@ self.addEventListener("message", async event => {
           collectionId: (collection && collection.verified && base58PublicKey(collection.key)) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? base58PublicKey(firstVerifiedCreator.address) : null,
           loan,
-          status,
+          status: item.status || nftStatus?.status,
+          delegate: nftStatus?.delegate,
           listing
         }
       })

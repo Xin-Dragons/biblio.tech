@@ -77,6 +77,7 @@ import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
 import { shorten } from "../../helpers/utils"
 import { AddressSelector } from "../AddressSelector"
+import { Vault } from "../Vault"
 
 export const Actions: FC = () => {
   const { nfts } = useNfts()
@@ -118,7 +119,11 @@ export const Actions: FC = () => {
   const nonListedStatusSelected = selectedItems.some((item) => item.status && item.status !== "listed")
   const allInVault = selectedItems.every((item: any) => item.status === "inVault")
   const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
-  const nonOwnedSelected = selectedItems.some((item) => item.owner !== wallet.publicKey?.toBase58())
+  const nonOwnedSelected = selectedItems.some((item) => {
+    return item.owner !== wallet.publicKey?.toBase58() && item.delegate !== wallet.publicKey?.toBase58()
+  })
+
+  const [vaultShowing, setVaultShowing] = useState(false)
 
   const canFreezeThaw = allInVault || noneInVault
 
@@ -136,6 +141,10 @@ export const Actions: FC = () => {
 
   function toggleListOpen() {
     setListOpen(!listOpen)
+  }
+
+  function toggleVaultShowing() {
+    setVaultShowing(!vaultShowing)
   }
 
   const collectionPage = !router.query.tag && !router.query.filter && !router.query.collectionId
@@ -302,177 +311,6 @@ export const Actions: FC = () => {
   //   }
   // }
 
-  async function lockUnlock(all: boolean = false) {
-    try {
-      if (nonOwnedSelected) {
-        throw new Error("Some selected items are owned by a linked wallet")
-      }
-      if (!canFreezeThaw) {
-        throw new Error("Cannot freeze and thaw in same transaction")
-      }
-
-      const items = all ? nfts : selectedItems
-
-      const frozenSelected = items.some((item) => item.status === "inVault")
-
-      const instructionGroups = frozenSelected
-        ? await Promise.all(
-            items.map(async (nft: any) => {
-              const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
-              const instructions = []
-              if (unwrapSome(digitalAsset.metadata.tokenStandard) === 4) {
-                instructions.push(
-                  unlockV1(umi, {
-                    mint: digitalAsset.mint.publicKey,
-                    tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                      ? digitalAsset.metadata.tokenStandard.value
-                      : 0,
-                  })
-                )
-                instructions.push(
-                  revokeUtilityV1(umi, {
-                    mint: digitalAsset.mint.publicKey,
-                    tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                      ? digitalAsset.metadata.tokenStandard.value
-                      : 0,
-                    delegate: umi.identity.publicKey,
-                  })
-                )
-              } else {
-                instructions.push(
-                  metaplex
-                    .nfts()
-                    .builders()
-                    .thawDelegatedNft({
-                      mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                      delegateAuthority: metaplex.identity(),
-                      tokenOwner: metaplex.identity().publicKey,
-                    })
-                    .getInstructions()
-                    .map((instruction) => {
-                      return transactionBuilder().add({
-                        instruction: fromWeb3JsInstruction(instruction),
-                        bytesCreatedOnChain: 0,
-                        signers: [createSignerFromWalletAdapter(wallet)],
-                      })
-                    })
-                )
-
-                instructions.push(
-                  metaplex
-                    .tokens()
-                    .builders()
-                    .revokeDelegateAuthority({
-                      mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                      owner: metaplex.identity().publicKey,
-                    })
-                    .getInstructions()
-                    .map((instruction) => {
-                      return transactionBuilder().add({
-                        instruction: fromWeb3JsInstruction(instruction),
-                        bytesCreatedOnChain: 0,
-                        signers: [createSignerFromWalletAdapter(wallet)],
-                      })
-                    })
-                )
-              }
-              return {
-                instructions: flatten(instructions),
-                mint: nft.nftMint,
-              }
-            })
-          )
-        : await Promise.all(
-            items.map(async (nft: any) => {
-              const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
-              const instructions = []
-              if (unwrapSome(digitalAsset.metadata.tokenStandard) === 4) {
-                instructions.push(
-                  delegateUtilityV1(umi, {
-                    mint: digitalAsset.mint.publicKey,
-                    tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                      ? digitalAsset.metadata.tokenStandard.value
-                      : 0,
-                    delegate: umi.identity.publicKey,
-                    authorizationRules: isSome(digitalAsset.metadata.programmableConfig)
-                      ? isSome(digitalAsset.metadata.programmableConfig.value.ruleSet)
-                        ? digitalAsset.metadata.programmableConfig.value.ruleSet.value
-                        : undefined
-                      : undefined,
-                  })
-                )
-                instructions.push(
-                  lockV1(umi, {
-                    mint: digitalAsset.mint.publicKey,
-                    tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                      ? digitalAsset.metadata.tokenStandard.value
-                      : 0,
-                  })
-                )
-              } else {
-                instructions.push(
-                  metaplex
-                    .tokens()
-                    .builders()
-                    .approveDelegateAuthority({
-                      mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                      delegateAuthority: metaplex.identity().publicKey,
-                    })
-                    .getInstructions()
-                    .map((instruction) => {
-                      return transactionBuilder().add({
-                        instruction: fromWeb3JsInstruction(instruction),
-                        bytesCreatedOnChain: 0,
-                        signers: [createSignerFromWalletAdapter(wallet)],
-                      })
-                    })
-                )
-
-                instructions.push(
-                  metaplex
-                    .nfts()
-                    .builders()
-                    .freezeDelegatedNft({
-                      mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                      delegateAuthority: metaplex.identity(),
-                    })
-                    .getInstructions()
-                    .map((instruction) => {
-                      return transactionBuilder().add({
-                        instruction: fromWeb3JsInstruction(instruction),
-                        bytesCreatedOnChain: 0,
-                        signers: [createSignerFromWalletAdapter(wallet)],
-                      })
-                    })
-                )
-              }
-
-              return {
-                instructions: flatten(instructions),
-                mint: nft.nftMint,
-              }
-            })
-          )
-
-      const chunks = getUmiChunks(umi, instructionGroups)
-      const txns = await buildTransactions(umi, chunks)
-
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-
-      const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
-        txns.map((t) => t.mints),
-        frozenSelected ? "thaw" : "freeze",
-        frozenSelected ? removeNftsFromVault : addNftsToVault
-      )
-
-      notifyStatus(errs, successes, "send", "sent")
-    } catch (err) {
-      console.log(err)
-    } finally {
-    }
-  }
-
   async function burn() {
     try {
       toggleBurnOpen()
@@ -633,7 +471,7 @@ export const Actions: FC = () => {
         <Tooltip
           title={
             nonOwnedSelected
-              ? "Some selected items are owned by a linked wallet"
+              ? "Some selected items are owned by or delegated to linked wallet"
               : nonInVaultStatusesSelected
               ? "Selection contains items that cannot be frozen/thawed"
               : onlyNftsSelected
@@ -649,13 +487,9 @@ export const Actions: FC = () => {
             <IconButton
               disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault"))}
               sx={{
-                color: allInVault ? "#111316" : "#a6e3e0",
-                background: allInVault ? "#a6e3e0" : "default",
-                "&:hover": {
-                  color: "#a6e3e0",
-                },
+                color: "#a6e3e0",
               }}
-              onClick={() => lockUnlock(true)}
+              onClick={() => toggleVaultShowing()}
             >
               <SvgIcon>
                 <VaultIcon />
@@ -750,9 +584,7 @@ export const Actions: FC = () => {
 
               <Tooltip
                 title={
-                  nonOwnedSelected
-                    ? "Some selected items are owned by a linked wallet"
-                    : nonInVaultStatusesSelected
+                  nonInVaultStatusesSelected
                     ? "Selection contains items that cannot be frozen/thawed"
                     : onlyNftsSelected
                     ? canFreezeThaw
@@ -765,21 +597,11 @@ export const Actions: FC = () => {
               >
                 <span>
                   <IconButton
-                    disabled={
-                      !selected.length ||
-                      !canFreezeThaw ||
-                      !onlyNftsSelected ||
-                      nonInVaultStatusesSelected ||
-                      nonOwnedSelected
-                    }
+                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected || nonInVaultStatusesSelected}
                     sx={{
-                      color: allInVault ? "text.primary" : "#a6e3e0",
-                      background: allInVault ? "#a6e3e0" : "default",
-                      "&:hover": {
-                        color: "#a6e3e0",
-                      },
+                      color: "#a6e3e0",
                     }}
-                    onClick={() => lockUnlock()}
+                    onClick={() => toggleVaultShowing()}
                   >
                     <SvgIcon>
                       <VaultIcon />
@@ -897,6 +719,12 @@ export const Actions: FC = () => {
         </Card>
       </Dialog>
 
+      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth>
+        <Card sx={{ overflowY: "auto" }}>
+          <Vault onClose={() => setVaultShowing(false)} />
+        </Card>
+      </Dialog>
+
       <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
         <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
           <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>
@@ -966,7 +794,7 @@ export const Actions: FC = () => {
                 </Button>
                 <Button
                   disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
-                  onClick={() => lockUnlock()}
+                  onClick={() => toggleVaultShowing()}
                   fullWidth
                   variant="contained"
                   size="large"

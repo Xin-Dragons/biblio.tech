@@ -23,6 +23,7 @@ export interface Nft extends DigitalAsset {
   json?: JsonMetadata;
   jsonLoaded?: boolean;
   status?: string | null;
+  delegate?: string | null;
   supply?: number;
   balance?: {
     [key: string]: number
