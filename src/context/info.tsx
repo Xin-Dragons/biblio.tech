@@ -14,7 +14,7 @@ type InfoType = "vault"
 
 type InfoItem = {
   title: string
-  content: string[]
+  content: ReactNode[]
 }
 
 type Information = {
