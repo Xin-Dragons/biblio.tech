@@ -58,7 +58,7 @@ const information: Information = {
         <Typography color="primary" fontWeight="bold" display="inline">
           amplify the security of your assets
         </Typography>{" "}
-        (it is far less likely for two of your wallets to both become compromised)
+        (it is far less likely for two of your wallets to both become compromised.)
       </Typography>,
       <Typography>
         <Typography color="primary" display="inline">
