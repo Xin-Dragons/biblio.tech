@@ -32,6 +32,7 @@ import {
   fetchDigitalAsset,
   lockV1,
   revokeUtilityV1,
+  transferV1,
   unlockV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { useMetaplex } from "../../context/metaplex"
@@ -48,10 +49,12 @@ import { Metaplex, guestIdentity } from "@metaplex-foundation/js"
 import { useWalletBypass } from "../../context/wallet-bypass"
 import { toast } from "react-hot-toast"
 import VaultIcon from "./vault.svg"
+import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
 
 export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [transferTo, setTransferTo] = useState<string | null>(null)
   const { setBypassWallet } = useWalletBypass()
   const [type, setType] = useState("secure")
   const { selected } = useSelection()
@@ -62,7 +65,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const { connection } = useConnection()
   const { data: session } = useSession()
   const { sendSignedTransactions } = useTransactionStatus()
-  const { addNftsToVault, removeNftsFromVault } = useDatabase()
+  const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
   const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
 
   const onlyFrozenSelected = selectedItems.every((item) => item.status === "inVault")
@@ -112,7 +115,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
     }, Promise.resolve(txns))
   }
 
-  async function lockUnlock(all: boolean = false) {
+  async function lockUnlock(all: boolean = false, transfer: boolean = false) {
     try {
       if (!onlyFrozenSelected && !onlyThawedSelected) {
         throw new Error("Cannot freeze and thaw in same transaction")
@@ -122,13 +125,19 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
         throw new Error("Locking wallet is required")
       }
 
+      if (transfer && !transferTo) {
+        throw new Error("Select a wallet to transfer to")
+      }
+
+      if (transfer && !onlyFrozenSelected) {
+        throw new Error("Can only transfer when thawing")
+      }
+
       onClose()
 
       const items = all ? nfts : selectedItems
 
-      const frozenSelected = items.some((item) => item.status === "inVault")
-
-      const instructionGroups = frozenSelected
+      const instructionGroups = onlyFrozenSelected
         ? await Promise.all(
             items.map(async (nft: any) => {
               const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
@@ -144,17 +153,72 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     tokenOwner: publicKey(nft.owner),
                   })
                 )
-                instructions.push(
-                  revokeUtilityV1(umi, {
-                    mint: digitalAsset.mint.publicKey,
-                    tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                      ? digitalAsset.metadata.tokenStandard.value
-                      : 0,
-                    delegate: publicKey(nft.delegate),
-                    tokenOwner: publicKey(nft.owner),
-                    authority: createNoopSigner(publicKey(nft.owner)),
-                  })
-                )
+
+                if (!transfer) {
+                  instructions.push(
+                    revokeUtilityV1(umi, {
+                      mint: digitalAsset.mint.publicKey,
+                      tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
+                        ? digitalAsset.metadata.tokenStandard.value
+                        : 0,
+                      delegate: publicKey(nft.delegate),
+                      tokenOwner: publicKey(nft.owner),
+                      authority: createNoopSigner(publicKey(nft.owner)),
+                    })
+                  )
+                }
+
+                if (transfer) {
+                  instructions.push(
+                    transferV1(umi, {
+                      destinationOwner: publicKey(transferTo!),
+                      mint: digitalAsset.mint.publicKey,
+                      tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                      amount: 1,
+                      tokenOwner: publicKey(nft.owner),
+                      authority: createNoopSigner(publicKey(nft.owner)),
+                    })
+                  )
+
+                  instructions.push(
+                    closeToken(umi, {
+                      account: findAssociatedTokenPda(umi, {
+                        mint: digitalAsset.mint.publicKey,
+                        owner: publicKey(nft.owner),
+                      }),
+                      destination: publicKey(transferTo!),
+                      owner: createNoopSigner(publicKey(nft.owner)),
+                    })
+                  )
+
+                  instructions.push(
+                    delegateUtilityV1(umi, {
+                      mint: digitalAsset.mint.publicKey,
+                      tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
+                        ? digitalAsset.metadata.tokenStandard.value
+                        : 0,
+                      delegate: publicKey(nft.delegate),
+                      authorizationRules: isSome(digitalAsset.metadata.programmableConfig)
+                        ? isSome(digitalAsset.metadata.programmableConfig.value.ruleSet)
+                          ? digitalAsset.metadata.programmableConfig.value.ruleSet.value
+                          : undefined
+                        : undefined,
+                      authority: createNoopSigner(publicKey(transferTo!)),
+                      tokenOwner: publicKey(transferTo!),
+                      payer: umi.identity,
+                    })
+                  )
+
+                  instructions.push(
+                    lockV1(umi, {
+                      mint: digitalAsset.mint.publicKey,
+                      tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                      authority: createNoopSigner(publicKey(nft.delegate)),
+                      tokenOwner: publicKey(transferTo!),
+                      payer: umi.identity,
+                    })
+                  )
+                }
               } else {
                 const identity = Metaplex.make(connection)
                   .use(guestIdentity(new PublicKey(nft.delegate)))
@@ -178,23 +242,92 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     })
                 )
 
-                instructions.push(
-                  metaplex
-                    .tokens()
-                    .builders()
-                    .revokeDelegateAuthority({
-                      mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                      owner: new PublicKey(nft.owner),
+                if (transfer) {
+                  instructions.push(
+                    transferV1(umi, {
+                      destinationOwner: publicKey(transferTo!),
+                      mint: digitalAsset.mint.publicKey,
+                      tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                      amount: 1,
+                      tokenOwner: publicKey(nft.owner),
+                      authority: createNoopSigner(publicKey(nft.owner)),
                     })
-                    .getInstructions()
-                    .map((instruction) => {
-                      return transactionBuilder().add({
-                        instruction: fromWeb3JsInstruction(instruction),
-                        bytesCreatedOnChain: 0,
-                        signers: [createNoopSigner(publicKey(nft.owner))],
+                  )
+
+                  instructions.push(
+                    closeToken(umi, {
+                      account: findAssociatedTokenPda(umi, {
+                        mint: digitalAsset.mint.publicKey,
+                        owner: publicKey(nft.owner),
+                      }),
+                      destination: publicKey(transferTo!),
+                      owner: createNoopSigner(publicKey(nft.owner)),
+                    })
+                  )
+
+                  instructions.push(
+                    metaplex
+                      .tokens()
+                      .builders()
+                      .approveDelegateAuthority({
+                        mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
+                        delegateAuthority: new PublicKey(nft.delegate),
+                        owner: new PublicKey(transferTo!),
                       })
-                    })
-                )
+                      .getInstructions()
+                      .map((instruction) => {
+                        return transactionBuilder().add({
+                          instruction: fromWeb3JsInstruction(instruction),
+                          bytesCreatedOnChain: 0,
+                          signers: [
+                            createNoopSigner(publicKey(nft.delegate)),
+                            createNoopSigner(publicKey(transferTo!)),
+                          ],
+                        })
+                      })
+                  )
+
+                  // const identity = Metaplex.make(connection)
+                  //   .use(guestIdentity(new PublicKey(nft.delegate)))
+                  //   .identity()
+
+                  // instructions.push(
+                  //   metaplex
+                  //     .nfts()
+                  //     .builders()
+                  //     .freezeDelegatedNft({
+                  //       mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
+                  //       delegateAuthority: identity,
+                  //       tokenOwner: new PublicKey(nft.owner),
+                  //     })
+                  //     .getInstructions()
+                  //     .map((instruction) => {
+                  //       return transactionBuilder().add({
+                  //         instruction: fromWeb3JsInstruction(instruction),
+                  //         bytesCreatedOnChain: 0,
+                  //         signers: [createNoopSigner(publicKey(nft.delegate))],
+                  //       })
+                  //     })
+                  // )
+                } else {
+                  instructions.push(
+                    metaplex
+                      .tokens()
+                      .builders()
+                      .revokeDelegateAuthority({
+                        mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
+                        owner: new PublicKey(nft.owner),
+                      })
+                      .getInstructions()
+                      .map((instruction) => {
+                        return transactionBuilder().add({
+                          instruction: fromWeb3JsInstruction(instruction),
+                          bytesCreatedOnChain: 0,
+                          signers: [createNoopSigner(publicKey(nft.owner))],
+                        })
+                      })
+                  )
+                }
               }
               return {
                 instructions: flatten(instructions),
@@ -244,13 +377,14 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     .approveDelegateAuthority({
                       mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
                       delegateAuthority: toWeb3JsPublicKey(delegate),
+                      owner: new PublicKey(nft.owner),
                     })
                     .getInstructions()
                     .map((instruction) => {
                       return transactionBuilder().add({
                         instruction: fromWeb3JsInstruction(instruction),
                         bytesCreatedOnChain: 0,
-                        signers: [createNoopSigner(delegate)],
+                        signers: [createNoopSigner(delegate), createNoopSigner(publicKey(nft.owner))],
                       })
                     })
                 )
@@ -266,6 +400,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     .freezeDelegatedNft({
                       mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
                       delegateAuthority: identity,
+                      tokenOwner: new PublicKey(nft.owner),
                     })
                     .getInstructions()
                     .map((instruction) => {
@@ -304,11 +439,11 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
         signedTransactions,
         txns.map((t) => t.mints),
         onlyFrozenSelected ? "thaw" : "freeze",
-        onlyFrozenSelected ? removeNftsFromVault : addNftsToVault
+        onlyFrozenSelected ? (transfer ? updateOwnerForNfts : removeNftsFromVault) : addNftsToVault
       )
 
       toast.promise(freezeThawPromise, {
-        loading: `${onlyFrozenSelected ? "Thawing" : "Freezing"} ${selected.length} item${
+        loading: `${onlyFrozenSelected ? (transfer ? "Recovering" : "Thawing") : "Freezing"} ${selected.length} item${
           selected.length === 1 ? "" : "s"
         }`,
         success: "Success",
@@ -317,7 +452,12 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
 
       const { errs, successes } = await freezeThawPromise
 
-      notifyStatus(errs, successes, onlyFrozenSelected ? "thaw" : "freeze", onlyFrozenSelected ? "thawed" : "frozen")
+      notifyStatus(
+        errs,
+        successes,
+        onlyFrozenSelected ? (transfer ? "recover" : "thaw") : "freeze",
+        onlyFrozenSelected ? (transfer ? "recovered" : "thawed") : "frozen"
+      )
     } catch (err) {
       console.log(err)
     } finally {
@@ -449,6 +589,38 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
               </Stack>
             </Button>
           </Stack>
+          {onlyFrozenSelected && (
+            <Stack spacing={2}>
+              <Typography variant="h6">Recover items</Typography>
+              <Typography variant="body2">
+                In the event of your wallet being compromised, you can use &quot;Recover&quot; to unlock AND send your
+                assets to a safe place in a single transaction.
+              </Typography>
+              <Typography variant="body2">
+                This means the hacker wont be able to steal the items when you unfreeze them.
+              </Typography>
+              <FormControl disabled={!canSecureLock}>
+                <InputLabel id="demo-simple-select-label">Select a secure wallet</InputLabel>
+                <Select
+                  value={transferTo}
+                  label={"Select a secure wallet"}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                >
+                  {wallets?.map((w, index) => (
+                    <MenuItem key={index} value={w.public_key}>
+                      {shorten(w.public_key)}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Choose a secure wallet to send your assets to. This must be linked in Biblio.
+                </FormHelperText>
+              </FormControl>
+              <Button color="secondary" variant="contained" size="large" onClick={() => lockUnlock(false, true)}>
+                Recover
+              </Button>
+            </Stack>
+          )}
         </Stack>
       </Container>
     </CardContent>

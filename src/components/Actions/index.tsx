@@ -7,6 +7,7 @@ import {
   unwrapSome,
   type PublicKey as UmiPublicKey,
   Transaction,
+  isNone,
 } from "@metaplex-foundation/umi"
 import {
   Stack,
@@ -126,6 +127,8 @@ export const Actions: FC = () => {
   const [vaultShowing, setVaultShowing] = useState(false)
 
   const canFreezeThaw = allInVault || noneInVault
+
+  const hasFreezeAuth = selectedItems.every((item) => isSome(item.mint.freezeAuthority))
 
   const allListed = selectedItems.every((item) => item.status === "listed")
   const allDelisted = selectedItems.every((item) => !item.status)
@@ -472,6 +475,8 @@ export const Actions: FC = () => {
           title={
             nonOwnedSelected
               ? "Some selected items are owned by or delegated to linked wallet"
+              : !hasFreezeAuth
+              ? "Some items cannot be frozen"
               : nonInVaultStatusesSelected
               ? "Selection contains items that cannot be frozen/thawed"
               : onlyNftsSelected
@@ -485,7 +490,7 @@ export const Actions: FC = () => {
         >
           <span>
             <IconButton
-              disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault"))}
+              disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault")) || hasFreezeAuth}
               sx={{
                 color: "#a6e3e0",
               }}
@@ -586,6 +591,8 @@ export const Actions: FC = () => {
                 title={
                   nonInVaultStatusesSelected
                     ? "Selection contains items that cannot be frozen/thawed"
+                    : !hasFreezeAuth
+                    ? "Some items cannot be frozen"
                     : onlyNftsSelected
                     ? canFreezeThaw
                       ? frozenSelected
@@ -597,7 +604,13 @@ export const Actions: FC = () => {
               >
                 <span>
                   <IconButton
-                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected || nonInVaultStatusesSelected}
+                    disabled={
+                      !selected.length ||
+                      !canFreezeThaw ||
+                      !onlyNftsSelected ||
+                      nonInVaultStatusesSelected ||
+                      !hasFreezeAuth
+                    }
                     sx={{
                       color: "#a6e3e0",
                     }}
