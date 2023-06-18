@@ -12,7 +12,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const mint = grouped[collectionId][0].mint
 
       const { data } = await axios.get(`https://api-mainnet.magiceden.dev/v2/tokens/${mint}`)
-      console.log(data)
 
       const collectionData = await axios.get(`https://api-mainnet.magiceden.dev/v2/collections/${data.collection}/stats`)
 

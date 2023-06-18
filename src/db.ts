@@ -124,6 +124,12 @@ export interface Preferences {
   lightMode: boolean;
 }
 
+export interface SharkyOrderBooks {
+  collectionId: string
+  pubkey: string
+  enabled: boolean
+}
+
 export class DB extends Dexie {
   nfts!: Table<Nft>;
   collections!: Table<Collection>;
@@ -132,11 +138,12 @@ export class DB extends Dexie {
   taggedNfts!: Table<TaggedNft>;
   order!: Table<Order>;
   preferences!: Table<Preferences>;
-  wallets!: Table<Wallet>
+  wallets!: Table<Wallet>;
+  sharkyOrderBooks!: Table<SharkyOrderBooks>;
 
   constructor() {
     super('biblio.tech');
-    this.version(2).stores({
+    this.version(3).stores({
       nfts: "nftMint,collectionId,owner",
       collections: "id,helloMoonCollectionId,collectionId,name",
       rarity: "nftMint,howRare,moonRank",
@@ -144,7 +151,8 @@ export class DB extends Dexie {
       taggedNfts: '[nftId+tagId],nftId,tagId,sortedIndex',
       order: "nftMint",
       preferences: 'page',
-      wallets: "publicKey"
+      wallets: "publicKey",
+      sharkyOrderBooks: "collectionId"
     })
   }
 }

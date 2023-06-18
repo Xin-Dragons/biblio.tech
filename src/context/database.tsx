@@ -1,5 +1,5 @@
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { Collection, DB, Loan, Nft, NftMetadata, Rarity } from "../db"
+import { Collection, DB, Loan, Nft, NftMetadata, Rarity, SharkyOrderBooks } from "../db"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useAccess } from "./access"
 
@@ -33,6 +33,8 @@ type DatabaseContextProps = {
   nftsListed: Function
   nftsSold: Function
   nftsBought: Function
+  refreshMint: Function
+  setLoaned: Function
 }
 
 const initial = {
@@ -57,6 +59,8 @@ const initial = {
   nftsListed: noop,
   nftsSold: noop,
   nftsBought: noop,
+  refreshMint: noop,
+  setLoaned: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -309,6 +313,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     // }
   }, [publicKey, isOffline])
 
+  async function updateSharkyOrderBooks(orderBooks: SharkyOrderBooks[]) {
+    console.log(orderBooks)
+    await db.sharkyOrderBooks.bulkPut(orderBooks)
+  }
+
   useEffect(() => {
     if (!publicKey) return
     if (isAdmin && publicKeys.length) {
@@ -316,7 +325,21 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     } else {
       syncDataWorker(publicKey)
     }
+    getSharkyOrderBooksWorker()
   }, [publicKey])
+
+  function getSharkyOrderBooksWorker() {
+    if (isOffline) {
+      return
+    }
+    const worker = new Worker(new URL("../../public/get-sharky-order-books.worker.ts", import.meta.url))
+
+    worker.addEventListener("message", async (event) => {
+      await updateSharkyOrderBooks(event.data.orderBooks)
+    })
+
+    worker.postMessage({ start: true })
+  }
 
   async function updateMetadata(metadata: any) {
     await db.nfts.bulkUpdate(
@@ -662,6 +685,14 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     )
   }
 
+  async function refreshMint(nftMint: string) {
+    syncDataWorker(publicKey!, [nftMint])
+  }
+
+  async function setLoaned(nftMint: string) {
+    await db.nfts.update(nftMint, { status: "loaned" })
+  }
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -686,6 +717,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         nftsListed,
         nftsSold,
         nftsBought,
+        refreshMint,
+        setLoaned,
       }}
     >
       {children}

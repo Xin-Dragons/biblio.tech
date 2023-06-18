@@ -249,7 +249,7 @@ self.addEventListener("message", async event => {
           collectionId: (collection && collection.verified && base58PublicKey(collection.key)) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? base58PublicKey(firstVerifiedCreator.address) : null,
           loan,
-          status: item.status || nftStatus?.status,
+          status: item.status || loan ? "loaned" : nftStatus?.status,
           delegate: nftStatus?.delegate,
           listing
         }

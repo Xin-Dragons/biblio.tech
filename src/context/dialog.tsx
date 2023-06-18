@@ -4,7 +4,10 @@ import { initial, noop } from "lodash"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useTheme } from "./theme"
 
-export const DialogContext = createContext<{ renderItem: Function }>({ renderItem: noop })
+export const DialogContext = createContext<{ renderItem: Function; setOpen: Function }>({
+  renderItem: noop,
+  setOpen: noop,
+})
 
 export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [open, setOpen] = useState(false)
@@ -30,7 +33,7 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   return (
-    <DialogContext.Provider value={{ renderItem }}>
+    <DialogContext.Provider value={{ renderItem, setOpen }}>
       {children}
       <Dialog open={open} onClose={toggleOpen} maxWidth="lg" fullScreen={isXs && !disableFullscreen}>
         <IconButton

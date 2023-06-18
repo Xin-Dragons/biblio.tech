@@ -19,6 +19,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableRow,
   Tooltip,
   Typography,
@@ -32,7 +33,7 @@ import Frozen from "@mui/icons-material/AcUnit"
 import LockIcon from "@mui/icons-material/Lock"
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
-import { useDatabase } from "../../context/database"
+import { MS_PER_DAY, useDatabase } from "../../context/database"
 import axios from "axios"
 import { ArrowBackIosNew, ArrowForwardIos, Close, LightMode, LocalFireDepartment, Paid } from "@mui/icons-material"
 import { useDialog } from "../../context/dialog"
@@ -70,8 +71,10 @@ import Tensor from "./tensor.svg"
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
 import Crown from "../Listing/crown.svg"
 import { useSelection } from "../../context/selection"
+import { OfferedLoan, OrderBook } from "@sharkyfi/client"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
+const SECONDS_PER_DAY = 86_400
 
 const statusTitles = {
   staked: "Staked",
@@ -413,7 +416,142 @@ const Listing = ({
   )
 }
 
+const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
+  const { setLoaned } = useDatabase()
+  const [fetchingOrderBook, setFetchingOrderBook] = useState(false)
+  const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [bestLoan, setBestLoan] = useState<OfferedLoan | null>(null)
+  const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
+  const { takeLoan, getBestLoan, getOrderBook } = useSharky()
+
+  async function fetchOrderBook() {
+    try {
+      setFetchingOrderBook(true)
+      const orderBook = await getOrderBook(item.nftMint)
+      setOrderBook(orderBook)
+      setFetchingOrderBook(false)
+    } catch {
+      toast.error("Error communicating with Sharky")
+    }
+  }
+
+  useEffect(() => {
+    setFetching(fetchingBestLoan || fetchingOrderBook)
+  }, [fetchingOrderBook, fetchingBestLoan])
+
+  useEffect(() => {
+    fetchOrderBook()
+  }, [])
+
+  async function updateBestLoan() {
+    if (orderBook) {
+      try {
+        setFetchingBestLoan(true)
+        const bestLoan = await getBestLoan(orderBook)
+        setBestLoan(bestLoan)
+        setFetchingBestLoan(false)
+      } catch {
+        toast.error("Error communicating with Sharky")
+      }
+    } else {
+      setBestLoan(null)
+    }
+  }
+
+  useEffect(() => {
+    updateBestLoan()
+  }, [orderBook])
+
+  async function onTakeLoanClick() {
+    try {
+      setLoading(true)
+      const takeLoanPromise = takeLoan(bestLoan, item.nftMint)
+      toast.promise(takeLoanPromise, {
+        loading: "Taking loan...",
+        success: "Success",
+        error: "Error taking loan",
+      })
+
+      await takeLoanPromise
+      await setLoaned(item.nftMint)
+      onClose()
+    } catch (err: any) {
+      toast.error(err.message || "Error taking loan")
+    } finally {
+      setLoading(false)
+    }
+  }
+  const days = orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0
+  return (
+    <Stack spacing={2} width="100%">
+      <Typography variant="h5">Available loans</Typography>
+      {fetching ? (
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+          <Typography>Fetching data...</Typography>
+          <CircularProgress size="20px" />
+        </Stack>
+      ) : orderBook ? (
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Provider</TableCell>
+              <TableCell>Best offer</TableCell>
+              <TableCell>Interest (APR)</TableCell>
+              <TableCell>Duration</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {orderBook && (
+              <TableRow>
+                <TableCell>
+                  <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
+                    <img src="/sharky-long.png" height="40px" />
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Typography>{bestLoan ? `◎${lamportsToSol(bestLoan.data.principalLamports)}` : "-"}</Typography>
+                </TableCell>
+                <TableCell>
+                  {((orderBook.apy.fixed?.apy || 0) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
+                </TableCell>
+                <TableCell>{days}d</TableCell>
+                <TableCell>
+                  <Tooltip
+                    title={
+                      item.status
+                        ? "Cannot take loan on frozen item"
+                        : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
+                    }
+                    placement="top"
+                  >
+                    <span>
+                      <Button
+                        variant="outlined"
+                        onClick={onTakeLoanClick}
+                        disabled={loading || Boolean(item.status)}
+                        sx={{ whiteSpace: "nowrap" }}
+                      >
+                        <Typography>Take loan</Typography>
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      ) : (
+        <Typography>No loans available</Typography>
+      )}
+    </Stack>
+  )
+}
+
 export const ItemDetails = ({ item }: { item: Nft }) => {
+  const { setOpen } = useDialog()
   const [assetIndex, setAssetIndex] = useState(0)
   const [assets, setAssets] = useState<Asset[]>([])
   const [asset, setAsset] = useState<Asset | null>(null)
@@ -569,6 +707,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(unwrapSome(item.metadata.tokenStandard) || 0)}
               />
             )}
+            {item.status !== "loaned" && <BestLoan item={item} onClose={() => setOpen(false)} />}
           </Stack>
         </Box>
         <CardContent sx={{ width: "100%" }}>
