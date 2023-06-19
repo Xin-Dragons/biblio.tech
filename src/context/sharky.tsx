@@ -105,7 +105,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   }
 
   async function getOrderBook(mint: string) {
-    const { data } = await axios.get(`https://api-mainnet.magiceden.dev/v2/tokens/${mint}`)
+    const { data } = await axios.get("/api/get-me-collection", { params: { mint } })
     const meCollection = data.collection
 
     const sharkyCollection = findKey(Sharky.magicEdenSymbols, (item) => item === meCollection)
