@@ -72,7 +72,7 @@ type ProfileProps = {
   onClose: Function
 }
 
-const ConnectEth = () => {
+const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
   const [recoveredAddress, setRecoveredAddress] = useState<string | null>()
   const { chain } = useNetwork()
   const { signMessageAsync } = useSignMessage()
@@ -128,10 +128,17 @@ const ConnectEth = () => {
       <Stack spacing={2}>
         {ensAvatar && <img src={ensAvatar} alt="ENS Avatar" />}
         <div>{ensName ? `${ensName} (${address})` : address}</div>
-        <div>Connected to {connector?.name}</div>
-        <Stack direction="row" spacing={2}>
-          <Button onClick={() => disconnect()}>Disconnect</Button>
-          <Button onClick={linkWallet}>Link wallet</Button>
+        <Alert severity="info">Connected to {connector?.name}</Alert>
+        <Stack direction="row" justifyContent="space-between">
+          <Button onClick={() => onClose()} variant="outlined" color="error">
+            Close
+          </Button>
+          <Stack direction="row" spacing={2}>
+            <Button onClick={() => disconnect()}>Disconnect</Button>
+            <Button onClick={linkWallet} variant="contained">
+              Link wallet
+            </Button>
+          </Stack>
         </Stack>
       </Stack>
     )
@@ -153,6 +160,11 @@ const ConnectEth = () => {
       ))}
 
       {error && <div>{error.message}</div>}
+      <Stack direction="row">
+        <Button onClick={() => onClose()} variant="outlined" color="error">
+          Close
+        </Button>
+      </Stack>
     </Stack>
   )
 }
@@ -621,7 +633,7 @@ function LinkedWallets() {
           </TableRow>
         </TableFooter>
       </Table>
-      <Dialog open={adding} onClose={toggleAdding}>
+      <Dialog open={adding} onClose={toggleAdding} fullWidth>
         <Card>
           <CardContent>
             <Stack spacing={2}>
@@ -629,11 +641,24 @@ function LinkedWallets() {
               <FormControl fullWidth>
                 <InputLabel id="demo-simple-select-label">Chain</InputLabel>
                 <Select value={chain} label="Chain" onChange={(e) => setChain(e.target.value)}>
-                  <MenuItem value="sol">Solana</MenuItem>
+                  <MenuItem value="solana">Solana</MenuItem>
                   <MenuItem value="eth">Etherium</MenuItem>
                 </Select>
               </FormControl>
-              {chain === "eth" && <ConnectEth />}
+              {chain === "eth" && <ConnectEth onClose={toggleAdding} />}
+              {chain === "solana" && (
+                <Stack spacing={2}>
+                  <Typography>
+                    To connect an additional Solana wallet, switch your extension to the new wallet while staying signed
+                    in to your main account.
+                  </Typography>
+                  <Stack direction="row">
+                    <Button variant="outlined" onClick={toggleAdding} color="error">
+                      Close
+                    </Button>
+                  </Stack>
+                </Stack>
+              )}
             </Stack>
           </CardContent>
         </Card>

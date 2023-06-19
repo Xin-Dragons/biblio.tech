@@ -483,7 +483,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
   async function updateNfts(updates: Nft[]) {
     await db.nfts.bulkUpdate(
-      updates.map((item) => {
+      updates.map((item: any) => {
         const { nftMint, ...changes } = item
         return {
           key: nftMint,

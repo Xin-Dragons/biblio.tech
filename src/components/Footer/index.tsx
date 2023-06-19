@@ -66,7 +66,7 @@ export const ScrollingBrice: FC = () => {
   const CurrencyTooltip = (
     <Stack>
       {Object.keys(brice).map((key) => (
-        <Stack direction="row" justifyContent="space-between">
+        <Stack key={key} direction="row" justifyContent="space-between">
           <Typography variant="body2" sx={{ marginRight: 2 }}>
             {upperFirst(key)}
           </Typography>

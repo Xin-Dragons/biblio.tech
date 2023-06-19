@@ -313,7 +313,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   if (sort === "creator") {
     filtered = sortBy(filtered, [
       (item) => {
-        const creator = item.metadata.creators?.find((c) => c.verified)?.address
+        const creator = item.metadata.creators?.find((c: any) => c.verified)?.address
         return creator ? base58PublicKey(creator) : null
       },
       "name",

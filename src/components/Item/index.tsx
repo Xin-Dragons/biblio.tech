@@ -706,7 +706,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && isAdmin && <BestLoan item={item} onClose={() => setOpen(false)} />}
+            {item.status !== "loaned" && item.chain !== "eth" && (
+              <BestLoan item={item} onClose={() => setOpen(false)} />
+            )}
           </Stack>
         </Box>
         <CardContent sx={{ width: "100%" }}>
@@ -967,7 +969,6 @@ export const Item: FC<ItemProps> = ({
   }
 
   function onItemClick(e: any) {
-    console.log("clicked")
     renderItem(ItemDetails, { item })
   }
 
