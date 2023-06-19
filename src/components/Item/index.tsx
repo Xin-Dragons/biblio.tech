@@ -55,7 +55,6 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
 import LockOpenIcon from "@mui/icons-material/LockOpen"
-import { unwrapSome } from "@metaplex-foundation/umi"
 import { Listing, Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
 import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
@@ -704,7 +703,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 listing={item.listing}
                 defaultPayRoyalties={payRoyalties}
                 sellerFeeBasisPoints={item.metadata.sellerFeeBasisPoints}
-                royaltiesEnforced={[4, 5].includes(unwrapSome(item.metadata.tokenStandard) || 0)}
+                royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
             {item.status !== "loaned" && isAdmin && <BestLoan item={item} onClose={() => setOpen(false)} />}
@@ -734,7 +733,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     <CopyAddress>{item.nftMint}</CopyAddress>
                   </TableCell>
                 </TableRow>
-                {[0, 1, 4].includes(unwrapSome(item.metadata.tokenStandard)!) && collection && (
+                {[0, 1, 4].includes(item.metadata.tokenStandard!) && collection && (
                   <TableRow>
                     <TableCell>
                       <Typography fontWeight="bold" color="primary">
@@ -758,12 +757,12 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                   </TableCell>
                   <TableCell sx={{ textAlign: "right" }}>
                     <Typography>
-                      {unwrapSome(item.metadata.collectionDetails) && "Collection "}
-                      {tokenStandards[unwrapSome(item.metadata.tokenStandard)!] || "Unknown"}
+                      {item.metadata.collectionDetails && "Collection "}
+                      {tokenStandards[item.metadata.tokenStandard as keyof object] || "Unknown"}
                     </Typography>
                   </TableCell>
                 </TableRow>
-                {unwrapSome(item.metadata.tokenStandard) === TokenStandard.NonFungibleEdition && (
+                {item.metadata.tokenStandard === TokenStandard.NonFungibleEdition && (
                   <TableRow>
                     <TableCell>
                       <Typography fontWeight="bold" color="primary">
@@ -1196,9 +1195,11 @@ export const Item: FC<ItemProps> = ({
                 item.nftMint === USDC
                   ? "/usdc.png"
                   : item.json?.image
-                  ? `https://img-cdn.magiceden.dev/${
-                      layoutSize === "collage" || enlarged ? "rs:fill:600" : "rs:fill:400:400:0:0"
-                    }/plain/${item.json?.image}`
+                  ? item.chain === "eth"
+                    ? item.json.image
+                    : `https://img-cdn.magiceden.dev/${
+                        layoutSize === "collage" || enlarged ? "rs:fill:600" : "rs:fill:400:400:0:0"
+                      }/plain/${item.json?.image}`
                   : lightMode
                   ? "/books-lightest.svg"
                   : "/books-lighter.svg"
@@ -1212,7 +1213,7 @@ export const Item: FC<ItemProps> = ({
               }}
             />
 
-            {[1, 2].includes(unwrapSome(item.metadata.tokenStandard)!) && (
+            {[1, 2].includes(item.metadata.tokenStandard) && (
               <Stack>
                 {value ? (
                   <>
@@ -1377,7 +1378,7 @@ export const Item: FC<ItemProps> = ({
                 }}
               >
                 {item.json?.name || item.metadata?.name || "Unknown"}
-                {unwrapSome(item.metadata.tokenStandard) === 2 && (
+                {item.metadata.tokenStandard === 2 && (
                   <Typography display="inline" variant="body2" color="primary" fontWeight="bold">
                     {" "}
                     - ({item.metadata.symbol || item.json?.symbol})

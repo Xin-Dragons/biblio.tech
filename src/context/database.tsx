@@ -70,7 +70,7 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
+  const { publicKey, publicKeys, ethPublicKeys, isAdmin, isActive, isOffline } = useAccess()
   const { showAllWallets } = useUiSettings()
   const [syncingData, setSyncingData] = useState(false)
   const [syncingRarity, setSyncingRarity] = useState(false)
@@ -79,7 +79,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const nfts = useLiveQuery(
     () =>
       (showAllWallets && isAdmin
-        ? db.nfts.where("owner").anyOf(publicKeys)
+        ? db.nfts.where("owner").anyOf([...publicKeys, ...ethPublicKeys])
         : db.nfts.where({ owner: publicKey })
       ).toArray(),
     [publicKey, publicKeys],
@@ -154,6 +154,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         toAdd.map((c) => {
           return {
             id: c.id,
+            chain: c.chain || "solana",
             helloMoonCollectionId: c.helloMoonCollectionId,
             collectionId: c.collectionId,
             collectionName: c.collectionName,
@@ -166,6 +167,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       await db.collections.bulkUpdate(
         toUpdate.map((c) => {
           const changes = {
+            chain: c.chain || "solana",
             collectionName: c.collectionName,
             collectionId: c.collectionId,
             helloMoonCollectionId: c.helloMoonCollectionId,
@@ -190,6 +192,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         const toRemove = fromDb.filter(
           (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
         )
+
+        console.log({ publicKey, toRemove })
 
         await db.nfts.bulkUpdate(
           toRemove.map((item) => {
@@ -314,8 +318,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }, [publicKey, isOffline])
 
   async function updateSharkyOrderBooks(orderBooks: SharkyOrderBooks[]) {
-    console.log(orderBooks)
-    await db.sharkyOrderBooks.bulkPut(orderBooks)
+    if (orderBooks && orderBooks.length) {
+      await db.sharkyOrderBooks.bulkPut(orderBooks)
+    }
   }
 
   useEffect(() => {
@@ -569,6 +574,28 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       }
     })
   }
+
+  async function getEthNftsWorker() {
+    if (isOffline) {
+      return
+    }
+    const worker = new Worker(new URL("../../public/get-eth-nfts.worker.ts", import.meta.url))
+
+    worker.addEventListener("message", async (event) => {
+      await Promise.all([
+        addNftsToDb(event.data.nfts, ethPublicKeys[0]!, true),
+        addCollectionsToDb(event.data.collections),
+      ])
+    })
+
+    worker.postMessage({ addresses: ethPublicKeys })
+  }
+
+  useEffect(() => {
+    if (ethPublicKeys.length) {
+      getEthNftsWorker()
+    }
+  }, [ethPublicKeys])
 
   useEffect(() => {
     setSyncing(syncingData || syncingRarity || syncingMetadata)

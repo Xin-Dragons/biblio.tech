@@ -26,9 +26,11 @@ import axios from "axios"
 import format from "date-fns/format"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
-import { AccountBalanceWallet } from "@mui/icons-material"
+import { AccountBalanceWallet, ConnectWithoutContactOutlined, ContactPageOutlined } from "@mui/icons-material"
 import { useNfts } from "../../context/nfts"
 import { useLiveQuery } from "dexie-react-hooks"
+import { Brice, CURRENCIES, CurrencyItem, useBrice } from "../../context/brice"
+import { upperFirst } from "lodash"
 
 function Time() {
   const [time, setTime] = useState("")
@@ -54,32 +56,41 @@ function Time() {
   )
 }
 
-const BRICE_API = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+export const ScrollingBrice: FC = () => {
+  const brice = useBrice()
+  const { preferredCurrency } = useUiSettings()
+  const [coin, setCoin] = useState("solana")
 
-export const Brice: FC = () => {
-  const [brice, setBrice] = useState(`$20.00`)
+  const currency = CURRENCIES.find((c) => c.code === preferredCurrency) as CurrencyItem
 
-  async function getBrice() {
-    try {
-      const { data } = await axios.get(BRICE_API)
-      setBrice(`$${data.solana.usd}`)
-    } catch {
-      setBrice("pending")
-    }
-  }
-
-  useEffect(() => {
-    getBrice()
-    const interval = setInterval(getBrice, 5 * 60 * 1000)
-    return () => {
-      clearInterval(interval)
-    }
-  }, [])
+  const CurrencyTooltip = (
+    <Stack>
+      {Object.keys(brice).map((key) => (
+        <Stack direction="row" justifyContent="space-between">
+          <Typography variant="body2" sx={{ marginRight: 2 }}>
+            {upperFirst(key)}
+          </Typography>
+          <Typography variant="body2" fontWeight="bold">
+            {currency.symbol}
+            {(brice[key as keyof object][preferredCurrency] as number).toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}{" "}
+            {currency.code.toUpperCase()}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  )
 
   return (
-    <Typography variant="body2" fontWeight="bold">
-      {brice}
-    </Typography>
+    <Tooltip title={CurrencyTooltip}>
+      <Typography variant="body2" fontWeight="bold">
+        {currency.symbol}
+        {(brice[coin as keyof object][currency.code] as number).toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}
+      </Typography>
+    </Tooltip>
   )
 }
 
@@ -176,6 +187,9 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
   const { filtered, nfts } = useNfts()
   const wallet = useWallet()
   const { db } = useDatabase()
+  const { preferredCurrency } = useUiSettings()
+  const brice = useBrice()
+  const [portfolioValue, setPortfolioValue] = useState(0)
   const collections = useLiveQuery(() => db.collections.toArray(), [], [])
 
   useEffect(() => {
@@ -185,9 +199,15 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
         if (!collection) {
           return n
         }
+
+        const price = brice[(n.chain === "ethereum" ? "ethereum" : "solana") as keyof object][
+          preferredCurrency
+        ] as number
+        const value = n.chain === "ethereum" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
+        // console.log(n.chain, price, value, price * value)
         return {
           ...n,
-          value: collection.floorPrice,
+          value: price * value,
         }
       })
       .reduce((sum, nft) => {
@@ -197,7 +217,7 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
         return sum
       }, 0)
 
-    console.log(value / LAMPORTS_PER_SOL)
+    setPortfolioValue(value)
   }, [nfts])
 
   useEffect(() => {
@@ -222,6 +242,8 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
   const isMobile = useMediaQuery("(max-width:480px)")
   const hideBalance = useMediaQuery("(max-width:400px)")
   const hideWeb = useMediaQuery("(max-width:1100px)")
+
+  const currency = CURRENCIES.find((c) => c.code === preferredCurrency) as CurrencyItem
 
   return (
     <Box sx={{ borderTop: 1, borderColor: "divider" }} component="footer" color="grey">
@@ -270,7 +292,7 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                 </FooterSection>
               )}
               <FooterSection first={isTiny}>
-                <Brice />
+                <ScrollingBrice />
               </FooterSection>
               {!hideTps && (
                 <FooterSection>
@@ -313,9 +335,18 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
           )}
           {!attachWeb && !isSmall && !hideWeb && (
             <Box sx={{ padding: 0.25, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
-              <Typography variant="body2" fontWeight="bold" color="grey">
-                https://biblio.tech
-              </Typography>
+              <Tooltip
+                title={
+                  <Typography variant="body2">
+                    This is an estimated value of the current view based on floor prices only
+                  </Typography>
+                }
+              >
+                <Typography variant="body2" fontWeight="bold" color="grey">
+                  {currency.symbol}
+                  {portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currency.code.toUpperCase()}
+                </Typography>
+              </Tooltip>
             </Box>
           )}
 

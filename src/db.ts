@@ -1,5 +1,6 @@
 import { DigitalAsset, JsonMetadata } from "@metaplex-foundation/mpl-token-metadata";
 import Dexie, { Table } from "dexie";
+import { Currency } from "./context/brice";
 
 export interface NftMetadata {
   name?: string;
@@ -13,7 +14,8 @@ export interface EditionDetails {
   supply: bigint | "unknown"
 }
 
-export interface Nft extends DigitalAsset {
+export interface Nft {
+  chain?: "eth" | "solana",
   nftMint: string;
   helloMoonCollectionId: string;
   loan?: Loan | null;
@@ -24,6 +26,9 @@ export interface Nft extends DigitalAsset {
   jsonLoaded?: boolean;
   status?: string | null;
   delegate?: string | null;
+  metadata: any,
+  mint: any,
+  edition: any,
   supply?: number;
   balance?: {
     [key: string]: number
@@ -37,6 +42,7 @@ export interface Nft extends DigitalAsset {
 
 export interface Collection {
   id: string;
+  chain: "eth" | "solana",
   helloMoonCollectionId?: string;
   collectionId?: string;
   collectionName: string;
@@ -122,6 +128,7 @@ export interface Preferences {
   payRoyalties: boolean;
   showAllWallets: boolean;
   lightMode: boolean;
+  preferredCurrency: Currency
 }
 
 export interface SharkyOrderBooks {

@@ -18,6 +18,7 @@ import { difference, flatten, sortBy } from "lodash"
 import { Nft } from "../../db"
 import { useAccess } from "../../context/access"
 import { useTheme } from "../../context/theme"
+import { CURRENCIES, CurrencyItem, useBrice } from "../../context/brice"
 
 type CollectionProps = {
   item: any
@@ -34,7 +35,7 @@ export type CollectionItem = {
 }
 
 export const Collection: FC<CollectionProps> = ({ item, selected }) => {
-  const { showInfo, lightMode, layoutSize } = useUiSettings()
+  const { showInfo, lightMode, layoutSize, preferredCurrency } = useUiSettings()
   const basePath = useBasePath()
   const nfts = item.nfts
   const theme = useTheme()
@@ -73,6 +74,13 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
 
     return sizes[layoutSize as keyof object]
   }
+
+  const currencySymbols = {
+    solana: "SOL",
+    ethereum: "ETH",
+  }
+
+  const currency = CURRENCIES.find((c) => c.code === preferredCurrency) as CurrencyItem
 
   return (
     <Link href={`${basePath}/collections/${item.id}`}>
@@ -148,7 +156,14 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
               <Typography variant="h6" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
                 {item.id === "unknown" || item.value === 0
                   ? "Unknown"
-                  : `◎${item.value.toLocaleString(undefined, { minimumFractionDrgits: 4 })}`}
+                  : `${(item.value as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${
+                      currencySymbols[item.currency as keyof object]
+                    }`}
+              </Typography>
+              <Typography variant="body1" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
+                {item.id === "unknown" || item.price === 0
+                  ? "Unknown"
+                  : `${currency.symbol}${item.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
               </Typography>
             </Stack>
           </Box>
@@ -178,7 +193,8 @@ const Home: NextPage = () => {
   const wallet = useWallet()
   const { db } = useDatabase()
   const { search } = useFilters()
-  const { sort } = useUiSettings()
+  const { sort, preferredCurrency } = useUiSettings()
+  const brice = useBrice()
   const { nfts, filtered } = useNfts()
 
   const allFilteredMints = filtered.map((f) => f.nftMint)
@@ -203,8 +219,18 @@ const Home: NextPage = () => {
       if (!collectionNfts) {
         return null
       }
+      if (collection.collectionName === "Zero Monke Biz") {
+        console.log(collection)
+      }
       const filtered = collectionNfts.filter((n) => allFilteredMints.includes(n.nftMint))
-      const value = (collection.floorPrice * filtered.length) / LAMPORTS_PER_SOL
+      const currency = collection.chain === "eth" ? "ethereum" : "solana"
+      const value =
+        collection.chain === "eth"
+          ? collection.floorPrice * filtered.length
+          : (collection.floorPrice * filtered.length) / LAMPORTS_PER_SOL
+
+      const price = value * brice[currency as keyof object][preferredCurrency]
+
       return {
         id: collection.id,
         image: collection.image,
@@ -212,6 +238,8 @@ const Home: NextPage = () => {
         allNfts: collectionNfts,
         nfts: filtered,
         value: value || 0,
+        price: price || 0,
+        currency,
       }
     })
     .filter(Boolean)
@@ -219,7 +247,7 @@ const Home: NextPage = () => {
 
   const uncategorized = nfts.filter(
     (n) =>
-      [0, 4, 5].includes(unwrapSome(n.metadata.tokenStandard)!) &&
+      [0, 4, 5].includes(n.metadata.tokenStandard) &&
       !flatten(collections.map((c: any) => c.nfts.map((cn: Nft) => cn.nftMint))).includes(n.nftMint)
   )
 
@@ -230,6 +258,8 @@ const Home: NextPage = () => {
       image: "/books.svg",
       allNfts: uncategorized,
       nfts: uncategorized.filter((n) => allFilteredMints.includes(n.nftMint)),
+      currency: "◎",
+      price: 0,
       value: 0,
     })
   }
@@ -239,7 +269,7 @@ const Home: NextPage = () => {
   })
 
   if (sort === "value") {
-    filteredCollections = sortBy(filteredCollections, ["value", (item) => item?.nfts.length]).reverse()
+    filteredCollections = sortBy(filteredCollections, ["price", (item) => item?.nfts.length]).reverse()
   } else if (sort === "name") {
     filteredCollections = sortBy(filteredCollections, (item: any) => item.name.toLowerCase().trim())
   } else if (sort === "holdings") {

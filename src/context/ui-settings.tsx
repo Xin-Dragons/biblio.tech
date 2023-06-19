@@ -6,6 +6,7 @@ import { toast } from "react-hot-toast"
 import { useDatabase } from "./database"
 import { useLiveQuery } from "dexie-react-hooks"
 import { noop } from "lodash"
+import type { Currency } from "./brice"
 
 export type LayoutSize = "small" | "medium" | "large" | "collage"
 
@@ -24,6 +25,8 @@ type UiSettingsContextProps = {
   setShowAllWallets: Function
   lightMode: boolean
   setLightMode: Function
+  preferredCurrency: Currency
+  setPreferredCurrency: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -41,6 +44,8 @@ const initialProps: UiSettingsContextProps = {
   setShowAllWallets: noop,
   lightMode: false,
   setLightMode: noop,
+  preferredCurrency: "usd",
+  setPreferredCurrency: noop,
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -107,6 +112,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       payRoyalties: true,
       setShowAllWallets: true,
       lightMode: false,
+      preferredCurrency: "usd",
     }
   ) as {
     showInfo: boolean
@@ -117,6 +123,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     payRoyalties: boolean
     showAllWallets: boolean
     lightMode: boolean
+    preferredCurrency: Currency
   }
 
   async function setSort(sort: string) {
@@ -143,6 +150,10 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("lightMode", lightMode, true)
   }
 
+  async function setPreferredCurrency(preferredCurrency: boolean) {
+    await updatePreferences("preferredCurrency", preferredCurrency, true)
+  }
+
   return (
     <UiSettingsContext.Provider
       value={{
@@ -160,6 +171,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setShowAllWallets,
         lightMode: Boolean(defaults?.lightMode),
         setLightMode,
+        preferredCurrency: defaults?.preferredCurrency || "usd",
+        setPreferredCurrency,
       }}
     >
       {children}
