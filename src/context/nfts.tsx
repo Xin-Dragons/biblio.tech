@@ -6,7 +6,7 @@ import { useFilters } from "./filters"
 import { useRouter } from "next/router"
 import { useAccess } from "./access"
 import { sortBy } from "lodash"
-import { base58PublicKey, unwrapSome } from "@metaplex-foundation/umi"
+import { base58PublicKey } from "@metaplex-foundation/umi"
 import { Nft, Rarity } from "../db"
 
 type NftsContextProps = {
@@ -37,7 +37,7 @@ type NftsProviderProps = {
 
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
-  const { publicKey, userId, publicKeys, isAdmin } = useAccess()
+  const { publicKey, userId, publicKeys, ethPublicKeys, isAdmin } = useAccess()
   const { sort, showAllWallets } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
   const {} = useFilters()
@@ -77,24 +77,26 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const nftsFromDb = useLiveQuery(
     () => {
       const query =
-        showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
+        showAllWallets && isAdmin
+          ? db.nfts.where("owner").anyOf([...publicKeys, ...ethPublicKeys])
+          : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
         return query.filter((item) => Boolean(item.loan && item.loan.status === "active")).toArray()
       }
       if (router.query.filter === "sfts") {
-        return query.filter((item) => unwrapSome(item.metadata.tokenStandard) === 1).toArray()
+        return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
       }
       if (router.query.filter === "starred") {
         return query.filter((item) => starredNfts.map((n) => n.nftId).includes(item.nftMint)).toArray()
       }
       if (router.query.filter === "spl") {
-        return query.filter((item) => unwrapSome(item.metadata.tokenStandard) === 2).toArray()
+        return query.filter((item) => item.metadata.tokenStandard === 2).toArray()
       }
       if (router.query.filter === "editions") {
-        return query.filter((item) => unwrapSome(item.metadata.tokenStandard) === 3).toArray()
+        return query.filter((item) => item.metadata.tokenStandard === 3).toArray()
       }
       if (router.query.filter === "nfts") {
-        return query.filter((item) => [0, null, 4].includes(unwrapSome(item.metadata.tokenStandard))).toArray()
+        return query.filter((item) => [0, null, 4].includes(item.metadata.tokenStandard)).toArray()
       }
       if (router.query.filter === "vault") {
         return query.filter((item) => item.status === "inVault").toArray()
@@ -103,7 +105,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         return query.filter((item) => item.status === "listed").toArray()
       }
       if (!router.query.filter && !router.query.collectionId && !router.query.tag) {
-        return query.filter((item) => [0, 4, 5].includes(unwrapSome(item.metadata.tokenStandard)!)).toArray()
+        return query.filter((item) => [0, 4, 5].includes(item.metadata.tokenStandard!)).toArray()
       }
       if (router.query.filter === "junk") {
         return query
@@ -120,7 +122,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
                 // things that have a value aren't junk
                 !item.price &&
                 // NFT editions probably aren't junk
-                unwrapSome(item.metadata.tokenStandard) !== 3 &&
+                item.metadata.tokenStandard !== 3 &&
                 // missing json probably junk
                 (!item.json ||
                   // website in description is probably junk
@@ -157,7 +159,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
           return query
             .filter(
               (item) =>
-                [0, 4, 5].includes(unwrapSome(item.metadata.tokenStandard)!) &&
+                [0, 4, 5].includes(item.metadata.tokenStandard!) &&
                 !item.collectionId &&
                 !item.helloMoonCollectionId &&
                 allNFts.filter((n) => n.firstVerifiedCreator === item.firstVerifiedCreator).length === 1
@@ -168,7 +170,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       return []
     },
-    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets],
+    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, ethPublicKeys, showAllWallets],
     []
   )
 
@@ -311,7 +313,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   if (sort === "creator") {
     filtered = sortBy(filtered, [
       (item) => {
-        const creator = unwrapSome(item.metadata.creators)?.find((c) => c.verified)?.address
+        const creator = item.metadata.creators?.find((c: any) => c.verified)?.address
         return creator ? base58PublicKey(creator) : null
       },
       "name",

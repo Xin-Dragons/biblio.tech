@@ -111,7 +111,7 @@ export const Actions: FC = () => {
     .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
     .filter(Boolean)
   const onlyNftsSelected = selectedItems.every((item: any) => {
-    return [0, 3, 4].includes(unwrapSome(item.metadata.tokenStandard)!)
+    return [0, 3, 4].includes(item.metadata.tokenStandard)
   })
 
   const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
@@ -128,7 +128,7 @@ export const Actions: FC = () => {
 
   const canFreezeThaw = allInVault || noneInVault
 
-  const hasFreezeAuth = selectedItems.every((item) => isSome(item.mint.freezeAuthority))
+  const hasFreezeAuth = selectedItems.every((item) => item.chain !== "eth" && isSome(item.mint.freezeAuthority))
 
   const allListed = selectedItems.every((item) => item.status === "listed")
   const allDelisted = selectedItems.every((item) => !item.status)

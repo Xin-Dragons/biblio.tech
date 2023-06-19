@@ -6,7 +6,7 @@ import { useRouter } from "next/router"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { getPublicKeyFromSolDomain } from "../components/WalletSearch"
 import { Nft, User } from "../types/nextauth"
-import { noop, sortBy } from "lodash"
+import { noop, partition, sortBy } from "lodash"
 import { addMemo } from "@metaplex-foundation/mpl-essentials"
 import { useUmi } from "./umi"
 import { toast } from "react-hot-toast"
@@ -24,6 +24,7 @@ type AccessContextProps = {
   userId: string | null
   multiWallet: boolean
   publicKeys: string[]
+  ethPublicKeys: string[]
   availableWallets: number
   signOut: Function
   signIn: Function
@@ -39,6 +40,7 @@ const initial = {
   isOffline: false,
   multiWallet: false,
   publicKeys: [],
+  ethPublicKeys: [],
   availableWallets: 0,
   signOut: noop,
   signIn: noop,
@@ -57,6 +59,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [multiWallet, setMultiWallet] = useState(false)
   const [publicKeys, setPublicKeys] = useState<string[]>([])
+  const [ethPublicKeys, setEthPublicKeys] = useState<string[]>([])
   const [availableWallets, setAvailableWallets] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string>("")
@@ -117,14 +120,17 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
           })
           .reduce((sum, nft) => sum + nft.number_wallets, 0) || 0
 
-      const publicKeys = sortBy(
-        session?.user?.wallets?.filter((w) => w.active),
-        (item) => !item.active
+      const [publicKeys, ethPublicKeys] = partition(
+        sortBy(
+          session?.user?.wallets?.filter((w) => w.active),
+          (item) => !item.active
+        ).slice(0, active),
+        (item) => item.chain === "solana"
       )
-        .map((item) => item.public_key)
-        .slice(0, active)
+
       setAvailableWallets(active)
-      setPublicKeys(publicKeys)
+      setPublicKeys(publicKeys.map((item) => item.public_key))
+      setEthPublicKeys(ethPublicKeys.map((item) => item.public_key))
     } else {
       setUser(null)
       setUserId(null)
@@ -269,6 +275,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         signOut,
         signIn,
         isSigningIn,
+        ethPublicKeys,
       }}
     >
       {children}

@@ -31,8 +31,12 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material"
-import { FC, useEffect, useState } from "react"
+import { FC, useEffect, useRef, useState } from "react"
 import { useMetaplex } from "../../context/metaplex"
 import { PublicKey, Transaction } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
@@ -44,8 +48,8 @@ import { getCsrfToken, signOut, useSession } from "next-auth/react"
 import { useDatabase } from "../../context/database"
 import { User } from "../../types/nextauth"
 import { useWallets } from "../../context/wallets"
-import { sortBy, upperFirst } from "lodash"
-import { AddCircle, Close, Delete, Edit, ExpandMore, TramSharp, Update } from "@mui/icons-material"
+import { sortBy, update, upperFirst } from "lodash"
+import { AddCircle, Close, Delete, Edit, ExpandMore, MonetizationOn, TramSharp, Update } from "@mui/icons-material"
 import { Wallet } from "../../db"
 import { default as NextLink } from "next/link"
 import { WalletMultiButtonDynamic } from "../ActionBar"
@@ -56,12 +60,122 @@ import { addMemo } from "@metaplex-foundation/mpl-essentials"
 import { SigninMessage } from "../../utils/SigninMessge"
 import { useTheme } from "../../context/theme"
 import { useUiSettings } from "../../context/ui-settings"
+import { useAccount, useConnect, useDisconnect, useEnsAvatar, useEnsName, useNetwork, useSignMessage } from "wagmi"
 import Crown from "../Listing/crown.svg"
+import { recoverMessageAddress } from "viem"
+import { SiweMessage } from "siwe"
+import { CURRENCIES, Currency } from "../../context/brice"
 
 type ProfileProps = {
   user: User
   publicKey: string
   onClose: Function
+}
+
+const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
+  const { chain } = useNetwork()
+  const { signMessageAsync } = useSignMessage()
+  const { data: session, update } = useSession()
+
+  const { address, connector, isConnected } = useAccount()
+  const { data: ensName } = useEnsName({ address })
+  const { data: ensAvatar } = useEnsAvatar({ name: "jxom.eth" })
+  const { connect, connectors, error, isLoading, pendingConnector } = useConnect()
+  const { disconnect } = useDisconnect()
+
+  async function linkWallet() {
+    try {
+      const nonce = await getCsrfToken()
+      const message = new SiweMessage({
+        domain: window.location.host,
+        address,
+        statement: "Link Ethereum wallet to Biblio.",
+        uri: window.location.origin,
+        version: "1",
+        chainId: chain?.id,
+        nonce,
+      })
+
+      const addingPromise = Promise.resolve().then(async () => {
+        const signature = await signMessageAsync({
+          message: message.prepareMessage(),
+        })
+
+        const { data } = await axios.post("/api/connect-eth-wallet", {
+          message,
+          signature,
+          basePublicKey: session?.publicKey,
+        })
+
+        if (!data.ok) {
+          throw new Error()
+        }
+      })
+
+      toast.promise(addingPromise, {
+        loading: "Linking wallet",
+        success: "Wallet linked successfully",
+        error: "Error linking wallet",
+      })
+
+      await addingPromise
+
+      await update()
+      onClose()
+    } catch (err: any) {
+      toast.error(err.response?.data || err.message || "Error adding wallet")
+    }
+  }
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error.message)
+    }
+  }, [error])
+
+  if (isConnected) {
+    return (
+      <Stack spacing={2}>
+        {ensAvatar && <img src={ensAvatar} alt="ENS Avatar" />}
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography>{ensName ? `${ensName} (${address})` : address}</Typography>
+          <Button onClick={() => disconnect()}>Disconnect</Button>
+        </Stack>
+        <Alert severity="info">Connected to {connector?.name}</Alert>
+        <Stack direction="row" justifyContent="space-between">
+          <Button onClick={() => onClose()} variant="outlined" color="error">
+            Close
+          </Button>
+
+          <Button onClick={linkWallet} variant="contained">
+            Link wallet
+          </Button>
+        </Stack>
+      </Stack>
+    )
+  }
+  return (
+    <Stack spacing={2}>
+      {connectors.map((connector) => (
+        <Button
+          disabled={!connector.ready}
+          key={connector.id}
+          onClick={() => connect({ connector })}
+          variant="contained"
+          fullWidth
+        >
+          {connector.name}
+          {!connector.ready && " (not detected)"}
+          {isLoading && connector.id === pendingConnector?.id && " (connecting)"}
+        </Button>
+      ))}
+      <Stack direction="row">
+        <Button onClick={() => onClose()} variant="outlined" color="error">
+          Close
+        </Button>
+      </Stack>
+    </Stack>
+  )
 }
 
 export const Profile: FC<ProfileProps> = ({ onClose }) => {
@@ -173,7 +287,7 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
         <Close fontSize="large" />
       </IconButton>
       <Stack spacing={2} alignItems="center">
-        <Stack>
+        <Stack mt={5}>
           <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
             Profile settings
           </Typography>
@@ -242,31 +356,33 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
           </Stack>
         ) : (
           <CardContent>
-            <Tabs value={activeTab} onChange={onTabChange}>
-              <Tab value="access" label="Access" />
-              <Tab value="wallets" label="Linked Wallets" />
-              <Tab value="address-book" label="Address book" />
-              <Tab value="data" label="Data" />
-              <Tab value="settings" label="Settings" />
-            </Tabs>
-            {activeTab === "access" && (
-              <>
-                <Selector
-                  linkedNfts={user?.nfts || null}
-                  onSubmit={linkNft}
-                  unlinkNft={unlinkNft}
-                  loading={loading}
-                  submitLabel="Link NFT"
-                />
-              </>
-            )}
+            <Stack justifyContent="center" alignItems="center" spacing={2}>
+              <Tabs value={activeTab} onChange={onTabChange}>
+                <Tab value="access" label="Access" />
+                <Tab value="wallets" label="Linked Wallets" />
+                <Tab value="address-book" label="Address book" />
+                <Tab value="data" label="Data" />
+                <Tab value="settings" label="Settings" />
+              </Tabs>
+              {activeTab === "access" && (
+                <>
+                  <Selector
+                    linkedNfts={user?.nfts || null}
+                    onSubmit={linkNft}
+                    unlinkNft={unlinkNft}
+                    loading={loading}
+                    submitLabel="Link NFT"
+                  />
+                </>
+              )}
 
-            {activeTab === "settings" && <Settings />}
+              {activeTab === "settings" && <Settings />}
 
-            {activeTab === "wallets" && <LinkedWallets />}
+              {activeTab === "wallets" && <LinkedWallets />}
 
-            {activeTab === "data" && <Data />}
-            {activeTab === "address-book" && <AddressBook />}
+              {activeTab === "data" && <Data />}
+              {activeTab === "address-book" && <AddressBook />}
+            </Stack>
           </CardContent>
         )}
       </Stack>
@@ -275,7 +391,7 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
 }
 
 const Settings: FC = () => {
-  const { payRoyalties, setPayRoyalties } = useUiSettings()
+  const { payRoyalties, setPayRoyalties, preferredCurrency, setPreferredCurrency } = useUiSettings()
   return (
     <Table>
       <TableBody>
@@ -303,6 +419,29 @@ const Settings: FC = () => {
             <Switch checked={payRoyalties} onChange={(e) => setPayRoyalties(e.target.checked)} />
           </TableCell>
         </TableRow>
+        <TableRow>
+          <TableCell>
+            <Stack>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Typography variant="h6" color="primary" textTransform="uppercase" fontWeight="bold">
+                  Display currency
+                </Typography>
+                <MonetizationOn color="primary" />
+              </Stack>
+              <Typography>Choose your preferred currency</Typography>
+              <FormHelperText>Portfolio value and floor prices will be shown in this currency</FormHelperText>
+            </Stack>
+          </TableCell>
+          <TableCell sx={{ textAlign: "right" }}>
+            <Select value={preferredCurrency} onChange={(e) => setPreferredCurrency(e.target.value)}>
+              {CURRENCIES.map((currency) => (
+                <MenuItem key={currency.code} value={currency.code}>
+                  {currency.symbol} {currency.code.toUpperCase()}
+                </MenuItem>
+              ))}
+            </Select>
+          </TableCell>
+        </TableRow>
       </TableBody>
     </Table>
   )
@@ -310,20 +449,28 @@ const Settings: FC = () => {
 
 function LinkedWallets() {
   const { data: session, update } = useSession()
-  const { publicKeys, availableWallets } = useAccess()
+  const { publicKeys, availableWallets, ethPublicKeys } = useAccess()
   const { wallets, isLedger } = useWallets()
   const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [chain, setChain] = useState("solana")
   const umi = useUmi()
   const wallet = useWallet()
+
+  const linkedWallets = [...publicKeys, ...ethPublicKeys]
+
+  function toggleAdding() {
+    setAdding(!adding)
+  }
 
   const isMain = session?.user?.wallets.find((w) => w.public_key === wallet.publicKey?.toBase58())?.main
 
   async function unlink(publicKey: string) {
     try {
       setLoading(true)
-      if (!isMain) {
-        throw new Error("Connect with main wallet in order to unlink additional wallets")
-      }
+      // if (!isMain) {
+      //   throw new Error("Connect with main wallet in order to unlink additional wallets")
+      // }
 
       async function signMessage() {
         if (isLedger) {
@@ -406,22 +553,22 @@ function LinkedWallets() {
 
   return (
     <Stack spacing={2} width="100%">
-      <Typography>
-        {publicKeys.length < availableWallets ? (
-          <span>
-            You have <strong>{publicKeys.length}</strong> linked wallet{publicKeys.length === 1 ? "" : "s"}. You can
-            link up to <strong>{availableWallets}</strong>.
-            <br />
-            <br />
+      {linkedWallets.length < availableWallets ? (
+        <>
+          <Alert severity="info">
+            You have <strong>{linkedWallets.length}</strong> linked wallet{linkedWallets.length === 1 ? "" : "s"}. You
+            can link up to <strong>{availableWallets}</strong>.
+          </Alert>
+          <Typography>
             Connect to a new wallet while signed in to your main account and sign a message in order to link. You can
             unlink additional wallets at any time.
-          </span>
-        ) : (
-          <Alert severity="info">
-            You have linked your maximum wallets. Link more Dandies or Biblio Passes to link additional wallets.
-          </Alert>
-        )}
-      </Typography>
+          </Typography>
+        </>
+      ) : (
+        <Alert severity="info">
+          You have linked your maximum wallets. Link more Dandies or Biblio Passes to link additional wallets.
+        </Alert>
+      )}
 
       <Table stickyHeader>
         {!isXs && (
@@ -482,7 +629,49 @@ function LinkedWallets() {
             )
           })}
         </TableBody>
+        <TableFooter sx={{ position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }}>
+          <TableRow>
+            <TableCell colSpan={5} sx={{ textAlign: "center" }}>
+              <Button variant="contained" onClick={toggleAdding} disabled={publicKeys.length >= availableWallets}>
+                <Stack direction="row" spacing={0.5}>
+                  <AddCircle />
+                  <Typography>Add new</Typography>
+                </Stack>
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
+      <Dialog open={adding} onClose={toggleAdding} fullWidth>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h5">Connect additional wallet</Typography>
+              <FormControl fullWidth>
+                <InputLabel id="demo-simple-select-label">Chain</InputLabel>
+                <Select value={chain} label="Chain" onChange={(e) => setChain(e.target.value)}>
+                  <MenuItem value="solana">Solana</MenuItem>
+                  <MenuItem value="eth">Ethereum</MenuItem>
+                </Select>
+              </FormControl>
+              {chain === "eth" && <ConnectEth onClose={toggleAdding} />}
+              {chain === "solana" && (
+                <Stack spacing={2}>
+                  <Typography>
+                    To connect an additional Solana wallet, switch your extension to the new wallet while staying signed
+                    in to your main account.
+                  </Typography>
+                  <Stack direction="row">
+                    <Button variant="outlined" onClick={toggleAdding} color="error">
+                      Close
+                    </Button>
+                  </Stack>
+                </Stack>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
     </Stack>
   )
 }

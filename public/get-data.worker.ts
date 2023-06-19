@@ -218,10 +218,10 @@ self.addEventListener("message", async event => {
         owner,
         metadata: {
           ...item.metadata,
-          tokenStandard
+          tokenStandard: unwrapSome(tokenStandard)
         }
       }
-    }), token => unwrapSome(token.metadata.tokenStandard))
+    }), token => token.metadata.tokenStandard)
 
     const nonFungibles = [
       ...(types[ExtendedTokenStandard.NonFungible] || []),
@@ -281,7 +281,7 @@ self.addEventListener("message", async event => {
       item => item.collectionId || item.helloMoonCollectionId || item.firstVerifiedCreator
     )
 
-    function getCollectionName(nft: DigitalAsset, meta: JsonMetadata) {
+    function getCollectionName(nft: any, meta: JsonMetadata) {
       try {
         return (meta?.collection?.name
           || meta?.collection?.family

@@ -115,7 +115,7 @@ export const Selector: FC<SelectorProps> = ({
           </Typography>
         </>
       ) : (
-        <Typography>Link multiple Dandies or Biblio Passes to use Biblio with multiple wallets.</Typography>
+        <Alert severity="info">Link multiple Dandies or Biblio Passes to use Biblio with multiple wallets.</Alert>
       )}
       {nftsLoading ? (
         <Box
@@ -124,6 +124,7 @@ export const Selector: FC<SelectorProps> = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            margin: "1em auto !important",
             background: darken(theme.palette.background.default, 0.1),
             padding: 5,
           }}
