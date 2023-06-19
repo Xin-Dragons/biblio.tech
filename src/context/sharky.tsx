@@ -157,18 +157,14 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     const isFreezable = Boolean(freezeAuthority)
 
     // Execute the instruction
-    try {
-      const { takenLoan, sig } = await loan.take({
-        program,
-        nftMintPubKey: new PublicKey(nftMint),
-        nftListIndex,
-        skipFreezingCollateral: !isFreezable,
-      })
+    const { takenLoan, sig } = await loan.take({
+      program,
+      nftMintPubKey: new PublicKey(nftMint),
+      nftListIndex,
+      skipFreezingCollateral: !isFreezable,
+    })
 
-      console.log(`Loan taken! Its pubkey is: ${takenLoan.pubKey.toString()}; tx sig: ${sig}`)
-    } catch (e: any) {
-      console.error(`Error taking loan (sig: ${e.sig})`, e)
-    }
+    console.log(`Loan taken! Its pubkey is: ${takenLoan.pubKey.toString()}; tx sig: ${sig}`)
   }
 
   async function repayLoan(mint: string) {
