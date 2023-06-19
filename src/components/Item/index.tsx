@@ -707,7 +707,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(unwrapSome(item.metadata.tokenStandard) || 0)}
               />
             )}
-            {item.status !== "loaned" && <BestLoan item={item} onClose={() => setOpen(false)} />}
+            {item.status !== "loaned" && isAdmin && <BestLoan item={item} onClose={() => setOpen(false)} />}
           </Stack>
         </Box>
         <CardContent sx={{ width: "100%" }}>
