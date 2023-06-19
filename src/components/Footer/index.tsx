@@ -250,14 +250,9 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
       <Container maxWidth={false}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" height="34px">
           {isMobile ? (
-            <Stack direction="row">
+            <Stack direction="row" alignItems="center">
               <FooterSection first>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  {!isSmall && (
-                    <Typography variant="body2" fontWeight="bold">
-                      Built by
-                    </Typography>
-                  )}
                   <Link href="https://dandies.xyz" target="_blank" rel="noreferrer">
                     <img width="24px" src="/logo.png" style={{ display: "block" }} />
                   </Link>
@@ -265,15 +260,25 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
               </FooterSection>
               <FooterSection>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  {!isSmall && (
-                    <Typography variant="body2" fontWeight="bold">
-                      Powered by
-                    </Typography>
-                  )}
                   <Link href="https://hellomoon.io/developers" target="_blank" rel="noreferrer">
                     <img width="20px" src="/hello-moon.svg" style={{ display: "block" }} />
                   </Link>
                 </Stack>
+              </FooterSection>
+              <FooterSection>
+                <Tooltip
+                  title={
+                    <Typography variant="body2">
+                      This is an estimated value of the current view based on floor prices only
+                    </Typography>
+                  }
+                >
+                  <Typography variant="body2" fontWeight="bold" color="grey" sx={{ fontSize: "12px !important" }}>
+                    {currency.symbol}
+                    {portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                    {!isTiny && currency.code.toUpperCase()}
+                  </Typography>
+                </Tooltip>
               </FooterSection>
             </Stack>
           ) : (
@@ -286,7 +291,7 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                   <WifiOffIcon color="error" fontSize="small" />
                 </Offline>
               </FooterSection> */}
-              {!isTiny && (
+              {!isSmall && (
                 <FooterSection first>
                   <Time />
                 </FooterSection>
@@ -324,11 +329,21 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                   </Link>
                 </Stack>
               </FooterSection>
-              {attachWeb && !isSmall && !hideWeb && (
+              {attachWeb && (
                 <FooterSection>
-                  <Typography variant="body2" fontWeight="bold" color="grey">
-                    https://biblio.tech
-                  </Typography>
+                  <Tooltip
+                    title={
+                      <Typography variant="body2">
+                        This is an estimated value of the current view based on floor prices only
+                      </Typography>
+                    }
+                  >
+                    <Typography variant="body2" fontWeight="bold" color="grey">
+                      {currency.symbol}
+                      {portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                      {!isTiny && currency.code.toUpperCase()}
+                    </Typography>
+                  </Tooltip>
                 </FooterSection>
               )}
             </Stack>
@@ -352,12 +367,12 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
 
           <Stack direction="row" alignItems="center">
             <FooterSection right>
-              <Typography fontWeight="bold">
+              <Typography fontWeight="bold" sx={isMobile ? { fontSize: "10px !important" } : {}}>
                 {isSmall ? "" : "Showing "}
                 {filtered.length} {isSmall ? "/" : "of"} {nfts.length}
               </Typography>
             </FooterSection>
-            {wallet.connected && !hideBalance && (
+            {wallet.connected && !hideBalance && !hideWeb && (
               <FooterSection right>
                 <Stack
                   direction="row"

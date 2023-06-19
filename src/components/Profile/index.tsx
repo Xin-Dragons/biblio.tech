@@ -48,7 +48,7 @@ import { getCsrfToken, signOut, useSession } from "next-auth/react"
 import { useDatabase } from "../../context/database"
 import { User } from "../../types/nextauth"
 import { useWallets } from "../../context/wallets"
-import { sortBy, upperFirst } from "lodash"
+import { sortBy, update, upperFirst } from "lodash"
 import { AddCircle, Close, Delete, Edit, ExpandMore, MonetizationOn, TramSharp, Update } from "@mui/icons-material"
 import { Wallet } from "../../db"
 import { default as NextLink } from "next/link"
@@ -73,10 +73,9 @@ type ProfileProps = {
 }
 
 const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
-  const [recoveredAddress, setRecoveredAddress] = useState<string | null>()
   const { chain } = useNetwork()
   const { signMessageAsync } = useSignMessage()
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
 
   const { address, connector, isConnected } = useAccount()
   const { data: ensName } = useEnsName({ address })
@@ -90,21 +89,27 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
       const message = new SiweMessage({
         domain: window.location.host,
         address,
-        statement: "Sign in with Ethereum to Biblio.",
+        statement: "Link Ethereum wallet to Biblio.",
         uri: window.location.origin,
         version: "1",
         chainId: chain?.id,
         nonce,
       })
 
-      const signature = await signMessageAsync({
-        message: message.prepareMessage(),
-      })
+      const addingPromise = Promise.resolve().then(async () => {
+        const signature = await signMessageAsync({
+          message: message.prepareMessage(),
+        })
 
-      const addingPromise = axios.post("/api/connect-eth-wallet", {
-        message,
-        signature,
-        basePublicKey: session?.publicKey,
+        const { data } = await axios.post("/api/connect-eth-wallet", {
+          message,
+          signature,
+          basePublicKey: session?.publicKey,
+        })
+
+        if (!data.ok) {
+          throw new Error()
+        }
       })
 
       toast.promise(addingPromise, {
@@ -113,32 +118,38 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
         error: "Error linking wallet",
       })
 
-      const { data } = await addingPromise
+      await addingPromise
 
-      if (!data.ok) {
-        throw new Error("Error verifying message")
-      }
+      await update()
+      onClose()
     } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || "Error adding wallet")
+      toast.error(err.response?.data || err.message || "Error adding wallet")
     }
   }
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error.message)
+    }
+  }, [error])
 
   if (isConnected) {
     return (
       <Stack spacing={2}>
         {ensAvatar && <img src={ensAvatar} alt="ENS Avatar" />}
-        <div>{ensName ? `${ensName} (${address})` : address}</div>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography>{ensName ? `${ensName} (${address})` : address}</Typography>
+          <Button onClick={() => disconnect()}>Disconnect</Button>
+        </Stack>
         <Alert severity="info">Connected to {connector?.name}</Alert>
         <Stack direction="row" justifyContent="space-between">
           <Button onClick={() => onClose()} variant="outlined" color="error">
             Close
           </Button>
-          <Stack direction="row" spacing={2}>
-            <Button onClick={() => disconnect()}>Disconnect</Button>
-            <Button onClick={linkWallet} variant="contained">
-              Link wallet
-            </Button>
-          </Stack>
+
+          <Button onClick={linkWallet} variant="contained">
+            Link wallet
+          </Button>
         </Stack>
       </Stack>
     )
@@ -158,8 +169,6 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
           {isLoading && connector.id === pendingConnector?.id && " (connecting)"}
         </Button>
       ))}
-
-      {error && <div>{error.message}</div>}
       <Stack direction="row">
         <Button onClick={() => onClose()} variant="outlined" color="error">
           Close
@@ -444,7 +453,7 @@ function LinkedWallets() {
   const { wallets, isLedger } = useWallets()
   const [loading, setLoading] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [chain, setChain] = useState("sol")
+  const [chain, setChain] = useState("solana")
   const umi = useUmi()
   const wallet = useWallet()
 
@@ -642,7 +651,7 @@ function LinkedWallets() {
                 <InputLabel id="demo-simple-select-label">Chain</InputLabel>
                 <Select value={chain} label="Chain" onChange={(e) => setChain(e.target.value)}>
                   <MenuItem value="solana">Solana</MenuItem>
-                  <MenuItem value="eth">Etherium</MenuItem>
+                  <MenuItem value="eth">Ethereum</MenuItem>
                 </Select>
               </FormControl>
               {chain === "eth" && <ConnectEth onClose={toggleAdding} />}

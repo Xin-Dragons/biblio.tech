@@ -27,8 +27,8 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
         const { data } = await axios.post(`${process.env.API_URL}/biblio/${basePublicKey}/add-wallet/${fields.address}`, { chain: "eth" }, { headers })
         res.status(200).json({ok: true})
  
-      } catch (_error) {
-        res.json({ ok: false })
+      } catch (err: any) {
+        res.status(500).send(err?.response?.data)
       }
       break
     default:

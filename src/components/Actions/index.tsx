@@ -111,7 +111,7 @@ export const Actions: FC = () => {
     .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
     .filter(Boolean)
   const onlyNftsSelected = selectedItems.every((item: any) => {
-    return [0, 3, 4].includes(unwrapSome(item.metadata.tokenStandard)!)
+    return [0, 3, 4].includes(item.metadata.tokenStandard)
   })
 
   const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
