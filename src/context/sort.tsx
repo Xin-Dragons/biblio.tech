@@ -3,6 +3,7 @@ import { FC, ReactNode, createContext, useContext, useEffect, useState } from "r
 import { useAccess } from "./access"
 import { useNfts } from "./nfts"
 import { useUiSettings } from "./ui-settings"
+import { Nft } from "../db"
 
 export const SortContext = createContext<{ sortOptions: Sort[] }>({ sortOptions: [] })
 
@@ -118,6 +119,9 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
     if (!filtered.some((n) => n.chain === "solana")) {
       options = options.filter((opt) => !["howRare", "howRareDesc", "moonRank", "moonRankDesc"].includes(opt))
     }
+
+    // const traits = filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att.trait_type.tolowerCase()))
+
     setSortOptions(options.map((opt) => allOptions[opt as keyof object]))
   }, [router.query, isAdmin, filtered])
 

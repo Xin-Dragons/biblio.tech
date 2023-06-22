@@ -33,6 +33,7 @@ export const Collage: FC = () => {
           .filter(Boolean)
           .map((item) => item.replace("ipfs://", "https://ipfs.io/ipfs/"))
           .map(async (image) => {
+            console.log(image)
             try {
               const jimp = await Jimp.read(image)
               setGenerated((prev) => prev + 1)
