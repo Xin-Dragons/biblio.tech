@@ -6,6 +6,7 @@ import {
   CircularProgress,
   Container,
   IconButton,
+  LinearProgress,
   Link,
   Stack,
   Theme,
@@ -181,7 +182,7 @@ const Balance: FC = () => {
 
 export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTransferOpen }) => {
   const [synced, setSynced] = useState(false)
-  const { syncing, sync } = useDatabase()
+  const { syncing, sync, syncProgress } = useDatabase()
   const previousLoading = usePrevious(syncing)
   const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
   const { filtered, nfts } = useNfts()
@@ -399,6 +400,13 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
           </Stack>
         </Stack>
       </Container>
+      {syncing && (
+        <LinearProgress
+          value={syncProgress}
+          variant="determinate"
+          sx={{ height: "2px", position: "fixed", bottom: 0, left: 0, right: 0 }}
+        />
+      )}
     </Box>
   )
 }

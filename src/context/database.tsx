@@ -34,6 +34,7 @@ type DatabaseContextProps = {
   nftsBought: Function
   refreshMint: Function
   setLoaned: Function
+  syncProgress: number
 }
 
 const initial = {
@@ -57,6 +58,7 @@ const initial = {
   nftsBought: noop,
   refreshMint: noop,
   setLoaned: noop,
+  syncProgress: 0,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -69,6 +71,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
   const { showAllWallets } = useUiSettings()
   const [syncing, setSyncing] = useState(false)
+  const [totalMints, setTotalMints] = useState(0)
+  const [loadedMints, setLoadedMints] = useState(0)
+  const [syncProgress, setSyncProgress] = useState(0)
   const [workers, setWorkers] = useState<Worker[]>([])
   const wallet = useWallet()
   const router = useRouter()
@@ -90,6 +95,15 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     [nfts],
     []
   )
+
+  useEffect(() => {
+    if (!loadedMints) {
+      setSyncProgress(0)
+      return
+    }
+    const progress = (loadedMints / totalMints) * 100
+    setSyncProgress(progress)
+  }, [totalMints, loadedMints])
 
   // useEffect(() => {
   //   if (!isAdmin) return
@@ -321,6 +335,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   useEffect(() => {
     workers.forEach((worker) => worker.terminate())
     setWorkers([])
+    setLoadedMints(0)
+    setTotalMints(0)
     if (!publicKey) {
       return
     }
@@ -594,9 +610,20 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
 
     worker.addEventListener("message", async (event) => {
-      await Promise.all([addNftsToDb(event.data.nfts, publicKey, true), addCollectionsToDb(event.data.collections)])
-      worker.terminate()
-      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+      if (event.data.done) {
+        await Promise.all([addNftsToDb(event.data.nfts, publicKey, true), addCollectionsToDb(event.data.collections)])
+        worker.terminate()
+        setWorkers((prevState) => prevState.filter((w) => w !== worker))
+        console.log("DONEONEONE")
+      }
+
+      if (event.data.progress) {
+        setLoadedMints((prev) => prev + event.data.progress)
+      }
+
+      if (event.data.total) {
+        setTotalMints((prev) => prev + event.data.total)
+      }
     })
 
     worker.postMessage({ address: publicKey })
@@ -608,6 +635,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
   async function sync() {
     workers.forEach((worker) => worker.terminate())
+    setLoadedMints(0)
+    setTotalMints(0)
     if (!publicKey) {
       return
     }
@@ -753,6 +782,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         nftsBought,
         refreshMint,
         setLoaned,
+        syncProgress,
       }}
     >
       {children}

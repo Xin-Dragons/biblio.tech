@@ -8,7 +8,7 @@ interface OwnedNftWithChain extends OwnedNft {
   chain: Chain
 }
 
-async function getNftsForAddress(address: string, network: Network, onProgress: Function, pageKey?: string): Promise<OwnedNftWithChain[]> {
+async function getNftsForAddress(address: string, network: Network, onProgress: Function, setTotal: Function, pageKey?: string): Promise<OwnedNftWithChain[]> {
   const settings = {
     apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
     network
@@ -17,6 +17,10 @@ async function getNftsForAddress(address: string, network: Network, onProgress: 
   const alchemy = new Alchemy(settings);
 
   const nfts = await alchemy.nft.getNftsForOwner(address, { pageKey });
+  if (!pageKey) {
+    setTotal(nfts.totalCount)
+  }
+    
   onProgress(nfts.ownedNfts.length)
   if (nfts.pageKey) {
     return [
@@ -26,7 +30,7 @@ async function getNftsForAddress(address: string, network: Network, onProgress: 
           chain: network === Network.ETH_MAINNET ? "eth" : "matic" as Chain
         }
       }),
-      ...(await getNftsForAddress(address, network, onProgress, nfts.pageKey))
+      ...(await getNftsForAddress(address, network, onProgress, setTotal, nfts.pageKey))
     ]
   }
   return nfts.ownedNfts.map(nft => {
@@ -64,14 +68,19 @@ self.addEventListener("message", async event => {
 
   let loaded = 0;
 
-  function onProgress(num: number, total: number) {
-    console.log(`Loaded ${loaded += num}`)
+  function onProgress(progress: number) {
+    self.postMessage({ progress })
+    // console.log(`Loaded ${loaded += num}`)
+  }
+
+  function setTotal(total: number) {
+    self.postMessage({ total })
   }
 
   const nfts = flatten(await Promise.all([
     Network.ETH_MAINNET,
     Network.MATIC_MAINNET
-  ].map(async network => await getNftsForAddress(address, network, onProgress))))
+  ].map(async network => await getNftsForAddress(address, network, onProgress, setTotal))))
     .map(nft => {
       const nftMint = `${nft.contract.address}.${nft.tokenId}`
 
@@ -151,5 +160,5 @@ self.addEventListener("message", async event => {
   }
 
 
-  self.postMessage({ type: "done", collections, nfts })
+  self.postMessage({ done: true, collections, nfts })
 })
