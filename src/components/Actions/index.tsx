@@ -105,7 +105,7 @@ const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address
           },
         }}
       >{`Peeking in ${shorten(address)}`}</Typography>
-      <Tooltip title="Return to own wallet">
+      <Tooltip title="Return home">
         <IconButton onClick={() => returnToWallet()}>
           <Close />
         </IconButton>
@@ -514,6 +514,9 @@ export const Actions: FC = () => {
         />
       )} */}
       <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
+        {router.query.publicKey && (
+          <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />
+        )}
         {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
           <Tooltip
             title={
@@ -547,7 +550,7 @@ export const Actions: FC = () => {
             </span>
           </Tooltip>
         )}
-        {isAdmin && !collectionPage ? (
+        {isAdmin && !collectionPage && (
           <>
             {!showMinMenu ? (
               <>
@@ -690,10 +693,6 @@ export const Actions: FC = () => {
               </Button>
             )}
           </>
-        ) : (
-          router.query.publicKey && (
-            <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />
-          )
         )}
         <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
           <Card>

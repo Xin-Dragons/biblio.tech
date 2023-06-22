@@ -42,7 +42,7 @@ export const ActionBar: FC<ActionBarProps> = () => {
           justifyContent="space-between"
           sx={{ padding: "0.5em 0 0.5em 0" }}
         >
-          {wallet.connected && <Actions />}
+          <Actions />
           <Filters showTags={showTags} setShowTags={setShowTags} />
         </Stack>
         {isAdmin && (

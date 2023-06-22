@@ -26,25 +26,35 @@ export const Collage: FC = () => {
     const images = (
       await Promise.all(
         mints
-          .map((mint) => nfts.find((n) => n.nftMint === mint)?.json?.image)
+          .map((mint) => {
+            const nft = nfts.find((n) => n.nftMint === mint)
+            return nft?.thumbnail || nft?.json?.image
+          })
           .filter(Boolean)
           .map((item) => item.replace("ipfs://", "https://ipfs.io/ipfs/"))
           .map(async (image) => {
             try {
-              const { data } = await axios.get("/api/get-image", {
-                params: {
-                  image: `https://img-cdn.magiceden.dev/rs:fill:1000:1000:0:0/plain/${image}`,
-                },
-                responseType: "arraybuffer",
-              })
-
-              const jimp = await Jimp.read(data)
-
+              const jimp = await Jimp.read(image)
               setGenerated((prev) => prev + 1)
-
               return jimp
             } catch {
-              return null
+              try {
+                const { data } = await axios.get("/api/get-image", {
+                  params: {
+                    image: `https://img-cdn.magiceden.dev/rs:fill:300:300:0:0/plain/${image}`,
+                  },
+                  responseType: "arraybuffer",
+                })
+
+                const jimp = await Jimp.read(data)
+
+                setGenerated((prev) => prev + 1)
+
+                return jimp
+              } catch {
+                setGenerated((prev) => prev + 1)
+                return null
+              }
             }
           })
       )

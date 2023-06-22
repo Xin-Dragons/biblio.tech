@@ -94,6 +94,8 @@ self.addEventListener("message", async event => {
         json: nft.rawMetadata,
         jsonLoaded: true,
         owner: address,
+        thumbnail: nft.media[0]?.thumbnail,
+        compressed: nft.media[0]?.gateway,
         mint: {
 
         },
