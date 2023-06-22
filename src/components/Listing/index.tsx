@@ -420,7 +420,6 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
       groupBy(items, (item) => item.collectionId || item.firstVerifiedCreator),
       (sum, items, collection) => {
         const collectionPools = (pools[collection as keyof object] || {}).pools || []
-        console.log(collectionPools)
 
         const total = items.reduce((all, item, index) => {
           const price = new BN((collectionPools[index] || {}).price || 0)

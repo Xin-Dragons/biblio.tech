@@ -38,6 +38,7 @@ export interface Nft {
   collectionIdentifier?: string
   price?: number
   value?: number
+  tokenType?: string
 }
 
 export interface Collection {
@@ -110,11 +111,15 @@ export interface Rarity {
 }
 
 export interface Wallet {
-  publicKey: string;
+  publicKey?: string;
   isLedger?: boolean;
   nickname?: string;
   favourite?: boolean;
   owned?: boolean;
+  added?: number;
+  autoAdded?: boolean
+  chain?: string
+  inputValue?: string
 }
 
 export type RarityTier = "mythic" | "epic" | "legendary" | "rare" | "uncommon" | "common"

@@ -200,10 +200,8 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
           return n
         }
 
-        const price = brice[(n.chain === "ethereum" ? "ethereum" : "solana") as keyof object][
-          preferredCurrency
-        ] as number
-        const value = n.chain === "ethereum" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
+        const price = brice[(n.chain === "eth" ? "ethereum" : "solana") as keyof object][preferredCurrency] as number
+        const value = n.chain === "eth" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
         // console.log(n.chain, price, value, price * value)
         return {
           ...n,

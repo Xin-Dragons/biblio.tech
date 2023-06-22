@@ -27,6 +27,8 @@ import { WalletBypassProvider } from "../context/wallet-bypass"
 import { WagmiConfig } from "wagmi"
 import { wagmiConfig } from "../helpers/wagmi"
 import { BriceProvider } from "../context/brice"
+import { AlchemyProvider } from "../context/alchemy"
+import { SortProvider } from "../context/sort"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -48,56 +50,60 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WagmiConfig config={wagmiConfig}>
-          <BriceProvider>
-            <WalletBypassProvider>
-              <SessionProvider session={session}>
-                <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
-                  <AccessProvider>
-                    <BasePathProvider publicKey={pageProps.publicKey}>
-                      <DatabaseProvider>
-                        <WalletsProvider>
-                          <UiSettingsProvider>
-                            <FiltersProvider>
-                              <NftsProvider>
-                                <TransactionStatusProvider>
-                                  <WalletModalProvider>
-                                    <MetaplexProvider>
-                                      <TagsProvider>
-                                        <ThemeProvider>
-                                          <SharkyProvider>
-                                            <TensorProvider>
-                                              <Script
-                                                async
-                                                strategy="afterInteractive"
-                                                type="module"
-                                                src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                              />
-                                              <CssBaseline />
-                                              <SelectionProvider>
-                                                <DialogProvider>
-                                                  <Component {...pageProps} />
-                                                </DialogProvider>
-                                              </SelectionProvider>
-                                            </TensorProvider>
-                                          </SharkyProvider>
-                                        </ThemeProvider>
-                                      </TagsProvider>
-                                    </MetaplexProvider>
-                                  </WalletModalProvider>
-                                </TransactionStatusProvider>
-                              </NftsProvider>
-                            </FiltersProvider>
-                          </UiSettingsProvider>
-                        </WalletsProvider>
-                      </DatabaseProvider>
-                    </BasePathProvider>
-                  </AccessProvider>
-                </UmiProvider>
-              </SessionProvider>
-            </WalletBypassProvider>
-          </BriceProvider>
-        </WagmiConfig>
+        <AlchemyProvider>
+          <WagmiConfig config={wagmiConfig}>
+            <BriceProvider>
+              <WalletBypassProvider>
+                <SessionProvider session={session}>
+                  <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+                    <AccessProvider>
+                      <BasePathProvider publicKey={pageProps.publicKey}>
+                        <DatabaseProvider>
+                          <WalletsProvider>
+                            <UiSettingsProvider>
+                              <FiltersProvider>
+                                <NftsProvider>
+                                  <SortProvider>
+                                    <TransactionStatusProvider>
+                                      <WalletModalProvider>
+                                        <MetaplexProvider>
+                                          <TagsProvider>
+                                            <ThemeProvider>
+                                              <SharkyProvider>
+                                                <TensorProvider>
+                                                  <Script
+                                                    async
+                                                    strategy="afterInteractive"
+                                                    type="module"
+                                                    src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                                  />
+                                                  <CssBaseline />
+                                                  <SelectionProvider>
+                                                    <DialogProvider>
+                                                      <Component {...pageProps} />
+                                                    </DialogProvider>
+                                                  </SelectionProvider>
+                                                </TensorProvider>
+                                              </SharkyProvider>
+                                            </ThemeProvider>
+                                          </TagsProvider>
+                                        </MetaplexProvider>
+                                      </WalletModalProvider>
+                                    </TransactionStatusProvider>
+                                  </SortProvider>
+                                </NftsProvider>
+                              </FiltersProvider>
+                            </UiSettingsProvider>
+                          </WalletsProvider>
+                        </DatabaseProvider>
+                      </BasePathProvider>
+                    </AccessProvider>
+                  </UmiProvider>
+                </SessionProvider>
+              </WalletBypassProvider>
+            </BriceProvider>
+          </WagmiConfig>
+        </AlchemyProvider>
       </WalletProvider>
     </ConnectionProvider>
   )

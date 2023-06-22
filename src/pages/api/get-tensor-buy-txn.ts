@@ -38,8 +38,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     })
 
-    console.log(resp.data.tswapBuySingleListingTx)
-
     res.status(200).json(resp.data.tswapBuySingleListingTx)
   } catch (err: any) {
     if (err.graphQLErrors && err.graphQLErrors.length) {

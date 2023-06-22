@@ -152,6 +152,7 @@ self.addEventListener("message", async event => {
     ])
 
     const mintsInWallet = umiTokens.map(token => base58PublicKey(token.mint.publicKey))
+    console.log("GOT IT", umiTokens.find(m => base58PublicKey(m.mint.publicKey) === "Ez2MCPmWektH74Csyc9sZGzwzH5BENHZMFm5GdbLDafF"))
 
     const loanedOut = loanStats.map((l: Loan) => l.collateralMint).filter((mint: string) => !mintsInWallet.includes(mint)).map(publicKey);
     if (loanedOut.length) {
@@ -403,8 +404,21 @@ self.addEventListener("message", async event => {
       }
     }), collection => collection.id)
     .filter(item => Boolean(item.id))
+    .map(c => {
+      return {
+        ...c,
+        chain: "solana"
+      }
+    })
 
-    const nftsToAdd = [...fungiblesWithBalances, ...nfts, ...editionsWithNumbers];
+    console.log(collectionsToAdd.find(c => c.id === "89Xwuah6o9Y2q91EREgsc1wKeFHYyfXEZKqPFRBNrfhv"), owner)
+
+    const nftsToAdd = [...fungiblesWithBalances, ...nfts, ...editionsWithNumbers].map(n => {
+      return {
+        ...n,
+        chain: "solana"
+      }
+    });
     self.postMessage({ type: "done", collectionsToAdd, nftsToAdd })
 
   } catch (err) {

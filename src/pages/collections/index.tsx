@@ -1,5 +1,5 @@
 import { NftMintsByOwner } from "@hellomoon/api"
-import { Box, Card, CardContent, Chip, Stack, Typography, alpha } from "@mui/material"
+import { Box, Card, CardContent, Chip, Stack, SvgIcon, Typography, alpha } from "@mui/material"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import type { NextPage } from "next"
@@ -14,11 +14,14 @@ import { useFilters } from "../../context/filters"
 import { useBasePath } from "../../context/base-path"
 import { publicKey, unwrapSome } from "@metaplex-foundation/umi"
 import { useNfts } from "../../context/nfts"
-import { difference, flatten, sortBy } from "lodash"
+import { difference, flatten, orderBy, sortBy } from "lodash"
 import { Nft } from "../../db"
 import { useAccess } from "../../context/access"
 import { useTheme } from "../../context/theme"
 import { CURRENCIES, CurrencyItem, useBrice } from "../../context/brice"
+import Solana from "../../../public/solana.svg"
+import Eth from "../../../public/eth.svg"
+import Matic from "../../../public/matic.svg"
 
 type CollectionProps = {
   item: any
@@ -106,7 +109,10 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
             onError={(e: any) => (e.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg")}
             src={
               item.image
-                ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image}`
+                ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image.replace(
+                    "ipfs://",
+                    "https://ipfs.io/ipfs/"
+                  )}`
                 : lightMode
                 ? "/books-lightest.svg"
                 : "/books-lighter.svg"
@@ -120,11 +126,32 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
               sx={{
                 position: "absolute",
                 backgroundColor: alpha(theme.palette.background.default, 0.8),
-                right: "0.5em",
-                top: "0.5em",
-                // fontSize: fontSizes(layoutSize),
+                right: "8px",
+                top: "8px",
+                height: "30px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "bold",
               }}
             />
+          )}
+
+          {showInfo && (
+            <SvgIcon
+              sx={{
+                position: "absolute",
+                left: "8px",
+                top: "8px",
+                width: "30px",
+                height: "30px",
+                fill: lightMode ? "white" : "black",
+              }}
+            >
+              {item.chain === "solana" && <Solana />}
+              {item.chain === "eth" && <Eth />}
+              {item.chain === "matic" && <Matic />}
+            </SvgIcon>
           )}
 
           <Box
@@ -219,15 +246,14 @@ const Home: NextPage = () => {
       if (!collectionNfts) {
         return null
       }
-      if (collection.collectionName === "Zero Monke Biz") {
-        console.log(collection)
-      }
       const filtered = collectionNfts.filter((n) => allFilteredMints.includes(n.nftMint))
+
       const currency = collection.chain === "eth" ? "ethereum" : "solana"
+
       const value =
-        collection.chain === "eth"
-          ? collection.floorPrice * filtered.length
-          : (collection.floorPrice * filtered.length) / LAMPORTS_PER_SOL
+        collection.chain === "solana"
+          ? (collection.floorPrice * filtered.length) / LAMPORTS_PER_SOL
+          : collection.floorPrice * filtered.length
 
       const price = value * brice[currency as keyof object][preferredCurrency]
 
@@ -235,6 +261,7 @@ const Home: NextPage = () => {
         id: collection.id,
         image: collection.image,
         name: collection.collectionName,
+        chain: collection.chain,
         allNfts: collectionNfts,
         nfts: filtered,
         value: value || 0,
@@ -256,6 +283,7 @@ const Home: NextPage = () => {
       id: "uncategorized",
       name: "Uncategorized",
       image: "/books.svg",
+      chain: "solana",
       allNfts: uncategorized,
       nfts: uncategorized.filter((n) => allFilteredMints.includes(n.nftMint)),
       currency: "◎",
@@ -269,11 +297,15 @@ const Home: NextPage = () => {
   })
 
   if (sort === "value") {
-    filteredCollections = sortBy(filteredCollections, ["price", (item) => item?.nfts.length]).reverse()
+    filteredCollections = orderBy(
+      filteredCollections,
+      ["price", (item) => item?.nfts.length, (item: any) => item.image],
+      ["asc", "asc", "desc"]
+    ).reverse()
   } else if (sort === "name") {
-    filteredCollections = sortBy(filteredCollections, (item: any) => item.name.toLowerCase().trim())
+    filteredCollections = orderBy(filteredCollections, (item: any) => item.name.toLowerCase().trim())
   } else if (sort === "holdings") {
-    filteredCollections = sortBy(filteredCollections, (item) => item?.nfts.length).reverse()
+    filteredCollections = orderBy(filteredCollections, (item) => item?.nfts.length).reverse()
   }
 
   return (

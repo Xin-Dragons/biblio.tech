@@ -57,7 +57,6 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
       return
     }
     const toMigrate = tags.filter((t) => !t.userId)
-    console.log({ toMigrate })
 
     if (!toMigrate.length) {
       return

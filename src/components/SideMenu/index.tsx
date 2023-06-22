@@ -28,6 +28,7 @@ import MonetizationOnIcon from "@mui/icons-material/MonetizationOn"
 import { useAccess } from "../../context/access"
 import { Sell } from "@mui/icons-material"
 import { useUiSettings } from "../../context/ui-settings"
+import { isAddress } from "viem"
 
 type SideMenuProps = {
   fullWidth?: boolean
@@ -84,6 +85,8 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
   const router = useRouter()
   const { isAdmin } = useAccess()
 
+  const isEthWallet = isAddress(router.query.publicKey as string)
+
   function relative(path: string) {
     return `${basePath}${path}`
   }
@@ -103,69 +106,74 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             NFTs
           </Button>
         </Link>
-        <Link href={relative("/editions")} passHref>
-          <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
-            NFT Editions
-          </Button>
-        </Link>
-        <Link href={relative("/sfts")} passHref>
-          <Button variant={route === "/sfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
-            SFTs
-          </Button>
-        </Link>
-        <Link href={relative("/spl")} passHref>
-          <Button variant={route === "/spl" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
-            SPL Tokens
-          </Button>
-        </Link>
+        {!isEthWallet && [
+          <Link href={relative("/editions")} passHref key={0}>
+            <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+              NFT Editions
+            </Button>
+          </Link>,
+          <Link href={relative("/sfts")} passHref key={1}>
+            <Button variant={route === "/sfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+              SFTs
+            </Button>
+          </Link>,
+          <Link href={relative("/spl")} passHref key={2}>
+            <Button variant={route === "/spl" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+              SPL Tokens
+            </Button>
+          </Link>,
+        ]}
       </MenuSection>
-      <MenuSection accordion={!noAccordions} title="Go to">
-        <Stack spacing={2}>
-          {!router.query.publicKey && isAdmin && (
-            <Link href={relative("/vault")} passHref>
+      {!isEthWallet && (
+        <MenuSection accordion={!noAccordions} title="Go to">
+          <Stack spacing={2}>
+            {!router.query.publicKey && isAdmin && (
+              <Link href={relative("/vault")} passHref>
+                <Button
+                  variant={route === "/vault" ? "contained" : "outlined"}
+                  startIcon={
+                    <SvgIcon fontSize="large">
+                      <VaultIcon />
+                    </SvgIcon>
+                  }
+                  size={large ? "large" : "medium"}
+                >
+                  The Vault
+                </Button>
+              </Link>
+            )}
+
+            <Link href={relative("/loans")} passHref>
               <Button
-                variant={route === "/vault" ? "contained" : "outlined"}
-                startIcon={
-                  <SvgIcon fontSize="large">
-                    <VaultIcon />
-                  </SvgIcon>
-                }
+                variant={route === "/loans" ? "contained" : "outlined"}
+                startIcon={<MonetizationOnIcon />}
                 size={large ? "large" : "medium"}
               >
-                The Vault
+                Loans
               </Button>
             </Link>
-          )}
+            <Link href={relative("/listings")} passHref>
+              <Button
+                variant={route === "/listings" ? "contained" : "outlined"}
+                startIcon={<Sell />}
+                size={large ? "large" : "medium"}
+              >
+                Listings
+              </Button>
+            </Link>
+            <Link href={relative("/junk")} passHref>
+              <Button
+                variant={route === "/junk" ? "contained" : "outlined"}
+                startIcon={<DeleteIcon />}
+                size={large ? "large" : "medium"}
+              >
+                Junk
+              </Button>
+            </Link>
+          </Stack>
+        </MenuSection>
+      )}
 
-          <Link href={relative("/loans")} passHref>
-            <Button
-              variant={route === "/loans" ? "contained" : "outlined"}
-              startIcon={<MonetizationOnIcon />}
-              size={large ? "large" : "medium"}
-            >
-              Loans
-            </Button>
-          </Link>
-          <Link href={relative("/listings")} passHref>
-            <Button
-              variant={route === "/listings" ? "contained" : "outlined"}
-              startIcon={<Sell />}
-              size={large ? "large" : "medium"}
-            >
-              Listings
-            </Button>
-          </Link>
-          <Link href={relative("/junk")} passHref>
-            <Button
-              variant={route === "/junk" ? "contained" : "outlined"}
-              startIcon={<DeleteIcon />}
-              size={large ? "large" : "medium"}
-            >
-              Junk
-            </Button>
-          </Link>
-        </Stack>
-      </MenuSection>
       {!router.query.publicKey && isAdmin && (
         <MenuSection accordion={!noAccordions} title="Tags">
           <Tags large={large} />
@@ -189,8 +197,6 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             </AccordionDetails>
           </Accordion>
         )} */}
-
-      <img src="/biblio-logo.png" style={{ opacity: 0.3, margin: "auto" }} width="200px" />
     </Stack>
   )
 }

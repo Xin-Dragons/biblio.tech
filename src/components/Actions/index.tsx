@@ -76,9 +76,43 @@ import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-ess
 import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
 import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
-import { shorten } from "../../helpers/utils"
+import { getAddressType, shorten } from "../../helpers/utils"
 import { AddressSelector } from "../AddressSelector"
 import { Vault } from "../Vault"
+import { useEnsName } from "wagmi"
+
+const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address, returnToWallet }) => {
+  // const { data: ensName } = useEnsName({ address })
+  // const [displayName, setDisplayName] = useState(ensName || shorten(address))
+  // const type = getAddressType(address)
+
+  // useEffect(() => {
+  // ;(async () => {})()
+  // }, [address])
+
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" maxWidth="100%">
+      <Typography
+        variant="h6"
+        color="primary"
+        fontWeight="bold"
+        sx={{
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
+          overflow: "hidden",
+          fontSize: {
+            xs: "18px",
+          },
+        }}
+      >{`Peeking in ${shorten(address)}`}</Typography>
+      <Tooltip title="Return to own wallet">
+        <IconButton onClick={() => returnToWallet()}>
+          <Close />
+        </IconButton>
+      </Tooltip>
+    </Stack>
+  )
+}
 
 export const Actions: FC = () => {
   const { nfts } = useNfts()
@@ -110,6 +144,7 @@ export const Actions: FC = () => {
   const selectedItems = selected
     .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
     .filter(Boolean)
+
   const onlyNftsSelected = selectedItems.every((item: any) => {
     return [0, 3, 4].includes(item.metadata.tokenStandard)
   })
@@ -128,7 +163,7 @@ export const Actions: FC = () => {
 
   const canFreezeThaw = allInVault || noneInVault
 
-  const hasFreezeAuth = selectedItems.every((item) => item.chain !== "eth" && isSome(item.mint.freezeAuthority))
+  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority && isSome(item.mint.freezeAuthority))
 
   const allListed = selectedItems.every((item) => item.status === "listed")
   const allDelisted = selectedItems.every((item) => !item.status)
@@ -469,384 +504,371 @@ export const Actions: FC = () => {
   }
 
   return (
-    <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
-      {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
-        <Tooltip
-          title={
-            nonOwnedSelected
-              ? "Some selected items are owned by or delegated to linked wallet"
-              : !hasFreezeAuth
-              ? "Some items cannot be frozen"
-              : nonInVaultStatusesSelected
-              ? "Selection contains items that cannot be frozen/thawed"
-              : onlyNftsSelected
-              ? canFreezeThaw
-                ? nfts.some((n) => n.status === "inVault")
-                  ? "Remove selected items from vault"
-                  : "Login to add items to vault"
-                : "Cannot freeze and thaw in same transaction"
-              : "Only NFTs and pNFTs can be locked in the vault"
-          }
-        >
-          <span>
-            <IconButton
-              disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault")) || hasFreezeAuth}
-              sx={{
-                color: "#a6e3e0",
-              }}
-              onClick={() => toggleVaultShowing()}
-            >
-              <SvgIcon>
-                <VaultIcon />
-              </SvgIcon>
-            </IconButton>
-          </span>
-        </Tooltip>
-      )}
-      {isAdmin && !collectionPage ? (
-        <>
-          {!showMinMenu ? (
-            <>
-              <Button onClick={selectAll} disabled={!filtered.length || allSelected} size="small" variant="outlined">
-                Select all
-              </Button>
-              <Button
-                onClick={deselectAll}
-                disabled={!filtered.length || !selected.length}
-                size="small"
-                variant="outlined"
+    <Stack>
+      {/* {isAdmin && !collectionPage && (
+        <Slider
+          aria-label="Selection"
+          value={selected.length}
+          onChange={(e, value) => handleSelectionChange(value as number)}
+          max={filtered.length}
+        />
+      )} */}
+      <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
+        {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
+          <Tooltip
+            title={
+              nonOwnedSelected
+                ? "Some selected items are owned by or delegated to linked wallet"
+                : !hasFreezeAuth
+                ? "Some items cannot be frozen"
+                : nonInVaultStatusesSelected
+                ? "Selection contains items that cannot be frozen/thawed"
+                : onlyNftsSelected
+                ? canFreezeThaw
+                  ? nfts.some((n) => n.status === "inVault")
+                    ? "Remove selected items from vault"
+                    : "Login to add items to vault"
+                  : "Cannot freeze and thaw in same transaction"
+                : "Only NFTs and pNFTs can be locked in the vault"
+            }
+          >
+            <span>
+              <IconButton
+                disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault")) || hasFreezeAuth}
+                sx={{
+                  color: "#a6e3e0",
+                }}
+                onClick={() => toggleVaultShowing()}
               >
-                Deselect all
-              </Button>
-              <Tooltip
-                title={
-                  nonOwnedSelected
-                    ? "Some selected items are owned by a linked wallet"
-                    : statusesSelected
-                    ? "Selection contains items that cannot be sent"
-                    : "Bulk send selected items"
-                }
-              >
-                <span>
-                  <IconButton
-                    disabled={!selected.length || statusesSelected || nonOwnedSelected}
-                    onClick={toggleBulkSendOpen}
-                    color="primary"
-                  >
-                    <SvgIcon fontSize="small">
-                      <PlaneIcon />
-                    </SvgIcon>
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip
-                title={
-                  nonOwnedSelected
-                    ? "Some selected items are owned by a linked wallet"
-                    : statusesSelected
-                    ? "Selection contains items that cannot be burnt"
-                    : "Burn selected items"
-                }
-              >
-                <span>
-                  <IconButton
-                    disabled={!selected.length || statusesSelected || nonOwnedSelected}
-                    color="error"
-                    onClick={toggleBurnOpen}
-                  >
-                    <LocalFireDepartment />
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <SvgIcon>
+                  <VaultIcon />
+                </SvgIcon>
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        {isAdmin && !collectionPage ? (
+          <>
+            {!showMinMenu ? (
+              <>
+                <Button onClick={selectAll} disabled={!filtered.length || allSelected} size="small" variant="outlined">
+                  Select all
+                </Button>
+                <Button
+                  onClick={deselectAll}
+                  disabled={!filtered.length || !selected.length}
+                  size="small"
+                  variant="outlined"
+                >
+                  Deselect all
+                </Button>
+                <Tooltip
+                  title={
+                    nonOwnedSelected
+                      ? "Some selected items are owned by a linked wallet"
+                      : statusesSelected
+                      ? "Selection contains items that cannot be sent"
+                      : "Bulk send selected items"
+                  }
+                >
+                  <span>
+                    <IconButton
+                      disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                      onClick={toggleBulkSendOpen}
+                      color="primary"
+                    >
+                      <SvgIcon fontSize="small">
+                        <PlaneIcon />
+                      </SvgIcon>
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={
+                    nonOwnedSelected
+                      ? "Some selected items are owned by a linked wallet"
+                      : statusesSelected
+                      ? "Selection contains items that cannot be burnt"
+                      : "Burn selected items"
+                  }
+                >
+                  <span>
+                    <IconButton
+                      disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                      color="error"
+                      onClick={toggleBurnOpen}
+                    >
+                      <LocalFireDepartment />
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-              <Tooltip
-                title={
-                  nonOwnedSelected
-                    ? "Some selected items are owned by a linked wallet"
-                    : nonListedStatusSelected
-                    ? "Selection contains items that cannot be listed"
-                    : onlyNftsSelected
-                    ? canList
-                      ? listedSelected
-                        ? "Delist selected items"
-                        : "List selected items"
-                      : "Cannot list and delist in same transaction"
-                    : "Only NFTs and pNFTs can be listed"
-                }
-              >
-                <span>
-                  <IconButton
-                    disabled={
-                      !selected.length || nonListedStatusSelected || !canList || !onlyNftsSelected || nonOwnedSelected
-                    }
-                    color="info"
-                    onClick={listedSelected ? onDelist : list}
-                  >
-                    <Sell />
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <Tooltip
+                  title={
+                    nonOwnedSelected
+                      ? "Some selected items are owned by a linked wallet"
+                      : nonListedStatusSelected
+                      ? "Selection contains items that cannot be listed"
+                      : onlyNftsSelected
+                      ? canList
+                        ? listedSelected
+                          ? "Delist selected items"
+                          : "List selected items"
+                        : "Cannot list and delist in same transaction"
+                      : "Only NFTs and pNFTs can be listed"
+                  }
+                >
+                  <span>
+                    <IconButton
+                      disabled={
+                        !selected.length || nonListedStatusSelected || !canList || !onlyNftsSelected || nonOwnedSelected
+                      }
+                      color="info"
+                      onClick={listedSelected ? onDelist : list}
+                    >
+                      <Sell />
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-              <Tooltip
-                title={
-                  nonInVaultStatusesSelected
-                    ? "Selection contains items that cannot be frozen/thawed"
-                    : !hasFreezeAuth
-                    ? "Some items cannot be frozen"
-                    : onlyNftsSelected
-                    ? canFreezeThaw
-                      ? frozenSelected
-                        ? "Remove selected items from vault"
-                        : "Add selected items to vault"
-                      : "Cannot freeze and thaw in same transaction"
-                    : "Only NFTs and pNFTs can be locked in the vault"
-                }
-              >
-                <span>
-                  <IconButton
-                    disabled={
-                      !selected.length ||
-                      !canFreezeThaw ||
-                      !onlyNftsSelected ||
-                      nonInVaultStatusesSelected ||
-                      !hasFreezeAuth
-                    }
-                    sx={{
-                      color: "#a6e3e0",
-                    }}
-                    onClick={() => toggleVaultShowing()}
-                  >
-                    <SvgIcon>
-                      <VaultIcon />
-                    </SvgIcon>
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <Tooltip
+                  title={
+                    nonInVaultStatusesSelected
+                      ? "Selection contains items that cannot be frozen/thawed"
+                      : !hasFreezeAuth
+                      ? "Some items cannot be frozen"
+                      : onlyNftsSelected
+                      ? canFreezeThaw
+                        ? frozenSelected
+                          ? "Remove selected items from vault"
+                          : "Add selected items to vault"
+                        : "Cannot freeze and thaw in same transaction"
+                      : "Only NFTs and pNFTs can be locked in the vault"
+                  }
+                >
+                  <span>
+                    <IconButton
+                      disabled={
+                        !selected.length ||
+                        !canFreezeThaw ||
+                        !onlyNftsSelected ||
+                        nonInVaultStatusesSelected ||
+                        !hasFreezeAuth
+                      }
+                      sx={{
+                        color: "#a6e3e0",
+                      }}
+                      onClick={() => toggleVaultShowing()}
+                    >
+                      <SvgIcon>
+                        <VaultIcon />
+                      </SvgIcon>
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-              <Tooltip title="Toggle tag menu">
-                <span>
-                  <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
-                    <Label />
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <Tooltip title="Toggle tag menu">
+                  <span>
+                    <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
+                      <Label />
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-              {/* <Tooltip title="Repay loans">
+                {/* <Tooltip title="Repay loans">
                 <span>
                   <IconButton disabled={!outstandingLoansSelected} onClick={repayLoans}>
                     <PaidIcon />
                   </IconButton>
                 </span>
               </Tooltip> */}
-              {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
-            </>
-          ) : (
-            <Button variant="outlined" onClick={toggleActionDrawer}>
-              Actions
-            </Button>
-          )}
-        </>
-      ) : (
-        router.query.publicKey && (
-          <Stack direction="row" spacing={1} alignItems="center" maxWidth="100%">
-            <Typography
-              variant="h6"
-              color="primary"
-              fontWeight="bold"
-              sx={{
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-                overflow: "hidden",
-                fontSize: {
-                  xs: "18px",
-                },
-              }}
-            >{`Peeking in ${
-              isPublicKey(router.query.publicKey as string)
-                ? shorten(router.query.publicKey as string)
-                : `${(router.query.publicKey as string).replace(".sol", "")}.sol`
-            }`}</Typography>
-            <Tooltip title="Return to own wallet">
-              <IconButton onClick={returnToWallet}>
-                <Close />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        )
-      )}
-      <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
-        <Card>
-          <DialogTitle>Tag items</DialogTitle>
-          <DialogContent>
-            <TagList edit />
-          </DialogContent>
-        </Card>
-      </Dialog>
-
-      <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen} fullWidth>
-        <Card>
-          <DialogTitle>Bulk send</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2}>
-              <Alert severity="info">
-                Sending {selected.length} item{selected.length === 1 ? "" : "s"}
-              </Alert>
-              <AddressSelector wallet={recipient} setWallet={setRecipient} />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={cancelSend} color="error">
-              Cancel
-            </Button>
-            <Button onClick={bulkSend} variant="contained" disabled={!recipient || !selected.length}>
-              Send
-            </Button>
-          </DialogActions>
-        </Card>
-      </Dialog>
-
-      <Dialog open={burnOpen} onClose={toggleBurnOpen}>
-        <Card>
-          <DialogTitle>
-            Burn {selected.length} item{selected.length === 1 ? "" : "s"}
-          </DialogTitle>
-          <DialogContent>
-            <Alert severity="error">
-              Burned items cannot be recovered. Please be sure you have selected the correct items!
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={cancelBurn} color="error">
-              Cancel
-            </Button>
-            <Button onClick={burn} variant="contained" disabled={!selected.length}>
-              Burn
-            </Button>
-          </DialogActions>
-        </Card>
-      </Dialog>
-
-      <Dialog open={listOpen} onClose={toggleListOpen} fullWidth maxWidth="md" fullScreen={isXs}>
-        <Card sx={{ overflowY: "auto", height: "100vh" }}>
-          <Listing items={selectedItems} onClose={toggleListOpen} />
-        </Card>
-      </Dialog>
-
-      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth maxWidth="md">
-        <Card sx={{ overflowY: "auto" }}>
-          <Vault onClose={() => setVaultShowing(false)} />
-        </Card>
-      </Dialog>
-
-      <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
-        <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
-          <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>
-            <Close />
-          </IconButton>
-          <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h5">Selection</Typography>
-              <Stack>
-                <Slider
-                  aria-label="Selection"
-                  value={selected.length}
-                  onChange={(e, value) => handleSelectionChange(value as number)}
-                  max={filtered.length}
-                />
-                <Typography textAlign="right">{selected.length} selected</Typography>
-              </Stack>
-              <Stack direction="row" spacing={2}>
-                <Button onClick={selectAll} disabled={!filtered.length || allSelected} fullWidth variant="outlined">
-                  Select all
-                </Button>
-                <Button
-                  onClick={deselectAll}
-                  disabled={!filtered.length || !selected.length}
-                  fullWidth
-                  variant="outlined"
-                >
-                  Deselect all
-                </Button>
-              </Stack>
-              <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+                {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
+              </>
+            ) : (
+              <Button variant="outlined" onClick={toggleActionDrawer}>
                 Actions
-              </Typography>
-              <Stack direction={{ sm: "row", xs: "column" }} spacing={2} width="100%" sx={{ width: "100%" }}>
-                {/* <Button onClick={toggleCollageModalShowing} disabled={!filtered.length} fullWidth variant="contained">
+              </Button>
+            )}
+          </>
+        ) : (
+          router.query.publicKey && (
+            <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />
+          )
+        )}
+        <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
+          <Card>
+            <DialogTitle>Tag items</DialogTitle>
+            <DialogContent>
+              <TagList edit />
+            </DialogContent>
+          </Card>
+        </Dialog>
+
+        <Dialog open={bulkSendOpen} onClose={toggleBulkSendOpen} fullWidth>
+          <Card>
+            <DialogTitle>Bulk send</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2}>
+                <Alert severity="info">
+                  Sending {selected.length} item{selected.length === 1 ? "" : "s"}
+                </Alert>
+                <AddressSelector wallet={recipient} setWallet={setRecipient} />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={cancelSend} color="error">
+                Cancel
+              </Button>
+              <Button onClick={bulkSend} variant="contained" disabled={!recipient || !selected.length}>
+                Send
+              </Button>
+            </DialogActions>
+          </Card>
+        </Dialog>
+
+        <Dialog open={burnOpen} onClose={toggleBurnOpen}>
+          <Card>
+            <DialogTitle>
+              Burn {selected.length} item{selected.length === 1 ? "" : "s"}
+            </DialogTitle>
+            <DialogContent>
+              <Alert severity="error">
+                Burned items cannot be recovered. Please be sure you have selected the correct items!
+              </Alert>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={cancelBurn} color="error">
+                Cancel
+              </Button>
+              <Button onClick={burn} variant="contained" disabled={!selected.length}>
+                Burn
+              </Button>
+            </DialogActions>
+          </Card>
+        </Dialog>
+
+        <Dialog open={listOpen} onClose={toggleListOpen} fullWidth maxWidth="md" fullScreen={isXs}>
+          <Card sx={{ overflowY: "auto", height: "100vh" }}>
+            <Listing items={selectedItems} onClose={toggleListOpen} />
+          </Card>
+        </Dialog>
+
+        <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth maxWidth="md">
+          <Card sx={{ overflowY: "auto" }}>
+            <Vault onClose={() => setVaultShowing(false)} />
+          </Card>
+        </Dialog>
+
+        <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
+          <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
+            <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>
+              <Close />
+            </IconButton>
+            <CardContent>
+              <Stack spacing={2}>
+                <Typography variant="h5">Selection</Typography>
+                <Stack>
+                  <Slider
+                    aria-label="Selection"
+                    value={selected.length}
+                    onChange={(e, value) => handleSelectionChange(value as number)}
+                    max={filtered.length}
+                  />
+                  <Typography textAlign="right">{selected.length} selected</Typography>
+                </Stack>
+                <Stack direction="row" spacing={2}>
+                  <Button onClick={selectAll} disabled={!filtered.length || allSelected} fullWidth variant="outlined">
+                    Select all
+                  </Button>
+                  <Button
+                    onClick={deselectAll}
+                    disabled={!filtered.length || !selected.length}
+                    fullWidth
+                    variant="outlined"
+                  >
+                    Deselect all
+                  </Button>
+                </Stack>
+                <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+                  Actions
+                </Typography>
+                <Stack direction={{ sm: "row", xs: "column" }} spacing={2} width="100%" sx={{ width: "100%" }}>
+                  {/* <Button onClick={toggleCollageModalShowing} disabled={!filtered.length} fullWidth variant="contained">
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Image />
                     <Typography>Export collage</Typography>
                   </Stack>
                 </Button> */}
-                <Button
-                  disabled={!selected.length || frozenSelected}
-                  onClick={toggleBulkSendOpen}
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                >
-                  <Stack spacing={1} direction="row">
-                    <SvgIcon>
-                      <PlaneIcon />
-                    </SvgIcon>
-                    <Typography>Send selected</Typography>
-                  </Stack>
-                </Button>
-                <Button
-                  disabled={!selected.length || frozenSelected}
-                  color="error"
-                  onClick={toggleBurnOpen}
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                >
-                  <Stack direction="row" spacing={1}>
-                    <LocalFireDepartment />
-                    <Typography>Burn selected</Typography>
-                  </Stack>
-                </Button>
-                <Button
-                  disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
-                  onClick={() => toggleVaultShowing()}
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                >
-                  <Stack direction="row" spacing={1}>
-                    <SvgIcon>
-                      <VaultIcon />
-                    </SvgIcon>
-                    <Typography>{frozenSelected ? "Remove from vault" : "Add to vault"}</Typography>
-                  </Stack>
-                </Button>
-                <Button
-                  disabled={
-                    !selected.length ||
-                    nonListedStatusSelected ||
-                    !canList ||
-                    !onlyNftsSelected ||
-                    nonOwnedSelected ||
-                    selected.length > 20
-                  }
-                  onClick={listedSelected ? onDelist : list}
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                >
-                  <Stack direction="row" spacing={1}>
-                    <Sell />
-                    <Typography>Sell / List selected</Typography>
-                  </Stack>
-                </Button>
+                  <Button
+                    disabled={!selected.length || frozenSelected}
+                    onClick={toggleBulkSendOpen}
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                  >
+                    <Stack spacing={1} direction="row">
+                      <SvgIcon>
+                        <PlaneIcon />
+                      </SvgIcon>
+                      <Typography>Send selected</Typography>
+                    </Stack>
+                  </Button>
+                  <Button
+                    disabled={!selected.length || frozenSelected}
+                    color="error"
+                    onClick={toggleBurnOpen}
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                  >
+                    <Stack direction="row" spacing={1}>
+                      <LocalFireDepartment />
+                      <Typography>Burn selected</Typography>
+                    </Stack>
+                  </Button>
+                  <Button
+                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+                    onClick={() => toggleVaultShowing()}
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                  >
+                    <Stack direction="row" spacing={1}>
+                      <SvgIcon>
+                        <VaultIcon />
+                      </SvgIcon>
+                      <Typography>{frozenSelected ? "Remove from vault" : "Add to vault"}</Typography>
+                    </Stack>
+                  </Button>
+                  <Button
+                    disabled={
+                      !selected.length ||
+                      nonListedStatusSelected ||
+                      !canList ||
+                      !onlyNftsSelected ||
+                      nonOwnedSelected ||
+                      selected.length > 20
+                    }
+                    onClick={listedSelected ? onDelist : list}
+                    variant="contained"
+                    size="large"
+                    fullWidth
+                  >
+                    <Stack direction="row" spacing={1}>
+                      <Sell />
+                      <Typography>Sell / List selected</Typography>
+                    </Stack>
+                  </Button>
+                </Stack>
+                <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+                  Tags
+                </Typography>
+                <TagList edit />
               </Stack>
-              <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
-                Tags
-              </Typography>
-              <TagList edit />
-            </Stack>
-          </CardContent>
-        </Card>
-      </Drawer>
+            </CardContent>
+          </Card>
+        </Drawer>
+      </Stack>
     </Stack>
   )
 }

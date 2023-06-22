@@ -31,7 +31,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         JSON.parse(message || "{}")
       );
       const nextAuthUrl = new URL(process.env.NEXTAUTH_URL!);
-      console.log(signinMessage.domain, nextAuthUrl.host)
       if (signinMessage.domain !== nextAuthUrl.host) {
         return null;
       }
@@ -68,7 +67,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   } catch (err: any) {
     if (err instanceof AxiosError) {
-      console.log(err?.response?.data)
       return res.status(500).send(err?.response?.data)
     }
     res.status(500).send(err.message || "Something went wrong")

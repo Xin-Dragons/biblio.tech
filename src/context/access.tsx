@@ -14,6 +14,7 @@ import base58 from "bs58"
 import { SigninMessage } from "../utils/SigninMessge"
 import { useWallets } from "./wallets"
 import { useWalletBypass } from "./wallet-bypass"
+import { getAddressType } from "../helpers/utils"
 
 type AccessContextProps = {
   publicKey: string | null
@@ -24,7 +25,6 @@ type AccessContextProps = {
   userId: string | null
   multiWallet: boolean
   publicKeys: string[]
-  ethPublicKeys: string[]
   availableWallets: number
   signOut: Function
   signIn: Function
@@ -40,7 +40,6 @@ const initial = {
   isOffline: false,
   multiWallet: false,
   publicKeys: [],
-  ethPublicKeys: [],
   availableWallets: 0,
   signOut: noop,
   signIn: noop,
@@ -72,21 +71,6 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const { data: session } = useSession()
   const router = useRouter()
 
-  async function getPublicKey(pk: string) {
-    try {
-      new PublicKey(pk)
-      return setPublicKey(pk)
-    } catch {
-      const bonfida = await getPublicKeyFromSolDomain(pk)
-
-      if (bonfida) {
-        setPublicKey(bonfida)
-      } else {
-        throw new Error("Invalid")
-      }
-    }
-  }
-
   useEffect(() => {
     if (bypassWallet) {
       return
@@ -95,7 +79,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
     if (!publicKey) {
       setPublicKey("")
     } else {
-      getPublicKey(publicKey)
+      setPublicKey(publicKey)
     }
   }, [router.query.publicKey, wallet.publicKey, isActive, isOffline, bypassWallet])
 
@@ -120,17 +104,13 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
           })
           .reduce((sum, nft) => sum + nft.number_wallets, 0) || 0
 
-      const [publicKeys, ethPublicKeys] = partition(
-        sortBy(
-          session?.user?.wallets?.filter((w) => w.active),
-          (item) => !item.active
-        ).slice(0, active),
-        (item) => item.chain === "solana"
-      )
+      const publicKeys = sortBy(
+        session?.user?.wallets?.filter((w) => w.active),
+        (item) => !item.active
+      ).slice(0, active)
 
       setAvailableWallets(active)
       setPublicKeys(publicKeys.map((item) => item.public_key))
-      setEthPublicKeys(ethPublicKeys.map((item) => item.public_key))
     } else {
       setUser(null)
       setUserId(null)
@@ -275,7 +255,6 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         signOut,
         signIn,
         isSigningIn,
-        ethPublicKeys,
       }}
     >
       {children}

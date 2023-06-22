@@ -1,10 +1,11 @@
-import { Close, Image } from "@mui/icons-material"
+import { Close, Image as ImageIcon } from "@mui/icons-material"
 import { IconButton, Dialog, Card, CardContent, Stack, Typography, Alert, LinearProgress, Button } from "@mui/material"
 import Jimp from "jimp/es"
 import { FC, useState } from "react"
 import { toast } from "react-hot-toast"
 import { useNfts } from "../../context/nfts"
 import { useAccess } from "../../context/access"
+import axios from "axios"
 
 export const Collage: FC = () => {
   const { nfts, filtered } = useNfts()
@@ -19,19 +20,47 @@ export const Collage: FC = () => {
   }
 
   async function generateCollage() {
+    setGenerating(true)
+    setGenerated(0)
     const mints = filtered.map((n) => n.nftMint)
-    const images = mints.map((mint) => nfts.find((n) => n.nftMint === mint)?.json?.image).filter(Boolean)
+    const images = (
+      await Promise.all(
+        mints
+          .map((mint) => nfts.find((n) => n.nftMint === mint)?.json?.image)
+          .filter(Boolean)
+          .map((item) => item.replace("ipfs://", "https://ipfs.io/ipfs/"))
+          .map(async (image) => {
+            try {
+              const { data } = await axios.get("/api/get-image", {
+                params: {
+                  image: `https://img-cdn.magiceden.dev/rs:fill:1000:1000:0:0/plain/${image}`,
+                },
+                responseType: "arraybuffer",
+              })
+
+              const jimp = await Jimp.read(data)
+
+              setGenerated((prev) => prev + 1)
+
+              return jimp
+            } catch {
+              return null
+            }
+          })
+      )
+    ).filter(Boolean)
 
     const ratio = 16 / 9
 
     const rows = Math.ceil((Math.sqrt(images.length) * 3) / 4)
     const cols = Math.ceil(images.length / rows)
-    const output: string[][] = []
+    const output: Jimp[][] = []
+    const logo = await Jimp.read("/biblio-logo-small.png")
     Array.from(new Array(rows).keys()).forEach(() => {
-      const row = images.splice(0, cols)
+      const row = images.splice(0, cols) as Jimp[]
       if (row.length < cols) {
         Array.from(new Array(cols - row.length).keys()).forEach(() => {
-          row.push("/biblio-logo-small.png")
+          row.push(logo)
         })
       }
       output.push(row)
@@ -57,18 +86,14 @@ export const Collage: FC = () => {
     })
   }
 
-  async function createCollage(rows: string[][]) {
+  async function createCollage(rows: Jimp[][]) {
     try {
-      setGenerating(true)
-      setGenerated(0)
       const edge = Math.floor(1600 / rows[0].length)
       const jimps = await Promise.all(
         rows.map(async (row) => {
           const rowJimps = await Promise.all(
-            row.map(async (img) => {
-              const jimp = (await Jimp.read(img)).resize(edge, edge)
-              setGenerated((prev) => prev + 1)
-              return jimp
+            row.map(async (jimp) => {
+              return jimp.resize(edge, edge)
             })
           )
           return rowJimps
@@ -86,12 +111,9 @@ export const Collage: FC = () => {
         const logo = await Jimp.read("/biblio-logo.png")
 
         logo.resize(image.bitmap.width / 10, Jimp.AUTO)
-        console.log(image.bitmap.width, logo.bitmap.width)
 
         const x = image.bitmap.width / 2 - logo.bitmap.width / 2
         const y = image.bitmap.height / 2 - logo.bitmap.height / 2
-
-        console.log(x, y)
 
         image = image.composite(logo, x, y, {
           mode: Jimp.BLEND_SCREEN,
@@ -103,9 +125,8 @@ export const Collage: FC = () => {
       const base64Image = await image.getBase64Async(Jimp.MIME_PNG)
       setImage(base64Image)
     } catch (err: any) {
-      console.log(err)
-      toast.error(err.message)
       console.error(err)
+      toast.error(err.message || "Error generating")
     } finally {
       setGenerating(false)
     }
@@ -119,7 +140,7 @@ export const Collage: FC = () => {
   return (
     <>
       <IconButton onClick={toggleCollageModalShowing} disabled={!filtered.length}>
-        <Image />
+        <ImageIcon />
       </IconButton>
       <Dialog open={collageModalShowing} onClose={toggleCollageModalShowing}>
         <Card>

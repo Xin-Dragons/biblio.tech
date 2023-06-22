@@ -1,37 +1,90 @@
-import { Network, Alchemy } from "alchemy-sdk";
-import { flatten, groupBy } from "lodash";
+import { Network, Alchemy, OwnedNftsResponse, OwnedNft } from "alchemy-sdk";
+import axios from "axios";
+import { add, filter, flatten, groupBy } from "lodash";
 
-const settings = {
-  apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
-  network: Network.ETH_MAINNET
+type Chain = "eth" | "matic"
+
+interface OwnedNftWithChain extends OwnedNft {
+  chain: Chain
 }
 
-const alchemy = new Alchemy(settings);
+async function getNftsForAddress(address: string, network: Network, onProgress: Function, pageKey?: string): Promise<OwnedNftWithChain[]> {
+  const settings = {
+    apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
+    network
+  }
+  
+  const alchemy = new Alchemy(settings);
 
-async function getNftsForAddress(address: string) {
-  const nfts = await alchemy.nft.getNftsForOwner(address);
-  return nfts.ownedNfts.map(item => {
+  const nfts = await alchemy.nft.getNftsForOwner(address, { pageKey });
+  onProgress(nfts.ownedNfts.length)
+  if (nfts.pageKey) {
+    return [
+      ...nfts.ownedNfts.map(nft => {
+        return {
+          ...nft,
+          chain: network === Network.ETH_MAINNET ? "eth" : "matic" as Chain
+        }
+      }),
+      ...(await getNftsForAddress(address, network, onProgress, nfts.pageKey))
+    ]
+  }
+  return nfts.ownedNfts.map(nft => {
     return {
-      ...item,
-      owner: address
+      ...nft,
+      chain: network === Network.ETH_MAINNET ? "eth" : "matic" as Chain
     }
   })
 }
 
 self.addEventListener("message", async event => {
-  const { addresses } = event.data;
+  const { address } = event.data;
 
-  const nfts = flatten(await Promise.all(addresses.map(async (address: string) => getNftsForAddress(address))))
+  const { data } = await axios.get('/api/open-sea-get-collections', { params: { address } })
+
+  const openSeaCollections = data.map((item: any) => {
+    const id = item.primary_asset_contracts[0]?.address;
+    return {
+      id,
+      slug: item.slug,
+      collectionName: item.name,
+      description: item.description,
+      image: item.image_url,
+      floorPrice: item.stats.floor_price,
+      safeList: item.safelist_request_status,
+      royalties: item.opensea_seller_fee_basis_points,
+      enforcedRoyalties: item.is_creator_fees_enforced,
+      website: item.external_url,
+      twitter: item.twitter_username,
+      discord: item.discord_url,
+      banner: item.banner_image_url
+    }
+  })
+  .filter((item: any) => item.id)
+
+  let loaded = 0;
+
+  function onProgress(num: number, total: number) {
+    console.log(`Loaded ${loaded += num}`)
+  }
+
+  const nfts = flatten(await Promise.all([
+    Network.ETH_MAINNET,
+    Network.MATIC_MAINNET
+  ].map(async network => await getNftsForAddress(address, network, onProgress))))
     .map(nft => {
       const nftMint = `${nft.contract.address}.${nft.tokenId}`
+
       return {
         ...nft,
-        chain: "eth",
+        chain: nft.chain,
         nftMint,
         collectionIdentifier: nft.contract.address,
         collectionId: nft.contract.address,
+        name: nft.title || nft.rawMetadata?.name || "Unknown",
         json: nft.rawMetadata,
         jsonLoaded: true,
+        owner: address,
         mint: {
 
         },
@@ -41,21 +94,62 @@ self.addEventListener("message", async event => {
       }
     })
 
-  const collections = Object.values(groupBy(nfts, nft => nft.collectionId)).map(item => item[0].contract)
+  let collections = Object.values(groupBy(nfts, nft => nft.collectionId)).map(item => item[0])
     .map(item => {
+      const contract = item.contract
       return {
-        id: item.address,
-        chain: "eth",
-        collectionName: item.name,
-        description: item.openSea.description,
-        image: item.openSea.imageUrl,
-        floorPrice: item.openSea.floorPrice,
+        id: contract.address,
+        chain: item.chain,
+        collectionName: contract.name,
+        name: contract.name || "Unknown collection",
+        description: contract.openSea?.description,
+        image: contract.openSea?.imageUrl,
+        nftImage: item.json?.image,
+        floorPrice: contract.openSea?.floorPrice,
         floorPriceCurrency: "eth",
-        safeList: item.openSea.safelistRequestStatus,
-        twitter: item.openSea.twitterUsername,
-        discordUrl: item.openSea.discordUrl
+        safeList: contract.openSea?.safelistRequestStatus,
+        twitter: contract.openSea?.twitterUsername,
+        discordUrl: contract.openSea?.discordUrl
       }
     })
+    .map((item: any) => {
+      const collection = openSeaCollections.find((c: any) => c.id === item.id);
+      if (!collection) {
+        return {
+          ...item,
+          image: item.image || item.nftImage
+        }
+      }
+      return {
+        id: item.id,
+        slug: collection.slug,
+        chain: item.chain,
+        collectionName: collection.collectionName || item.collectionName,
+        name: collection.name || item.name,
+        description: collection.description || item.description,
+        image: collection.image || item.image || item.nftImage,
+        floorPrice: item.floorPrice,
+        safeList: item.safeList || collection.safeList,
+        twitter: item.twitter || collection.twitter,
+        discordUrl: item.discordUrl || collection.discordUrl,
+      }
+    })
+
+  const missingFp = collections.filter(c => c.image && !c.floorPrice).map(item => item.slug).filter(Boolean);
+  if (missingFp.length) {
+    const { data: collectionStats } = await axios.post('/api/open-sea-get-collection-stats', { slugs: missingFp });
+    collections = collections.map(c => {
+      const stats = collectionStats.find((cs: any) => cs.slug === c.slug);
+      if (stats) {
+        return {
+          ...c,
+          floorPrice: stats.floor_price
+        }
+      }
+      return c
+    })
+  }
+
 
   self.postMessage({ type: "done", collections, nfts })
 })

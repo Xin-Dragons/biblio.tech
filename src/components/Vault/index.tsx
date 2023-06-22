@@ -428,8 +428,6 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
         .map((signer) => base58PublicKey(signer.publicKey))
         .sort((item: string) => (item === wallet.publicKey?.toBase58() ? -1 : 1))
 
-      console.log(signers)
-
       const signedTransactions = await signAllTransactions(
         txns.map((t) => t.txn),
         signers

@@ -209,9 +209,9 @@ function getMultimediaType(ext: string): Category {
   const types = {
     image: ["jpg", "jpeg", "jpng", "gif", "png"],
     video: ["mp4", "mov"],
-    audio: ["mp3", "wav", "flac"],
+    audio: ["mp3", "wav", "flac", "mpeg"],
     web: ["html"],
-    vr: ["glb", "gltf"],
+    vr: ["glb", "gltf", "gltf-binary"],
   }
   return findKey(types, (items) => items.includes(ext)) as Category
 }
@@ -244,7 +244,18 @@ export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
   const multimediaType = getMultimediaType(asset.type.split("/")[1].split(";")[0]) || "image"
 
   if (multimediaType === "image") {
-    return <img src={asset.uri} style={{ display: "block", width: "100%" }} />
+    return (
+      <img
+        src={`https://img-cdn.magiceden.dev/rs:fill:1000/plain/${asset.uri}`}
+        style={{ display: "block", width: "100%" }}
+        onError={(e: any) => {
+          e.target.src = asset.uri
+          e.target.onerror = (er: any) => {
+            er.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
+          }
+        }}
+      />
+    )
   }
 
   if (multimediaType === "web") {
@@ -272,7 +283,11 @@ export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
   }
 
   if (multimediaType === "audio") {
-    return <audio src={asset.uri} style={{ display: "block", aspectRatio: "1 / 1" }} autoPlay controls loop />
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        <audio src={asset.uri} autoPlay controls loop />
+      </Box>
+    )
   }
 
   if (multimediaType === "vr") {
@@ -283,7 +298,8 @@ export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
         camera-controls
         ar-modes="webxr"
         width="100%"
-        style={{ width: "55px", height: "55px", background: "transparent" }}
+        height="100%"
+        style={{ width: "100%", height: "100%", background: "transparent" }}
       ></model-viewer>
     )
   }
@@ -295,6 +311,7 @@ async function getType(uri: string) {
   if (!uri) {
     return
   }
+  uri = uri.replace("ipfs://", "https://ipfs.io/ipfs/")
   try {
     const { headers } = await axios.get(uri)
     const type = headers["content-type"]
@@ -706,7 +723,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain !== "eth" && (
+            {item.status !== "loaned" && item.chain === "solana" && (
               <BestLoan item={item} onClose={() => setOpen(false)} />
             )}
           </Stack>
@@ -725,16 +742,32 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             </Typography>
             <Table>
               <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <Typography fontWeight="bold" color="primary">
-                      Mint address
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <CopyAddress>{item.nftMint}</CopyAddress>
-                  </TableCell>
-                </TableRow>
+                {item.chain === "solana" && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Mint address
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <CopyAddress>{item.nftMint}</CopyAddress>
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {["eth", "matic"].includes(item.chain!) && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Contract address
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <CopyAddress chain={item.chain}>{item.collectionIdentifier}</CopyAddress>
+                    </TableCell>
+                  </TableRow>
+                )}
+
                 {[0, 1, 4].includes(item.metadata.tokenStandard!) && collection && (
                   <TableRow>
                     <TableCell>
@@ -751,19 +784,33 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-                <TableRow>
-                  <TableCell>
-                    <Typography fontWeight="bold" color="primary">
-                      Token standard
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <Typography>
-                      {item.metadata.collectionDetails && "Collection "}
-                      {tokenStandards[item.metadata.tokenStandard as keyof object] || "Unknown"}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
+                {item.chain === "solana" && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Token standard
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>
+                        {item.metadata.collectionDetails && "Collection "}
+                        {tokenStandards[item.metadata.tokenStandard as keyof object] || "Unknown"}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {["eth", "matic"].includes(item.chain!) && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Token type
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>{item.tokenType}</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
                 {item.metadata.tokenStandard === TokenStandard.NonFungibleEdition && (
                   <TableRow>
                     <TableCell>
@@ -778,16 +825,18 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-                <TableRow>
-                  <TableCell>
-                    <Typography fontWeight="bold" color="primary">
-                      Royalties
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "right" }}>
-                    <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
-                  </TableCell>
-                </TableRow>
+                {item.chain === "solana" && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Royalties
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
                 {item.status && (
                   <>
                     <TableRow>
@@ -1065,6 +1114,19 @@ export const Item: FC<ItemProps> = ({
     setIsTouchDevice(isTouchDevice)
   }, [])
 
+  let image
+  if (item.nftMint === USDC) {
+    image = "/usdc.png"
+  } else if (item.json?.image) {
+    image = item.json.image.replace("ipfs://", "https://ipfs.io/ipfs/")
+    image =
+      layoutSize === "collage" || enlarged
+        ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
+        : `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image}`
+  } else {
+    image = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
+  }
+
   return (
     <Card
       sx={{
@@ -1192,20 +1254,13 @@ export const Item: FC<ItemProps> = ({
             }}
           >
             <img
-              src={
-                item.nftMint === USDC
-                  ? "/usdc.png"
-                  : item.json?.image
-                  ? item.chain === "eth"
-                    ? item.json.image
-                    : `https://img-cdn.magiceden.dev/${
-                        layoutSize === "collage" || enlarged ? "rs:fill:600" : "rs:fill:400:400:0:0"
-                      }/plain/${item.json?.image}`
-                  : lightMode
-                  ? "/books-lightest.svg"
-                  : "/books-lighter.svg"
-              }
-              onError={(e: any) => (e.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg")}
+              src={image}
+              onError={(e: any) => {
+                e.target.src = item.json?.image
+                e.target.onerror = (er: any) => {
+                  er.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
+                }
+              }}
               width="100%"
               style={{
                 display: "block",

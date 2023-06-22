@@ -21,13 +21,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tokenAccount: (await connection.getTokenLargestAccounts(new PublicKey(tokenMint))).value[0].address.toBase58(),
       price: Number(price)
     }
-    console.log(params)
     const { data } = await axios.get(`https://api-mainnet.magiceden.dev/v2/instructions/sell`, {
       params,
       headers
     });
-    // const { auctionHouse, tokenAddress, sellerReferral, price } = result.data[0];
-    console.log(data)
 
     res.status(200).json(data)
   } catch (err: any) {

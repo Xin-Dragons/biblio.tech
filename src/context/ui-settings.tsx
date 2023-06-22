@@ -87,7 +87,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
     await db.transaction("rw", db.preferences, async () => {
       const item = await db.preferences.get(page)
-      console.log(item, isDefault)
       if (item) {
         await db.preferences.update(isDefault ? "defaults" : page, { [key]: value })
       } else {

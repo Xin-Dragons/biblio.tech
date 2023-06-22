@@ -12,7 +12,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const result = await axios.get(`https://api-mainnet.magiceden.dev/v2/tokens/${tokenMint}/listings`);
     const { auctionHouse, tokenAddress, sellerReferral, price } = result.data[0]
-    console.log(result.data[0])
 
     const params = {
       seller,
@@ -23,7 +22,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sellerReferral,
     }
 
-    console.log(params)
 
     const { data } = await axios.get("https://api-mainnet.magiceden.dev/v2/instructions/sell_cancel", {
       params,

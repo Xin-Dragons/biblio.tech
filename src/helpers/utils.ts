@@ -1,7 +1,10 @@
+import { PublicKey } from "@metaplex-foundation/js";
+import { isPda, publicKey } from "@metaplex-foundation/umi";
 import { WalletContextState } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import BN from "bn.js";
 import base58 from "bs58";
+import { isAddress } from "viem";
 
 export async function signMessage(wallet: WalletContextState, nonce: string) {
   const message = `Sign in to Biblio\n\${nonce}`;
@@ -28,3 +31,20 @@ export function shorten(address: string) {
   }
   return `${address.substring(0, 4)}...${address.substring(address.length - 4, address.length)}`
 }
+
+export const isValidPublicKey = (input: string) => {
+  try {
+    const pk = new PublicKey(input)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const getAddressType = (pk: string) => {
+  return isValidPublicKey(pk)
+    ? "Solana"
+    : isAddress(pk!)
+    ? "Ethereum"
+    : "Unknown"
+} 

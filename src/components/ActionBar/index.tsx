@@ -1,4 +1,4 @@
-import { Container, Stack, useMediaQuery } from "@mui/material"
+import { Container, Slider, Stack, Typography, useMediaQuery } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { useWallet } from "@solana/wallet-adapter-react"

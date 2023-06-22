@@ -31,7 +31,7 @@ type WalletsProviderProps = {
 
 export const WalletsProvider: FC<WalletsProviderProps> = ({ children }) => {
   const { db } = useDatabase()
-  const wallets = useLiveQuery(() => db.wallets.toArray(), [], [])
+  const wallets = useLiveQuery(() => db.wallets.toCollection().sortBy("added"), [], [])
   const wallet = useWallet()
 
   async function setIsLedger(isLedger: boolean) {
@@ -43,7 +43,7 @@ export const WalletsProvider: FC<WalletsProviderProps> = ({ children }) => {
     if (exists) {
       await db.wallets.update(base58Wallet, { isLedger, owned: true })
     } else {
-      await db.wallets.add({ publicKey: base58Wallet, isLedger, owned: true })
+      await db.wallets.add({ publicKey: base58Wallet, isLedger, owned: true, added: Date.now() })
     }
   }
 
@@ -51,12 +51,19 @@ export const WalletsProvider: FC<WalletsProviderProps> = ({ children }) => {
     wallet.publicKey && (wallets.find((w) => w.publicKey === wallet.publicKey?.toBase58()) || {}).isLedger
   )
 
-  async function addWallet(publicKey: string, nickname?: string, owned?: boolean) {
-    await db.wallets.add({
+  async function addWallet(publicKey: string, nickname?: string, owned?: boolean, autoAdded?: boolean, chain?: string) {
+    const id = await db.wallets.put({
       publicKey,
       nickname,
       owned,
+      added: Date.now(),
+      autoAdded,
+      chain,
     })
+
+    const item = await db.wallets.get(id)
+
+    return item
   }
 
   async function deleteWallet(publicKey: string) {

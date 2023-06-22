@@ -6,6 +6,8 @@ import { useAccess } from "./access"
 import { merge, noop, partition, uniqBy } from "lodash"
 import { useUiSettings } from "./ui-settings"
 import { useWallet } from "@solana/wallet-adapter-react"
+import { isAddress } from "viem"
+import { useRouter } from "next/router"
 
 export const MS_PER_DAY = 8.64e7
 
@@ -15,8 +17,6 @@ type DatabaseContextProps = {
   db: DB
   sync: Function
   syncing: boolean
-  syncingData: boolean
-  syncingRarity: boolean
   collections: Collection[]
   deleteNfts: Function
   updateItem: Function
@@ -27,7 +27,6 @@ type DatabaseContextProps = {
   removeNftsFromVault: Function
   stakeNft: Function
   unstakeNft: Function
-  syncingMetadata: boolean
   settleLoans: Function
   nftsDelisted: Function
   nftsListed: Function
@@ -41,8 +40,6 @@ const initial = {
   db,
   sync: noop,
   syncing: false,
-  syncingData: false,
-  syncingRarity: false,
   collections: [],
   deleteNfts: noop,
   updateItem: noop,
@@ -53,7 +50,6 @@ const initial = {
   removeNftsFromVault: noop,
   stakeNft: noop,
   unstakeNft: noop,
-  syncingMetadata: false,
   settleLoans: noop,
   nftsDelisted: noop,
   nftsListed: noop,
@@ -70,22 +66,21 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey, publicKeys, ethPublicKeys, isAdmin, isActive, isOffline } = useAccess()
+  const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
   const { showAllWallets } = useUiSettings()
-  const [syncingData, setSyncingData] = useState(false)
-  const [syncingRarity, setSyncingRarity] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [workers, setWorkers] = useState<Worker[]>([])
   const wallet = useWallet()
+  const router = useRouter()
   const nfts = useLiveQuery(
     () =>
       (showAllWallets && isAdmin
-        ? db.nfts.where("owner").anyOf([...publicKeys, ...ethPublicKeys])
+        ? db.nfts.where("owner").anyOf(publicKeys)
         : db.nfts.where({ owner: publicKey })
       ).toArray(),
     [publicKey, publicKeys],
     []
   )
-  const [syncingMetadata, setSyncingMetadata] = useState(false)
   const collections = useLiveQuery(
     () =>
       db.collections
@@ -193,18 +188,18 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
           (item) => item.owner === publicKey && !nfts.map((n) => n.nftMint).includes(item.nftMint)
         )
 
-        console.log({ publicKey, toRemove })
-
-        await db.nfts.bulkUpdate(
-          toRemove.map((item) => {
-            return {
-              key: item.nftMint,
-              changes: {
-                owner: null,
-              },
-            }
-          })
-        )
+        if (toRemove.length) {
+          await db.nfts.bulkUpdate(
+            toRemove.map((item) => {
+              return {
+                key: item.nftMint,
+                changes: {
+                  owner: null,
+                },
+              }
+            })
+          )
+        }
       }
 
       const [toAdd, toUpdate] = partition(
@@ -324,14 +319,30 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    if (!publicKey) return
+    workers.forEach((worker) => worker.terminate())
+    setWorkers([])
+    if (!publicKey) {
+      return
+    }
+    if (router.query.publicKey) {
+      if (isAddress(router.query.publicKey as string)) {
+        getEthNftsWorker(router.query.publicKey as string)
+      } else {
+        syncDataWorker(router.query.publicKey as string)
+      }
+      return
+    }
     if (isAdmin && publicKeys.length) {
-      publicKeys.map((pk) => syncDataWorker(pk))
+      publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk)))
     } else {
-      syncDataWorker(publicKey)
+      if (isAddress(publicKey)) {
+        getEthNftsWorker(publicKey)
+      } else {
+        syncDataWorker(publicKey)
+      }
     }
     getSharkyOrderBooksWorker()
-  }, [publicKey])
+  }, [publicKey, publicKeys, router.query.publicKey])
 
   function getSharkyOrderBooksWorker() {
     if (isOffline) {
@@ -339,8 +350,14 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     }
     const worker = new Worker(new URL("../../public/get-sharky-order-books.worker.ts", import.meta.url))
 
+    setWorkers((prevState) => {
+      return [...prevState, worker]
+    })
+
     worker.addEventListener("message", async (event) => {
       await updateSharkyOrderBooks(event.data.orderBooks)
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
     })
 
     worker.postMessage({ start: true })
@@ -364,11 +381,14 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     if (isOffline) {
       return
     }
-    setSyncingMetadata(true)
     const worker = new Worker(new URL("../../public/get-metadata.worker.ts", import.meta.url))
+    setWorkers((prevState) => {
+      return [...prevState, worker]
+    })
     worker.addEventListener("message", async (event) => {
-      setSyncingMetadata(false)
       await updateMetadata(event.data.metadata)
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
     })
 
     const nfts = await db.nfts.where({ owner: publicKey }).toArray()
@@ -390,35 +410,27 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     if (isOffline) {
       return
     }
-    setSyncingData(true)
     const worker = new Worker(new URL("../../public/get-data.worker.ts", import.meta.url))
+
+    setWorkers((prevState) => {
+      return [...prevState, worker]
+    })
+
     worker.addEventListener("message", async (event) => {
       const { type } = event.data
       if (type === "get-rarity") {
         syncRoyaltiesWorker(event.data.nfts, event.data.force)
         syncMetadataWorker(event.data.nfts, event.data.force)
       } else if (type === "done") {
-        setSyncingData(false)
         await Promise.all([
           addNftsToDb(event.data.nftsToAdd, publicKey!, !mints),
           addCollectionsToDb(event.data.collectionsToAdd),
         ])
-      } else if (type === "error") {
-        setSyncingData(false)
-        worker.terminate()
       }
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
     })
     worker.postMessage({ publicKey, force, mints, publicKeys })
-
-    worker.addEventListener("error", () => {
-      worker.terminate()
-      setSyncingData(false)
-    })
-
-    return () => {
-      worker.terminate()
-      setSyncingData(false)
-    }
   }
 
   async function syncRoyaltiesWorker(nfts: Nft[], force?: boolean) {
@@ -435,21 +447,17 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
 
-    setSyncingRarity(true)
     const worker = new Worker(new URL("../../public/get-rarity-worker.ts", import.meta.url))
+
+    setWorkers((prevState) => {
+      return [...prevState, worker]
+    })
+
     worker.addEventListener("message", async (event) => {
       await updateRarity(event.data.updates)
-      setSyncingRarity(false)
-    })
-    worker.addEventListener("error", () => {
       worker.terminate()
-      setSyncingRarity(false)
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
     })
-    worker.postMessage({ nfts: toUpdate })
-    return () => {
-      worker.terminate()
-      setSyncingRarity(false)
-    }
   }
 
   async function updateRarity(updates: Rarity[]) {
@@ -575,41 +583,43 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     })
   }
 
-  async function getEthNftsWorker() {
+  async function getEthNftsWorker(publicKey: string) {
     if (isOffline) {
       return
     }
     const worker = new Worker(new URL("../../public/get-eth-nfts.worker.ts", import.meta.url))
 
-    worker.addEventListener("message", async (event) => {
-      await Promise.all([
-        addNftsToDb(event.data.nfts, ethPublicKeys[0]!, true),
-        addCollectionsToDb(event.data.collections),
-      ])
+    setWorkers((prevState) => {
+      return [...prevState, worker]
     })
 
-    worker.postMessage({ addresses: ethPublicKeys })
+    worker.addEventListener("message", async (event) => {
+      await Promise.all([addNftsToDb(event.data.nfts, publicKey, true), addCollectionsToDb(event.data.collections)])
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    })
+
+    worker.postMessage({ address: publicKey })
   }
 
   useEffect(() => {
-    if (ethPublicKeys.length) {
-      getEthNftsWorker()
-    }
-  }, [ethPublicKeys])
-
-  useEffect(() => {
-    setSyncing(syncingData || syncingRarity || syncingMetadata)
-  }, [syncingData, syncingRarity, syncingMetadata])
+    setSyncing(!!workers.length)
+  }, [workers])
 
   async function sync() {
-    if (!publicKey || syncing) {
+    workers.forEach((worker) => worker.terminate())
+    if (!publicKey) {
       return
     }
 
     if (isAdmin && publicKeys.length > 1) {
-      publicKeys.map((pk) => syncDataWorker(pk, undefined, true))
+      publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk, undefined, true)))
     } else {
-      syncDataWorker(publicKey, undefined, true)
+      if (isAddress(publicKey)) {
+        getEthNftsWorker(publicKey)
+      } else {
+        syncDataWorker(publicKey, undefined, true)
+      }
     }
   }
 
@@ -724,8 +734,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     <DatabaseContext.Provider
       value={{
         syncing,
-        syncingData,
-        syncingRarity,
         db,
         collections,
         deleteNfts,
@@ -738,7 +746,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         removeNftsFromVault,
         stakeNft,
         unstakeNft,
-        syncingMetadata,
         settleLoans,
         nftsDelisted,
         nftsListed,

@@ -68,7 +68,6 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
     }
   } else if (router.query.collectionId) {
     const collection = collections.find((c) => c.id === router.query.collectionId)
-    console.log(collections)
     title = collection?.collectionName || "Unknown collection"
   } else if (isVault) {
     title = (

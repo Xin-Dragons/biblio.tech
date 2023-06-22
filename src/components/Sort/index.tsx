@@ -1,7 +1,7 @@
 import { FormControl, InputLabel, Select, MenuItem } from "@mui/material"
 import { FC } from "react"
 import { useUiSettings } from "../../context/ui-settings"
-import { useFilters } from "../../context/filters"
+import { useSort } from "../../context/sort"
 
 type SortProps = {
   large?: boolean
@@ -9,7 +9,7 @@ type SortProps = {
 
 export const Sort: FC<SortProps> = ({ large }) => {
   const { sort, setSort } = useUiSettings()
-  const { sortOptions } = useFilters()
+  const { sortOptions } = useSort()
   return (
     <FormControl size={large ? "medium" : "small"} sx={{ width: { sm: "150px", xs: "default" } }}>
       <InputLabel id="demo-simple-select-label">Sort</InputLabel>

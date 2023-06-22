@@ -108,8 +108,6 @@ export const SolTransfer: FC<{ onClose: Function }> = ({ onClose }) => {
         throw new Error("invalid amount")
       }
 
-      console.log(lamports, balance)
-
       if (lamports > balance) {
         throw new Error("Insufficient balance")
       }

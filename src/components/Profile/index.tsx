@@ -449,7 +449,7 @@ const Settings: FC = () => {
 
 function LinkedWallets() {
   const { data: session, update } = useSession()
-  const { publicKeys, availableWallets, ethPublicKeys } = useAccess()
+  const { publicKeys, availableWallets } = useAccess()
   const { wallets, isLedger } = useWallets()
   const [loading, setLoading] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -457,7 +457,7 @@ function LinkedWallets() {
   const umi = useUmi()
   const wallet = useWallet()
 
-  const linkedWallets = [...publicKeys, ...ethPublicKeys]
+  const linkedWallets = publicKeys
 
   function toggleAdding() {
     setAdding(!adding)
@@ -1301,7 +1301,7 @@ const Wallet: FC<WalletProps> = ({ wallet, isLinked }) => {
         <TableCell data-th="Address">
           <Tooltip title={wallet.publicKey}>
             <NextLink passHref href={`/wallet/${wallet.publicKey}`}>
-              <Link>{shorten(wallet.publicKey)}</Link>
+              <Link>{shorten(wallet.publicKey as string)}</Link>
             </NextLink>
           </Tooltip>
         </TableCell>
