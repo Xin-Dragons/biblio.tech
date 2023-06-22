@@ -280,6 +280,13 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     filtered = sortBy(filtered, (item) => rarity.find((r) => r.nftMint === item.nftMint)?.moonRank).reverse()
   }
 
+  if (sort === "background") {
+    filtered = sortBy(filtered, (item) => {
+      const bg = item.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === "background")?.value
+      return bg
+    })
+  }
+
   if (sort === "outstanding") {
     filtered = sortBy(filtered, (item) => item.loan?.amountToRepay || 0).reverse()
   }

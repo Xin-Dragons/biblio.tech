@@ -123,7 +123,7 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
       showChain
       addDialog={false}
       onNotFound={checkWallet}
-      deletable
+      deletable={true}
     />
   )
 }
