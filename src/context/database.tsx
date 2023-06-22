@@ -442,9 +442,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
           addNftsToDb(event.data.nftsToAdd, publicKey!, !mints),
           addCollectionsToDb(event.data.collectionsToAdd),
         ])
+        worker.terminate()
+        setWorkers((prevState) => prevState.filter((w) => w !== worker))
       }
-      worker.terminate()
-      setWorkers((prevState) => prevState.filter((w) => w !== worker))
     })
     worker.postMessage({ publicKey, force, mints, publicKeys })
   }
@@ -614,7 +614,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         await Promise.all([addNftsToDb(event.data.nfts, publicKey, true), addCollectionsToDb(event.data.collections)])
         worker.terminate()
         setWorkers((prevState) => prevState.filter((w) => w !== worker))
-        console.log("DONEONEONE")
       }
 
       if (event.data.progress) {
