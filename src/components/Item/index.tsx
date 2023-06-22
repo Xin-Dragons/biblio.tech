@@ -1191,10 +1191,10 @@ export const Item: FC<ItemProps> = ({
         </Box>
       )}
       <>
-        {isAdmin && (!isTouchDevice || showInfo) && (
+        {(!isTouchDevice || showInfo) && (
           <Stack
             direction="row"
-            justifyContent="space-between"
+            justifyContent={isAdmin ? "space-between" : "center"}
             alignItems="center"
             onClick={onNftClick}
             sx={{
@@ -1217,25 +1217,30 @@ export const Item: FC<ItemProps> = ({
               // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
             }}
           >
-            <Tooltip title={starred ? "Remove from starred" : "Add to starred"}>
-              <Rating
-                max={1}
-                value={starred ? 1 : 0}
-                onChange={onStarredChange}
-                size={layoutSize === "collage" ? "large" : layoutSize}
-              />
-            </Tooltip>
+            {isAdmin && (
+              <Tooltip title={starred ? "Remove from starred" : "Add to starred"}>
+                <Rating
+                  max={1}
+                  value={starred ? 1 : 0}
+                  onChange={onStarredChange}
+                  size={layoutSize === "collage" ? "large" : layoutSize}
+                />
+              </Tooltip>
+            )}
+
             {DragHandle && <Tooltip title="Drag to reorder">{DragHandle as ReactElement}</Tooltip>}
 
-            <Tooltip title={isSelected ? "Remove from selection" : "Add to selection"}>
-              <RadioIndicator
-                className="plus-minus"
-                sx={{
-                  fontSize: fontSizes[layoutSize],
-                  color: theme.palette.text.disabled,
-                }}
-              />
-            </Tooltip>
+            {isAdmin && (
+              <Tooltip title={isSelected ? "Remove from selection" : "Add to selection"}>
+                <RadioIndicator
+                  className="plus-minus"
+                  sx={{
+                    fontSize: fontSizes[layoutSize],
+                    color: theme.palette.text.disabled,
+                  }}
+                />
+              </Tooltip>
+            )}
           </Stack>
         )}
 

@@ -181,7 +181,6 @@ type CardsProps = {
 }
 
 const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
-  const { isAdmin } = useAccess()
   const { layoutSize, showInfo } = useUiSettings()
   const pageWidth = useWidth()
   const router = useRouter()
@@ -192,7 +191,7 @@ const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }: { width: number; height: number }) => {
             const isCollectionsView = !router.query.filter && !router.query.collectionId && !router.query.tag
-            const adjust = isCollectionsView ? 40 : isAdmin ? 90 : 70
+            const adjust = isCollectionsView ? 40 : 90
             const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
             const columnCount = Math.floor(width! / cardWidth)

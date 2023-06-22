@@ -112,10 +112,6 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
     let options = sortOptionsConfig[type]
 
-    if (!isAdmin) {
-      options = options.filter((opt) => opt !== "custom")
-    }
-
     if (!filtered.some((n) => n.chain === "solana")) {
       options = options.filter((opt) => !["howRare", "howRareDesc", "moonRank", "moonRankDesc"].includes(opt))
     }
