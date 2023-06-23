@@ -4,6 +4,7 @@ import { useAccess } from "./access"
 import { useNfts } from "./nfts"
 import { useUiSettings } from "./ui-settings"
 import { Nft } from "../db"
+import { flatten, uniq } from "lodash"
 
 export const SortContext = createContext<{ sortOptions: Sort[] }>({ sortOptions: [] })
 
@@ -27,7 +28,7 @@ type SortType =
 
 const sortOptionsConfig = {
   loans: ["expiring", "outstanding", "name"],
-  nonFungible: ["custom", "name", "howRare", "howRareDesc", "moonRank", "moonRankDesc", "background"],
+  nonFungible: ["custom", "name", "howRare", "howRareDesc", "moonRank", "moonRankDesc"],
   fungible: ["value", "custom", "balance", "name"],
   editions: ["custom", "name", "creator"],
   collections: ["value", "name", "holdings"],
@@ -116,9 +117,23 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
       options = options.filter((opt) => !["howRare", "howRareDesc", "moonRank", "moonRankDesc"].includes(opt))
     }
 
-    // const traits = filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att.trait_type.tolowerCase()))
+    const traits = router.query.collectionId
+      ? uniq(
+          flatten(filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att.trait_type)).filter(Boolean))
+        )
+      : []
 
-    setSortOptions(options.map((opt) => allOptions[opt as keyof object]))
+    const opts = [
+      ...options.map((opt) => allOptions[opt as keyof object]),
+      ...traits.map((trait) => {
+        return {
+          label: trait,
+          value: `attribute.${trait?.toLowerCase()}`,
+        }
+      }),
+    ]
+
+    setSortOptions(opts as any)
   }, [router.query, isAdmin, filtered])
 
   useEffect(() => {

@@ -350,6 +350,14 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     filtered = sortBy(filtered, (item) => order.find((i) => i.nftMint === item.nftMint)?.[key as keyof object])
   }
 
+  if (sort.includes("attribute")) {
+    const attribute = sort.replace("attribute.", "").toLowerCase()
+    filtered = sortBy(filtered, (item) => {
+      const bg = item.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === attribute)?.value
+      return bg
+    })
+  }
+
   return (
     <NftsContext.Provider
       value={{
