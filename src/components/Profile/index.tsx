@@ -463,7 +463,7 @@ function LinkedWallets() {
     setAdding(!adding)
   }
 
-  const isMain = session?.user?.wallets.find((w) => w.public_key === wallet.publicKey?.toBase58())?.main
+  const isMain = session?.user?.wallets?.find((w) => w.public_key === wallet.publicKey?.toBase58())?.main
 
   async function unlink(publicKey: string) {
     try {

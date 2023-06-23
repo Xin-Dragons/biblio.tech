@@ -114,6 +114,7 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
 
             const { data: user } = await axios.get(`${process.env.API_URL}/biblio/${token.sub}`, { headers });
             Object.assign(session.user, user)
+            session.user.wallets = session.user.wallets || []
             session.user.active = user?.nfts?.some((item: Nft) => {
               if (!item || !item.active) {
                 return false
