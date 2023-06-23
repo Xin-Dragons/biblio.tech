@@ -107,7 +107,9 @@ export const Selector: FC<SelectorProps> = ({
       {!linkedNfts?.length ? (
         <>
           {" "}
-          <Typography color="primary">Choose a Dandy or a Library Card to gain access to Biblio</Typography>
+          <Typography color="primary" textAlign={"center"}>
+            Choose a Dandy or a Library Card to gain access to Biblio
+          </Typography>
           <Typography textAlign="center">
             This NFT will be locked and linked to your account.
             <br />
@@ -189,14 +191,14 @@ export const Selector: FC<SelectorProps> = ({
         </Stack>
       )}
 
-      <Dialog open={selectorOpen} onClose={toggleSelectorOpen} maxWidth="xl">
+      <Dialog open={selectorOpen} onClose={toggleSelectorOpen} maxWidth="md">
         <Card sx={{ padding: 2, overflow: "auto" }}>
           <Grid container spacing={2}>
             {libraryCards
               .filter((l: any) => !linkedNfts?.map((n) => n.mint).includes(l.mint))
               .map((card: Nft, index) => {
                 return (
-                  <Grid item xs={6} sm={4} md={3} lg={2} xl={1} key={index}>
+                  <Grid item xs={12} sm={6} md={4} lg={3} xl={2} key={index}>
                     <Card key={card.mint} sx={{ cursor: "pointer" }} onClick={() => onSelect(card)}>
                       <img src={card.metadata.image} width="100%" />
                       <CardContent>
@@ -233,6 +235,17 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
   const owner = (nfts.find((n) => n.nftMint === nft.mint) || {}).owner
 
   const isOwned = owner === wallet.publicKey?.toBase58()
+
+  const numWallets =
+    nft?.metadata?.attributes?.find((att) => att.trait_type === "Wallets")?.value || nft.number_wallets || 1
+
+  const isUnlimited =
+    nft?.metadata?.attributes?.find((att) => att.trait_type === "Access")?.value === "Unlimited" ||
+    !Boolean(nft.hours_active)
+
+  const timeRemaining = !isUnlimited
+    ? `${(nft?.hours_active! - nft.time_staked / 3600).toLocaleString(undefined, { maximumFractionDigits: 2 })} hours`
+    : "Unlimited"
 
   return (
     <Stack
@@ -313,7 +326,7 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
               </TableCell>
               <TableCell>
                 <Typography textAlign="right" variant={small ? "body2" : "body1"}>
-                  {nft.number_wallets}
+                  {numWallets}
                 </Typography>
               </TableCell>
             </TableRow>
@@ -325,7 +338,7 @@ const LinkedNft: FC<LinkedNftProps> = ({ nft, onClick, unlinkNft, loading, submi
               </TableCell>
               <TableCell sx={{ border: "none" }}>
                 <Typography textAlign="right" variant={small ? "body2" : "body1"}>
-                  {nft?.hours_active ? `${nft?.hours_active! - nft.time_staked / 3600} hours` : "Unlimited"}
+                  {timeRemaining}
                 </Typography>
               </TableCell>
             </TableRow>

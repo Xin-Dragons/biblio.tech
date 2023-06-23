@@ -504,15 +504,7 @@ export const Actions: FC = () => {
   }
 
   return (
-    <Stack>
-      {/* {isAdmin && !collectionPage && (
-        <Slider
-          aria-label="Selection"
-          value={selected.length}
-          onChange={(e, value) => handleSelectionChange(value as number)}
-          max={filtered.length}
-        />
-      )} */}
+    <Stack spacing={2}>
       <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
         {router.query.publicKey && (
           <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />

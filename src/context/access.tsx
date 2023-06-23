@@ -88,13 +88,17 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
       setUser(session?.user)
       setUserId(session?.user?.id)
 
+      console.log(session.user.nfts)
+
       const active =
         session?.user?.nfts
           ?.filter((item: Nft) => {
             if (!item || !item.active) {
               return false
             }
-            if (!item.hours_active) {
+            const isUnlimited =
+              item.metadata?.attributes?.find((att) => att.trait_type === "Access")?.value === "Unlimited"
+            if (!item.hours_active || isUnlimited) {
               return true
             }
 
@@ -102,7 +106,13 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
 
             return stakedHours < item.hours_active
           })
-          .reduce((sum, nft) => sum + nft.number_wallets, 0) || 0
+          .reduce((sum, nft) => {
+            const numFromMeta = nft.metadata.attributes?.find((att) => att.trait_type === "Wallets")?.value
+            if (numFromMeta) {
+              return sum + Number(numFromMeta)
+            }
+            return sum + nft.number_wallets
+          }, 0) || 0
 
       const publicKeys = sortBy(
         session?.user?.wallets?.filter((w) => w.active),
@@ -130,6 +140,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
     const isActive = session?.user?.active || session?.user?.offline
     const isLocalScope = !router.query.publicKey
     const isAdmin = (session?.user?.wallets || [])
+      .filter((wallet) => wallet.active)
       .map((wallet: any) => wallet.public_key)
       .includes(wallet.publicKey?.toBase58())
 

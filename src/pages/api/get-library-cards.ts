@@ -11,8 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    const response = await axios.get(`${process.env.API_URL}/biblio/${publicKey}/eligible-nfts`, options);
-    res.status(200).send(response.data)
+    const { data } = await axios.get(`${process.env.API_URL}/biblio/${publicKey}/eligible-nfts`, options);
+    res.status(200).json(data)
   } catch (err: any) {
     console.log(err)
     const message = err?.response?.data;

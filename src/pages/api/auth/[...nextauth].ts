@@ -119,7 +119,8 @@ export default async function auth(req: NextApiRequest, res: NextApiResponse) {
               if (!item || !item.active) {
                 return false
               }
-              if (!item.hours_active) {
+              const isUnlimited = item.metadata?.attributes?.find(att => att.trait_type === "Access")?.value === "Unlimited"
+              if (!item.hours_active || isUnlimited) {
                 return true;
               }
 
