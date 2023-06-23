@@ -249,6 +249,16 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         }
       }
 
+      if (s.includes(":")) {
+        const [trait_type, value] = s.split(":").map((item) => item.trim().toLocaleLowerCase())
+        if (trait_type && value) {
+          return (
+            nft.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === trait_type)?.value?.toLowerCase() ===
+            value
+          )
+        }
+      }
+
       const values = (nft.json?.attributes || []).map((att: any) => `${att.value || ""}`.toLowerCase())
       return (
         nft.nftMint === search ||
