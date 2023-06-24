@@ -365,16 +365,25 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
     const worker = new Worker(new URL("../../public/get-sharky-order-books.worker.ts", import.meta.url))
+    Object.defineProperty(worker, "type", {
+      value: "sharky",
+      writable: false,
+    })
 
     setWorkers((prevState) => {
       return [...prevState, worker]
     })
 
-    worker.addEventListener("message", async (event) => {
+    worker.onmessage = async (event) => {
       await updateSharkyOrderBooks(event.data.orderBooks)
       worker.terminate()
       setWorkers((prevState) => prevState.filter((w) => w !== worker))
-    })
+    }
+
+    worker.onerror = () => {
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    }
 
     worker.postMessage({ start: true })
   }
@@ -398,14 +407,23 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
     const worker = new Worker(new URL("../../public/get-metadata.worker.ts", import.meta.url))
+    Object.defineProperty(worker, "type", {
+      value: "metadata",
+      writable: false,
+    })
     setWorkers((prevState) => {
       return [...prevState, worker]
     })
-    worker.addEventListener("message", async (event) => {
+    worker.onmessage = async (event) => {
       await updateMetadata(event.data.metadata)
       worker.terminate()
       setWorkers((prevState) => prevState.filter((w) => w !== worker))
-    })
+    }
+
+    worker.onerror = () => {
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    }
 
     const nfts = await db.nfts.where({ owner: publicKey }).toArray()
 
@@ -422,20 +440,28 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     worker.postMessage({ mints })
   }
 
+  useEffect(() => {
+    console.log(workers)
+  }, [workers])
+
   function syncDataWorker(publicKey: string, mints?: string[], force?: boolean) {
     if (isOffline) {
       return
     }
     const worker = new Worker(new URL("../../public/get-data.worker.ts", import.meta.url))
+    Object.defineProperty(worker, "type", {
+      value: "sync-data",
+      writable: false,
+    })
 
     setWorkers((prevState) => {
       return [...prevState, worker]
     })
 
-    worker.addEventListener("message", async (event) => {
+    worker.onmessage = async (event) => {
       const { type } = event.data
       if (type === "get-rarity") {
-        syncRoyaltiesWorker(event.data.nfts, event.data.force)
+        syncRarityWorker(event.data.nfts, event.data.force)
         syncMetadataWorker(event.data.nfts, event.data.force)
       } else if (type === "done") {
         await Promise.all([
@@ -445,11 +471,17 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         worker.terminate()
         setWorkers((prevState) => prevState.filter((w) => w !== worker))
       }
-    })
+    }
+
+    worker.onerror = () => {
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    }
+
     worker.postMessage({ publicKey, force, mints, publicKeys })
   }
 
-  async function syncRoyaltiesWorker(nfts: Nft[], force?: boolean) {
+  async function syncRarityWorker(nfts: Nft[], force?: boolean) {
     if (isOffline) {
       return
     }
@@ -464,16 +496,27 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     }
 
     const worker = new Worker(new URL("../../public/get-rarity-worker.ts", import.meta.url))
+    Object.defineProperty(worker, "type", {
+      value: "rarity",
+      writable: false,
+    })
 
     setWorkers((prevState) => {
       return [...prevState, worker]
     })
 
-    worker.addEventListener("message", async (event) => {
+    worker.onmessage = async (event) => {
       await updateRarity(event.data.updates)
       worker.terminate()
       setWorkers((prevState) => prevState.filter((w) => w !== worker))
-    })
+    }
+
+    worker.onerror = () => {
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    }
+
+    worker.postMessage({ nfts })
   }
 
   async function updateRarity(updates: Rarity[]) {
@@ -604,12 +647,15 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
     const worker = new Worker(new URL("../../public/get-eth-nfts.worker.ts", import.meta.url))
-
+    Object.defineProperty(worker, "type", {
+      value: "get-eth-nfts",
+      writable: false,
+    })
     setWorkers((prevState) => {
       return [...prevState, worker]
     })
 
-    worker.addEventListener("message", async (event) => {
+    worker.onmessage = async (event) => {
       if (event.data.done) {
         await Promise.all([addNftsToDb(event.data.nfts, publicKey, true), addCollectionsToDb(event.data.collections)])
         worker.terminate()
@@ -623,17 +669,26 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       if (event.data.total) {
         setTotalMints((prev) => prev + event.data.total)
       }
-    })
+    }
+
+    worker.onerror = () => {
+      worker.terminate()
+      setWorkers((prevState) => prevState.filter((w) => w !== worker))
+    }
 
     worker.postMessage({ address: publicKey })
   }
 
   useEffect(() => {
-    setSyncing(!!workers.length)
+    const relevantWorkers = workers.filter((worker) =>
+      ["sync-data", "metadata", "get-eth-nfts"].includes((worker as any).type)
+    )
+    setSyncing(!!relevantWorkers.length)
   }, [workers])
 
   async function sync() {
     workers.forEach((worker) => worker.terminate())
+    setWorkers([])
     setLoadedMints(0)
     setTotalMints(0)
     if (!publicKey) {

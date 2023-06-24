@@ -57,7 +57,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
   })
 
   const linkedWallets =
-    session?.user?.wallets.map((w) => {
+    session?.user?.wallets?.map((w) => {
       const addressBookWallet = addressBookWallets.find((a) => a.publicKey === w.public_key)
       return {
         publicKey: w.public_key,

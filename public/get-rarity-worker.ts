@@ -33,7 +33,6 @@ async function getRarity(nfts: Nft[]) {
 self.addEventListener("message", async event => {
   try {
     const { nfts } = event.data;
-  
     const rarity = await getRarity(nfts)
   
     const updates = nfts.map((item: Nft) => {

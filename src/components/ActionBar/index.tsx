@@ -56,23 +56,21 @@ export const ActionBar: FC<ActionBarProps> = () => {
           <Filters showTags={showTags} setShowTags={setShowTags} />
         </Stack>
         {isAdmin && (
-          <Container>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box width="30%">
-                {!collectionPage && (
-                  <Slider
-                    aria-label="Selection"
-                    value={selected.length}
-                    onChange={(e, value) => handleSelectionChange(value as number)}
-                    max={filtered.length}
-                  />
-                )}
-              </Box>
-              <Stack direction="row" justifyContent="flex-end">
-                {showTags && filtersShowing && <TagList clip />}
-              </Stack>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" pl={1} pr={1}>
+            <Box width="30%">
+              {!collectionPage && (
+                <Slider
+                  aria-label="Selection"
+                  value={selected.length}
+                  onChange={(e, value) => handleSelectionChange(value as number)}
+                  max={filtered.length}
+                />
+              )}
+            </Box>
+            <Stack direction="row" justifyContent="flex-end">
+              {showTags && filtersShowing && <TagList clip />}
             </Stack>
-          </Container>
+          </Stack>
         )}
       </Stack>
     </Container>
