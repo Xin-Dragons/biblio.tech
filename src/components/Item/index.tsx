@@ -81,6 +81,7 @@ const statusTitles = {
   frozen: "Frozen",
   listed: "Listed",
   loaned: "Loaned",
+  linked: "Linked",
 }
 
 const tokenStandards = {
@@ -723,7 +724,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain === "solana" && (
+            {item.status !== "loaned" && item.chain === "solana" && isAdmin && (
               <BestLoan item={item} onClose={() => setOpen(false)} />
             )}
           </Stack>
@@ -846,7 +847,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ textAlign: "right" }}>
-                        <Typography>{statusTitles[item.status as keyof object]}</Typography>
+                        <Typography>
+                          {item.status === "linked" ? "Linked to Biblio" : statusTitles[item.status as keyof object]}
+                        </Typography>
                       </TableCell>
                     </TableRow>
                     <TableRow>
@@ -856,7 +859,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ textAlign: "right" }}>
-                        <Typography>{item.delegate ? shorten(item.delegate) : "-"}</Typography>
+                        <Typography>{item.delegate ? <CopyAddress>{item.delegate}</CopyAddress> : "-"}</Typography>
                       </TableCell>
                     </TableRow>
                   </>
@@ -1090,6 +1093,7 @@ export const Item: FC<ItemProps> = ({
     staked: theme.palette.secondary.dark,
     inVault: theme.palette.success.dark,
     frozen: theme.palette.warning.dark,
+    linked: theme.palette.info.dark,
   }
 
   const balance =

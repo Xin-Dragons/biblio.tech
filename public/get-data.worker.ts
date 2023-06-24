@@ -91,14 +91,17 @@ async function getStatus(publicKey: string, publicKeys: string[]) {
     items,
     (item: any) => publicKeys.includes(item.delegate)
   );
-  const [staked, frozen] = partition(locked, (item: any) =>
-    [process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET, process.env.NEXT_PUBLIC_BIBLIO_LOCKING_WALLET].includes(
-      item.delegate
-    )
+  const [linked, rest] = partition(locked, (item: any) => 
+    process.env.NEXT_PUBLIC_BIBLIO_LOCKING_WALLET === item.delegate
+  )
+  const [staked, frozen] = partition(rest, (item: any) =>
+    process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET === item.delegate
   );
+  console.log(linked)
   const statuses = {
     inVault: inVault.map(item => item.mint),
     staked: staked.map(item => item.mint),
+    linked: linked.map(item => item.mint),
     frozen: frozen.map(item => item.mint)
   }
   return items.map(item => {
