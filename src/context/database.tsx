@@ -441,7 +441,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    console.log(workers)
+    console.log("Active workers: ", workers)
   }, [workers])
 
   function syncDataWorker(publicKey: string, mints?: string[], force?: boolean) {
