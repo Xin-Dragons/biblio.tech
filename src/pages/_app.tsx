@@ -29,6 +29,7 @@ import { wagmiConfig } from "../helpers/wagmi"
 import { BriceProvider } from "../context/brice"
 import { AlchemyProvider } from "../context/alchemy"
 import { SortProvider } from "../context/sort"
+import { CitrusProvider } from "../context/citrus"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -70,20 +71,22 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
                                           <TagsProvider>
                                             <ThemeProvider>
                                               <SharkyProvider>
-                                                <TensorProvider>
-                                                  <Script
-                                                    async
-                                                    strategy="afterInteractive"
-                                                    type="module"
-                                                    src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                                  />
-                                                  <CssBaseline />
-                                                  <SelectionProvider>
-                                                    <DialogProvider>
-                                                      <Component {...pageProps} />
-                                                    </DialogProvider>
-                                                  </SelectionProvider>
-                                                </TensorProvider>
+                                                <CitrusProvider>
+                                                  <TensorProvider>
+                                                    <Script
+                                                      async
+                                                      strategy="afterInteractive"
+                                                      type="module"
+                                                      src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                                    />
+                                                    <CssBaseline />
+                                                    <SelectionProvider>
+                                                      <DialogProvider>
+                                                        <Component {...pageProps} />
+                                                      </DialogProvider>
+                                                    </SelectionProvider>
+                                                  </TensorProvider>
+                                                </CitrusProvider>
                                               </SharkyProvider>
                                             </ThemeProvider>
                                           </TagsProvider>

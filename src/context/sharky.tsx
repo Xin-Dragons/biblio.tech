@@ -1,3 +1,4 @@
+import { aprToApy, apyToApr, aprToInterestRatio, interestRatioToApr } from "@sharkyfi/client"
 import { createSharkyClient, createProvider, OrderBook, enabledOrderBooks } from "@sharkyfi/client"
 import * as Sharky from "@sharkyfi/client"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
@@ -20,6 +21,7 @@ type SharkyContextProps = {
   getBestLoan: Function
   takeLoan: Function
   getOrderBook: Function
+  extendLoan: Function
 }
 
 const inital = {
@@ -28,6 +30,7 @@ const inital = {
   getBestLoan: noop,
   takeLoan: noop,
   getOrderBook: noop,
+  extendLoan: noop,
 }
 
 export const SharkyContext = createContext<SharkyContextProps>(inital)
@@ -99,9 +102,46 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     const bestLoan = await orderBook.fetchBestLoan(program)
 
     if (!bestLoan) {
-      throw new Error("Cannot find available loan")
+      return null
     }
-    return bestLoan.offered
+
+    const loan = bestLoan.offered
+
+    const { interestRatio, interestWithFeeLamports, totalOwedLamports, apyAfterFee } = getRates(loan, orderBook)
+
+    return {
+      ...bestLoan.offered,
+      interestRatio,
+      interestWithFeeLamports,
+      totalOwedLamports,
+      apyAfterFee,
+    }
+  }
+
+  function getRates(loan: Sharky.Loan, orderBook: OrderBook) {
+    const apr = orderBook.apy.fixed!.apy / 1000
+
+    const principalLamports = loan.data.principalLamports.toNumber()
+    const feePermillicentage = orderBook.feePermillicentage
+    const durationSeconds =
+      loan.data.loanState.taken?.taken.terms.time?.duration.toNumber() ||
+      loan.data.loanState.offer?.offer.termsSpec.time?.duration.toNumber()
+
+    const interestRatio = aprToInterestRatio(apr, durationSeconds || 0)
+    const interestWithFeeLamports = interestRatio * principalLamports
+    const totalOwedLamports = principalLamports + interestWithFeeLamports
+    const feeLamports = Math.floor((interestWithFeeLamports * feePermillicentage) / 100_000)
+    const interestWithoutFeeLamports = interestWithFeeLamports - feeLamports
+    const interestRatioAfterFee = interestWithoutFeeLamports / principalLamports
+    const aprAfterFee = interestRatioToApr(interestRatioAfterFee, durationSeconds || 0)
+    const apyAfterFee = aprToApy(aprAfterFee).toLocaleString(undefined, { maximumFractionDigits: 2 })
+
+    return {
+      interestRatio,
+      interestWithFeeLamports,
+      totalOwedLamports,
+      apyAfterFee,
+    }
   }
 
   async function getOrderBook(mint: string) {
@@ -124,7 +164,11 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       orderBookPubKey: new PublicKey(orderBookItem.pubkey),
     })
 
-    return orderBook || null
+    if (!orderBook) {
+      return null
+    }
+
+    return orderBook
   }
 
   async function takeLoan(loan: Sharky.OfferedLoan, nftMint: string) {
@@ -206,27 +250,43 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     }
   }
 
-  // async function extendLoan(mint: string) {
-  //   const nft = nfts.find((n) => n.nftMint === mint) as Nft
-  //   const loanPubKey = nft.loan?.loanId
-  //   if (!loanPubKey) {
-  //     throw new Error("No loan foound")
-  //   }
-  //   const loan = await getLoanToRepay(loanPubKey)
+  async function extendLoan(mint: string) {
+    const nft = nfts.find((n) => n.nftMint === mint) as Nft
+    const loanPubKey = nft.loan?.loanId
+    if (!loanPubKey) {
+      throw new Error("No loan foound")
+    }
+    const loan = await getLoanToRepay(loanPubKey)
 
-  //   const { orderBook } = await sharkyClient.fetchOrderBook({
-  //     program,
-  //     orderBookPubKey: loan.data.orderBook,
-  //   })
+    const { orderBook } = await sharkyClient.fetchOrderBook({
+      program,
+      orderBookPubKey: loan.data.orderBook,
+    })
 
-  //   if (!orderBook) {
-  //     throw new Error("Order book not found")
-  //   }
+    if (!orderBook) {
+      throw new Error("Cannot find order book")
+    }
 
-  //   setTransactionInProgress([mint], "extend")
+    const newLoan = await getBestLoan(orderBook)
 
-  //   const { sig } = await loan.extend()
-  // }
+    if (!newLoan) {
+      throw new Error("New loan not found")
+    }
+
+    await loan.extend({
+      program,
+      orderBook,
+      newLoan,
+    })
+
+    setTransactionInProgress([mint], "repay")
+
+    toast.success("Loan extended successfully!")
+    await setTransactionComplete([mint])
+    await sleep(2000)
+    clearTransactions([mint])
+    // await settleLoans([nft])
+  }
 
   async function getRepayLoanInstructions(selected: string[]) {
     const loans = selected.map((nftMint) => {
@@ -264,7 +324,9 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   }
 
   return (
-    <SharkyContext.Provider value={{ repayLoan, getRepayLoanInstructions, getBestLoan, takeLoan, getOrderBook }}>
+    <SharkyContext.Provider
+      value={{ repayLoan, getRepayLoanInstructions, getBestLoan, takeLoan, getOrderBook, extendLoan }}
+    >
       {children}
     </SharkyContext.Provider>
   )

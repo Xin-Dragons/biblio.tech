@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   CircularProgressProps,
+  Container,
   Dialog,
   FormControlLabel,
   IconButton,
@@ -35,7 +36,15 @@ import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
 import { MS_PER_DAY, useDatabase } from "../../context/database"
 import axios from "axios"
-import { ArrowBackIosNew, ArrowForwardIos, Close, LightMode, LocalFireDepartment, Paid } from "@mui/icons-material"
+import {
+  ArrowBackIosNew,
+  ArrowForwardIos,
+  Close,
+  LightMode,
+  LocalFireDepartment,
+  Paid,
+  Sync,
+} from "@mui/icons-material"
 import { useDialog } from "../../context/dialog"
 import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
@@ -47,6 +56,7 @@ import { useMetaplex } from "../../context/metaplex"
 import { PublicKey } from "@metaplex-foundation/js"
 import HowRare from "./howrare.svg"
 import CornerRibbon from "react-corner-ribbon"
+import { Loan as CitrusLoan } from "@famousfoxfederation/citrus-sdk"
 
 import { useAccess } from "../../context/access"
 import { useTransactionStatus } from "../../context/transactions"
@@ -71,6 +81,7 @@ import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
 import Crown from "../Listing/crown.svg"
 import { useSelection } from "../../context/selection"
 import { OfferedLoan, OrderBook } from "@sharkyfi/client"
+import { useCitrus } from "../../context/citrus"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 const SECONDS_PER_DAY = 86_400
@@ -121,12 +132,22 @@ const CircularProgressWithLabel: FC<CircularProgressWithLabelProps> = (props) =>
   )
 }
 
+interface OfferedLoanWithApy extends OfferedLoan {
+  interestRatio?: number
+  interestWithFeeLamports?: number
+  totalOwedLamports?: number
+  apyAfterFee?: number
+}
+
 const Loan: FC<{ loan: Loan }> = ({ loan }) => {
-  const { repayLoan } = useSharky()
+  const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { isAdmin } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
+  const [extendShowing, setExtendShowing] = useState(false)
+  const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
   const { showInfo } = useUiSettings()
+  const [loading, setLoading] = useState(false)
   const theme = useTheme()
 
   function getTimeRemaining() {
@@ -142,6 +163,14 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
   }
 
   useEffect(() => {
+    ;(async () => {
+      const orderBook = await getOrderBook(loan.collateralMint)
+      const bestLoan = await getBestLoan(orderBook)
+      setBestLoan(bestLoan)
+    })()
+  }, [])
+
+  useEffect(() => {
     getTimeRemaining()
     const interval = setInterval(getTimeRemaining, 1000)
     return () => {
@@ -154,14 +183,35 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
     await repayLoan(loan.collateralMint)
   }
 
-  // async function onExtendClick(e: any) {
-  //   e.stopPropagation()
-  //   await extendLoan(loan.collateralMint)
-  // }
+  async function onExtendClick(e: any) {
+    e.stopPropagation()
+    try {
+      setLoading(true)
+      const extendPromise = extendLoan(loan.collateralMint)
+
+      toast.promise(extendPromise, {
+        loading: "Extending loan...",
+        success: "Loan extended",
+        error: "Error extending loan",
+      })
+      await extendPromise
+    } catch (err: any) {
+      toast.error(err.message || "Error extending loan")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (loan.status !== "active") {
     return null
   }
+
+  function toggleExtendShowing(e: any) {
+    e.stopPropagation()
+    setExtendShowing(!extendShowing)
+  }
+
+  const newLoanHigher = loan.amountToRepay < (bestLoan?.data?.principalLamports?.toNumber() || 0)
 
   return (
     <Stack
@@ -197,11 +247,114 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
           <Button onClick={onRepayClick} variant="contained" size="small">
             Repay
           </Button>
-          {/* <Button onClick={onExtendClick} size="small">
+          <Button
+            onClick={toggleExtendShowing}
+            size="small"
+            variant="contained"
+            color={newLoanHigher ? "success" : "warning"}
+          >
             Extend
-          </Button> */}
+          </Button>
         </Stack>
       )}
+      <Dialog open={extendShowing} onClose={toggleExtendShowing} maxWidth="sm" fullWidth>
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="h4" color="primary" textAlign="center" textTransform="uppercase">
+                Extend loan
+              </Typography>
+              <Stack direction="row" spacing={2} width="100%" justifyContent="center">
+                <Stack spacing={2} sx={{ textAlign: "right", color: "#888!important" }} width="50%">
+                  <Typography variant="h6">Current</Typography>
+                  <Stack>
+                    <Typography variant="body2">Principal</Typography>
+                    <Typography variant="h4" fontWeight="normal">
+                      ◎{lamportsToSol(loan.principalAmount)}
+                    </Typography>
+                  </Stack>
+                  <Stack>
+                    <Typography variant="body2">Interest</Typography>
+                    <Typography variant="h4" fontWeight="normal">
+                      ◎{lamportsToSol(loan.amountToRepay - loan.principalAmount)}
+                    </Typography>
+                    <Typography>{loan.apy}%</Typography>
+                  </Stack>
+                  <Stack>
+                    <Typography variant="body2">Remaining time</Typography>
+                    <Typography variant="h4" fontWeight="normal">
+                      <Typography
+                        variant="h6"
+                        color={urgent ? "error" : "inherit"}
+                        fontWeight={urgent ? "bold" : "default"}
+                      >
+                        {timeRemaining}
+                      </Typography>
+                    </Typography>
+                  </Stack>
+                </Stack>
+                <Stack spacing={2} width="50%">
+                  <Typography variant="h6">New loan</Typography>
+                  {bestLoan && (
+                    <>
+                      <Stack>
+                        <Typography variant="body2">Principal</Typography>
+                        <Typography
+                          variant="h4"
+                          fontWeight="normal"
+                          color={newLoanHigher ? "success" : "error"}
+                          sx={newLoanHigher ? { color: "#66bb6a!important" } : {}}
+                        >
+                          ◎{lamportsToSol(bestLoan?.data?.principalLamports)}
+                        </Typography>
+                      </Stack>
+                      <Stack>
+                        <Typography variant="body2">Interest</Typography>
+                        <Typography variant="h4" fontWeight="normal">
+                          ◎{lamportsToSol(bestLoan.interestWithFeeLamports!)}
+                        </Typography>
+                        <Typography>{bestLoan.apyAfterFee}%</Typography>
+                      </Stack>
+                      <Stack>
+                        <Typography variant="body2">New duration</Typography>
+                        <Typography variant="h4" fontWeight="normal">
+                          <Typography variant="h6">
+                            {(bestLoan?.data?.loanState?.offer?.offer?.termsSpec?.time?.duration?.toNumber() || 1) /
+                              SECONDS_PER_DAY}
+                            d
+                          </Typography>
+                        </Typography>
+                      </Stack>
+                    </>
+                  )}
+                </Stack>
+              </Stack>
+              <Typography
+                variant="h5"
+                color={newLoanHigher ? "success" : "error"}
+                textAlign="center"
+                sx={newLoanHigher ? { color: "#66bb6a!important" } : {}}
+              >
+                {newLoanHigher
+                  ? `You will receive ◎${lamportsToSol(
+                      (bestLoan?.data?.principalLamports?.toNumber() || 0) - loan.amountToRepay
+                    )}`
+                  : `You need to pay ◎${lamportsToSol(
+                      loan.amountToRepay - (bestLoan?.data?.principalLamports?.toNumber() || 0)
+                    )} to extend`}
+              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" justifyContent="center">
+                <Button onClick={toggleExtendShowing} color="error" variant="outlined" size="large" disabled={loading}>
+                  Cancel
+                </Button>
+                <Button variant="contained" disabled={loading || !bestLoan} size="large" onClick={onExtendClick}>
+                  Extend
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Dialog>
     </Stack>
   )
 }
@@ -435,15 +588,38 @@ const Listing = ({
 
 const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   const { setLoaned } = useDatabase()
+  const { getBestCitrusLoan, takeCitrusLoan } = useCitrus()
   const [fetchingOrderBook, setFetchingOrderBook] = useState(false)
   const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
-  const [fetching, setFetching] = useState(false)
+  const [sharkyFetching, setSharkyFetching] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [bestLoan, setBestLoan] = useState<OfferedLoan | null>(null)
+  const [bestLoan, setBestLoan] = useState<any | null>(null)
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
   const { takeLoan, getBestLoan, getOrderBook } = useSharky()
+  const [bestCitrusLoan, setBestCitrusLoan] = useState<CitrusLoan | null>(null)
+  const [citrusFetching, setCitrusFetching] = useState(false)
 
-  async function fetchOrderBook() {
+  async function fetchCitrus() {
+    try {
+      setCitrusFetching(true)
+      const bestLoan = await getBestCitrusLoan(item)
+      if (bestLoan) {
+        setBestCitrusLoan(bestLoan)
+      } else {
+        setBestCitrusLoan(null)
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error communicating with Citrus")
+    } finally {
+      setCitrusFetching(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchCitrus()
+  }, [])
+
+  async function fetchSharky() {
     try {
       setFetchingOrderBook(true)
       const orderBook = await getOrderBook(item.nftMint)
@@ -455,11 +631,11 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   }
 
   useEffect(() => {
-    setFetching(fetchingBestLoan || fetchingOrderBook)
+    setSharkyFetching(fetchingBestLoan || fetchingOrderBook)
   }, [fetchingOrderBook, fetchingBestLoan])
 
   useEffect(() => {
-    fetchOrderBook()
+    fetchSharky()
   }, [])
 
   async function updateBestLoan() {
@@ -500,41 +676,90 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
       setLoading(false)
     }
   }
-  const days = orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0
+
+  const onTakeCitrusLoanClick = (loanDetails: any) => async (e: any) => {
+    try {
+      setLoading(true)
+      const takeLoanPromise = takeCitrusLoan(loanDetails, item.nftMint)
+
+      toast.promise(takeLoanPromise, {
+        loading: "Taking loan...",
+        success: "Success",
+        error: "Error taking loan",
+      })
+
+      await takeLoanPromise
+      await setLoaned(item.nftMint)
+    } catch (err: any) {
+      toast.error(err.message || "Error taking loan")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function sync() {
+    fetchSharky()
+    fetchCitrus()
+  }
+
   return (
     <Stack spacing={2} width="100%">
       <Typography variant="h5">Available loans</Typography>
-      {fetching ? (
-        <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-          <Typography>Fetching data...</Typography>
-          <CircularProgress size="20px" />
-        </Stack>
-      ) : orderBook ? (
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Provider</TableCell>
-              <TableCell>Best offer</TableCell>
-              <TableCell>Interest (APR)</TableCell>
-              <TableCell>Duration</TableCell>
-              <TableCell></TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {orderBook && (
-              <TableRow>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ whiteSpace: "nowrap" }}>Provider</TableCell>
+            <TableCell sx={{ whiteSpace: "nowrap" }}>Best offer</TableCell>
+            <TableCell sx={{ whiteSpace: "nowrap" }}>Interest</TableCell>
+            <TableCell sx={{ whiteSpace: "nowrap" }}>Duration</TableCell>
+            <TableCell sx={{ textAlign: "right" }}>
+              <IconButton onClick={sync} disabled={citrusFetching || sharkyFetching}>
+                <Sync />
+              </IconButton>
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          <TableRow>
+            <TableCell>
+              <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
+                <img src="/sharky-long.png" height="40px" />
+              </Link>
+            </TableCell>
+            <TableCell colSpan={sharkyFetching || !orderBook ? 4 : 1}>
+              {sharkyFetching ? (
+                <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+                  <Typography>Fetching data...</Typography>
+                  <CircularProgress size="20px" />
+                </Stack>
+              ) : orderBook ? (
+                <Typography>{bestLoan ? `◎${lamportsToSol(bestLoan.data.principalLamports)}` : "-"}</Typography>
+              ) : (
+                <Typography textAlign="center">No offers found</Typography>
+              )}
+            </TableCell>
+            {orderBook && !sharkyFetching && (
+              <>
                 <TableCell>
-                  <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
-                    <img src="/sharky-long.png" height="40px" />
-                  </Link>
+                  <Stack>
+                    <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
+                      {bestLoan?.apyAfterFee || 0}%
+                    </Typography>
+                    <Typography variant="body2">
+                      ◎
+                      {lamportsToSol(
+                        (((((bestLoan?.data?.principalLamports || 0) / 100) * (orderBook?.apy?.fixed?.apy || 0)) /
+                          1000 /
+                          365) *
+                          (orderBook?.loanTerms?.fixed?.terms.time?.duration?.toNumber() || 0)) /
+                          SECONDS_PER_DAY
+                      )}
+                    </Typography>
+                  </Stack>
                 </TableCell>
                 <TableCell>
-                  <Typography>{bestLoan ? `◎${lamportsToSol(bestLoan.data.principalLamports)}` : "-"}</Typography>
+                  {orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0}d
                 </TableCell>
-                <TableCell>
-                  {((orderBook.apy.fixed?.apy || 0) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
-                </TableCell>
-                <TableCell>{days}d</TableCell>
                 <TableCell>
                   <Tooltip
                     title={
@@ -556,13 +781,66 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                     </span>
                   </Tooltip>
                 </TableCell>
-              </TableRow>
+              </>
             )}
-          </TableBody>
-        </Table>
-      ) : (
-        <Typography>No loans available</Typography>
-      )}
+          </TableRow>
+          <TableRow>
+            <TableCell>
+              <Link href="https://citrus.famousfoxes.com/borrow" target="_blank" rel="noreferrer">
+                <img src="/citrus.webp" height="40px" />
+              </Link>
+            </TableCell>
+            <TableCell colSpan={bestCitrusLoan && !citrusFetching ? 1 : 4}>
+              {citrusFetching ? (
+                <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+                  <Typography>Fetching data...</Typography>
+                  <CircularProgress size="20px" />
+                </Stack>
+              ) : bestCitrusLoan ? (
+                <Typography>{bestCitrusLoan ? `◎${lamportsToSol(bestCitrusLoan.terms.principal)}` : "-"}</Typography>
+              ) : (
+                <Typography textAlign="center">No offers found</Typography>
+              )}
+            </TableCell>
+            {bestCitrusLoan && !citrusFetching && (
+              <>
+                <TableCell>
+                  <Stack>
+                    <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
+                      {((bestCitrusLoan.terms.apy || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
+                    </Typography>
+                    <Typography variant="body2">
+                      ◎{bestCitrusLoan.terms.interest ? lamportsToSol(bestCitrusLoan.terms.interest) : "-"}
+                    </Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell>{bestCitrusLoan.terms.duration / SECONDS_PER_DAY}d</TableCell>
+                <TableCell>
+                  <Tooltip
+                    title={
+                      item.status
+                        ? "Cannot take loan on frozen item"
+                        : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
+                    }
+                    placement="top"
+                  >
+                    <span>
+                      <Button
+                        variant="outlined"
+                        onClick={onTakeCitrusLoanClick(bestCitrusLoan)}
+                        disabled={loading || Boolean(item.status)}
+                        sx={{ whiteSpace: "nowrap" }}
+                      >
+                        <Typography>Take loan</Typography>
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </TableCell>
+              </>
+            )}
+          </TableRow>
+        </TableBody>
+      </Table>
     </Stack>
   )
 }

@@ -76,7 +76,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
   return (
     <Box>
       <Head>
-        <title>BIBLIO | Smart wallet for NFTs</title>
+        <title>BIBLIO | Smart Wallet Manager</title>
         <link rel="preload" href="/Lato-Regular.woff" as="font" crossOrigin="" type="font/woff" />
         <link rel="preload" href="/Lato-Regular.woff2" as="font" crossOrigin="" type="font/woff2" />
         <link rel="preload" href="/Lato-Bold.woff" as="font" crossOrigin="" type="font/woff" />

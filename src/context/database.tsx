@@ -358,7 +358,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       }
     }
     getSharkyOrderBooksWorker()
-  }, [publicKey, publicKeys, router.query.publicKey])
+  }, [publicKey])
 
   function getSharkyOrderBooksWorker() {
     if (isOffline) {
