@@ -254,10 +254,11 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
       ? bestLoan?.data?.principalLamports?.toNumber() || 0
       : citrusBestLoan?.terms.principal || 0)
   const canExtend = loan.market === "Sharky" ? bestLoan : citrusBestLoan
+
   const difference = Math.abs(
-    loan.market === "Sharky"
+    (loan.market === "Sharky"
       ? bestLoan?.data?.principalLamports?.toNumber() || 0
-      : (citrusBestLoan?.terms.principal || 0) - loan.amountToRepay
+      : citrusBestLoan?.terms.principal || 0) - loan.amountToRepay
   )
 
   return (
@@ -1619,7 +1620,7 @@ export const Item: FC<ItemProps> = ({
               overflow: "visible",
               width: "100%",
               padding: "0.5em",
-              background: alpha(theme.palette.background.default, 0.8),
+              background: !item.loan ? alpha(theme.palette.background.default, 0.8) : "transparent",
               opacity: infoShowing || (layoutSize === "collage" && isSelected) ? 1 : 0,
               transition: infoShowing ? "none" : "opacity 0.2s",
               borderTopLeftRadius: "4px",

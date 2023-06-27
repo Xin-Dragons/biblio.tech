@@ -5,7 +5,7 @@ import { useUiSettings } from "./ui-settings"
 import { useFilters } from "./filters"
 import { useRouter } from "next/router"
 import { useAccess } from "./access"
-import { sortBy } from "lodash"
+import { orderBy, sortBy } from "lodash"
 import { base58PublicKey } from "@metaplex-foundation/umi"
 import { Nft, Rarity } from "../db"
 
@@ -298,20 +298,24 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   }
 
   if (sort === "outstanding") {
-    filtered = sortBy(filtered, (item) => item.loan?.amountToRepay || 0).reverse()
+    filtered = orderBy(filtered, (item) => item.loan?.amountToRepay || 0, "desc")
   }
 
   if (sort === "value") {
-    filtered = sortBy(filtered, (item) => {
-      const balance =
-        (isAdmin && showAllWallets
-          ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
-          : item.balance?.[publicKey as keyof object]) || 0
+    filtered = orderBy(
+      filtered,
+      (item) => {
+        const balance =
+          (isAdmin && showAllWallets
+            ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
+            : item.balance?.[publicKey as keyof object]) || 0
 
-      const price = item.price || 0
-      const value = price * balance
-      return value || 0
-    }).reverse()
+        const price = item.price || 0
+        const value = price * balance
+        return value || 0
+      },
+      "desc"
+    )
   }
 
   if (sort === "expiring") {
