@@ -140,7 +140,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
   apyAfterFee?: number
 }
 
-const Loan: FC<{ loan: Loan }> = ({ loan }) => {
+const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean }> = ({ loan, isTouchDevice }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
   const { isAdmin } = useAccess()
@@ -270,8 +270,7 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
         right: 0,
         bottom: 0,
         background: alpha(theme.palette.background.default, 0.8),
-        borderRadius: "4px",
-        opacity: urgent ? 1 : 0,
+        opacity: urgent || isTouchDevice ? 1 : 0,
         transition: "opacity 0.2s",
         zIndex: 1000,
       }}
@@ -295,20 +294,19 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
           <Button onClick={onRepayClick} variant="contained" size="small">
             Repay
           </Button>
-          {canExtend && (
-            <Button
-              onClick={toggleExtendShowing}
-              size="small"
-              variant="contained"
-              color={newLoanHigher ? "success" : "warning"}
-            >
-              Extend
-            </Button>
-          )}
+          <Button
+            onClick={toggleExtendShowing}
+            size="small"
+            variant="contained"
+            color={newLoanHigher ? "success" : "warning"}
+            disabled={!canExtend}
+          >
+            Extend
+          </Button>
         </Stack>
       )}
       <Dialog open={extendShowing} onClose={toggleExtendShowing} maxWidth="sm" fullWidth>
-        <Card>
+        <Card sx={{ overflowY: "auto" }}>
           <CardContent>
             <Stack spacing={2}>
               <Typography variant="h4" color="primary" textAlign="center" textTransform="uppercase">
@@ -1632,8 +1630,6 @@ export const Item: FC<ItemProps> = ({
               background: !item.loan ? alpha(theme.palette.background.default, 0.8) : "transparent",
               opacity: infoShowing || (layoutSize === "collage" && isSelected) ? 1 : 0,
               transition: infoShowing ? "none" : "opacity 0.2s",
-              borderTopLeftRadius: "4px",
-              borderTopRightRadius: "4px",
               "&:hover": {
                 ".plus-minus.MuiSvgIcon-root": {
                   color: alpha(theme.palette.text.disabled, 0.7),
@@ -1832,7 +1828,7 @@ export const Item: FC<ItemProps> = ({
                   </Box>
                 </Tooltip>
               )}
-            {item.loan && <Loan loan={item.loan} />}
+            {item.loan && <Loan loan={item.loan} isTouchDevice={isTouchDevice} />}
           </Box>
         ) : (
           <Box
@@ -1872,7 +1868,7 @@ export const Item: FC<ItemProps> = ({
                 )}
               </Typography>
             </Tooltip>
-            {itemRarity && layoutSize !== "small" && (
+            {itemRarity && layoutSize !== "small" && (!item.loan || !isTouchDevice) && (
               <Stack
                 sx={{
                   position: "absolute",

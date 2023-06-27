@@ -27,6 +27,7 @@ export const ActionBar: FC<ActionBarProps> = () => {
   const { filtered } = useNfts()
   const wallet = useWallet()
   const router = useRouter()
+  const showMinMenu = useMediaQuery("(max-width:1050px)")
 
   const collectionPage = !router.query.tag && !router.query.filter && !router.query.collectionId
 
@@ -58,7 +59,7 @@ export const ActionBar: FC<ActionBarProps> = () => {
         {isAdmin && (
           <Stack direction="row" justifyContent="space-between" alignItems="center" pl={1} pr={1}>
             <Box width="30%">
-              {!collectionPage && (
+              {!collectionPage && !showMinMenu && (
                 <Slider
                   aria-label="Selection"
                   value={selected.length}
