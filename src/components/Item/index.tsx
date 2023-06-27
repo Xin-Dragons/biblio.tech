@@ -672,7 +672,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
   const [sharkyFetching, setSharkyFetching] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [bestLoan, setBestLoan] = useState<any | null>(null)
+  const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
   const { takeLoan, getBestLoan, getOrderBook } = useSharky()
   const [bestCitrusLoan, setBestCitrusLoan] = useState<CitrusLoan | null>(null)
@@ -783,6 +783,175 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
     fetchCitrus()
   }
 
+  const sharky = (
+    <TableRow
+      sx={
+        isSmall
+          ? {
+              display: "flex",
+              flexDirection: "column",
+              td: {
+                textAlign: "right",
+                display: "flex",
+                justifyContent: "space-between",
+              },
+              "td[data-th]": {
+                border: 0,
+                "&:before": {
+                  content: "attr(data-th)",
+                  fontWeight: "bold",
+                },
+              },
+            }
+          : {}
+      }
+    >
+      <TableCell data-th="Provider">
+        <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
+          <img src="/sharky-long.png" height="40px" />
+        </Link>
+      </TableCell>
+      <TableCell colSpan={sharkyFetching || !orderBook ? 4 : 1} data-th="Best offer">
+        {sharkyFetching ? (
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+            <Typography>Fetching data...</Typography>
+            <CircularProgress size="20px" />
+          </Stack>
+        ) : orderBook ? (
+          <Typography>{bestLoan ? `◎${lamportsToSol(bestLoan.data.principalLamports)}` : "-"}</Typography>
+        ) : (
+          <Typography textAlign="center">No offers found</Typography>
+        )}
+      </TableCell>
+      {orderBook && !sharkyFetching && (
+        <>
+          <TableCell data-th="Interest">
+            <Stack>
+              <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
+                {bestLoan?.apyAfterFee || 0}%
+              </Typography>
+              <Typography variant="body2">
+                ◎
+                {lamportsToSol(
+                  (((((bestLoan?.data?.principalLamports.toNumber() || 0) / 100) * (orderBook?.apy?.fixed?.apy || 0)) /
+                    1000 /
+                    365) *
+                    (orderBook?.loanTerms?.fixed?.terms.time?.duration?.toNumber() || 0)) /
+                    SECONDS_PER_DAY
+                )}
+              </Typography>
+            </Stack>
+          </TableCell>
+          <TableCell data-th="Duration">
+            {orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0}d
+          </TableCell>
+          <TableCell>
+            <Tooltip
+              title={
+                item.status
+                  ? "Cannot take loan on frozen item"
+                  : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
+              }
+              placement="top"
+            >
+              <span style={{ width: "100%" }}>
+                <Button
+                  variant="outlined"
+                  onClick={onTakeLoanClick}
+                  disabled={loading || Boolean(item.status)}
+                  sx={{ whiteSpace: "nowrap" }}
+                  fullWidth
+                >
+                  <Typography>Take loan</Typography>
+                </Button>
+              </span>
+            </Tooltip>
+          </TableCell>
+        </>
+      )}
+    </TableRow>
+  )
+
+  const citrus = (
+    <TableRow
+      sx={
+        isSmall
+          ? {
+              display: "flex",
+              flexDirection: "column",
+              td: {
+                textAlign: "right",
+                display: "flex",
+                justifyContent: "space-between",
+              },
+              "td[data-th]": {
+                border: 0,
+                "&:before": {
+                  content: "attr(data-th)",
+                  fontWeight: "bold",
+                },
+              },
+            }
+          : {}
+      }
+    >
+      <TableCell data-th="Provider">
+        <Link href="https://citrus.famousfoxes.com/borrow" target="_blank" rel="noreferrer">
+          <img src="/citrus.webp" height="40px" />
+        </Link>
+      </TableCell>
+      <TableCell colSpan={bestCitrusLoan && !citrusFetching ? 1 : 4} data-th="Best offer">
+        {citrusFetching ? (
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+            <Typography>Fetching data...</Typography>
+            <CircularProgress size="20px" />
+          </Stack>
+        ) : bestCitrusLoan ? (
+          <Typography>{bestCitrusLoan ? `◎${lamportsToSol(bestCitrusLoan.terms.principal)}` : "-"}</Typography>
+        ) : (
+          <Typography textAlign="center">No offers found</Typography>
+        )}
+      </TableCell>
+      {bestCitrusLoan && !citrusFetching && (
+        <>
+          <TableCell data-th="Interest">
+            <Stack>
+              <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
+                {((bestCitrusLoan.terms.apy || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
+              </Typography>
+              <Typography variant="body2">
+                ◎{bestCitrusLoan.terms.interest ? lamportsToSol(bestCitrusLoan.terms.interest) : "-"}
+              </Typography>
+            </Stack>
+          </TableCell>
+          <TableCell data-th="Duration">{bestCitrusLoan.terms.duration / SECONDS_PER_DAY}d</TableCell>
+          <TableCell>
+            <Tooltip
+              title={
+                item.status
+                  ? "Cannot take loan on frozen item"
+                  : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
+              }
+              placement="top"
+            >
+              <span style={{ width: "100%" }}>
+                <Button
+                  variant="outlined"
+                  onClick={onTakeCitrusLoanClick(bestCitrusLoan)}
+                  disabled={loading || Boolean(item.status)}
+                  sx={{ whiteSpace: "nowrap" }}
+                  fullWidth
+                >
+                  <Typography>Take loan</Typography>
+                </Button>
+              </span>
+            </Tooltip>
+          </TableCell>
+        </>
+      )}
+    </TableRow>
+  )
+
   return (
     <Stack spacing={2} width="100%">
       <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -810,169 +979,9 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
           </TableHead>
         )}
         <TableBody>
-          <TableRow
-            sx={
-              isSmall
-                ? {
-                    display: "flex",
-                    flexDirection: "column",
-                    td: {
-                      textAlign: "right",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    },
-                    "td[data-th]": {
-                      border: 0,
-                      "&:before": {
-                        content: "attr(data-th)",
-                        fontWeight: "bold",
-                      },
-                    },
-                  }
-                : {}
-            }
-          >
-            <TableCell data-th="Provider">
-              <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
-                <img src="/sharky-long.png" height="40px" />
-              </Link>
-            </TableCell>
-            <TableCell colSpan={sharkyFetching || !orderBook ? 4 : 1} data-th="Best offer">
-              {sharkyFetching ? (
-                <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-                  <Typography>Fetching data...</Typography>
-                  <CircularProgress size="20px" />
-                </Stack>
-              ) : orderBook ? (
-                <Typography>{bestLoan ? `◎${lamportsToSol(bestLoan.data.principalLamports)}` : "-"}</Typography>
-              ) : (
-                <Typography textAlign="center">No offers found</Typography>
-              )}
-            </TableCell>
-            {orderBook && !sharkyFetching && (
-              <>
-                <TableCell data-th="Interest">
-                  <Stack>
-                    <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
-                      {bestLoan?.apyAfterFee || 0}%
-                    </Typography>
-                    <Typography variant="body2">
-                      ◎
-                      {lamportsToSol(
-                        (((((bestLoan?.data?.principalLamports || 0) / 100) * (orderBook?.apy?.fixed?.apy || 0)) /
-                          1000 /
-                          365) *
-                          (orderBook?.loanTerms?.fixed?.terms.time?.duration?.toNumber() || 0)) /
-                          SECONDS_PER_DAY
-                      )}
-                    </Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell data-th="Duration">
-                  {orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0}d
-                </TableCell>
-                <TableCell>
-                  <Tooltip
-                    title={
-                      item.status
-                        ? "Cannot take loan on frozen item"
-                        : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
-                    }
-                    placement="top"
-                  >
-                    <span style={{ width: "100%" }}>
-                      <Button
-                        variant="outlined"
-                        onClick={onTakeLoanClick}
-                        disabled={loading || Boolean(item.status)}
-                        sx={{ whiteSpace: "nowrap" }}
-                        fullWidth
-                      >
-                        <Typography>Take loan</Typography>
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </TableCell>
-              </>
-            )}
-          </TableRow>
-          <TableRow
-            sx={
-              isSmall
-                ? {
-                    display: "flex",
-                    flexDirection: "column",
-                    td: {
-                      textAlign: "right",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    },
-                    "td[data-th]": {
-                      border: 0,
-                      "&:before": {
-                        content: "attr(data-th)",
-                        fontWeight: "bold",
-                      },
-                    },
-                  }
-                : {}
-            }
-          >
-            <TableCell data-th="Provider">
-              <Link href="https://citrus.famousfoxes.com/borrow" target="_blank" rel="noreferrer">
-                <img src="/citrus.webp" height="40px" />
-              </Link>
-            </TableCell>
-            <TableCell colSpan={bestCitrusLoan && !citrusFetching ? 1 : 4} data-th="Best offer">
-              {citrusFetching ? (
-                <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-                  <Typography>Fetching data...</Typography>
-                  <CircularProgress size="20px" />
-                </Stack>
-              ) : bestCitrusLoan ? (
-                <Typography>{bestCitrusLoan ? `◎${lamportsToSol(bestCitrusLoan.terms.principal)}` : "-"}</Typography>
-              ) : (
-                <Typography textAlign="center">No offers found</Typography>
-              )}
-            </TableCell>
-            {bestCitrusLoan && !citrusFetching && (
-              <>
-                <TableCell data-th="Interest">
-                  <Stack>
-                    <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
-                      {((bestCitrusLoan.terms.apy || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
-                    </Typography>
-                    <Typography variant="body2">
-                      ◎{bestCitrusLoan.terms.interest ? lamportsToSol(bestCitrusLoan.terms.interest) : "-"}
-                    </Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell data-th="Duration">{bestCitrusLoan.terms.duration / SECONDS_PER_DAY}d</TableCell>
-                <TableCell>
-                  <Tooltip
-                    title={
-                      item.status
-                        ? "Cannot take loan on frozen item"
-                        : "By taking this loan you agree to the terms set out by the supplier. Biblio and Dandies have no affiliation with any providers or their terms."
-                    }
-                    placement="top"
-                  >
-                    <span style={{ width: "100%" }}>
-                      <Button
-                        variant="outlined"
-                        onClick={onTakeCitrusLoanClick(bestCitrusLoan)}
-                        disabled={loading || Boolean(item.status)}
-                        sx={{ whiteSpace: "nowrap" }}
-                        fullWidth
-                      >
-                        <Typography>Take loan</Typography>
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </TableCell>
-              </>
-            )}
-          </TableRow>
+          {(bestCitrusLoan?.terms.principal || 0) > (bestLoan?.data.principalLamports.toNumber() || 0)
+            ? [citrus, sharky]
+            : [sharky, citrus]}
         </TableBody>
       </Table>
     </Stack>
