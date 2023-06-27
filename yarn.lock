@@ -3265,9 +3265,9 @@
     buffer "^6.0.3"
 
 "@metaplex-foundation/umi@^0.7.7":
-  version "0.7.10"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi/-/umi-0.7.10.tgz#d223f64d0b87123ab92f3c6e6a4263bc54c77dff"
-  integrity sha512-RrYRZc0ApAeOccILoiUCJZuOKQAnV9VuWXmt6g/FAakmQNeVn1XmxW4EiL2SYnKN+xiakRVXb1LiRflTLS6RLA==
+  version "0.7.14"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi/-/umi-0.7.14.tgz#e54f4c0420d752e46253b83aec6322fb6d9e4b63"
+  integrity sha512-rzq2OMGiWe1dsKZjxQYVSzWGh86QNT4cryXqv45gQhkaO0i7gLXjlvS09pqvI/3SuC5EHL799bo5XGJRmdYfMQ==
 
 "@motionone/animation@^10.15.1":
   version "10.15.1"

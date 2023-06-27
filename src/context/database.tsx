@@ -152,7 +152,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   // }, [user])
 
   async function addCollectionsToDb(collections: any[]) {
-    db.transaction("rw", db.collections, async () => {
+    await db.transaction("rw", db.collections, async () => {
       const fromDb = await db.collections.toArray()
 
       const [toAdd, toUpdate] = partition(collections, (collection) => {
@@ -194,8 +194,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function addNftsToDb(nfts: Nft[], publicKey: string, remove?: boolean) {
-    db.transaction("rw", db.nfts, async () => {
+    console.log("ading nfts to db")
+    await db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
+      console.log(fromDb)
 
       if (remove) {
         const toRemove = fromDb.filter(
@@ -231,6 +233,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
           const changes = {
             ...n,
             balance: balance instanceof Number ? n.balance : merge(balance, n.balance || {}),
+            publicKey: null,
           }
 
           return {
