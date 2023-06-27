@@ -25,6 +25,7 @@ import {
   Tooltip,
   Typography,
   alpha,
+  useMediaQuery,
 } from "@mui/material"
 import { default as NextLink } from "next/link"
 import { findKey, isEmpty, uniq } from "lodash"
@@ -715,6 +716,8 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
     fetchSharky()
   }, [])
 
+  const isSmall = useMediaQuery("(max-width: 580px)")
+
   async function updateBestLoan() {
     if (orderBook) {
       try {
@@ -781,29 +784,59 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
 
   return (
     <Stack spacing={2} width="100%">
-      <Typography variant="h5">Available loans</Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="h5">Available loans</Typography>
+        {isSmall && (
+          <IconButton onClick={sync} disabled={citrusFetching || sharkyFetching}>
+            <Sync />
+          </IconButton>
+        )}
+      </Stack>
       <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ whiteSpace: "nowrap" }}>Provider</TableCell>
-            <TableCell sx={{ whiteSpace: "nowrap" }}>Best offer</TableCell>
-            <TableCell sx={{ whiteSpace: "nowrap" }}>Interest</TableCell>
-            <TableCell sx={{ whiteSpace: "nowrap" }}>Duration</TableCell>
-            <TableCell sx={{ textAlign: "right" }}>
-              <IconButton onClick={sync} disabled={citrusFetching || sharkyFetching}>
-                <Sync />
-              </IconButton>
-            </TableCell>
-          </TableRow>
-        </TableHead>
+        {!isSmall && (
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>Provider</TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>Best offer</TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>Interest</TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>Duration</TableCell>
+              <TableCell sx={{ textAlign: "right" }}>
+                <IconButton onClick={sync} disabled={citrusFetching || sharkyFetching}>
+                  <Sync />
+                </IconButton>
+              </TableCell>
+            </TableRow>
+          </TableHead>
+        )}
         <TableBody>
-          <TableRow>
-            <TableCell>
+          <TableRow
+            sx={
+              isSmall
+                ? {
+                    display: "flex",
+                    flexDirection: "column",
+                    td: {
+                      textAlign: "right",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    },
+                    "td[data-th]": {
+                      border: 0,
+                      "&:before": {
+                        content: "attr(data-th)",
+                        fontWeight: "bold",
+                      },
+                    },
+                  }
+                : {}
+            }
+          >
+            <TableCell data-th="Provider">
               <Link href="https://sharky.fi/borrow" target="_blank" rel="noreferrer">
                 <img src="/sharky-long.png" height="40px" />
               </Link>
             </TableCell>
-            <TableCell colSpan={sharkyFetching || !orderBook ? 4 : 1}>
+            <TableCell colSpan={sharkyFetching || !orderBook ? 4 : 1} data-th="Best offer">
               {sharkyFetching ? (
                 <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
                   <Typography>Fetching data...</Typography>
@@ -817,7 +850,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
             </TableCell>
             {orderBook && !sharkyFetching && (
               <>
-                <TableCell>
+                <TableCell data-th="Interest">
                   <Stack>
                     <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
                       {bestLoan?.apyAfterFee || 0}%
@@ -834,7 +867,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                     </Typography>
                   </Stack>
                 </TableCell>
-                <TableCell>
+                <TableCell data-th="Duration">
                   {orderBook ? (orderBook.loanTerms.fixed?.terms.time?.duration.toNumber() || 0) / SECONDS_PER_DAY : 0}d
                 </TableCell>
                 <TableCell>
@@ -846,12 +879,13 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                     }
                     placement="top"
                   >
-                    <span>
+                    <span style={{ width: "100%" }}>
                       <Button
                         variant="outlined"
                         onClick={onTakeLoanClick}
                         disabled={loading || Boolean(item.status)}
                         sx={{ whiteSpace: "nowrap" }}
+                        fullWidth
                       >
                         <Typography>Take loan</Typography>
                       </Button>
@@ -861,13 +895,34 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
               </>
             )}
           </TableRow>
-          <TableRow>
-            <TableCell>
+          <TableRow
+            sx={
+              isSmall
+                ? {
+                    display: "flex",
+                    flexDirection: "column",
+                    td: {
+                      textAlign: "right",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    },
+                    "td[data-th]": {
+                      border: 0,
+                      "&:before": {
+                        content: "attr(data-th)",
+                        fontWeight: "bold",
+                      },
+                    },
+                  }
+                : {}
+            }
+          >
+            <TableCell data-th="Provider">
               <Link href="https://citrus.famousfoxes.com/borrow" target="_blank" rel="noreferrer">
                 <img src="/citrus.webp" height="40px" />
               </Link>
             </TableCell>
-            <TableCell colSpan={bestCitrusLoan && !citrusFetching ? 1 : 4}>
+            <TableCell colSpan={bestCitrusLoan && !citrusFetching ? 1 : 4} data-th="Best offer">
               {citrusFetching ? (
                 <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
                   <Typography>Fetching data...</Typography>
@@ -881,7 +936,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
             </TableCell>
             {bestCitrusLoan && !citrusFetching && (
               <>
-                <TableCell>
+                <TableCell data-th="Interest">
                   <Stack>
                     <Typography sx={{ whiteSpace: "nowrap" }} variant="body2">
                       {((bestCitrusLoan.terms.apy || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}%
@@ -891,7 +946,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                     </Typography>
                   </Stack>
                 </TableCell>
-                <TableCell>{bestCitrusLoan.terms.duration / SECONDS_PER_DAY}d</TableCell>
+                <TableCell data-th="Duration">{bestCitrusLoan.terms.duration / SECONDS_PER_DAY}d</TableCell>
                 <TableCell>
                   <Tooltip
                     title={
@@ -901,12 +956,13 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                     }
                     placement="top"
                   >
-                    <span>
+                    <span style={{ width: "100%" }}>
                       <Button
                         variant="outlined"
                         onClick={onTakeCitrusLoanClick(bestCitrusLoan)}
                         disabled={loading || Boolean(item.status)}
                         sx={{ whiteSpace: "nowrap" }}
+                        fullWidth
                       >
                         <Typography>Take loan</Typography>
                       </Button>
