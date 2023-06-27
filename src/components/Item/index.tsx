@@ -141,6 +141,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
 
 const Loan: FC<{ loan: Loan }> = ({ loan }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
+  const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
   const { isAdmin } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
@@ -148,6 +149,7 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
   const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
   const { showInfo } = useUiSettings()
   const [loading, setLoading] = useState(false)
+  const [citrusBestLoan, setCitrusBestLoan] = useState<CitrusLoan | null>(null)
   const theme = useTheme()
 
   function getTimeRemaining() {
@@ -164,9 +166,14 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
 
   useEffect(() => {
     ;(async () => {
-      const orderBook = await getOrderBook(loan.collateralMint)
-      const bestLoan = await getBestLoan(orderBook)
-      setBestLoan(bestLoan)
+      if (loan.market === "Sharky") {
+        const orderBook = await getOrderBook(loan.collateralMint)
+        const bestLoan = await getBestLoan(orderBook)
+        setBestLoan(bestLoan)
+      } else if (loan.market === "Citrus") {
+        const bestCitrusLoan = await getBestCitrusLoanFromLoan(loan.loanId)
+        setCitrusBestLoan(bestCitrusLoan)
+      }
     })()
   }, [])
 
@@ -180,14 +187,43 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
 
   async function onRepayClick(e: any) {
     e.stopPropagation()
-    await repayLoan(loan.collateralMint)
+    try {
+      setLoading(true)
+      let repayPromise
+      if (loan.market === "Sharky") {
+        repayPromise = repayLoan(loan.collateralMint)
+      } else if (loan.market === "Citrus") {
+        repayPromise = repayCitrusLoan(loan.loanId)
+      } else {
+        throw new Error("Unsupported supplier")
+      }
+
+      toast.promise(repayPromise, {
+        loading: "Repaying loan...",
+        success: "Loan repaid",
+        error: "Error repaying loan",
+      })
+
+      await repayPromise
+    } catch (err: any) {
+      toast.error(err.message || "Error repaying loan")
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function onExtendClick(e: any) {
     e.stopPropagation()
     try {
       setLoading(true)
-      const extendPromise = extendLoan(loan.collateralMint)
+      let extendPromise
+      if (loan.market === "Sharky") {
+        extendPromise = extendLoan(loan.collateralMint)
+      } else if (loan.market === "Citrus") {
+        extendPromise = extendCitrusLoan(loan.loanId)
+      } else {
+        throw new Error("Supplier not supported")
+      }
 
       toast.promise(extendPromise, {
         loading: "Extending loan...",
@@ -211,7 +247,17 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
     setExtendShowing(!extendShowing)
   }
 
-  const newLoanHigher = loan.amountToRepay < (bestLoan?.data?.principalLamports?.toNumber() || 0)
+  const newLoanHigher =
+    loan.amountToRepay <
+    (loan.market === "Sharky"
+      ? bestLoan?.data?.principalLamports?.toNumber() || 0
+      : citrusBestLoan?.terms.principal || 0)
+  const canExtend = loan.market === "Sharky" ? bestLoan : citrusBestLoan
+  const difference = Math.abs(
+    loan.market === "Sharky"
+      ? bestLoan?.data?.principalLamports?.toNumber() || 0
+      : (citrusBestLoan?.terms.principal || 0) - loan.amountToRepay
+  )
 
   return (
     <Stack
@@ -242,19 +288,21 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
           {timeRemaining}
         </Typography>
       </Stack>
-      {loan.market === "Sharky" && isAdmin && (
+      {["Sharky", "Citrus"].includes(loan.market) && isAdmin && (
         <Stack direction="row" spacing={1}>
           <Button onClick={onRepayClick} variant="contained" size="small">
             Repay
           </Button>
-          <Button
-            onClick={toggleExtendShowing}
-            size="small"
-            variant="contained"
-            color={newLoanHigher ? "success" : "warning"}
-          >
-            Extend
-          </Button>
+          {canExtend && (
+            <Button
+              onClick={toggleExtendShowing}
+              size="small"
+              variant="contained"
+              color={newLoanHigher ? "success" : "warning"}
+            >
+              Extend
+            </Button>
+          )}
         </Stack>
       )}
       <Dialog open={extendShowing} onClose={toggleExtendShowing} maxWidth="sm" fullWidth>
@@ -327,6 +375,34 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
                       </Stack>
                     </>
                   )}
+                  {citrusBestLoan && (
+                    <>
+                      <Stack>
+                        <Typography variant="body2">Principal</Typography>
+                        <Typography
+                          variant="h4"
+                          fontWeight="normal"
+                          color={newLoanHigher ? "success" : "error"}
+                          sx={newLoanHigher ? { color: "#66bb6a!important" } : {}}
+                        >
+                          ◎{lamportsToSol(citrusBestLoan.terms.principal)}
+                        </Typography>
+                      </Stack>
+                      <Stack>
+                        <Typography variant="body2">Interest</Typography>
+                        <Typography variant="h4" fontWeight="normal">
+                          ◎{lamportsToSol(citrusBestLoan.terms.interest || 0)}
+                        </Typography>
+                        <Typography>{citrusBestLoan.terms.apy / 100}%</Typography>
+                      </Stack>
+                      <Stack>
+                        <Typography variant="body2">New duration</Typography>
+                        <Typography variant="h4" fontWeight="normal">
+                          <Typography variant="h6">{citrusBestLoan.terms.duration / SECONDS_PER_DAY}d</Typography>
+                        </Typography>
+                      </Stack>
+                    </>
+                  )}
                 </Stack>
               </Stack>
               <Typography
@@ -336,18 +412,19 @@ const Loan: FC<{ loan: Loan }> = ({ loan }) => {
                 sx={newLoanHigher ? { color: "#66bb6a!important" } : {}}
               >
                 {newLoanHigher
-                  ? `You will receive ◎${lamportsToSol(
-                      (bestLoan?.data?.principalLamports?.toNumber() || 0) - loan.amountToRepay
-                    )}`
-                  : `You need to pay ◎${lamportsToSol(
-                      loan.amountToRepay - (bestLoan?.data?.principalLamports?.toNumber() || 0)
-                    )} to extend`}
+                  ? `You will receive ◎${lamportsToSol(difference)}`
+                  : `You need to pay ◎${lamportsToSol(difference)} to extend`}
               </Typography>
               <Stack direction="row" spacing={2} alignItems="center" justifyContent="center">
                 <Button onClick={toggleExtendShowing} color="error" variant="outlined" size="large" disabled={loading}>
                   Cancel
                 </Button>
-                <Button variant="contained" disabled={loading || !bestLoan} size="large" onClick={onExtendClick}>
+                <Button
+                  variant="contained"
+                  disabled={loading || (!bestLoan && !citrusBestLoan)}
+                  size="large"
+                  onClick={onExtendClick}
+                >
                   Extend
                 </Button>
               </Stack>
