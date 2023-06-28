@@ -152,6 +152,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
   const { showInfo } = useUiSettings()
   const [loading, setLoading] = useState(false)
   const [citrusBestLoan, setCitrusBestLoan] = useState<CitrusLoan | null>(null)
+  const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
   const theme = useTheme()
 
   function getTimeRemaining() {
@@ -171,13 +172,19 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
       return
     }
     ;(async () => {
-      if (loan.market === "Sharky") {
-        const orderBook = await getOrderBook(loan.collateralMint)
-        const bestLoan = await getBestLoan(orderBook)
-        setBestLoan(bestLoan)
-      } else if (loan.market === "Citrus") {
-        const bestCitrusLoan = await getBestCitrusLoanFromLoan(loan.loanId)
-        setCitrusBestLoan(bestCitrusLoan)
+      try {
+        setFetchingBestLoan(true)
+        if (loan.market === "Sharky") {
+          const orderBook = await getOrderBook(loan.collateralMint)
+          const bestLoan = await getBestLoan(orderBook)
+          setBestLoan(bestLoan)
+        } else if (loan.market === "Citrus") {
+          const bestCitrusLoan = await getBestCitrusLoanFromLoan(loan.loanId)
+          setCitrusBestLoan(bestCitrusLoan)
+        }
+      } catch {
+      } finally {
+        setFetchingBestLoan(false)
       }
     })()
   }, [])
@@ -303,9 +310,9 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
             size="small"
             variant="contained"
             color={newLoanHigher ? "success" : "warning"}
-            disabled={!canExtend}
+            disabled={fetchingBestLoan || !canExtend}
           >
-            Extend
+            {fetchingBestLoan ? "Loading" : bestLoan || citrusBestLoan ? "Extend" : "Unavailable"}
           </Button>
         </Stack>
       )}
