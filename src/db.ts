@@ -85,6 +85,7 @@ export interface Loan {
   extendBlocktime: number | null
   helloMoonCollectionId: string
   lender: string
+  borrower: string
   liquidateBlocktime: number | null
   loanDurationSeconds: number | null
   loanId: string

@@ -79,15 +79,14 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       const query =
         showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
-        return query
-          .filter((item) =>
-            Boolean(
-              item.loan &&
-                item.loan.status === "active" &&
-                (loanType === "borrowed" ? item.status === "loan-taken" : item.status === "loan-given")
-            )
-          )
-          .toArray()
+        if (loanType === "borrowed") {
+          return query
+            .filter((item) => Boolean(item.loan && item.loan.status === "active" && item.status === "loan-taken"))
+            .toArray()
+        } else {
+          const pks = showAllWallets && isAdmin ? publicKeys : [publicKey]
+          return db.nfts.filter((item) => pks.includes(item.loan?.lender!)).toArray()
+        }
       }
       if (router.query.filter === "sfts") {
         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()

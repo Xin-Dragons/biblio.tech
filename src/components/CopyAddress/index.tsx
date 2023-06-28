@@ -1,17 +1,20 @@
 import { Link, Stack, Tooltip, Typography } from "@mui/material"
 import { FC, useEffect, useState } from "react"
+import { default as NextLink } from "next/link"
 
 import ContentCopyIcon from "@mui/icons-material/ContentCopy"
 import DoneIcon from "@mui/icons-material/Done"
 import { shorten } from "../../helpers/utils"
 import { useUiSettings } from "../../context/ui-settings"
+import { useBasePath } from "../../context/base-path"
 
 type CopyAddressProps = {
   children: any
   chain?: string
+  wallet?: Boolean
 }
 
-export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana" }) => {
+export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", wallet }) => {
   const [copied, setCopied] = useState(false)
   const { lightMode } = useUiSettings()
 
@@ -50,6 +53,8 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana" }
     },
   }
 
+  const basePath = useBasePath()
+
   const target = targets[chain as keyof object] as any
 
   return (
@@ -59,7 +64,14 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana" }
           <img src={target.image} width="15px" style={{ display: "block" }} />
         </Link>
       </Tooltip>
-      <Typography>{shorten(children)}</Typography>
+      {wallet ? (
+        <NextLink href={`${basePath}/wallet/${children}`} passHref>
+          <Link underline="hover">{shorten(children)}</Link>
+        </NextLink>
+      ) : (
+        <Typography>{shorten(children)}</Typography>
+      )}
+
       {copied ? (
         <DoneIcon fontSize="small" color="success" />
       ) : (

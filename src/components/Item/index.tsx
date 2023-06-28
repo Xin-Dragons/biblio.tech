@@ -1178,7 +1178,22 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-
+                {item.loan && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        {item.status === "loan-taken" ? "Lender" : "Borrower"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>
+                        <CopyAddress wallet>
+                          {item.status === "loan-taken" ? item.loan.lender : item.loan.borrower}
+                        </CopyAddress>
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
                 {["eth", "matic"].includes(item.chain!) && (
                   <TableRow>
                     <TableCell>
@@ -1208,6 +1223,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
+
                 {item.chain === "solana" && (
                   <TableRow>
                     <TableCell>

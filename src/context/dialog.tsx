@@ -3,6 +3,7 @@ import { Dialog, IconButton, Theme, alpha, useMediaQuery } from "@mui/material"
 import { initial, noop } from "lodash"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useTheme } from "./theme"
+import { useRouter } from "next/router"
 
 export const DialogContext = createContext<{ renderItem: Function; setOpen: Function }>({
   renderItem: noop,
@@ -14,6 +15,7 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [item, setItem] = useState<any>(null)
   const [disableFullscreen, setDisableFullscreen] = useState(false)
   const theme = useTheme()
+  const router = useRouter()
 
   useEffect(() => {
     if (item) {
@@ -31,6 +33,10 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   }
 
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
+
+  useEffect(() => {
+    setOpen(false)
+  }, [router.query])
 
   return (
     <DialogContext.Provider value={{ renderItem, setOpen }}>

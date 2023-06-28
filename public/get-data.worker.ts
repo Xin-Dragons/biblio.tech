@@ -222,20 +222,17 @@ self.addEventListener("message", async (event) => {
       .map((l: Loan) => l.collateralMint as string)
       .filter(Boolean)
       .filter((mint: string) => !mintsInWallet.includes(mint))
-    console.log({ lentOn })
 
     if (lentOn.length) {
-      console.log("OK HERE")
       const lentOnDigitalAssets = await fetchAllDigitalAsset(
         umi,
         lentOn.map((l: string) => publicKey(l))
       )
       const lentOnNfts = lentOnDigitalAssets.map((item) => {
-        console.log(item)
         return {
           ...item,
           status: "loan-given",
-          owner: publicKey,
+          owner: incomingLoans.find((i: Loan) => i.collateralMint === base58PublicKey(item.publicKey)).borrower,
         }
       })
       umiTokens = uniqBy([...umiTokens, ...lentOnNfts], (item) => base58PublicKey(item.mint.publicKey))
@@ -295,7 +292,7 @@ self.addEventListener("message", async (event) => {
           ...item,
           status: item.status,
           nftMint: base58PublicKey(item.mint.publicKey),
-          owner,
+          owner: (item as any).owner || owner,
           metadata: {
             ...item.metadata,
             tokenStandard: unwrapSome(tokenStandard),
