@@ -117,7 +117,6 @@ async function getStatus(publicKey: string, publicKeys: string[]) {
     rest,
     (item: any) => process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET === item.delegate
   )
-  console.log(linked)
   const statuses = {
     inVault: inVault.map((item) => item.mint),
     staked: staked.map((item) => item.mint),
@@ -163,8 +162,6 @@ async function getCollections(collectionIds: string[]) {
 self.addEventListener("message", async (event) => {
   try {
     let { publicKey: owner, force, mints, publicKeys } = event.data
-
-    console.log({ owner })
 
     let [umiTokens, helloMoonNfts, loanStats, status, listings] = await Promise.all([
       mints
@@ -291,7 +288,7 @@ self.addEventListener("message", async (event) => {
             (collection && collection.verified && base58PublicKey(collection.key)) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? base58PublicKey(firstVerifiedCreator.address) : null,
           loan,
-          status: item.status || loan ? "loaned" : nftStatus?.status,
+          status: item.status || (loan ? "loaned" : listing ? "listed" : nftStatus?.status),
           delegate: nftStatus?.delegate,
           listing,
         }
@@ -488,8 +485,6 @@ self.addEventListener("message", async (event) => {
       }
     })
 
-    // await addNftsToDb(nftsToAdd as Nft[], owner, !mints)
-    console.log("OK DONE")
     self.postMessage({ type: "done", nftsToAdd, collectionsToAdd })
   } catch (err) {
     self.postMessage({ type: "error" })
