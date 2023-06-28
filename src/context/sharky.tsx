@@ -42,7 +42,7 @@ type SharkyProviderProps = {
 export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   const { connection } = useConnection()
   const wallet = useWallet()
-  const { settleLoans } = useDatabase()
+  const { settleLoans, updateCollection } = useDatabase()
   const provider = createProvider(connection, wallet as any)
   const sharkyClient = createSharkyClient(provider)
   const { nfts } = useNfts()
@@ -144,11 +144,27 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     }
   }
 
-  async function getOrderBook(mint: string) {
-    const { data } = await axios.get("/api/get-me-collection", { params: { mint } })
-    const meCollection = data.collection
+  async function getOrderBook(nft: Nft) {
+    const collection = await db.collections.get(nft.collectionIdentifier!)
 
-    const sharkyCollection = findKey(Sharky.magicEdenSymbols, (item) => item === meCollection)
+    if (!collection) {
+      console.log("Collection not found")
+      return null
+    }
+
+    let meIdentifier = collection.meIdentifier
+    if (!meIdentifier) {
+      const { data } = await axios.get("/api/get-me-collection", { params: { mint: nft.nftMint } })
+      meIdentifier = data.collection
+      if (meIdentifier) {
+        await updateCollection(collection.id, { meIdentifier })
+      } else {
+        console.log("ME collection unavailable")
+        return null
+      }
+    }
+
+    const sharkyCollection = findKey(Sharky.magicEdenSymbols, (item) => item === meIdentifier)
 
     const orderBooks = dbOrderBooks.length ? dbOrderBooks : await fetchOrderBooks()
 

@@ -35,6 +35,7 @@ type DatabaseContextProps = {
   refreshMint: Function
   setLoaned: Function
   syncProgress: number
+  updateCollection: Function
 }
 
 const initial = {
@@ -59,6 +60,7 @@ const initial = {
   refreshMint: noop,
   setLoaned: noop,
   syncProgress: 0,
+  updateCollection: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -816,6 +818,10 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     await db.nfts.update(nftMint, { status: "loaned" })
   }
 
+  async function updateCollection(id: string, updates: Object) {
+    await db.collections.update(id, updates)
+  }
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -840,6 +846,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         refreshMint,
         setLoaned,
         syncProgress,
+        updateCollection,
       }}
     >
       {children}

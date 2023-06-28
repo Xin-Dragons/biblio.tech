@@ -175,7 +175,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
       try {
         setFetchingBestLoan(true)
         if (loan.market === "Sharky") {
-          const orderBook = await getOrderBook(loan.collateralMint)
+          const orderBook = await getOrderBook(item)
           const bestLoan = await getBestLoan(orderBook)
           setBestLoan(bestLoan)
         } else if (loan.market === "Citrus") {
@@ -710,7 +710,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   async function fetchSharky() {
     try {
       setFetchingOrderBook(true)
-      const orderBook = await getOrderBook(item.nftMint)
+      const orderBook = await getOrderBook(item)
       setOrderBook(orderBook)
       setFetchingOrderBook(false)
     } catch {

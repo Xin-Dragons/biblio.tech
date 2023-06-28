@@ -50,6 +50,7 @@ export interface Collection {
   collectionName: string
   image?: string
   floorPrice: number
+  meIdentifier?: string
 }
 
 export interface Tag {
