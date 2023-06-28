@@ -1,4 +1,4 @@
-import { Box, Container, Slider, Stack, Typography, useMediaQuery } from "@mui/material"
+import { Box, Container, Slider, Stack, Tab, Tabs, Typography, useMediaQuery } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { useWallet } from "@solana/wallet-adapter-react"
@@ -9,6 +9,7 @@ import { Filters } from "../Filters"
 import { Actions } from "../Actions"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
+import { useUiSettings } from "../../context/ui-settings"
 
 export const WalletMultiButtonDynamic = dynamic(
   async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
@@ -27,6 +28,7 @@ export const ActionBar: FC<ActionBarProps> = () => {
   const { filtered } = useNfts()
   const wallet = useWallet()
   const router = useRouter()
+  const { loanType, setLoanType } = useUiSettings()
   const showMinMenu = useMediaQuery("(max-width:1050px)")
 
   const collectionPage = !router.query.tag && !router.query.filter && !router.query.collectionId
@@ -60,12 +62,14 @@ export const ActionBar: FC<ActionBarProps> = () => {
           <Stack direction="row" justifyContent="space-between" alignItems="center" pl={1} pr={1}>
             <Box width="30%">
               {!collectionPage && !showMinMenu && (
-                <Slider
-                  aria-label="Selection"
-                  value={selected.length}
-                  onChange={(e, value) => handleSelectionChange(value as number)}
-                  max={filtered.length}
-                />
+                <>
+                  <Slider
+                    aria-label="Selection"
+                    value={selected.length}
+                    onChange={(e, value) => handleSelectionChange(value as number)}
+                    max={filtered.length}
+                  />
+                </>
               )}
             </Box>
             <Stack direction="row" justifyContent="flex-end">

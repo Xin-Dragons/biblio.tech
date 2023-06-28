@@ -32,6 +32,8 @@ import {
   TableCell,
   Theme,
   Slider,
+  Tabs,
+  Tab,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
 // import { createCloseAccountInstruction, getAssociatedTokenAddress } from "@solana/spl-token"
@@ -80,6 +82,7 @@ import { getAddressType, shorten } from "../../helpers/utils"
 import { AddressSelector } from "../AddressSelector"
 import { Vault } from "../Vault"
 import { useEnsName } from "wagmi"
+import { useUiSettings } from "../../context/ui-settings"
 
 const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address, returnToWallet }) => {
   // const { data: ensName } = useEnsName({ address })
@@ -122,6 +125,7 @@ export const Actions: FC = () => {
   const { filtered } = useNfts()
   const { isAdmin } = useAccess()
   const { selected, setSelected } = useSelection()
+  const { loanType, setLoanType } = useUiSettings()
 
   const [sending, setSending] = useState(false)
   const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
@@ -494,7 +498,9 @@ export const Actions: FC = () => {
   }
 
   function returnToWallet() {
-    router.push("/")
+    const target = router.asPath.replace(`/wallet/${router.query.publicKey}`, "")
+    console.log(target)
+    router.push(target)
   }
 
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
@@ -508,6 +514,12 @@ export const Actions: FC = () => {
       <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
         {router.query.publicKey && (
           <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />
+        )}
+        {router.query.filter === "loans" && (
+          <Tabs value={loanType} onChange={(e, value) => setLoanType(value)}>
+            <Tab label="Borrowed" value="borrowed" />
+            <Tab label="Lent" value="lent" />
+          </Tabs>
         )}
         {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
           <Tooltip
@@ -557,118 +569,126 @@ export const Actions: FC = () => {
                 >
                   Deselect all
                 </Button>
-                <Tooltip
-                  title={
-                    nonOwnedSelected
-                      ? "Some selected items are owned by a linked wallet"
-                      : statusesSelected
-                      ? "Selection contains items that cannot be sent"
-                      : "Bulk send selected items"
-                  }
-                >
-                  <span>
-                    <IconButton
-                      disabled={!selected.length || statusesSelected || nonOwnedSelected}
-                      onClick={toggleBulkSendOpen}
-                      color="primary"
-                    >
-                      <SvgIcon fontSize="small">
-                        <PlaneIcon />
-                      </SvgIcon>
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                <Tooltip
-                  title={
-                    nonOwnedSelected
-                      ? "Some selected items are owned by a linked wallet"
-                      : statusesSelected
-                      ? "Selection contains items that cannot be burnt"
-                      : "Burn selected items"
-                  }
-                >
-                  <span>
-                    <IconButton
-                      disabled={!selected.length || statusesSelected || nonOwnedSelected}
-                      color="error"
-                      onClick={toggleBurnOpen}
-                    >
-                      <LocalFireDepartment />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-
-                <Tooltip
-                  title={
-                    nonOwnedSelected
-                      ? "Some selected items are owned by a linked wallet"
-                      : nonListedStatusSelected
-                      ? "Selection contains items that cannot be listed"
-                      : onlyNftsSelected
-                      ? canList
-                        ? listedSelected
-                          ? "Delist selected items"
-                          : "List selected items"
-                        : "Cannot list and delist in same transaction"
-                      : "Only NFTs and pNFTs can be listed"
-                  }
-                >
-                  <span>
-                    <IconButton
-                      disabled={
-                        !selected.length || nonListedStatusSelected || !canList || !onlyNftsSelected || nonOwnedSelected
+                {router.query.filter !== "loans" && (
+                  <>
+                    <Tooltip
+                      title={
+                        nonOwnedSelected
+                          ? "Some selected items are owned by a linked wallet"
+                          : statusesSelected
+                          ? "Selection contains items that cannot be sent"
+                          : "Bulk send selected items"
                       }
-                      color="info"
-                      onClick={listedSelected ? onDelist : list}
                     >
-                      <Sell />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-
-                <Tooltip
-                  title={
-                    nonInVaultStatusesSelected
-                      ? "Selection contains items that cannot be frozen/thawed"
-                      : !hasFreezeAuth
-                      ? "Some items cannot be frozen"
-                      : onlyNftsSelected
-                      ? canFreezeThaw
-                        ? frozenSelected
-                          ? "Remove selected items from vault"
-                          : "Add selected items to vault"
-                        : "Cannot freeze and thaw in same transaction"
-                      : "Only NFTs and pNFTs can be locked in the vault"
-                  }
-                >
-                  <span>
-                    <IconButton
-                      disabled={
-                        !selected.length ||
-                        !canFreezeThaw ||
-                        !onlyNftsSelected ||
-                        nonInVaultStatusesSelected ||
-                        !hasFreezeAuth
+                      <span>
+                        <IconButton
+                          disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                          onClick={toggleBulkSendOpen}
+                          color="primary"
+                        >
+                          <SvgIcon fontSize="small">
+                            <PlaneIcon />
+                          </SvgIcon>
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip
+                      title={
+                        nonOwnedSelected
+                          ? "Some selected items are owned by a linked wallet"
+                          : statusesSelected
+                          ? "Selection contains items that cannot be burnt"
+                          : "Burn selected items"
                       }
-                      sx={{
-                        color: "#a6e3e0",
-                      }}
-                      onClick={() => toggleVaultShowing()}
                     >
-                      <SvgIcon>
-                        <VaultIcon />
-                      </SvgIcon>
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                      <span>
+                        <IconButton
+                          disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                          color="error"
+                          onClick={toggleBurnOpen}
+                        >
+                          <LocalFireDepartment />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
 
-                <Tooltip title="Toggle tag menu">
-                  <span>
-                    <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
-                      <Label />
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                    <Tooltip
+                      title={
+                        nonOwnedSelected
+                          ? "Some selected items are owned by a linked wallet"
+                          : nonListedStatusSelected
+                          ? "Selection contains items that cannot be listed"
+                          : onlyNftsSelected
+                          ? canList
+                            ? listedSelected
+                              ? "Delist selected items"
+                              : "List selected items"
+                            : "Cannot list and delist in same transaction"
+                          : "Only NFTs and pNFTs can be listed"
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          disabled={
+                            !selected.length ||
+                            nonListedStatusSelected ||
+                            !canList ||
+                            !onlyNftsSelected ||
+                            nonOwnedSelected
+                          }
+                          color="info"
+                          onClick={listedSelected ? onDelist : list}
+                        >
+                          <Sell />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip
+                      title={
+                        nonInVaultStatusesSelected
+                          ? "Selection contains items that cannot be frozen/thawed"
+                          : !hasFreezeAuth
+                          ? "Some items cannot be frozen"
+                          : onlyNftsSelected
+                          ? canFreezeThaw
+                            ? frozenSelected
+                              ? "Remove selected items from vault"
+                              : "Add selected items to vault"
+                            : "Cannot freeze and thaw in same transaction"
+                          : "Only NFTs and pNFTs can be locked in the vault"
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          disabled={
+                            !selected.length ||
+                            !canFreezeThaw ||
+                            !onlyNftsSelected ||
+                            nonInVaultStatusesSelected ||
+                            !hasFreezeAuth
+                          }
+                          sx={{
+                            color: "#a6e3e0",
+                          }}
+                          onClick={() => toggleVaultShowing()}
+                        >
+                          <SvgIcon>
+                            <VaultIcon />
+                          </SvgIcon>
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip title="Toggle tag menu">
+                      <span>
+                        <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
+                          <Label />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </>
+                )}
 
                 {/* <Tooltip title="Repay loans">
                 <span>

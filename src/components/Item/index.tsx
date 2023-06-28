@@ -92,7 +92,8 @@ const statusTitles = {
   inVault: "In Vault",
   frozen: "Frozen",
   listed: "Listed",
-  loaned: "Loaned",
+  "loan-taken": "On loan",
+  "loan-given": "Lent on",
   linked: "Linked",
 }
 
@@ -140,7 +141,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
   apyAfterFee?: number
 }
 
-const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean }> = ({ loan, isTouchDevice }) => {
+const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, isTouchDevice, item }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
   const { isAdmin } = useAccess()
@@ -160,12 +161,15 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean }> = ({ loan, isTouchDevice
     const hours = Math.floor(hoursLeft / 3600)
     const minutesLeft = Math.floor(hoursLeft - hours * 3600)
     const minutes = Math.floor(minutesLeft / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
+    const remainingSeconds = 60 + Math.floor(seconds % 60)
     setTimeRemaining(`${days > 0 ? `${days}d ` : ""}${hours > 0 ? `${hours}h ` : ""}${minutes}m ${remainingSeconds}s`)
     setUrgent(days <= 0)
   }
 
   useEffect(() => {
+    if (item.status === "loan-given") {
+      return
+    }
     ;(async () => {
       if (loan.market === "Sharky") {
         const orderBook = await getOrderBook(loan.collateralMint)
@@ -1508,7 +1512,8 @@ export const Item: FC<ItemProps> = ({
 
   const statusColors = {
     listed: theme.palette.primary.dark,
-    loaned: theme.palette.error.dark,
+    "loan-taken": theme.palette.error.dark,
+    "loan-given": theme.palette.success.dark,
     staked: theme.palette.secondary.dark,
     inVault: theme.palette.success.dark,
     frozen: theme.palette.warning.dark,
@@ -1828,7 +1833,7 @@ export const Item: FC<ItemProps> = ({
                   </Box>
                 </Tooltip>
               )}
-            {item.loan && <Loan loan={item.loan} isTouchDevice={isTouchDevice} />}
+            {item.loan && <Loan loan={item.loan} isTouchDevice={isTouchDevice} item={item} />}
           </Box>
         ) : (
           <Box
@@ -1842,7 +1847,7 @@ export const Item: FC<ItemProps> = ({
             }}
           >
             <img src="/loading-slow.gif" width="100%" />
-            {item.loan && <Loan loan={item.loan} />}
+            {item.loan && <Loan loan={item.loan} item={item} />}
           </Box>
         )}
 

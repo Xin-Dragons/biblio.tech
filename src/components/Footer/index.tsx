@@ -32,6 +32,8 @@ import { useNfts } from "../../context/nfts"
 import { useLiveQuery } from "dexie-react-hooks"
 import { Brice, CURRENCIES, CurrencyItem, useBrice } from "../../context/brice"
 import { upperFirst } from "lodash"
+import { useRouter } from "next/router"
+import { Nft } from "../../db"
 
 function Time() {
   const [time, setTime] = useState("")
@@ -192,21 +194,32 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
   const brice = useBrice()
   const [portfolioValue, setPortfolioValue] = useState(0)
   const collections = useLiveQuery(() => db.collections.toArray(), [], [])
+  const router = useRouter()
+  const isLoanPage = router.query.filter === "loans"
 
   useEffect(() => {
     const value = nfts
-      .map((n) => {
-        const collection = collections.find((c) => c.id === n.collectionId)
-        if (!collection) {
-          return n
-        }
-
+      .map((n: Nft) => {
         const price = brice[(n.chain === "eth" ? "ethereum" : "solana") as keyof object][preferredCurrency] as number
-        const value = n.chain === "eth" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
-        // console.log(n.chain, price, value, price * value)
-        return {
-          ...n,
-          value: price * value,
+        if (isLoanPage) {
+          const solPrice = (n.loan?.amountToRepay || 0) / LAMPORTS_PER_SOL
+          return {
+            ...n,
+            value: solPrice * price,
+            solPrice: solPrice,
+          }
+        } else {
+          const collection = collections.find((c) => c.id === n.collectionId)
+          if (!collection) {
+            return n
+          }
+
+          const value = n.chain === "eth" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
+          // console.log(n.chain, price, value, price * value)
+          return {
+            ...n,
+            value: price * value,
+          }
         }
       })
       .reduce((sum, nft) => {
@@ -268,7 +281,9 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                 <Tooltip
                   title={
                     <Typography variant="body2">
-                      This is an estimated value of the current view based on floor prices only
+                      {isLoanPage
+                        ? "This is the total amount owing"
+                        : "This is an estimated value of the current view based on floor prices only"}
                     </Typography>
                   }
                 >
@@ -333,7 +348,9 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                   <Tooltip
                     title={
                       <Typography variant="body2">
-                        This is an estimated value of the current view based on floor prices only
+                        {isLoanPage
+                          ? "This is the total amount owing"
+                          : "This is an estimated value of the current view based on floor prices only"}
                       </Typography>
                     }
                   >
@@ -352,7 +369,9 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
               <Tooltip
                 title={
                   <Typography variant="body2">
-                    This is an estimated value of the current view based on floor prices only
+                    {isLoanPage
+                      ? "This is the total amount owing"
+                      : "This is an estimated value of the current view based on floor prices only"}
                   </Typography>
                 }
               >

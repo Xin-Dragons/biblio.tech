@@ -9,6 +9,7 @@ import { noop } from "lodash"
 import type { Currency } from "./brice"
 
 export type LayoutSize = "small" | "medium" | "large" | "collage"
+export type LoanType = "lent" | "borrowed"
 
 type UiSettingsContextProps = {
   layoutSize: LayoutSize
@@ -27,6 +28,8 @@ type UiSettingsContextProps = {
   setLightMode: Function
   preferredCurrency: Currency
   setPreferredCurrency: Function
+  setLoanType: Function
+  loanType: LoanType
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -46,6 +49,8 @@ const initialProps: UiSettingsContextProps = {
   setLightMode: noop,
   preferredCurrency: "usd",
   setPreferredCurrency: noop,
+  setLoanType: noop,
+  loanType: "borrowed",
 }
 
 export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -112,6 +117,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       setShowAllWallets: true,
       lightMode: false,
       preferredCurrency: "usd",
+      loanType: "borrowed",
     }
   ) as {
     showInfo: boolean
@@ -123,6 +129,7 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     showAllWallets: boolean
     lightMode: boolean
     preferredCurrency: Currency
+    loanType: LoanType
   }
 
   async function setSort(sort: string) {
@@ -153,6 +160,10 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("preferredCurrency", preferredCurrency, true)
   }
 
+  async function setLoanType(loanType: LoanType) {
+    await updatePreferences("loanType", loanType, true)
+  }
+
   return (
     <UiSettingsContext.Provider
       value={{
@@ -171,6 +182,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         lightMode: Boolean(defaults?.lightMode),
         setLightMode,
         preferredCurrency: defaults?.preferredCurrency || "usd",
+        loanType: defaults?.loanType || "borrowed",
+        setLoanType,
         setPreferredCurrency,
       }}
     >

@@ -38,7 +38,7 @@ type NftsProviderProps = {
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
   const { publicKey, userId, publicKeys, isAdmin } = useAccess()
-  const { sort, showAllWallets } = useUiSettings()
+  const { sort, showAllWallets, loanType } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
   const {} = useFilters()
   const [nfts, setNfts] = useState<Nft[]>([])
@@ -79,7 +79,15 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       const query =
         showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
-        return query.filter((item) => Boolean(item.loan && item.loan.status === "active")).toArray()
+        return query
+          .filter((item) =>
+            Boolean(
+              item.loan &&
+                item.loan.status === "active" &&
+                (loanType === "borrowed" ? item.status === "loan-taken" : item.status === "loan-given")
+            )
+          )
+          .toArray()
       }
       if (router.query.filter === "sfts") {
         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
@@ -168,7 +176,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       return []
     },
-    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets],
+    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets, loanType],
     []
   )
 

@@ -71,13 +71,37 @@ async function getTokenPrices(mints: string[]) {
   return flatten(results).filter(Boolean)
 }
 
-async function getLoanSummaryForUser(publicKey: string, paginationToken?: string): Promise<any> {
+async function getOutstandingLoans(publicKey: string, paginationToken?: string): Promise<any> {
   const { data } = await axios.post(
     `https://rest-api.hellomoon.io/v0/nft/loans`,
     {
       borrower: publicKey,
       status: ["open", "active"],
-      limit: 10,
+      limit: 1000,
+      paginationToken,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY}`,
+      },
+    }
+  )
+  console.log(data.data[0])
+
+  if (data.paginationToken) {
+    return [...data.data, ...(await getOutstandingLoans(publicKey, data.paginationToken))]
+  }
+
+  return data.data
+}
+
+async function getIncomingLoans(publicKey: string, paginationToken?: string): Promise<any> {
+  const { data } = await axios.post(
+    `https://rest-api.hellomoon.io/v0/nft/loans`,
+    {
+      lender: publicKey,
+      status: ["open", "active"],
+      limit: 1000,
       paginationToken,
     },
     {
@@ -88,7 +112,7 @@ async function getLoanSummaryForUser(publicKey: string, paginationToken?: string
   )
 
   if (data.paginationToken) {
-    return [...data.data, ...(await getLoanSummaryForUser(publicKey, data.paginationToken))]
+    return [...data.data, ...(await getIncomingLoans(publicKey, data.paginationToken))]
   }
 
   return data.data
@@ -163,7 +187,7 @@ self.addEventListener("message", async (event) => {
   try {
     let { publicKey: owner, force, mints, publicKeys } = event.data
 
-    let [umiTokens, helloMoonNfts, loanStats, status, listings] = await Promise.all([
+    let [umiTokens, helloMoonNfts, loanStats, incomingLoans, status, listings] = await Promise.all([
       mints
         ? fetchAllDigitalAsset(
             umi,
@@ -171,7 +195,8 @@ self.addEventListener("message", async (event) => {
           )
         : fetchAllDigitalAssetByOwner(umi, owner, { tokenStrategy: "getProgramAccounts" }),
       getOwnedHelloMoonNfts(owner),
-      getLoanSummaryForUser(owner),
+      getOutstandingLoans(owner),
+      getIncomingLoans(owner),
       getStatus(owner, publicKeys),
       getListings(owner),
     ])
@@ -179,17 +204,41 @@ self.addEventListener("message", async (event) => {
     const mintsInWallet = umiTokens.map((token) => base58PublicKey(token.mint.publicKey))
 
     const loanedOut = loanStats
-      .map((l: Loan) => l.collateralMint)
+      .map((l: Loan) => l.collateralMint as string)
       .filter((mint: string) => !mintsInWallet.includes(mint))
       .map(publicKey)
+
     if (loanedOut.length) {
       const loanedNfts = (await fetchAllDigitalAsset(umi, loanedOut)).map((item) => {
         return {
           ...item,
-          status: "loaned",
+          status: "loan-taken",
         }
       })
       umiTokens = uniqBy([...umiTokens, ...loanedNfts], (item) => base58PublicKey(item.mint.publicKey))
+    }
+
+    const lentOn = incomingLoans
+      .map((l: Loan) => l.collateralMint as string)
+      .filter(Boolean)
+      .filter((mint: string) => !mintsInWallet.includes(mint))
+    console.log({ lentOn })
+
+    if (lentOn.length) {
+      console.log("OK HERE")
+      const lentOnDigitalAssets = await fetchAllDigitalAsset(
+        umi,
+        lentOn.map((l: string) => publicKey(l))
+      )
+      const lentOnNfts = lentOnDigitalAssets.map((item) => {
+        console.log(item)
+        return {
+          ...item,
+          status: "loan-given",
+          owner: publicKey,
+        }
+      })
+      umiTokens = uniqBy([...umiTokens, ...lentOnNfts], (item) => base58PublicKey(item.mint.publicKey))
     }
 
     if (listings.length) {
@@ -264,11 +313,15 @@ self.addEventListener("message", async (event) => {
 
     const nfts = nonFungibles
       .map((item) => {
-        const loan = loanStats.find((l: Loan) => l.collateralMint === item.nftMint)
+        const loanTaken = loanStats.find((l: Loan) => l.collateralMint === item.nftMint)
+        const loanGiven = incomingLoans.find((l: Loan) => l.collateralMint === item.nftMint)
         const listing = listings.find((l: any) => l.nftMint === item.nftMint)
         const nftStatus = status.find((i) => i.mint === item.nftMint)
-        if (loan) {
-          loan.defaults = loan.acceptBlocktime + loan.loanDurationSeconds
+        if (loanTaken) {
+          loanTaken.defaults = loanTaken.acceptBlocktime + loanTaken.loanDurationSeconds
+        }
+        if (loanGiven) {
+          loanGiven.defaults = loanGiven.acceptBlocktime + loanGiven.loanDurationSeconds
         }
         const helloMoonNft = helloMoonNfts.find((hm) => hm.nftMint === item.nftMint)
         const collection = unwrapSome(item.metadata.collection)
@@ -287,8 +340,10 @@ self.addEventListener("message", async (event) => {
           collectionId:
             (collection && collection.verified && base58PublicKey(collection.key)) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? base58PublicKey(firstVerifiedCreator.address) : null,
-          loan,
-          status: item.status || (loan ? "loaned" : listing ? "listed" : nftStatus?.status),
+          loan: loanTaken || loanGiven,
+          status:
+            item.status ||
+            (loanTaken ? "loan-taken" : loanGiven ? "loan-given" : listing ? "listed" : nftStatus?.status),
           delegate: nftStatus?.delegate,
           listing,
         }
@@ -478,6 +533,9 @@ self.addEventListener("message", async (event) => {
     const nftsToAdd = [...fungiblesWithBalances, ...nfts, ...editionsWithNumbers].map((n) => {
       return {
         ...omit(n, "edition", "mint", "publicKey"),
+        mint: {
+          freezeAuthority: isSome(n.mint.freezeAuthority) ? base58PublicKey(n.mint.freezeAuthority.value) : null,
+        },
         metadata: {
           tokenStandard: 0,
           sellerFeeBasisPoints: n.metadata.sellerFeeBasisPoints,

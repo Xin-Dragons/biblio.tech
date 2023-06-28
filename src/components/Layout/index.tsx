@@ -13,6 +13,8 @@ import {
   CardContent,
   SvgIcon,
   LinearProgress,
+  Tabs,
+  Tab,
 } from "@mui/material"
 import { Container } from "@mui/system"
 import Link from "next/link"
@@ -44,6 +46,7 @@ import { SolTransfer } from "../SolTransfer"
 import { Collage } from "../Collage"
 import { LightDarkMode } from "../LightDarkMode"
 import Logo from "../AppBar/logo.svg"
+import { useFilters } from "../../context/filters"
 
 type LayoutProps = {
   nfts: Nft[] | CollectionItem[]
@@ -56,6 +59,7 @@ type LayoutProps = {
 export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
+  const { loanType, setLoanType } = useUiSettings()
   const [solTransferOpen, setSolTransferOpen] = useState(false)
   const { lightMode } = useUiSettings()
 
@@ -105,7 +109,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
                 }}
               >
                 {wallet.connected || router.query.publicKey ? (
-                  children
+                  <>{children}</>
                 ) : (
                   <Stack
                     sx={{
