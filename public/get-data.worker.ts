@@ -318,7 +318,11 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    self.postMessage({ type: "get-rarity", nfts, force })
+    self.postMessage({
+      type: "get-rarity",
+      nfts: nfts.map((n) => omit(n, "edition", "mint", "publicKey")),
+      force,
+    })
 
     const helloMoonCollections = await getCollections(
       uniq(nfts.map((n) => n.helloMoonCollectionId).filter(Boolean)) as string[]
