@@ -168,7 +168,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
   }
 
   useEffect(() => {
-    if (item.status === "loan-given") {
+    if (item.status === "loan-given" || !isAdmin) {
       return
     }
     ;(async () => {
