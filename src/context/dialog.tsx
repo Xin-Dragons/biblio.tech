@@ -35,7 +35,7 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <DialogContext.Provider value={{ renderItem, setOpen }}>
       {children}
-      <Dialog open={open} onClose={toggleOpen} maxWidth="lg" fullScreen={isXs && !disableFullscreen}>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg" fullScreen={isXs && !disableFullscreen}>
         <IconButton
           onClick={toggleOpen}
           sx={{

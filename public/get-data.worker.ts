@@ -480,6 +480,8 @@ self.addEventListener("message", async (event) => {
         ...omit(n, "edition", "mint", "publicKey"),
         metadata: {
           tokenStandard: 0,
+          sellerFeeBasisPoints: n.metadata.sellerFeeBasisPoints,
+          symbol: n.metadata.symbol,
         },
         chain: "solana",
       }
