@@ -167,7 +167,7 @@ export const Actions: FC = () => {
 
   const canFreezeThaw = allInVault || noneInVault
 
-  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority && isSome(item.mint.freezeAuthority))
+  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority)
 
   const allListed = selectedItems.every((item) => item.status === "listed")
   const allDelisted = selectedItems.every((item) => !item.status)
