@@ -365,7 +365,8 @@ export const Actions: FC = () => {
       const toBurn = await Promise.all(
         filtered
           .filter((n: any) => selected.includes(n.nftMint))
-          .map(async (digitalAsset: Nft) => {
+          .map(async (item: Nft) => {
+            const digitalAsset = await fetchDigitalAsset(umi, publicKey(item.nftMint))
             let masterEditionMint: UmiPublicKey | undefined = undefined
             let masterEditionToken
             const isEdition =
@@ -450,7 +451,7 @@ export const Actions: FC = () => {
 
             return {
               instructions: burnInstruction,
-              mint: digitalAsset.nftMint,
+              mint: item.nftMint,
             }
           })
       )
@@ -467,7 +468,7 @@ export const Actions: FC = () => {
         deleteNfts
       )
 
-      notifyStatus(errs, successes, "send", "sent")
+      notifyStatus(errs, successes, "burn", "burned")
     } catch (err: any) {
       console.error(err)
       toast.error(err.message)

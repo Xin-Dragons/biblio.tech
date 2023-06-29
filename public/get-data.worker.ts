@@ -534,7 +534,7 @@ self.addEventListener("message", async (event) => {
           freezeAuthority: isSome(n.mint.freezeAuthority) ? base58PublicKey(n.mint.freezeAuthority.value) : null,
         },
         metadata: {
-          tokenStandard: 0,
+          tokenStandard: n.metadata.tokenStandard,
           sellerFeeBasisPoints: n.metadata.sellerFeeBasisPoints,
           symbol: n.metadata.symbol,
         },
