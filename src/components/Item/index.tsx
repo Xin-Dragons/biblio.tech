@@ -1324,9 +1324,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     sx={{ borderRadius: "5px", border: "1px solid", padding: 1, borderColor: "primary.main" }}
                   >
                     <Typography color="primary" textTransform="uppercase">
-                      {att.trait_type}
+                      {att?.trait_type}
                     </Typography>
-                    <Typography>{att.value}</Typography>
+                    <Typography>{att?.value}</Typography>
                   </Box>
                 ))}
               </Stack>

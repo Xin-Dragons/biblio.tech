@@ -260,7 +260,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         const [trait_type, value] = s.split(":").map((item) => item.trim().toLocaleLowerCase())
         if (trait_type && value) {
           return (
-            nft.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === trait_type)?.value?.toLowerCase() ===
+            nft.json?.attributes?.find((att) => att?.trait_type?.toLowerCase() === trait_type)?.value?.toLowerCase() ===
             value
           )
         }
@@ -364,7 +364,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   if (sort.includes("attribute")) {
     const attribute = sort.replace("attribute.", "").toLowerCase()
     filtered = sortBy(filtered, (item) => {
-      const bg = item.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === attribute)?.value
+      const bg = item.json?.attributes?.find((att) => att?.trait_type?.toLowerCase() === attribute)?.value
       return bg
     })
   }

@@ -97,7 +97,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
               return false
             }
             const isUnlimited =
-              item.metadata?.attributes?.find((att) => att.trait_type === "Access")?.value === "Unlimited"
+              item.metadata?.attributes?.find((att) => att?.trait_type === "Access")?.value === "Unlimited"
             if (!item.hours_active || isUnlimited) {
               return true
             }
@@ -107,7 +107,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
             return stakedHours < item.hours_active
           })
           .reduce((sum, nft) => {
-            const numFromMeta = nft.metadata.attributes?.find((att) => att.trait_type === "Wallets")?.value
+            const numFromMeta = nft.metadata.attributes?.find((att) => att?.trait_type === "Wallets")?.value
             if (numFromMeta) {
               return sum + Number(numFromMeta)
             }
