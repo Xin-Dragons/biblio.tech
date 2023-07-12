@@ -119,7 +119,7 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
     const traits = router.query.collectionId
       ? uniq(
-          flatten(filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att.trait_type)).filter(Boolean))
+          flatten(filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att?.trait_type)).filter(Boolean))
         )
       : []
 
