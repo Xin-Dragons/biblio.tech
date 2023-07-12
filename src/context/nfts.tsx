@@ -266,7 +266,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         }
       }
 
-      const values = (nft.json?.attributes || []).map((att: any) => `${att.value || ""}`.toLowerCase())
+      const values = (nft.json?.attributes || []).map((att: any) => `${att?.value || ""}`.toLowerCase())
       return (
         nft.nftMint === search ||
         nft.status === s ||
