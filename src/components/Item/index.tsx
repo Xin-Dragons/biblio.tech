@@ -1106,7 +1106,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
       await revokeUtilityV1(umi, {
         mint: publicKey(item.nftMint),
         authority: umi.identity,
-        tokenStandard: 4,
+        tokenStandard: unwrapOption(da.metadata.tokenStandard) || 0,
         delegate: publicKey(delegate),
       }).sendAndConfirm(umi)
 

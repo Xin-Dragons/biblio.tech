@@ -3074,11 +3074,6 @@
     "@solana/web3.js" "^1.31.0"
     bs58 "^4.0.1"
 
-"@metaplex-foundation/mpl-essentials@^0.5.8":
-  version "0.5.8"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/mpl-essentials/-/mpl-essentials-0.5.8.tgz#da033bb62450b20fc7bd1b09ae4587258ac4cb38"
-  integrity sha512-bPer6uIhMkqcaKqF9PyIuOR2+chAxX5bIsJNplTGZM8ROwvkzwdgN65BVDkkevsPNCKiQt1L8HWMtLWxxwJnYg==
-
 "@metaplex-foundation/mpl-token-auth-rules@1.0.0":
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/@metaplex-foundation/mpl-token-auth-rules/-/mpl-token-auth-rules-1.0.0.tgz#67a07ed99685b2243ee088287848d837f1018940"

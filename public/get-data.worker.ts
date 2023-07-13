@@ -39,10 +39,10 @@ import {
   unwrapOption,
   none,
 } from "@metaplex-foundation/umi"
-import { findAssociatedTokenPda, mplEssentials } from "@metaplex-foundation/mpl-essentials"
+import { findAssociatedTokenPda, mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 import { toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
 
-const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!).use(mplEssentials()).use(mplTokenMetadata())
+const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!).use(mplToolbox()).use(mplTokenMetadata())
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, {
   commitment: "confirmed",

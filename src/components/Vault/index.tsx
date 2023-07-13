@@ -25,11 +25,14 @@ import {
   isSome,
   publicKey,
   transactionBuilder,
+  unwrapOption,
   unwrapSome,
 } from "@metaplex-foundation/umi"
 import {
   delegateUtilityV1,
   fetchDigitalAsset,
+  fetchDigitalAssetWithToken,
+  fetchDigitalAssetWithTokenByMint,
   lockV1,
   revokeUtilityV1,
   transferV1,
@@ -49,7 +52,7 @@ import { Metaplex, guestIdentity } from "@metaplex-foundation/js"
 import { useWalletBypass } from "../../context/wallet-bypass"
 import { toast } from "react-hot-toast"
 import VaultIcon from "./vault.svg"
-import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
+import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-toolbox"
 
 export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
@@ -173,7 +176,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     transferV1(umi, {
                       destinationOwner: publicKey(transferTo!),
                       mint: digitalAsset.mint.publicKey,
-                      tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                      tokenStandard: unwrapOption(digitalAsset.metadata.tokenStandard) || 0,
                       amount: 1,
                       tokenOwner: publicKey(nft.owner),
                       authority: createNoopSigner(publicKey(nft.owner)),
@@ -185,7 +188,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       account: findAssociatedTokenPda(umi, {
                         mint: digitalAsset.mint.publicKey,
                         owner: publicKey(nft.owner),
-                      })[0],
+                      }),
                       destination: publicKey(transferTo!),
                       owner: createNoopSigner(publicKey(nft.owner)),
                     })
@@ -259,7 +262,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       account: findAssociatedTokenPda(umi, {
                         mint: digitalAsset.mint.publicKey,
                         owner: publicKey(nft.owner),
-                      })[0],
+                      }),
                       destination: publicKey(transferTo!),
                       owner: createNoopSigner(publicKey(nft.owner)),
                     })
@@ -338,9 +341,21 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
         : await Promise.all(
             items.map(async (nft: any) => {
               const delegate = type === "basic" ? publicKey(nft.owner) : publicKey(lockingWallet!)
-              const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
+              const digitalAsset = await fetchDigitalAssetWithTokenByMint(umi, publicKey(nft.nftMint))
               const instructions = []
-              if (unwrapSome(digitalAsset.metadata.tokenStandard) === 4) {
+              if (unwrapOption(digitalAsset.metadata.tokenStandard) === 4) {
+                if (digitalAsset.tokenRecord?.delegate) {
+                  const delegate = unwrapOption(digitalAsset.tokenRecord?.delegate)
+                  if (delegate) {
+                    instructions.push(
+                      revokeUtilityV1(umi, {
+                        mint: digitalAsset.publicKey,
+                        delegate: delegate,
+                        tokenStandard: unwrapOption(digitalAsset.metadata.tokenStandard) || 0,
+                      })
+                    )
+                  }
+                }
                 instructions.push(
                   delegateUtilityV1(umi, {
                     mint: digitalAsset.mint.publicKey,

@@ -13,13 +13,8 @@ import {
   toWeb3JsPublicKey,
 } from "@metaplex-foundation/umi-web3js-adapters"
 import { PublicKey } from "@solana/web3.js"
-import {
-  createAssociatedToken,
-  findAssociatedTokenPda,
-  initializeMint,
-  initializeToken,
-} from "@metaplex-foundation/mpl-essentials"
-import { Instruction, base58PublicKey, publicKey, transactionBuilder, unwrapSome } from "@metaplex-foundation/umi"
+import { findAssociatedTokenPda } from "@metaplex-foundation/mpl-toolbox"
+import { publicKey, transactionBuilder } from "@metaplex-foundation/umi"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { flatten, groupBy, noop } from "lodash"
 import { toast } from "react-hot-toast"
@@ -144,7 +139,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         items.map(async (item) => {
           if (item.marketplace === "TensorSwap") {
             const { data } = await axios.post("/api/get-tensor-buy-txn", {
-              buyer: base58PublicKey(umi.identity.publicKey),
+              buyer: umi.identity.publicKey,
               maxPrice: `${item.maxPrice}`,
               mint: item.mint,
               owner: item.owner,
@@ -171,7 +166,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
             })
           } else if (item.marketplace === "MEv2") {
             const { data } = await axios.post("/api/get-me-buy-txn", {
-              buyer: base58PublicKey(umi.identity.publicKey),
+              buyer: umi.identity.publicKey,
               seller: item.owner,
               tokenMint: item.mint,
               royalties: item.royalties,
@@ -425,12 +420,10 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
               tokenMint: item.mint,
               price: item.price,
               seller: wallet.publicKey?.toBase58(),
-              tokenAccount: base58PublicKey(
-                findAssociatedTokenPda(umi, {
-                  mint: publicKey(item.mint),
-                  owner: umi.identity.publicKey,
-                })
-              ),
+              tokenAccount: findAssociatedTokenPda(umi, {
+                mint: publicKey(item.mint),
+                owner: umi.identity.publicKey,
+              }),
             })
 
             const txn = fromWeb3JsTransaction(VersionedTransaction.deserialize(data.v0.txSigned.data))

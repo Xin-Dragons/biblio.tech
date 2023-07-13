@@ -74,7 +74,7 @@ import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { useSharky } from "../../context/sharky"
-import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-essentials"
+import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-toolbox"
 import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
 import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
@@ -264,18 +264,24 @@ export const Actions: FC = () => {
           instSet.push(
             transferV1(umi, {
               destinationOwner: publicKey(recipient.publicKey),
-              mint: fromWeb3JsPublicKey(item.mintAddress),
+              mint: publicKey(item.mintAddress.toBase58()),
               tokenStandard: item.tokenStandard!,
               amount,
             })
           )
 
+          console.log(publicKey(item.mintAddress.toBase58()), umi.identity.publicKey)
+
+          const ata = findAssociatedTokenPda(umi, {
+            mint: publicKey(item.mintAddress.toBase58()),
+            owner: umi.identity.publicKey,
+          })
+
+          console.log({ ata })
+
           instSet.push(
             closeToken(umi, {
-              account: findAssociatedTokenPda(umi, {
-                mint: fromWeb3JsPublicKey(item.mintAddress),
-                owner: umi.identity.publicKey,
-              })[0],
+              account: ata[0],
               destination: umi.identity.publicKey,
               owner: umi.identity,
             })
@@ -305,7 +311,7 @@ export const Actions: FC = () => {
 
       notifyStatus(errs, successes, "send", "sent")
     } catch (err: any) {
-      console.log(err)
+      console.error(err.stack)
       toast.error(err.message)
     } finally {
       setRecipient("")

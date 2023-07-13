@@ -7,7 +7,7 @@ import { FC, ReactNode, createContext, useContext, useEffect, useState } from "r
 import { getPublicKeyFromSolDomain } from "../components/WalletSearch"
 import { Nft, User } from "../types/nextauth"
 import { noop, partition, sortBy } from "lodash"
-import { addMemo } from "@metaplex-foundation/mpl-essentials"
+import { addMemo } from "@metaplex-foundation/mpl-toolbox"
 import { useUmi } from "./umi"
 import { toast } from "react-hot-toast"
 import base58 from "bs58"

@@ -44,7 +44,6 @@
         "@hellomoon/api": "^1.16.4",
         "@jup-ag/react-hook": "^4.0.0-beta.17",
         "@metaplex-foundation/js": "^0.19.3",
-        "@metaplex-foundation/mpl-essentials": "^0.5.8",
         "@metaplex-foundation/mpl-token-metadata": "^3.0.0-alpha.24",
         "@metaplex-foundation/mpl-toolbox": "^0.8.0",
         "@metaplex-foundation/umi": "^0.8.4",
