@@ -1,6 +1,4 @@
-import { Connection } from "@solana/web3.js"
-import { Listing, Loan, Nft } from "../src/db"
-import { PublicKey } from "@solana/web3.js"
+import { Loan } from "../src/db"
 import {
   LeaderboardStatsRequest,
   NftMintsByOwner,
@@ -8,45 +6,26 @@ import {
   RestClient,
   NftListingStatusRequest,
 } from "@hellomoon/api"
-import { partition, uniqBy, groupBy, findKey, size, uniq, chunk, flatten, omit } from "lodash"
+import { uniqBy, groupBy, size, uniq, chunk, flatten, omit } from "lodash"
 import axios from "axios"
-import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token"
 import {
-  DigitalAsset,
   DigitalAssetWithToken,
   JsonMetadata,
   TokenStandard,
   TokenState,
   fetchAllDigitalAsset,
-  fetchAllDigitalAssetByOwner,
   fetchAllDigitalAssetWithTokenByOwner,
-  fetchAllTokenRecord,
   fetchDigitalAsset,
   fetchMasterEdition,
-  findTokenRecordPda,
   mplTokenMetadata,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { TokenState as NftTokenState } from "@metaplex-foundation/mpl-toolbox"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
-import {
-  base58PublicKey,
-  isSome,
-  publicKey,
-  some,
-  Option,
-  unwrapSome,
-  Umi,
-  unwrapOption,
-  none,
-} from "@metaplex-foundation/umi"
-import { findAssociatedTokenPda, mplToolbox } from "@metaplex-foundation/mpl-toolbox"
-import { toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
+import { isSome, publicKey, some, Option, unwrapOption } from "@metaplex-foundation/umi"
+import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!).use(mplToolbox()).use(mplTokenMetadata())
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, {
-  commitment: "confirmed",
-})
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string)
 
 async function getListings(owner: string) {
@@ -102,7 +81,6 @@ async function getOutstandingLoans(publicKey: string, paginationToken?: string):
       },
     }
   )
-  console.log(data.data[0])
 
   if (data.paginationToken) {
     return [...data.data, ...(await getOutstandingLoans(publicKey, data.paginationToken))]
@@ -136,9 +114,6 @@ async function getIncomingLoans(publicKey: string, paginationToken?: string): Pr
 
 function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
   return items.map((item) => {
-    if (item.publicKey === "B5Qt7VKqjRUR8yRhxpTbmhEVuTCCWnqtncquRXjtuLUX") {
-      console.log({ item }, TokenState)
-    }
     if (
       ![TokenStandard.NonFungible, TokenStandard.ProgrammableNonFungible].includes(
         unwrapOption(item.metadata.tokenStandard)!
@@ -200,41 +175,6 @@ function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
 
     return item
   })
-  // const accounts = await connection.getParsedTokenAccountsByOwner(new PublicKey(publicKey), {
-  //   programId: TOKEN_PROGRAM_ID,
-  // })
-  // const items = accounts.value
-  //   .filter(
-  //     (account) => account.account.data.parsed.info.state === "frozen" && account.account.data.parsed.info.delegate
-  //   )
-  //   .map((item) => {
-  //     return {
-  //       mint: item.account.data.parsed.info.mint,
-  //       delegate: item.account.data.parsed.info.delegate,
-  //     }
-  //   })
-  // const [inVault, locked] = partition(items, (item: any) => publicKeys.includes(item.delegate))
-  // const [linked, rest] = partition(
-  //   locked,
-  //   (item: any) => process.env.NEXT_PUBLIC_BIBLIO_LOCKING_WALLET === item.delegate
-  // )
-  // const [staked, frozen] = partition(
-  //   rest,
-  //   (item: any) => process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET === item.delegate
-  // )
-  // const statuses = {
-  //   inVault: inVault.map((item) => item.mint),
-  //   staked: staked.map((item) => item.mint),
-  //   linked: linked.map((item) => item.mint),
-  //   frozen: frozen.map((item) => item.mint),
-  // }
-  // return items.map((item) => {
-  //   const status = findKey(statuses, (mints) => mints.includes(item.mint))
-  //   return {
-  //     ...item,
-  //     status,
-  //   }
-  // })
 }
 
 async function getOwnedHelloMoonNfts(ownerAccount: string, paginationToken?: string): Promise<NftMintsByOwner[]> {
@@ -276,11 +216,7 @@ self.addEventListener("message", async (event) => {
       getListings(owner),
     ])
 
-    console.log("got all the things for", owner)
-
     umiTokens = getStatus(umiTokens as DigitalAssetWithToken[], publicKeys)
-
-    console.log("got status")
 
     const mintsInWallet = umiTokens.map((token) => token.mint.publicKey)
 
@@ -298,8 +234,6 @@ self.addEventListener("message", async (event) => {
       })
       umiTokens = uniqBy([...umiTokens, ...loanedNfts], (item) => item.mint.publicKey)
     }
-
-    console.log("got loaned out")
 
     const lentOn = incomingLoans
       .map((l: Loan) => l.collateralMint as string)
@@ -321,8 +255,6 @@ self.addEventListener("message", async (event) => {
       umiTokens = uniqBy([...umiTokens, ...lentOnNfts], (item) => item.mint.publicKey)
     }
 
-    console.log("got lent on")
-
     if (listings.length) {
       const listedNfts = (
         await fetchAllDigitalAsset(
@@ -338,8 +270,6 @@ self.addEventListener("message", async (event) => {
 
       umiTokens = uniqBy([...umiTokens, ...listedNfts], (item) => item.mint.publicKey)
     }
-
-    console.log("got listongs")
 
     type ExtendedTokenStandard = TokenStandard & {
       OCP?: 5
@@ -357,8 +287,6 @@ self.addEventListener("message", async (event) => {
     interface DigitalAssetWithStatusAndOwner extends DigitalAssetWithStatus {
       owner?: string
     }
-
-    console.log("grouping")
 
     const types = groupBy(
       umiTokens.map((item: DigitalAssetWithStatus) => {
@@ -384,11 +312,11 @@ self.addEventListener("message", async (event) => {
         return {
           ...item,
           status: item.status,
-          nftMint: base58PublicKey(item.mint.publicKey),
+          nftMint: item.mint.publicKey,
           owner: (item as any).owner || owner,
           metadata: {
             ...item.metadata,
-            tokenStandard: unwrapSome(tokenStandard),
+            tokenStandard: unwrapOption(tokenStandard),
           },
         }
       }),
@@ -400,8 +328,6 @@ self.addEventListener("message", async (event) => {
       ...(types[ExtendedTokenStandard.ProgrammableNonFungible] || []),
       ...(types[ExtendedTokenStandard.OCP] || []),
     ]
-
-    console.log("gettign nfts")
 
     const nfts = nonFungibles
       .map((item) => {
@@ -433,7 +359,7 @@ self.addEventListener("message", async (event) => {
           collectionId: (collection && collection.verified && collection.key) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? firstVerifiedCreator.address : null,
           loan: loanTaken || loanGiven,
-          status: item.status || (loanTaken ? "loan-taken" : loanGiven ? "loan-given" : listing ? "listed" : null),
+          status: (loanTaken ? "loan-taken" : loanGiven ? "loan-given" : listing ? "listed" : null) || item.status,
           delegate,
           listing,
         }
@@ -460,7 +386,6 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    console.log("getting rarity")
     self.postMessage({
       type: "get-rarity",
       nfts: nfts.map((n) => omit(n, "edition", "mint", "publicKey")),
@@ -566,8 +491,6 @@ self.addEventListener("message", async (event) => {
       })
     )
 
-    console.log("got balnces")
-
     const editionsWithNumbers = await Promise.all(
       (types[ExtendedTokenStandard.NonFungibleEdition] || []).map(async (item) => {
         if (item.edition?.isOriginal) {
@@ -589,7 +512,7 @@ self.addEventListener("message", async (event) => {
           ...item,
           editionDetails: {
             edition: item.edition?.edition || "unknown",
-            supply: unwrapSome(masterEdition.maxSupply) || "unknown",
+            supply: unwrapOption(masterEdition.maxSupply) || "unknown",
           },
         }
       })
@@ -616,7 +539,7 @@ self.addEventListener("message", async (event) => {
       return {
         ...omit(n, "edition", "mint", "publicKey"),
         mint: {
-          freezeAuthority: isSome(n.mint.freezeAuthority) ? base58PublicKey(n.mint.freezeAuthority.value) : null,
+          freezeAuthority: isSome(n.mint.freezeAuthority) ? n.mint.freezeAuthority.value : null,
         },
         metadata: {
           tokenStandard: n.metadata.tokenStandard,
@@ -626,8 +549,6 @@ self.addEventListener("message", async (event) => {
         chain: "solana",
       }
     })
-
-    console.log("done")
 
     self.postMessage({ type: "done", nftsToAdd, collectionsToAdd })
   } catch (err) {
