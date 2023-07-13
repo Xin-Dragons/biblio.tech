@@ -275,7 +275,7 @@ export const Actions: FC = () => {
               account: findAssociatedTokenPda(umi, {
                 mint: fromWeb3JsPublicKey(item.mintAddress),
                 owner: umi.identity.publicKey,
-              }),
+              })[0],
               destination: umi.identity.publicKey,
               owner: umi.identity,
             })
@@ -401,7 +401,7 @@ export const Actions: FC = () => {
                 owner: umi.identity.publicKey,
               })
 
-              const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata))
+              const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata[0]))
               amount = BigInt(balance.value.amount)
             }
 

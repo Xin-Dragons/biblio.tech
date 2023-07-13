@@ -185,7 +185,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       account: findAssociatedTokenPda(umi, {
                         mint: digitalAsset.mint.publicKey,
                         owner: publicKey(nft.owner),
-                      }),
+                      })[0],
                       destination: publicKey(transferTo!),
                       owner: createNoopSigner(publicKey(nft.owner)),
                     })
@@ -259,7 +259,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       account: findAssociatedTokenPda(umi, {
                         mint: digitalAsset.mint.publicKey,
                         owner: publicKey(nft.owner),
-                      }),
+                      })[0],
                       destination: publicKey(transferTo!),
                       owner: createNoopSigner(publicKey(nft.owner)),
                     })

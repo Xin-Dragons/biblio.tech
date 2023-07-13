@@ -59,7 +59,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
                 findAssociatedTokenPda(umi, {
                   owner: umi.identity.publicKey,
                   mint: publicKey(mint),
-                })
+                })[0]
               ),
             })
 
@@ -98,7 +98,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
             findAssociatedTokenPda(umi, {
               owner: umi.identity.publicKey,
               mint: publicKey(item.mint),
-            })
+            })[0]
           ),
           price: new BN(item.price * LAMPORTS_PER_SOL),
         })
