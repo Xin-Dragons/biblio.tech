@@ -67,7 +67,14 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
 import LockOpenIcon from "@mui/icons-material/LockOpen"
 import { Listing, Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
-import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
+import {
+  DigitalAssetWithToken,
+  TokenDelegateRole,
+  TokenStandard,
+  fetchDigitalAssetWithToken,
+  fetchDigitalAssetWithTokenByMint,
+  revokeUtilityV1,
+} from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
 import { useNfts } from "../../context/nfts"
 import { useBasePath } from "../../context/base-path"
@@ -83,6 +90,7 @@ import Crown from "../Listing/crown.svg"
 import { useSelection } from "../../context/selection"
 import { OfferedLoan, OrderBook } from "@sharkyfi/client"
 import { useCitrus } from "../../context/citrus"
+import { publicKey, unwrapOption } from "@metaplex-foundation/umi"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 const SECONDS_PER_DAY = 86_400
@@ -1004,12 +1012,15 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const [asset, setAsset] = useState<Asset | null>(null)
   const { db } = useDatabase()
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
-  const { isAdmin } = useAccess()
+  const { isAdmin, isInScope } = useAccess()
+  const [revoking, setRevoking] = useState(false)
   const router = useRouter()
   const { collections } = useDatabase()
   const basePath = useBasePath()
+  const umi = useUmi()
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
+  const [da, setDa] = useState<DigitalAssetWithToken | null>(null)
 
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
@@ -1047,6 +1058,15 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
     getAssets()
   }, [])
 
+  async function fetchItem() {
+    const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
+    setDa(da)
+  }
+
+  useEffect(() => {
+    fetchItem()
+  }, [])
+
   useEffect(() => {
     const asset = assets[assetIndex]
     setAsset(asset)
@@ -1063,6 +1083,42 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   }
 
   const collection = collections.find((c) => c.id === item.collectionIdentifier)
+
+  let delegate: any
+
+  if (da?.tokenRecord) {
+    delegate = unwrapOption(da.tokenRecord.delegate)
+  } else if (da?.token) {
+    delegate = unwrapOption(da.token.delegate)
+  } else {
+    delegate = item.delegate
+  }
+
+  async function revoke() {
+    try {
+      if (!da) {
+        throw new Error("still fetching")
+      }
+      if (!delegate) {
+        throw new Error("Delegate not found")
+      }
+      setRevoking(true)
+      await revokeUtilityV1(umi, {
+        mint: publicKey(item.nftMint),
+        authority: umi.identity,
+        tokenStandard: 4,
+        delegate: publicKey(delegate),
+      }).sendAndConfirm(umi)
+
+      toast.success("Auth revoked!")
+      await fetchItem()
+    } catch (err: any) {
+      console.log(err)
+      toast.error(err.message || "Error revoking")
+    } finally {
+      setRevoking(false)
+    }
+  }
 
   return (
     <Card sx={{ height: "100%", outline: "none !important", width: "100%", overflowY: "auto", padding: 2 }}>
@@ -1285,30 +1341,39 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                   </TableRow>
                 )}
                 {item.status && (
-                  <>
-                    <TableRow>
-                      <TableCell>
-                        <Typography fontWeight="bold" color="primary">
-                          Status
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right" }}>
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Status
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Typography>
+                        {item.status === "linked" ? "Linked to Biblio" : statusTitles[item.status as keyof object]}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {delegate && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Delegate
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={2}>
+                        {isInScope && (
+                          <Button variant="outlined" color="error" disabled={revoking} onClick={revoke}>
+                            Revoke
+                          </Button>
+                        )}
                         <Typography>
-                          {item.status === "linked" ? "Linked to Biblio" : statusTitles[item.status as keyof object]}
+                          <CopyAddress>{delegate}</CopyAddress>
                         </Typography>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <Typography fontWeight="bold" color="primary">
-                          Delegate
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right" }}>
-                        <Typography>{item.delegate ? <CopyAddress>{item.delegate}</CopyAddress> : "-"}</Typography>
-                      </TableCell>
-                    </TableRow>
-                  </>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
@@ -1795,15 +1860,17 @@ export const Item: FC<ItemProps> = ({
                 </Tooltip>
               </Box>
             )} */}
-            {item.status && showInfo && (
+            {(item.status || item.delegate) && showInfo && (
               <CornerRibbon
                 style={{
                   textTransform: "uppercase",
                   fontSize: { small: "10px", medium: "12px", large: "14px", collage: "16px" }[layoutSize],
                 }}
-                backgroundColor={statusColors[item.status as keyof object]}
+                backgroundColor={
+                  item.delegate && !item.status ? theme.palette.error.dark : statusColors[item.status as keyof object]
+                }
               >
-                {statusTitles[item.status as keyof object]}
+                {item.delegate && !item.status ? "DELEGATED" : statusTitles[item.status as keyof object]}
               </CornerRibbon>
             )}
             {showInfo &&

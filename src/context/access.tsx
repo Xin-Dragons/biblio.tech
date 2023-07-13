@@ -29,6 +29,7 @@ type AccessContextProps = {
   signOut: Function
   signIn: Function
   isSigningIn: boolean
+  isInScope: boolean
 }
 
 const initial = {
@@ -44,6 +45,7 @@ const initial = {
   signOut: noop,
   signIn: noop,
   isSigningIn: false,
+  isInScope: false,
 }
 
 export const AccessContext = createContext<AccessContextProps>(initial)
@@ -58,11 +60,11 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [multiWallet, setMultiWallet] = useState(false)
   const [publicKeys, setPublicKeys] = useState<string[]>([])
-  const [ethPublicKeys, setEthPublicKeys] = useState<string[]>([])
   const [availableWallets, setAvailableWallets] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isInScope, setIsInScope] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const { isLedger, setIsLedger } = useWallets()
@@ -87,8 +89,6 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
     if (session?.user) {
       setUser(session?.user)
       setUserId(session?.user?.id)
-
-      console.log(session.user.nfts)
 
       const active =
         session?.user?.nfts
@@ -145,6 +145,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
       .includes(wallet.publicKey?.toBase58())
 
     setIsAdmin(Boolean(isAdmin && isLocalScope && isActive) || isOffline)
+    setIsInScope(!router.query.publicKey || wallet.publicKey?.toBase58() === router.query.publicKey)
   }, [session, user, wallet.publicKey, router.query])
 
   useEffect(() => {
@@ -266,6 +267,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         signOut,
         signIn,
         isSigningIn,
+        isInScope,
       }}
     >
       {children}
