@@ -44,3 +44,13 @@ export const isValidPublicKey = (input: string) => {
 export const getAddressType = (pk: string) => {
   return isValidPublicKey(pk) ? "Solana" : isAddress(pk!) ? "Ethereum" : "Unknown"
 }
+
+export async function waitForWalletChange(signer: string): Promise<void> {
+  // @ts-ignore
+  if (window.solana?.publicKey?.toBase58() === signer) {
+    return
+  }
+
+  await sleep(1000)
+  return waitForWalletChange(signer)
+}

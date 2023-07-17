@@ -1,10 +1,10 @@
-import { TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi";
-import { chunkBy } from "chunkier";
-import { flatten } from "lodash";
-import { toast } from "react-hot-toast";
+import { TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
+import { chunkBy } from "chunkier"
+import { flatten } from "lodash"
+import { toast } from "react-hot-toast"
 
 export type InstructionSet = {
-  instructions: TransactionBuilder[]
+  instructions: TransactionBuilder
   mint: string
 }
 
@@ -15,8 +15,8 @@ export function getUmiChunks(umi: Umi, instructionSets: InstructionSet[]) {
     }
 
     const t = transactionBuilder()
-      .add(flatten(ch.map((c) => c.instructions)))
-      .add(flatten(instructionSets[i + 1].instructions))
+      .add(ch.map((c) => c.instructions))
+      .add(instructionSets[i + 1].instructions)
 
     return !t.fitsInOneTransaction(umi)
   })
@@ -26,6 +26,7 @@ export async function buildTransactions(umi: Umi, chunks: InstructionSet[][]) {
   return await Promise.all(
     chunks.map(async (builders) => {
       const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
+      console.log(txn.getTransactionSize(umi))
       return {
         txn: await txn.buildWithLatestBlockhash(umi),
         signers: txn.getSigners(umi),
@@ -42,11 +43,11 @@ export function notifyStatus(errs: string[], successes: string[], type: string, 
     )
   } else if (errs.length && successes.length) {
     toast(
-      `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully, ${errs.length} failed to ${type}. Check the console for more details`
+      `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully, ${
+        errs.length
+      } failed to ${type}. Check the console for more details`
     )
   } else if (successes.length && !errs.length) {
-    toast.success(
-      `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully`,
-    )
+    toast.success(`${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully`)
   }
 }

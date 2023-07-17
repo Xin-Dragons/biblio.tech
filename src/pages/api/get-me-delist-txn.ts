@@ -1,16 +1,16 @@
-import { Connection, PublicKey } from "@solana/web3.js";
-import axios from "axios";
-import { NextApiRequest, NextApiResponse } from "next";
+import { Connection, PublicKey } from "@solana/web3.js"
+import axios from "axios"
+import { NextApiRequest, NextApiResponse } from "next"
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" });
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { seller, tokenMint } = req.body;
+  const { seller, tokenMint } = req.body
   try {
     const headers = {
-      Authorization: `Bearer ${process.env.ME_API_KEY}`
+      Authorization: `Bearer ${process.env.ME_API_KEY}`,
     }
-    const result = await axios.get(`https://api-mainnet.magiceden.dev/v2/tokens/${tokenMint}/listings`);
+    const result = await axios.get(`https://api-mainnet.magiceden.dev/v2/tokens/${tokenMint}/listings`)
     const { auctionHouse, tokenAddress, sellerReferral, price } = result.data[0]
 
     const params = {
@@ -22,10 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sellerReferral,
     }
 
-
     const { data } = await axios.get("https://api-mainnet.magiceden.dev/v2/instructions/sell_cancel", {
       params,
-      headers
+      headers,
     })
 
     res.status(200).json(data)

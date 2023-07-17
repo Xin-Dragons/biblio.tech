@@ -8,6 +8,8 @@ import {
   type PublicKey as UmiPublicKey,
   Transaction,
   isNone,
+  sol,
+  unwrapOption,
 } from "@metaplex-foundation/umi"
 import {
   Stack,
@@ -74,7 +76,7 @@ import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { useSharky } from "../../context/sharky"
-import { closeToken, findAssociatedTokenPda } from "@metaplex-foundation/mpl-toolbox"
+import { closeToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
 import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
@@ -123,7 +125,7 @@ export const Actions: FC = () => {
   const [listOpen, setListOpen] = useState(false)
   const { delist } = useTensor()
   const { filtered } = useNfts()
-  const { isAdmin } = useAccess()
+  const { isInScope, isAdmin, isBasic } = useAccess()
   const { selected, setSelected } = useSelection()
   const { loanType, setLoanType } = useUiSettings()
 
@@ -260,8 +262,18 @@ export const Actions: FC = () => {
             const balance = await connection.getTokenAccountBalance(ata)
             amount = BigInt(balance.value.amount)
           }
-          const instSet = []
-          instSet.push(
+          let txn = transactionBuilder()
+
+          if (!isAdmin) {
+            txn = txn.add(
+              transferSol(umi, {
+                destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                amount: sol(0.002),
+              })
+            )
+          }
+
+          txn = txn.add(
             transferV1(umi, {
               destinationOwner: publicKey(recipient.publicKey),
               mint: publicKey(item.mintAddress.toBase58()),
@@ -270,16 +282,12 @@ export const Actions: FC = () => {
             })
           )
 
-          console.log(publicKey(item.mintAddress.toBase58()), umi.identity.publicKey)
-
           const ata = findAssociatedTokenPda(umi, {
             mint: publicKey(item.mintAddress.toBase58()),
             owner: umi.identity.publicKey,
           })
 
-          console.log({ ata })
-
-          instSet.push(
+          txn = txn.add(
             closeToken(umi, {
               account: ata[0],
               destination: umi.identity.publicKey,
@@ -288,7 +296,7 @@ export const Actions: FC = () => {
           )
 
           return {
-            instructions: flatten(instSet),
+            instructions: txn,
             mint: item.mintAddress.toBase58(),
           }
         })
@@ -373,6 +381,7 @@ export const Actions: FC = () => {
           .filter((n: any) => selected.includes(n.nftMint))
           .map(async (item: Nft) => {
             const digitalAsset = await fetchDigitalAsset(umi, publicKey(item.nftMint))
+            const tokenStandard = unwrapOption(digitalAsset.metadata.tokenStandard)
             let masterEditionMint: UmiPublicKey | undefined = undefined
             let masterEditionToken
             const isEdition =
@@ -380,7 +389,7 @@ export const Actions: FC = () => {
               digitalAsset.metadata.tokenStandard.value === TokenStandard.NonFungibleEdition &&
               !digitalAsset.edition?.isOriginal
             if (isEdition) {
-              const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "confirmed" })
+              const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "processed" })
               const sigs = await connection.getSignaturesForAddress(
                 toWeb3JsPublicKey(
                   !digitalAsset.edition?.isOriginal ? digitalAsset.edition?.parent! : digitalAsset.edition.publicKey
@@ -397,11 +406,7 @@ export const Actions: FC = () => {
 
             let amount = BigInt(1)
 
-            if (
-              [TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(
-                unwrapSome(digitalAsset.metadata.tokenStandard)!
-              )
-            ) {
+            if ([TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard || 0)) {
               const ata = findAssociatedTokenPda(umi, {
                 mint: digitalAsset.mint.publicKey,
                 owner: umi.identity.publicKey,
@@ -417,7 +422,7 @@ export const Actions: FC = () => {
               digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
             }
 
-            const burnInstruction = burnV1(umi, {
+            let burnInstruction = burnV1(umi, {
               mint: digitalAsset.mint.publicKey,
               authority: umi.identity,
               tokenOwner: umi.identity.publicKey,
@@ -454,6 +459,21 @@ export const Actions: FC = () => {
                     )
                   : undefined,
             })
+
+            if (!isAdmin) {
+              burnInstruction = burnInstruction.add(
+                transferSol(umi, {
+                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                  amount: [
+                    TokenStandard.NonFungible,
+                    TokenStandard.NonFungibleEdition,
+                    TokenStandard.ProgrammableNonFungible,
+                  ].includes(tokenStandard || 0)
+                    ? sol(0.002)
+                    : sol(0.0002),
+                })
+              )
+            }
 
             return {
               instructions: burnInstruction,
@@ -516,6 +536,8 @@ export const Actions: FC = () => {
     setSelected(filtered.slice(0, value).map((item) => item.nftMint))
   }
 
+  const isDisabled = isInScope && !isAdmin && !isBasic
+
   return (
     <Stack spacing={2}>
       <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
@@ -528,7 +550,7 @@ export const Actions: FC = () => {
             <Tab label="Lent" value="lent" />
           </Tabs>
         )}
-        {!isAdmin && !router.query.publicKey && router.query.filter === "vault" && (
+        {!isInScope && !router.query.publicKey && router.query.filter === "vault" && (
           <Tooltip
             title={
               nonOwnedSelected
@@ -561,16 +583,21 @@ export const Actions: FC = () => {
             </span>
           </Tooltip>
         )}
-        {isAdmin && !collectionPage && (
+        {isInScope && !collectionPage && (
           <>
             {!showMinMenu ? (
               <>
-                <Button onClick={selectAll} disabled={!filtered.length || allSelected} size="small" variant="outlined">
+                <Button
+                  onClick={selectAll}
+                  disabled={!filtered.length || allSelected || isDisabled}
+                  size="small"
+                  variant="outlined"
+                >
                   Select all
                 </Button>
                 <Button
                   onClick={deselectAll}
-                  disabled={!filtered.length || !selected.length}
+                  disabled={!filtered.length || !selected.length || isDisabled}
                   size="small"
                   variant="outlined"
                 >
@@ -589,7 +616,7 @@ export const Actions: FC = () => {
                     >
                       <span>
                         <IconButton
-                          disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                          disabled={!selected.length || statusesSelected || nonOwnedSelected || isDisabled}
                           onClick={toggleBulkSendOpen}
                           color="primary"
                         >
@@ -610,7 +637,7 @@ export const Actions: FC = () => {
                     >
                       <span>
                         <IconButton
-                          disabled={!selected.length || statusesSelected || nonOwnedSelected}
+                          disabled={!selected.length || statusesSelected || nonOwnedSelected || isDisabled}
                           color="error"
                           onClick={toggleBurnOpen}
                         >
@@ -641,7 +668,8 @@ export const Actions: FC = () => {
                             nonListedStatusSelected ||
                             !canList ||
                             !onlyNftsSelected ||
-                            nonOwnedSelected
+                            nonOwnedSelected ||
+                            isDisabled
                           }
                           color="info"
                           onClick={listedSelected ? onDelist : list}
@@ -673,7 +701,8 @@ export const Actions: FC = () => {
                             !canFreezeThaw ||
                             !onlyNftsSelected ||
                             nonInVaultStatusesSelected ||
-                            !hasFreezeAuth
+                            !hasFreezeAuth ||
+                            isDisabled
                           }
                           sx={{
                             color: "#a6e3e0",
@@ -689,7 +718,11 @@ export const Actions: FC = () => {
 
                     <Tooltip title="Toggle tag menu">
                       <span>
-                        <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length}>
+                        <IconButton
+                          onClick={toggleTagMenuOpen}
+                          color="secondary"
+                          disabled={!selected.length || isDisabled}
+                        >
                           <Label />
                         </IconButton>
                       </span>
@@ -707,7 +740,7 @@ export const Actions: FC = () => {
                 {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
               </>
             ) : (
-              <Button variant="outlined" onClick={toggleActionDrawer}>
+              <Button variant="outlined" onClick={toggleActionDrawer} disabled={isDisabled}>
                 Actions
               </Button>
             )}

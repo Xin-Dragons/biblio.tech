@@ -152,7 +152,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
 const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, isTouchDevice, item }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
-  const { isAdmin } = useAccess()
+  const { isInScope, isAdmin } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const [extendShowing, setExtendShowing] = useState(false)
@@ -176,7 +176,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
   }
 
   useEffect(() => {
-    if (item.status === "loan-given" || !isAdmin) {
+    if (item.status === "loan-given" || !isInScope) {
       return
     }
     ;(async () => {
@@ -274,10 +274,18 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
       : citrusBestLoan?.terms.principal || 0)
   const canExtend = loan.market === "Sharky" ? bestLoan : citrusBestLoan
 
+  const serviceFee = isAdmin
+    ? 0
+    : loan.market === "Sharky"
+    ? (bestLoan?.data.principalLamports ? Number(bestLoan?.data.principalLamports) : 0) * 0.005
+    : (citrusBestLoan?.terms.principal || 0) * 0.005
+
   const difference = Math.abs(
     (loan.market === "Sharky"
       ? bestLoan?.data?.principalLamports?.toNumber() || 0
-      : citrusBestLoan?.terms.principal || 0) - loan.amountToRepay
+      : citrusBestLoan?.terms.principal || 0) -
+      loan.amountToRepay -
+      serviceFee
   )
 
   return (
@@ -308,7 +316,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
           {timeRemaining}
         </Typography>
       </Stack>
-      {["Sharky", "Citrus"].includes(loan.market) && isAdmin && (
+      {["Sharky", "Citrus"].includes(loan.market) && isInScope && (
         <Stack direction="row" spacing={1}>
           <Button onClick={onRepayClick} variant="contained" size="small">
             Repay
@@ -424,6 +432,11 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
                   )}
                 </Stack>
               </Stack>
+              {serviceFee && (
+                <Typography variant="body1" textAlign="center">
+                  Service fee (0.5%): ◎{lamportsToSol(serviceFee)}
+                </Typography>
+              )}
               <Typography
                 variant="h5"
                 color={newLoanHigher ? "success" : "error"}
@@ -496,7 +509,7 @@ export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
   if (multimediaType === "image") {
     return (
       <img
-        src={`https://img-cdn.magiceden.dev/rs:fill:1000/plain/${asset.uri}`}
+        src={`${asset.uri}`}
         style={{ display: "block", width: "100%" }}
         onError={(e: any) => {
           e.target.src = asset.uri
@@ -587,9 +600,14 @@ const Listing = ({
   sellerFeeBasisPoints: number
   royaltiesEnforced: boolean
 }) => {
+  const { isInScope } = useAccess()
   const [payRoyalties, setPayRoyalties] = useState(royaltiesEnforced || defaultPayRoyalties)
   const [loading, setLoading] = useState(false)
   const { buy } = useTensor()
+
+  if (isInScope) {
+    return null
+  }
 
   async function buyItem() {
     try {
@@ -694,6 +712,9 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   const { takeLoan, getBestLoan, getOrderBook } = useSharky()
   const [bestCitrusLoan, setBestCitrusLoan] = useState<CitrusLoan | null>(null)
   const [citrusFetching, setCitrusFetching] = useState(false)
+  const { isAdmin, isBasic } = useAccess()
+
+  const isDisabled = !isAdmin && !isBasic
 
   async function fetchCitrus() {
     try {
@@ -875,7 +896,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                 <Button
                   variant="outlined"
                   onClick={onTakeLoanClick}
-                  disabled={loading || Boolean(item.status)}
+                  disabled={loading || Boolean(item.status) || isDisabled}
                   sx={{ whiteSpace: "nowrap" }}
                   fullWidth
                 >
@@ -955,7 +976,7 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
                 <Button
                   variant="outlined"
                   onClick={onTakeCitrusLoanClick(bestCitrusLoan)}
-                  disabled={loading || Boolean(item.status)}
+                  disabled={loading || Boolean(item.status) || isDisabled}
                   sx={{ whiteSpace: "nowrap" }}
                   fullWidth
                 >
@@ -1012,7 +1033,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const [asset, setAsset] = useState<Asset | null>(null)
   const { db } = useDatabase()
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
-  const { isAdmin, isInScope } = useAccess()
+  const { isInScope, isAdmin, isBasic } = useAccess()
   const [revoking, setRevoking] = useState(false)
   const router = useRouter()
   const { collections } = useDatabase()
@@ -1025,6 +1046,8 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
   }
+
+  const isDisabled = !isAdmin && !isBasic
 
   const selectedTags =
     useLiveQuery(() => db && db.taggedNfts.where({ nftId: item.nftMint }).toArray(), [item, db], []) || []
@@ -1096,6 +1119,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
 
   async function revoke() {
     try {
+      if (isDisabled) {
+        throw new Error("You're not signed in")
+      }
       if (!da) {
         throw new Error("still fetching")
       }
@@ -1210,7 +1236,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain === "solana" && isAdmin && (
+            {item.status !== "loaned" && item.chain === "solana" && isInScope && (
               <BestLoan item={item} onClose={() => setOpen(false)} />
             )}
           </Stack>
@@ -1398,7 +1424,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             ) : (
               <Typography variant="h6">None</Typography>
             )}
-            {isAdmin && !router.query.publicKey && (
+            {isInScope && !router.query.publicKey && (
               <>
                 <Typography variant="h5" fontFamily="Lato" color="primary" fontWeight="bold">
                   Tags
@@ -1410,7 +1436,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                       <Chip
                         label={tag.name}
                         key={tag.id}
-                        onDelete={isAdmin ? () => (isSelected ? removeTag(tag) : addTag(tag)) : undefined}
+                        onDelete={isInScope ? () => (isSelected ? removeTag(tag) : addTag(tag)) : undefined}
                         onClick={() => router.push(`/tags/${tag.id}`)}
                         // @ts-ignore
                         color={tag.id}
@@ -1501,7 +1527,7 @@ export const Item: FC<ItemProps> = ({
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
-  const { isAdmin, isOffline, publicKey, publicKeys } = useAccess()
+  const { isInScope, isOffline, publicKey, publicKeys, isBasic, isAdmin } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
   const [isTouchDevice, setIsTouchDevice] = useState(false)
 
@@ -1514,6 +1540,8 @@ export const Item: FC<ItemProps> = ({
 
   const { transactions } = useTransactionStatus()
   const transaction = transactions.find((t) => t.nftMint === item.nftMint)
+
+  const isDisabled = isInScope && !isAdmin && !isBasic
 
   async function loadNft() {
     if (isOffline) {
@@ -1543,7 +1571,11 @@ export const Item: FC<ItemProps> = ({
   const starred = starredNfts.includes(item.nftMint)
 
   async function onStarredChange(e: SyntheticEvent) {
-    if (!isAdmin) return
+    if (isDisabled) {
+      toast("You're not signed in")
+      return
+    }
+    if (!isInScope) return
     if (starred) {
       await removeNftFromStarred(item.nftMint)
     } else {
@@ -1552,13 +1584,18 @@ export const Item: FC<ItemProps> = ({
   }
 
   const onNftClick = (e: MouseEvent) => {
-    if (!isAdmin) return
+    if (!isInScope) return
     e.stopPropagation()
     const target = e.target as HTMLElement
     if (["LABEL", "INPUT"].includes(target.tagName)) {
       return
     }
-    select(item.nftMint)
+    if (isDisabled) {
+      toast("You're not signed in")
+      return
+    } else {
+      select(item.nftMint)
+    }
   }
 
   const fontSizes = {
@@ -1609,7 +1646,7 @@ export const Item: FC<ItemProps> = ({
   }
 
   const balance =
-    (isAdmin && showAllWallets
+    (isInScope && showAllWallets
       ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
       : item.balance?.[publicKey as keyof object]) || 0
 
@@ -1635,10 +1672,6 @@ export const Item: FC<ItemProps> = ({
     image = "/usdc.png"
   } else if (item.json?.image) {
     image = item.json.image.replace("ipfs://", "https://ipfs.io/ipfs/")
-    image =
-      layoutSize === "collage" || enlarged
-        ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
-        : `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image}`
   } else {
     image = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
   }
@@ -1710,7 +1743,7 @@ export const Item: FC<ItemProps> = ({
         {(!isTouchDevice || showInfo) && (
           <Stack
             direction="row"
-            justifyContent={isAdmin ? "space-between" : "center"}
+            justifyContent={isInScope ? "space-between" : "center"}
             alignItems="center"
             onClick={onNftClick}
             sx={{
@@ -1731,20 +1764,21 @@ export const Item: FC<ItemProps> = ({
               // background: "linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%)"
             }}
           >
-            {isAdmin && (
+            {isInScope && (
               <Tooltip title={starred ? "Remove from starred" : "Add to starred"}>
                 <Rating
                   max={1}
                   value={starred ? 1 : 0}
                   onChange={onStarredChange}
                   size={layoutSize === "collage" ? "large" : layoutSize}
+                  disabled={isDisabled}
                 />
               </Tooltip>
             )}
 
-            {DragHandle && <Tooltip title="Drag to reorder">{DragHandle as ReactElement}</Tooltip>}
+            {DragHandle && !isDisabled && <Tooltip title="Drag to reorder">{DragHandle as ReactElement}</Tooltip>}
 
-            {isAdmin && (
+            {isInScope && (
               <Tooltip title={isSelected ? "Remove from selection" : "Add to selection"}>
                 <RadioIndicator
                   className="plus-minus"
@@ -1785,6 +1819,8 @@ export const Item: FC<ItemProps> = ({
                 display: "block",
                 backgroundColor: alpha(theme.palette.background.default, 0.8),
                 borderRadius: infoShowing ? 0 : "4px",
+                aspectRatio: layoutSize === "collage" || enlarged ? "unset" : "1 / 1",
+                objectFit: layoutSize === "collage" || enlarged ? "unset" : "cover",
               }}
             />
 
@@ -1830,7 +1866,7 @@ export const Item: FC<ItemProps> = ({
                 />
               </Stack>
             )}
-            {isAdmin && DragHandle && isTouchDevice && !showInfo && (
+            {isInScope && DragHandle && isTouchDevice && !showInfo && (
               <Box sx={{ position: "absolute", zIndex: 10, top: 0 }}>{DragHandle}</Box>
             )}
             {/* {item.status && ["frozen", "staked", "inVault"].includes(item.status) && (

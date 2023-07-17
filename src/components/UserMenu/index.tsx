@@ -1,7 +1,8 @@
 import { useSession } from "next-auth/react"
-import { AccountBalanceWallet, MonetizationOn } from "@mui/icons-material"
+import { AccountBalanceWallet, MonetizationOn, PersonAdd, Star } from "@mui/icons-material"
 import {
   Box,
+  Chip,
   Dialog,
   IconButton,
   Link,
@@ -10,8 +11,10 @@ import {
   Menu,
   MenuItem,
   MenuList,
+  Stack,
   Switch,
   Theme,
+  Typography,
   darken,
   useMediaQuery,
 } from "@mui/material"
@@ -31,6 +34,7 @@ import { useWallets } from "../../context/wallets"
 import { useAccess } from "../../context/access"
 import { shorten } from "../../helpers/utils"
 import { useTheme } from "../../context/theme"
+import { SignUp } from "../SignUp"
 
 type UserMenuProps = {
   large?: boolean
@@ -40,6 +44,7 @@ type UserMenuProps = {
 export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) => {
   const { setVisible, visible } = useWalletModal()
   const { multiWallet, signOut, signIn, isSigningIn, isAdmin } = useAccess()
+  const [signUpShowing, setSignUpShowing] = useState(false)
   const { data: session, status } = useSession()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const { profileModalShowing, setProfileModalShowing, showAllWallets, setShowAllWallets } = useUiSettings()
@@ -97,13 +102,23 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
   return (
     <Box>
       <IconButton
-        color={wallet.connected ? "primary" : "default"}
+        //@ts-ignore
         onClick={handleClick}
         aria-controls={open ? "basic-menu" : undefined}
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
+        sx={{
+          color: wallet.connected ? (session?.user?.id ? "gold.main" : session?.user ? "primary" : "#999") : "unset",
+        }}
       >
-        <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
+        <Stack alignItems="center">
+          <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
+          {wallet.connected && session?.user && (
+            <Typography fontStyle="italic" variant="body2" fontWeight="bold">
+              {session?.user?.id ? "PREMIUM" : "BASIC"}
+            </Typography>
+          )}
+        </Stack>
       </IconButton>
       <Menu
         anchorEl={anchorEl}
@@ -135,6 +150,56 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
           </MenuItem>
           {wallet.connected && (
             <div>
+              {session?.user && (
+                <>
+                  {session.user.id ? (
+                    <MenuItem onClick={openProfile} disabled={isSigningIn}>
+                      <ListItemIcon sx={{ width: "50px" }}>
+                        <PermIdentityIcon />
+                      </ListItemIcon>
+                      <ListItemText>Profile</ListItemText>
+                    </MenuItem>
+                  ) : (
+                    <MenuItem onClick={() => setSignUpShowing(true)} disabled={isSigningIn}>
+                      <ListItemIcon sx={{ width: "50px" }}>
+                        <Star
+                          // @ts-ignore
+                          color="gold"
+                        />
+                      </ListItemIcon>
+                      <ListItemText sx={{ color: "gold.default" }}>PREMIUM</ListItemText>
+                    </MenuItem>
+                  )}
+                </>
+              )}
+
+              {session?.user ? (
+                <MenuItem onClick={() => signOut()} disabled={isSigningIn}>
+                  <ListItemIcon sx={{ width: "50px" }}>
+                    <LogoutIcon />
+                  </ListItemIcon>
+                  <ListItemText>Sign out</ListItemText>
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={() => signIn()} disabled={isSigningIn}>
+                  <ListItemIcon sx={{ width: "50px" }}>
+                    <LoginIcon />
+                  </ListItemIcon>
+                  <ListItemText>Sign in</ListItemText>
+                </MenuItem>
+              )}
+              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <LinkOffIcon />
+                </ListItemIcon>
+                <ListItemText>Disconnect</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => toggleSolTransferOpen()}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <MonetizationOn />
+                </ListItemIcon>
+                <ListItemText>Transfer SOL</ListItemText>
+              </MenuItem>
               {multiWallet && isAdmin && (
                 <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
                   <ListItemIcon sx={{ width: "50px" }}>
@@ -161,42 +226,6 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
               </MenuItem>
-              {session?.user && (
-                <MenuItem onClick={openProfile} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <PermIdentityIcon />
-                  </ListItemIcon>
-                  <ListItemText>Profile</ListItemText>
-                </MenuItem>
-              )}
-
-              <MenuItem onClick={() => toggleSolTransferOpen()}>
-                <ListItemIcon sx={{ width: "50px" }}>
-                  <MonetizationOn />
-                </ListItemIcon>
-                <ListItemText>Transfer SOL</ListItemText>
-              </MenuItem>
-              {session?.user ? (
-                <MenuItem onClick={() => signOut()} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign out</ListItemText>
-                </MenuItem>
-              ) : (
-                <MenuItem onClick={() => signIn()} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LoginIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign in</ListItemText>
-                </MenuItem>
-              )}
-              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
-                <ListItemIcon sx={{ width: "50px" }}>
-                  <LinkOffIcon />
-                </ListItemIcon>
-                <ListItemText>Disconnect</ListItemText>
-              </MenuItem>
             </div>
           )}
         </MenuList>
@@ -212,6 +241,15 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
           <Profile user={session.user} publicKey={session.publicKey} onClose={toggleProfileModal} />
         </Dialog>
       )}
+      <Dialog
+        open={signUpShowing}
+        onClose={() => setSignUpShowing(false)}
+        fullWidth={true}
+        maxWidth="md"
+        fullScreen={isXs}
+      >
+        <SignUp />
+      </Dialog>
     </Box>
   )
 }

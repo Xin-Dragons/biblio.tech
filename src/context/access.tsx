@@ -30,6 +30,7 @@ type AccessContextProps = {
   signIn: Function
   isSigningIn: boolean
   isInScope: boolean
+  isBasic: boolean
 }
 
 const initial = {
@@ -46,6 +47,7 @@ const initial = {
   signIn: noop,
   isSigningIn: false,
   isInScope: false,
+  isBasic: false,
 }
 
 export const AccessContext = createContext<AccessContextProps>(initial)
@@ -64,6 +66,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const [userId, setUserId] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isBasic, setIsBasic] = useState(false)
   const [isInScope, setIsInScope] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [isActive, setIsActive] = useState(false)
@@ -145,6 +148,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
       .includes(wallet.publicKey?.toBase58())
 
     setIsAdmin(Boolean(isAdmin && isLocalScope && isActive) || isOffline)
+    setIsBasic(Boolean(session?.user && isLocalScope))
     setIsInScope(!router.query.publicKey || wallet.publicKey?.toBase58() === router.query.publicKey)
   }, [session, user, wallet.publicKey, router.query])
 
@@ -268,6 +272,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         signIn,
         isSigningIn,
         isInScope,
+        isBasic,
       }}
     >
       {children}

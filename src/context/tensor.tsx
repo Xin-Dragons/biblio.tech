@@ -13,8 +13,8 @@ import {
   toWeb3JsPublicKey,
 } from "@metaplex-foundation/umi-web3js-adapters"
 import { PublicKey } from "@solana/web3.js"
-import { findAssociatedTokenPda } from "@metaplex-foundation/mpl-toolbox"
-import { publicKey, transactionBuilder } from "@metaplex-foundation/umi"
+import { findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
+import { publicKey, sol, transactionBuilder } from "@metaplex-foundation/umi"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { flatten, groupBy, noop } from "lodash"
 import { toast } from "react-hot-toast"
@@ -25,6 +25,7 @@ import { useNfts } from "./nfts"
 import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
 import axios, { AxiosError } from "axios"
+import { useAccess } from "./access"
 
 export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop, buy: noop })
 
@@ -37,6 +38,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const provider = new AnchorProvider(connection, wallet as any, {
     commitment: "confirmed",
   })
+  const { isAdmin } = useAccess()
   const { nfts } = useNfts()
   const swapSdk = new TensorSwapSDK({ provider })
   const wlSdk = new TensorWhitelistSDK({ provider })
@@ -58,16 +60,27 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
               ),
             })
 
-            const instructions = data.tx.ixs.map((instruction) => {
-              return transactionBuilder().add({
+            let txn = transactionBuilder()
+
+            data.tx.ixs.map((instruction) => {
+              txn = txn.add({
                 instruction: fromWeb3JsInstruction(instruction),
                 bytesCreatedOnChain: 0,
                 signers: [createSignerFromWalletAdapter(wallet)],
               })
             })
 
+            if (!isAdmin) {
+              txn = txn.add(
+                transferSol(umi, {
+                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                  amount: sol(0.002),
+                })
+              )
+            }
+
             return {
-              instructions,
+              instructions: txn,
               mint,
             }
           } else {
@@ -98,8 +111,10 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
           price: new BN(item.price * LAMPORTS_PER_SOL),
         })
 
-        const instructions = data.tx.ixs.map((instruction) => {
-          return transactionBuilder().add({
+        let txn = transactionBuilder()
+
+        data.tx.ixs.forEach((instruction) => {
+          txn = txn.add({
             instruction: fromWeb3JsInstruction(instruction),
             bytesCreatedOnChain: 0,
             signers: [createSignerFromWalletAdapter(wallet)],
@@ -107,7 +122,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         })
 
         return {
-          instructions,
+          instructions: txn,
           mint: item.mint,
         }
       })

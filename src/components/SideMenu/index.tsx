@@ -127,21 +127,19 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
       {!isEthWallet && (
         <MenuSection accordion={!noAccordions} title="Go to">
           <Stack spacing={2}>
-            {!router.query.publicKey && isAdmin && (
-              <Link href={relative("/vault")} passHref>
-                <Button
-                  variant={route === "/vault" ? "contained" : "outlined"}
-                  startIcon={
-                    <SvgIcon fontSize="large">
-                      <VaultIcon />
-                    </SvgIcon>
-                  }
-                  size={large ? "large" : "medium"}
-                >
-                  The Vault
-                </Button>
-              </Link>
-            )}
+            <Link href={relative("/vault")} passHref>
+              <Button
+                variant={route === "/vault" ? "contained" : "outlined"}
+                startIcon={
+                  <SvgIcon fontSize="large">
+                    <VaultIcon />
+                  </SvgIcon>
+                }
+                size={large ? "large" : "medium"}
+              >
+                The Vault
+              </Button>
+            </Link>
 
             <Link href={relative("/loans")} passHref>
               <Button

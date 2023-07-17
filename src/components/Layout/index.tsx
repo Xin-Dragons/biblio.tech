@@ -198,7 +198,6 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
           </CardContent>
         </Card>
       </Dialog>
-      <SignUp />
     </Box>
   )
 }

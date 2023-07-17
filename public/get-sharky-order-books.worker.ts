@@ -1,9 +1,9 @@
-import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { OrderBook, createProvider, createSharkyClient, enabledOrderBooks } from "@sharkyfi/client";
-import { Connection, Keypair } from "@solana/web3.js";
-import { flatten, noop } from "lodash";
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet"
+import { OrderBook, createProvider, createSharkyClient, enabledOrderBooks } from "@sharkyfi/client"
+import { Connection, Keypair } from "@solana/web3.js"
+import { flatten, noop } from "lodash"
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!);
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 process.env.ANCHOR_PROVIDER_URL = process.env.NEXT_PUBLIC_RPC_HOST
 const provider = createProvider(connection, new NodeWallet(Keypair.generate()))
@@ -20,26 +20,25 @@ async function getSharkyOrderBooks() {
   )
 
   const orderBooksByName = flatten(
-    orderBooks
-      .map((ob: OrderBook) => [
-        {
-          collectionId: nftListPubKeyToNameMap[ob.orderBookType.nftList!.listAccount.toString()],
-          pubkey: ob.pubKey.toString(),
-          enabled: enabledOrderBooks.includes(ob.pubKey.toString()),
-        },
-      ])
+    orderBooks.map((ob: OrderBook) => [
+      {
+        collectionId: nftListPubKeyToNameMap[ob.orderBookType.nftList!.listAccount.toString()],
+        pubkey: ob.pubKey.toString(),
+        enabled: enabledOrderBooks.includes(ob.pubKey.toString()),
+      },
+    ])
   )
 
-  return orderBooksByName.filter(item => Boolean(item.collectionId))
+  return orderBooksByName.filter((item) => Boolean(item.collectionId))
 }
 
-self.addEventListener("message", async event => {
+self.addEventListener("message", async (event) => {
   try {
-    const { nfts } = event.data;
-  
-    const orderBooks = await getSharkyOrderBooks();
-  
-    self.postMessage({ orderBooks, ok: true });
+    const { nfts } = event.data
+
+    const orderBooks = await getSharkyOrderBooks()
+
+    self.postMessage({ orderBooks, ok: true })
   } catch {
     self.postMessage({ ok: false })
   }

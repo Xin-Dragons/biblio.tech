@@ -2,7 +2,7 @@ import { aprToApy, apyToApr, aprToInterestRatio, interestRatioToApr } from "@sha
 import { createSharkyClient, createProvider, OrderBook, enabledOrderBooks } from "@sharkyfi/client"
 import * as Sharky from "@sharkyfi/client"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { PublicKey } from "@solana/web3.js"
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js"
 import { findKey, flatten, noop, update } from "lodash"
 import { FC, ReactNode, createContext, useContext } from "react"
 import { toast } from "react-hot-toast"
@@ -14,6 +14,14 @@ import { useDatabase } from "./database"
 import { sleep } from "../helpers/utils"
 import axios from "axios"
 import { useLiveQuery } from "dexie-react-hooks"
+import { useAccess } from "./access"
+import { transferSol } from "@metaplex-foundation/mpl-toolbox"
+import { lamports, publicKey, sol, transactionBuilder } from "@metaplex-foundation/umi"
+import {
+  fromWeb3JsInstruction,
+  fromWeb3JsLegacyTransaction,
+  fromWeb3JsTransaction,
+} from "@metaplex-foundation/umi-web3js-adapters"
 
 type SharkyContextProps = {
   repayLoan: Function
@@ -46,6 +54,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   const provider = createProvider(connection, wallet as any)
   const sharkyClient = createSharkyClient(provider)
   const { nfts } = useNfts()
+  const { isAdmin } = useAccess()
   const { setTransactionInProgress, setTransactionComplete, setTransactionErrors, clearTransactions } =
     useTransactionStatus()
   const umi = useUmi()
@@ -91,6 +100,8 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
         },
       ])
     )
+
+    console.log({ orderBooksByName })
 
     return orderBooksByName
   }
@@ -216,15 +227,42 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     const { freezeAuthority } = metadata?.value?.data?.parsed?.info
     const isFreezable = Boolean(freezeAuthority)
 
-    // Execute the instruction
-    const { takenLoan, sig } = await loan.take({
+    const { transaction } = await loan.createTakeTransaction({
       program,
       nftMintPubKey: new PublicKey(nftMint),
       nftListIndex,
       skipFreezingCollateral: !isFreezable,
     })
 
-    console.log(`Loan taken! Its pubkey is: ${takenLoan.pubKey.toString()}; tx sig: ${sig}`)
+    const transactions = []
+
+    if (!isAdmin) {
+      const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+      transactions.push(
+        await transferSol(umi, {
+          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+          amount,
+        }).buildWithLatestBlockhash(umi)
+      )
+    }
+
+    transactions.unshift(fromWeb3JsLegacyTransaction(transaction))
+
+    const signed = await umi.identity.signAllTransactions(transactions)
+    await Promise.all(
+      signed.map(async (tx) => {
+        const sig = await umi.rpc.sendTransaction(tx, { commitment: "processed" })
+        const result = await umi.rpc.confirmTransaction(sig, {
+          commitment: "processed",
+          strategy: {
+            type: "blockhash",
+            ...(await umi.rpc.getLatestBlockhash()),
+          },
+        })
+      })
+    )
+
+    console.log(`Loan taken!`)
   }
 
   async function repayLoan(mint: string) {
@@ -247,10 +285,37 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
 
       setTransactionInProgress([mint], "repay")
 
-      const { sig } = await loan.repay({
+      const { instructions } = await loan.createRepayInstruction({
         program,
-        orderBook,
+        orderBookPubKey: orderBook.pubKey,
+        feeAuthorityPubKey: orderBook.feeAuthority,
+        valueMint: loan.data.valueTokenMint,
       })
+
+      let tx = transactionBuilder().add(
+        instructions.map((instruction) => ({
+          instruction: fromWeb3JsInstruction(instruction),
+          signers: [umi.identity],
+          bytesCreatedOnChain: 0,
+        }))
+      )
+
+      if (!isAdmin) {
+        // 0.5%
+        const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+        tx = tx.add(
+          transferSol(umi, {
+            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+            amount: amount,
+          })
+        )
+      }
+
+      const conf = await tx.sendAndConfirm(umi)
+
+      if (conf.result.value.err) {
+        throw new Error("Error repaying loan")
+      }
 
       toast.success("Loan repaid successfully!")
       await setTransactionComplete([mint])
@@ -289,11 +354,39 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       throw new Error("New loan not found")
     }
 
-    await loan.extend({
+    const { instructions } = await loan.createExtendInstruction({
       program,
-      orderBook,
+      orderBookPubKey: orderBook.pubKey,
+      valueMint: loan.data.valueTokenMint,
+      feeAuthorityPubKey: orderBook.feeAuthority,
       newLoan,
     })
+
+    let tx = transactionBuilder().add(
+      instructions.map((instruction) => ({
+        instruction: fromWeb3JsInstruction(instruction),
+        signers: [umi.identity],
+        bytesCreatedOnChain: 0,
+      }))
+    )
+
+    if (!isAdmin) {
+      // 0.5%
+      const amount = sol(Number(BigInt(newLoan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+      console.log(amount)
+      tx = tx.add(
+        transferSol(umi, {
+          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+          amount: amount,
+        })
+      )
+    }
+
+    const conf = await tx.sendAndConfirm(umi)
+
+    if (conf.result.value.err) {
+      throw new Error("Error repaying loan")
+    }
 
     setTransactionInProgress([mint], "repay")
 

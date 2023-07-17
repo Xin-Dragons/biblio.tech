@@ -61,6 +61,8 @@ const WaitingMessage: FC = () => {
     "Shaking, not stirring...",
     "Waiting for bull market...",
     "Searching for Sugarman...",
+    "Touching grass...",
+    "Sifting through all your rugs...",
   ]
   const [message, setMessage] = useState("")
 
@@ -190,7 +192,8 @@ const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }: { width: number; height: number }) => {
-            const isCollectionsView = !router.query.filter && !router.query.collectionId && !router.query.tag
+            const isCollectionsView =
+              !router.query.filter && !router.query.collectionId && !router.query.tag && !router.query.id
             const adjust = isCollectionsView ? 40 : 90
             const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
@@ -398,18 +401,14 @@ export const Items: FC<ItemsProps> = ({
         ) : (
           <Stack spacing={2} className="no-items-wrap">
             <Typography variant="h5" textAlign="center" fontWeight="normal">
-              {noAccess ? "Insufficient access" : "Nothing here yet..."}
+              {"Nothing here yet..."}
             </Typography>
-            {noAccess ? (
-              <Button onClick={() => renderItem(Profile)}>View profile settings</Button>
-            ) : (
-              <>
-                {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
-                <Link href={`${basePath}/`} passHref>
-                  <Button>View all collections</Button>
-                </Link>
-              </>
-            )}
+            <>
+              {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
+              <Link href={`${basePath}/`} passHref>
+                <Button>View all collections</Button>
+              </Link>
+            </>
 
             <Typography textAlign="center">or</Typography>
             <WalletSearch />

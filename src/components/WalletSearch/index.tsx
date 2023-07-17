@@ -24,7 +24,7 @@ import { Wallet } from "../../db"
 
 const ENS_CONTRACT_ADDRESS = "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" })
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 export async function getPublicKeyFromSolDomain(domain: string): Promise<string | null> {
   try {

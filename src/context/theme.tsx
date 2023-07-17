@@ -15,6 +15,7 @@ const getTheme = (mode: "light" | "dark") => {
       },
       text: {
         main: "black",
+        disabled: "#555",
       },
       gold: {
         main: "#faaf00",

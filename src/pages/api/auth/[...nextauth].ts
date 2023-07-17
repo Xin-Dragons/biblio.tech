@@ -11,7 +11,7 @@ import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
 import { Nft } from "../../../types/nextauth"
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "confirmed" })
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 export default async function auth(req: NextApiRequest, res: NextApiResponse) {
   const providers = [

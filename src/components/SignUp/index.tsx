@@ -116,90 +116,6 @@ export const SignUp: FC = () => {
     toast.success("Signed out")
   }
 
-  async function addWallet() {
-    try {
-      setAdding(true)
-
-      async function linkWallet() {
-        if (isLedger) {
-          try {
-            const txn = await addMemo(umi, {
-              memo: "Add wallet to Biblio",
-            }).buildWithLatestBlockhash(umi)
-
-            const signed = await umi.identity.signTransaction(txn)
-
-            const result = await axios.post("/api/add-wallet", {
-              publicKey: wallet.publicKey?.toBase58(),
-              rawTransaction: base58.encode(umi.transactions.serialize(signed)),
-              basePublicKey: session?.publicKey,
-              isLedger,
-            })
-          } catch (err: any) {
-            console.error(err)
-
-            if (err.message.includes("Something went wrong")) {
-              throw new Error(
-                "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
-              )
-            }
-
-            if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
-              throw new Error(
-                'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
-              )
-            }
-
-            throw err
-          }
-        } else {
-          const csrf = await getCsrfToken()
-          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
-
-          const message = new SigninMessage({
-            domain: window.location.host,
-            publicKey: wallet.publicKey?.toBase58(),
-            statement: `Sign this message to sign in to Biblio.\n\n`,
-            nonce: csrf,
-          })
-
-          const data = new TextEncoder().encode(message.prepare())
-          const signature = await wallet.signMessage(data)
-          const serializedSignature = base58.encode(signature)
-
-          const result = await axios.post("/api/add-wallet", {
-            message: JSON.stringify(message),
-            signature: serializedSignature,
-            publicKey: wallet.publicKey.toBase58(),
-            basePublicKey: session?.publicKey,
-          })
-        }
-      }
-
-      const linkWalletPromise = linkWallet()
-
-      toast.promise(linkWalletPromise, {
-        loading: "Linking wallet",
-        success: "Wallet linked",
-        error: "Error linking wallet",
-      })
-
-      await linkWalletPromise
-
-      await signOut()
-      await signIn()
-    } catch (err: any) {
-      if (err instanceof AxiosError) {
-        toast.error(err.response?.data || "Error linking wallet")
-        return
-      }
-      console.log(err)
-      toast.error(err.message)
-    } finally {
-      setAdding(false)
-    }
-  }
-
   const maxWallets =
     (session?.user?.nfts || [])
       .filter((item) => {
@@ -221,67 +137,36 @@ export const SignUp: FC = () => {
   const canLink = linkedWallets < maxWallets
 
   return (
-    <Dialog open={isOpen} fullWidth maxWidth="md" fullScreen={fullScreen}>
-      <Card sx={{ overflowY: "auto", height: fullScreen ? "100vh" : "auto" }}>
-        <CardContent>
-          {session?.user?.id ? (
-            <Stack spacing={2} justifyContent="center" alignItems="center">
-              <Typography variant="h4">Add wallet - {shorten(wallet.publicKey?.toBase58())}</Typography>
-              <Typography variant="h6">You are signed in as {shorten(session.publicKey)}</Typography>
-              {!canLink ? (
-                <Alert severity="error">
-                  Your account only permits linking {maxWallets} wallet{maxWallets === 1 ? "" : "s"}
-                </Alert>
-              ) : (
-                <Alert severity="info">
-                  You can link {maxWallets - linkedWallets} more wallet{maxWallets - linkedWallets === 1 ? "" : "s"}
-                </Alert>
-              )}
-              <FormControlLabel
-                label="Using ledger?"
-                control={<Switch value={isLedger} onChange={(e) => setIsLedger(e.target.checked)} />}
-              />
-
-              <Stack direction="row" spacing={2}>
-                <Button variant="outlined" color="error" onClick={signOutAndDisconnect} disabled={adding}>
-                  Sign out
-                </Button>
-                <Button disabled={adding || !canLink} variant="outlined" onClick={addWallet}>
-                  Add wallet
-                </Button>
-              </Stack>
-            </Stack>
-          ) : (
-            <Stack spacing={2} justifyContent="center" alignItems="center">
-              <Typography variant="h4" fontFamily="lato" fontWeight="bold">
-                Enter the Library -{" "}
-                <Typography variant="h4" color="primary" fontFamily="lato" display="inline">
-                  {shorten(wallet.publicKey?.toBase58())}
-                </Typography>
-              </Typography>
-              <Selector onSubmit={createAccount} onCancel={() => wallet.disconnect()} loading={loading} />
-              <Stack>
-                <Typography variant="body2">
-                  If you are trying to link an additional wallet to an existing account, please{" "}
-                  <Button
-                    component={Link}
-                    onClick={() => wallet.disconnect()}
-                    size="small"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    disconnect
-                  </Button>{" "}
-                  and reconnect with your main wallet.
-                  <br />
-                  You will be able to link additional wallets in your profile menu if your account type permits multiple
-                  wallets
-                </Typography>
-              </Stack>
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
-    </Dialog>
+    <Card sx={{ overflowY: "auto", height: fullScreen ? "100vh" : "auto" }}>
+      <CardContent>
+        <Stack spacing={2} justifyContent="center" alignItems="center">
+          <Typography variant="h4" fontFamily="lato" fontWeight="bold">
+            Biblio Premium
+          </Typography>
+          <Typography variant="h4" color="primary" fontFamily="lato" display="inline">
+            {shorten(wallet.publicKey?.toBase58())}
+          </Typography>
+          <Selector onSubmit={createAccount} onCancel={() => wallet.disconnect()} loading={loading} />
+          <Stack>
+            <Typography variant="body2">
+              If you are trying to link an additional wallet to an existing account, please{" "}
+              <Button
+                component={Link}
+                onClick={() => wallet.disconnect()}
+                size="small"
+                target="_blank"
+                rel="noreferrer"
+              >
+                disconnect
+              </Button>{" "}
+              and reconnect with your main wallet.
+              <br />
+              You will be able to link additional wallets in your profile menu if your account type permits multiple
+              wallets
+            </Typography>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
   )
 }

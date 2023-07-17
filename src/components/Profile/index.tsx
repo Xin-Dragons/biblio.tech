@@ -53,7 +53,7 @@ import { AddCircle, Close, Delete, Edit, ExpandMore, MonetizationOn, TramSharp, 
 import { Wallet } from "../../db"
 import { default as NextLink } from "next/link"
 import { WalletMultiButtonDynamic } from "../ActionBar"
-import { shorten } from "../../helpers/utils"
+import { shorten, waitForWalletChange } from "../../helpers/utils"
 import { useAccess } from "../../context/access"
 import { useUmi } from "../../context/umi"
 import { addMemo } from "@metaplex-foundation/mpl-toolbox"
@@ -65,11 +65,173 @@ import Crown from "../Listing/crown.svg"
 import { recoverMessageAddress } from "viem"
 import { SiweMessage } from "siwe"
 import { CURRENCIES, Currency } from "../../context/brice"
+import { useWalletBypass } from "../../context/wallet-bypass"
 
 type ProfileProps = {
   user: User
   publicKey: string
   onClose: Function
+}
+
+const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
+  const [loading, setLoading] = useState(false)
+  const [isLedger, setIsLedger] = useState(false)
+  const [publicKey, setPublicKey] = useState<string>("")
+  const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
+  const wallet = useWallet()
+  const { data: session } = useSession()
+  const umi = useUmi()
+  const { setBypassWallet } = useWalletBypass()
+
+  async function addWallet() {
+    try {
+      setLoading(true)
+
+      async function linkWallet() {
+        if (isLedger) {
+          try {
+            const txn = await addMemo(umi, {
+              memo: "Add wallet to Biblio",
+            }).buildWithLatestBlockhash(umi)
+
+            const signed = await umi.identity.signTransaction(txn)
+
+            const result = await axios.post("/api/add-wallet", {
+              publicKey,
+              rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+              basePublicKey: session?.publicKey,
+              isLedger,
+            })
+          } catch (err: any) {
+            console.error(err)
+
+            if (err.message.includes("Something went wrong")) {
+              throw new Error(
+                "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+              )
+            }
+
+            if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+              throw new Error(
+                'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+              )
+            }
+
+            throw err
+          }
+        } else {
+          const csrf = await getCsrfToken()
+          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+
+          const message = new SigninMessage({
+            domain: window.location.host,
+            publicKey,
+            statement: `Sign this message to sign in to Biblio.\n\n`,
+            nonce: csrf,
+          })
+
+          const data = new TextEncoder().encode(message.prepare())
+          const signature = await wallet.signMessage(data)
+          const serializedSignature = base58.encode(signature)
+
+          const result = await axios.post("/api/add-wallet", {
+            message: JSON.stringify(message),
+            signature: serializedSignature,
+            publicKey: wallet.publicKey.toBase58(),
+            basePublicKey: session?.publicKey,
+          })
+        }
+      }
+
+      const linkWalletPromise = linkWallet()
+
+      toast.promise(linkWalletPromise, {
+        loading: "Linking wallet",
+        success: "Wallet linked",
+        error: "Error linking wallet",
+      })
+
+      await linkWalletPromise
+    } catch (err: any) {
+      if (err instanceof AxiosError) {
+        toast.error(err.response?.data || "Error linking wallet")
+        return
+      }
+      console.log(err)
+      toast.error(err.message)
+    } finally {
+      console.log("FUCK")
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!publicKey) {
+      setPublicKeyError(null)
+      return
+    }
+    try {
+      const pk = new PublicKey(publicKey)
+      setPublicKeyError(null)
+    } catch {
+      setPublicKeyError("Invalid Public Key")
+    }
+  }, [publicKey])
+
+  async function connectWallet() {
+    try {
+      setBypassWallet(true)
+      const walletChangePromise = waitForWalletChange(publicKey)
+
+      toast.promise(walletChangePromise, {
+        loading: `Switch connected wallet to ${shorten(publicKey)}`,
+        success: "Done!",
+        error: "Error switching wallet",
+      })
+
+      await walletChangePromise
+
+      if (!wallet.connected) {
+        await wallet.connect()
+      }
+
+      await addWallet()
+    } catch (err: any) {
+      toast.error(err.message || "Error connecting wallet")
+    } finally {
+      setBypassWallet(false)
+    }
+  }
+
+  return (
+    <Stack spacing={2}>
+      <Typography>
+        To connect an additional Solana wallet, enter a Public Key below, then click &quot;Continue&quot;. You will then
+        need to switch to this wallet using your wallet extension, and sign a message to link the wallet.
+      </Typography>
+
+      <FormControlLabel
+        control={<Switch checked={isLedger} onChange={(e) => setIsLedger(e.target.checked)} />}
+        label="Is the wallet you are connecting a ledger?"
+      />
+
+      <TextField
+        label="Public Key"
+        error={!!publicKeyError}
+        value={publicKey}
+        onChange={(e) => setPublicKey(e.target.value)}
+        helperText={publicKeyError}
+      />
+      <Stack direction="row" spacing={2} justifyContent="space-between">
+        <Button variant="outlined" onClick={() => onClose()} color="error">
+          Close
+        </Button>
+        <Button disabled={!publicKey || !!publicKeyError} variant="contained" onClick={connectWallet}>
+          Continue
+        </Button>
+      </Stack>
+    </Stack>
+  )
 }
 
 const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
@@ -655,19 +817,7 @@ function LinkedWallets() {
                 </Select>
               </FormControl>
               {chain === "eth" && <ConnectEth onClose={toggleAdding} />}
-              {chain === "solana" && (
-                <Stack spacing={2}>
-                  <Typography>
-                    To connect an additional Solana wallet, switch your extension to the new wallet while staying signed
-                    in to your main account.
-                  </Typography>
-                  <Stack direction="row">
-                    <Button variant="outlined" onClick={toggleAdding} color="error">
-                      Close
-                    </Button>
-                  </Stack>
-                </Stack>
-              )}
+              {chain === "solana" && <ConnectSol onClose={toggleAdding} />}
             </Stack>
           </CardContent>
         </Card>

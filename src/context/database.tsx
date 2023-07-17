@@ -199,7 +199,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     console.log("ading nfts to db")
     await db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
-      console.log(fromDb)
 
       if (remove) {
         const toRemove = fromDb.filter(
@@ -483,7 +482,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       setWorkers((prevState) => prevState.filter((w) => w !== worker))
     }
 
-    worker.postMessage({ publicKey, force, mints, publicKeys })
+    worker.postMessage({ publicKey, force, mints, publicKeys: publicKeys.length ? publicKeys : [publicKey] })
   }
 
   async function syncRarityWorker(nfts: Nft[], force?: boolean) {

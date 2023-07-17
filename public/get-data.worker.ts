@@ -24,7 +24,11 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { isSome, publicKey, some, Option, unwrapOption } from "@metaplex-foundation/umi"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 
-const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!).use(mplToolbox()).use(mplTokenMetadata())
+const MOB_TRAITS = publicKey("5j3KnVdZPgPRFcMgAn9cL68xNXtXSHFUbvSjcn9JUPQy")
+
+const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
+  .use(mplToolbox())
+  .use(mplTokenMetadata())
 
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string)
 
@@ -115,7 +119,7 @@ async function getIncomingLoans(publicKey: string, paginationToken?: string): Pr
 function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
   return items.map((item) => {
     if (
-      ![TokenStandard.NonFungible, TokenStandard.ProgrammableNonFungible].includes(
+      ![TokenStandard.NonFungible, TokenStandard.ProgrammableNonFungible, null].includes(
         unwrapOption(item.metadata.tokenStandard)!
       )
     ) {
@@ -127,7 +131,7 @@ function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
         return item
       }
 
-      if (TokenState.Locked) {
+      if (TokenState.Locked === item.tokenRecord.state) {
         const delegate = unwrapOption(item.tokenRecord.delegate) || ""
         if (publicKeys.includes(delegate)) {
           return {
@@ -144,13 +148,18 @@ function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
             ...item,
             status: "staked",
           }
+        } else {
+          return {
+            ...item,
+            status: "frozen",
+          }
         }
       }
 
-      if (TokenState.Listed) {
+      if (TokenState.Listed === item.tokenRecord.state) {
         return {
           ...item,
-          status: "listed",
+          status: "staked",
         }
       }
     } else if (item.token && item.token.state === NftTokenState.Frozen) {
@@ -169,6 +178,11 @@ function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
         return {
           ...item,
           status: "staked",
+        }
+      } else {
+        return {
+          ...item,
+          status: "frozen",
         }
       }
     }
@@ -291,13 +305,18 @@ self.addEventListener("message", async (event) => {
     const types = groupBy(
       umiTokens.map((item: DigitalAssetWithStatus) => {
         let tokenStandard: Option<ExtendedTokenStandard> = item.metadata.tokenStandard
+        const collection = unwrapOption(item.metadata.collection)
         if (isSome(item.metadata.tokenStandard)) {
           if (
             item.metadata.tokenStandard.value === ExtendedTokenStandard.FungibleAsset &&
             item.mint.supply === BigInt(1) &&
             item.mint.decimals === 0
           ) {
-            tokenStandard = some(ExtendedTokenStandard.OCP)
+            if (collection && collection.verified && collection.key === MOB_TRAITS) {
+              tokenStandard = some(ExtendedTokenStandard.FungibleAsset)
+            } else {
+              tokenStandard = some(ExtendedTokenStandard.OCP)
+            }
           }
         } else {
           if (item.mint.supply === BigInt(1) && item.mint.decimals === 0) {
@@ -351,7 +370,13 @@ self.addEventListener("message", async (event) => {
             hm.nftCollectionMint
         )?.nftCollectionMint
 
-        const delegate = item.tokenRecord ? unwrapOption(item.tokenRecord?.delegate!) : null
+        let delegate
+
+        if (item.metadata.tokenStandard === TokenStandard.ProgrammableNonFungible) {
+          delegate = unwrapOption(item.tokenRecord?.delegate!)
+        } else {
+          delegate = item.token ? unwrapOption(item.token?.delegate!) : null
+        }
 
         return {
           ...item,
