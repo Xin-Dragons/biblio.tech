@@ -114,7 +114,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
         <Stack alignItems="center">
           <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
           {wallet.connected && session?.user && (
-            <Typography fontStyle="italic" variant="body2" fontWeight="bold">
+            <Typography fontStyle="italic" variant="body2" fontWeight="bold" sx={{ fontSize: "10px" }}>
               {session?.user?.id ? "PREMIUM" : "BASIC"}
             </Typography>
           )}

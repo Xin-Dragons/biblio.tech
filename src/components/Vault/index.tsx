@@ -32,6 +32,7 @@ import {
 import {
   delegateUtilityV1,
   fetchDigitalAsset,
+  fetchDigitalAssetWithAssociatedToken,
   fetchDigitalAssetWithToken,
   fetchDigitalAssetWithTokenByMint,
   lockV1,
@@ -136,7 +137,11 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
       const instructionGroups = onlyFrozenSelected
         ? await Promise.all(
             items.map(async (nft: any) => {
-              const digitalAsset = await fetchDigitalAsset(umi, publicKey(nft.nftMint))
+              const digitalAsset = await fetchDigitalAssetWithAssociatedToken(
+                umi,
+                publicKey(nft.nftMint),
+                umi.identity.publicKey
+              )
               console.log({ digitalAsset })
               let txn = transactionBuilder()
               if (unwrapOption(digitalAsset.metadata.tokenStandard) === 4) {
@@ -215,8 +220,16 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                     )
                 }
               } else {
+                const delegate =
+                  nft.delegate || digitalAsset.tokenRecord
+                    ? unwrapOption(digitalAsset.tokenRecord?.delegate!)
+                    : unwrapOption(digitalAsset.token.delegate)
+
+                if (!delegate) {
+                  throw new Error("Error looking up delegate")
+                }
                 const identity = Metaplex.make(connection)
-                  .use(guestIdentity(new PublicKey(nft.delegate)))
+                  .use(guestIdentity(new PublicKey(delegate)))
                   .identity()
 
                 txn = txn.add(
@@ -233,10 +246,12 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       return transactionBuilder().add({
                         instruction: fromWeb3JsInstruction(instruction),
                         bytesCreatedOnChain: 0,
-                        signers: [createNoopSigner(publicKey(nft.delegate))],
+                        signers: [createNoopSigner(publicKey(delegate))],
                       })
                     })
                 )
+
+                console.log("NAH")
 
                 if (transfer) {
                   txn = txn
@@ -244,7 +259,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       transferV1(umi, {
                         destinationOwner: publicKey(transferTo!),
                         mint: digitalAsset.mint.publicKey,
-                        tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                        tokenStandard: unwrapOption(digitalAsset.metadata.tokenStandard) || 0,
                         amount: 1,
                         tokenOwner: publicKey(nft.owner),
                         authority: createNoopSigner(publicKey(nft.owner)),
