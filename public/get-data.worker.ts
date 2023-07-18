@@ -302,6 +302,8 @@ self.addEventListener("message", async (event) => {
       owner?: string
     }
 
+    console.log("1", owner)
+
     const types = groupBy(
       umiTokens.map((item: DigitalAssetWithStatus) => {
         let tokenStandard: Option<ExtendedTokenStandard> = item.metadata.tokenStandard
@@ -342,6 +344,8 @@ self.addEventListener("message", async (event) => {
       (token) => token.metadata.tokenStandard
     )
 
+    console.log("2", owner)
+
     const nonFungibles = [
       ...(types[ExtendedTokenStandard.NonFungible] || []),
       ...(types[ExtendedTokenStandard.ProgrammableNonFungible] || []),
@@ -372,9 +376,11 @@ self.addEventListener("message", async (event) => {
 
         let delegate
 
-        if (item.metadata.tokenStandard === TokenStandard.ProgrammableNonFungible) {
+        console.log("WEEE", item)
+
+        if (item.tokenRecord) {
           delegate = unwrapOption(item.tokenRecord?.delegate!)
-        } else {
+        } else if (item.token) {
           delegate = item.token ? unwrapOption(item.token?.delegate!) : null
         }
 
@@ -410,6 +416,8 @@ self.addEventListener("message", async (event) => {
           collectionIdentifier: item.collectionId || item.helloMoonCollectionId || item.firstVerifiedCreator,
         }
       })
+
+    console.log("3", owner)
 
     self.postMessage({
       type: "get-rarity",
