@@ -221,9 +221,10 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                 }
               } else {
                 const delegate =
-                  nft.delegate || digitalAsset.tokenRecord
+                  nft.delegate ||
+                  (digitalAsset.tokenRecord
                     ? unwrapOption(digitalAsset.tokenRecord?.delegate!)
-                    : unwrapOption(digitalAsset.token.delegate)
+                    : unwrapOption(digitalAsset.token.delegate))
 
                 if (!delegate) {
                   throw new Error("Error looking up delegate")

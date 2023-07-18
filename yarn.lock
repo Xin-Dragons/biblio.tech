@@ -8940,6 +8940,21 @@ fb-watchman@^2.0.0:
   dependencies:
     bser "2.1.1"
 
+fbonds-core-public@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/fbonds-core-public/-/fbonds-core-public-0.1.0.tgz#910c30520a5ede4448f7da3dc2d09e75cf111192"
+  integrity sha512-Jd6qukRG20kFbg3HHB4UefNn2DNAEjkuARdCjBtcCXU0jkFauuzGdB8iciEoLF4sqmYHsj3kbbzvi7fgWqHMDg==
+  dependencies:
+    "@metaplex-foundation/mpl-token-metadata" "^2.8.1"
+    "@project-serum/anchor" "^0.26.0"
+    "@solana/web3.js" "^1.63.1"
+    heap-js "^2.2.0"
+    immer "^9.0.19"
+    keccak256 "^1.0.6"
+    lodash "^4.17.21"
+    merkletreejs "^0.3.9"
+    zustand "^4.3.2"
+
 fetch-blob@^2.1.1:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/fetch-blob/-/fetch-blob-2.1.2.tgz#a7805db1361bd44c1ef62bb57fb5fe8ea173ef3c"
@@ -9424,6 +9439,11 @@ hash.js@1.1.7, hash.js@^1.0.0, hash.js@^1.0.3, hash.js@^1.1.7:
     inherits "^2.0.3"
     minimalistic-assert "^1.0.1"
 
+heap-js@^2.2.0:
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/heap-js/-/heap-js-2.3.0.tgz#8eed2cede31ec312aa696eef1d4df0565841f183"
+  integrity sha512-E5303mzwQ+4j/n2J0rDvEPBN7GKjhis10oHiYOgjxsmxYgqG++hz9NyLLOXttzH8as/DyiBHYpUrJTZWYaMo8Q==
+
 hey-listen@^1.0.8:
   version "1.0.8"
   resolved "https://registry.yarnpkg.com/hey-listen/-/hey-listen-1.0.8.tgz#8e59561ff724908de1aa924ed6ecc84a56a9aa68"
@@ -9544,6 +9564,11 @@ image-q@^4.0.0:
   integrity sha512-PfJGVgIfKQJuq3s0tTDOKtztksibuUEbJQIYT3by6wctQo+Rdlh7ef4evJ5NCdxY4CfMbvFkocEwbl4BF8RlJw==
   dependencies:
     "@types/node" "16.9.1"
+
+immer@^9.0.19:
+  version "9.0.21"
+  resolved "https://registry.yarnpkg.com/immer/-/immer-9.0.21.tgz#1e025ea31a40f24fb064f1fef23e931496330176"
+  integrity sha512-bc4NBHqOqSfRW7POMkHd51LvClaeMXpm8dx0e8oE2GORbq5aRK7Bxl4FyzVLdGtLmvLKL7BTDBG5ACQm4HWjTA==
 
 immutable@^4.0.0:
   version "4.3.0"
@@ -14478,5 +14503,12 @@ zustand@^4.3.1:
   version "4.3.8"
   resolved "https://registry.yarnpkg.com/zustand/-/zustand-4.3.8.tgz#37113df8e9e1421b0be1b2dca02b49b76210e7c4"
   integrity sha512-4h28KCkHg5ii/wcFFJ5Fp+k1J3gJoasaIbppdgZFO4BPJnsNxL0mQXBSFgOgAdCdBj35aDTPvdAJReTMntFPGg==
+  dependencies:
+    use-sync-external-store "1.2.0"
+
+zustand@^4.3.2:
+  version "4.3.9"
+  resolved "https://registry.yarnpkg.com/zustand/-/zustand-4.3.9.tgz#a7d4332bbd75dfd25c6848180b3df1407217f2ad"
+  integrity sha512-Tat5r8jOMG1Vcsj8uldMyqYKC5IZvQif8zetmLHs9WoZlntTHmIoNM8TpLRY31ExncuUvUOXehd0kvahkuHjDw==
   dependencies:
     use-sync-external-store "1.2.0"
