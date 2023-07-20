@@ -19,7 +19,7 @@ import {
 import { Container } from "@mui/system"
 import Link from "next/link"
 import { Toaster } from "react-hot-toast"
-import { FC, useState } from "react"
+import { FC, ReactNode, useState } from "react"
 import { ActionBar, WalletMultiButtonDynamic } from "../ActionBar"
 import { SideMenu } from "../SideMenu"
 import { Footer } from "../Footer"
@@ -51,12 +51,14 @@ import { useFilters } from "../../context/filters"
 type LayoutProps = {
   nfts: Nft[] | CollectionItem[]
   filtered: Nft[] | CollectionItem[]
-  children: JSX.Element | JSX.Element[]
+  children: ReactNode
   showUntagged?: boolean
   selection?: boolean
+  title?: string
+  actions?: ReactNode
 }
 
-export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) => {
+export const Layout: FC<LayoutProps> = ({ children, title, filtered = [], nfts = [], actions }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
   const { loanType, setLoanType } = useUiSettings()
@@ -88,7 +90,12 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
       </Head>
       <Toaster />
       <Stack height="100vh" width="100vw">
-        <AppBar showMenu={showMenu} toggleMenu={toggleMenu} toggleSolTransferOpen={toggleSolTransferOpen} />
+        <AppBar
+          showMenu={showMenu}
+          toggleMenu={toggleMenu}
+          toggleSolTransferOpen={toggleSolTransferOpen}
+          title={title}
+        />
         <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
           <Stack direction="row" sx={{ height: "100%", overflowY: "auto" }}>
             {showMenu && (
@@ -97,7 +104,7 @@ export const Layout: FC<LayoutProps> = ({ children, filtered = [], nfts = [] }) 
               </Sidebar>
             )}
             <Stack sx={{ flexGrow: 1, overflow: "hidden" }}>
-              <ActionBar nfts={nfts} filtered={filtered} />
+              <ActionBar actions={actions} />
               <Box
                 sx={{
                   width: "100%",

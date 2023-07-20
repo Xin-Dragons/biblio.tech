@@ -215,7 +215,6 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
           }
 
           const value = n.chain === "eth" ? collection.floorPrice : collection.floorPrice / LAMPORTS_PER_SOL
-          // console.log(n.chain, price, value, price * value)
           return {
             ...n,
             value: price * value,

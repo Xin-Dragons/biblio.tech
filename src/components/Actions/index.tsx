@@ -526,7 +526,6 @@ export const Actions: FC = () => {
 
   function returnToWallet() {
     const target = router.asPath.replace(`/wallet/${router.query.publicKey}`, "")
-    console.log(target)
     router.push(target)
   }
 

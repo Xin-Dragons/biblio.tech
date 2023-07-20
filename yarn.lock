@@ -3333,10 +3333,27 @@
   dependencies:
     "@metaplex-foundation/umi-web3js-adapters" "^0.8.4"
 
+"@metaplex-foundation/umi-uploader-bundlr@^0.8.7":
+  version "0.8.7"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-uploader-bundlr/-/umi-uploader-bundlr-0.8.7.tgz#ad16bc057dbd8ab24df08c9439e783688ecd0d1f"
+  integrity sha512-A4RYvCPo3gtqLqPY9sE/7RK9n7HtefJ4XN8obXBxAkbdmPZCf3cW4zBkZ++FHx9zpWr9Aro9aWu2cuhH2qfeJQ==
+  dependencies:
+    "@bundlr-network/client" "^0.8.8"
+    "@metaplex-foundation/umi-web3js-adapters" "^0.8.7"
+    bignumber.js "^9.0.2"
+    buffer "^6.0.3"
+
 "@metaplex-foundation/umi-web3js-adapters@^0.8.4":
   version "0.8.4"
   resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-web3js-adapters/-/umi-web3js-adapters-0.8.4.tgz#2e4649775160b7305b61a67fa41ce42eb691663d"
   integrity sha512-2ZOMR1gAcm/wvr6dHFvxgmLP/+zb3i9ZX5BQ+zohLA6BK2pnnDzi0QTdaqwUhz13AOJ53k/5m7qS5DY08EtAiA==
+  dependencies:
+    buffer "^6.0.3"
+
+"@metaplex-foundation/umi-web3js-adapters@^0.8.7":
+  version "0.8.7"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-web3js-adapters/-/umi-web3js-adapters-0.8.7.tgz#3df3f6ee43c407d0aa45ff1ba7c444689dcd11a5"
+  integrity sha512-rxqnvVEZY9bkoLfgQkTGXdPXYsBpZSmjI2QpuwEhT/5q/yVWsiBNVtKoZzgFDvQvVeB/Ix83LXCzMa+/B8J1LA==
   dependencies:
     buffer "^6.0.3"
 

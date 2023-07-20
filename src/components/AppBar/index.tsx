@@ -176,9 +176,10 @@ type AppBarProps = {
   showMenu?: boolean
   toggleMenu?: Function
   toggleSolTransferOpen: Function
+  title?: string
 }
 
-export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen }) => {
+export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen, title }) => {
   const [open, setOpen] = useState(false)
   const { tag, updateTag } = useTags()
   const breakLine = useMediaQuery("(max-width:500px)")
@@ -208,7 +209,13 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransfe
           {showMenu && <WalletSearch />}
 
           <Box sx={{ flexGrow: breakLine ? 0 : 1 }}>
-            <Title setOpen={setOpen} />
+            {title ? (
+              <Typography variant="h5" fontFamily="Lato" fontWeight="bold" textAlign="center" textTransform="uppercase">
+                {title}
+              </Typography>
+            ) : (
+              <Title setOpen={setOpen} />
+            )}
           </Box>
 
           {showMenu ? (

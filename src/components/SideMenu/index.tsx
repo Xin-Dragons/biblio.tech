@@ -21,7 +21,7 @@ import { Sidebar } from "../Sidebar"
 import { useTags } from "../../context/tags"
 import { Tags } from "../Tags"
 import { FC, ReactNode } from "react"
-import { useRouter } from "next/router"
+import { Router, useRouter } from "next/router"
 import { useBasePath } from "../../context/base-path"
 import VaultIcon from "../Actions/vault.svg"
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn"
@@ -29,6 +29,10 @@ import { useAccess } from "../../context/access"
 import { Sell } from "@mui/icons-material"
 import { useUiSettings } from "../../context/ui-settings"
 import { isAddress } from "viem"
+import Tokens from "./tokens.svg"
+import Nfts from "./nfts.svg"
+import Address from "./address.svg"
+import Snap from "./snap.svg"
 
 type SideMenuProps = {
   fullWidth?: boolean
@@ -40,9 +44,10 @@ type MenuSectionProps = {
   accordion?: boolean
   children: ReactNode
   title: string
+  open?: boolean
 }
 
-const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title }) => {
+const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title, open }) => {
   if (!accordion) {
     return (
       <Stack spacing={2}>
@@ -56,7 +61,7 @@ const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title }) => {
 
   return (
     <Accordion
-      defaultExpanded
+      defaultExpanded={open}
       sx={{
         backgroundColor: "transparent",
         backgroundImage: "none !important",
@@ -64,12 +69,15 @@ const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title }) => {
         borderBottom: 1,
         borderColor: "divider",
         borderTop: 0,
+        "&:before": {
+          backgroundColor: "transparent",
+        },
       }}
       disableGutters
       elevation={0}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ border: 0 }}>
-        <Typography variant="h6" fontWeight="bold" textTransform="uppercase">
+        <Typography variant="h6" fontWeight="bold" textTransform="uppercase" sx={{ fontSize: "16px" }}>
           {title}
         </Typography>
       </AccordionSummary>
@@ -85,6 +93,8 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
   const router = useRouter()
   const { isAdmin } = useAccess()
 
+  const [_, section, page] = router.asPath.split("/")
+
   const isEthWallet = isAddress(router.query.publicKey as string)
 
   function relative(path: string) {
@@ -94,8 +104,8 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
   const route = router.asPath.replace(basePath, "")
 
   return (
-    <Stack spacing={2}>
-      <MenuSection accordion={!noAccordions} title="Show">
+    <Stack>
+      <MenuSection accordion={!noAccordions} title="Wallet">
         <Link href={relative("/")} passHref>
           <Button variant={["/", ""].includes(route) ? "contained" : "outlined"} size={large ? "large" : "medium"}>
             Collections
@@ -177,6 +187,60 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
           <Tags large={large} />
         </MenuSection>
       )}
+      <MenuSection title="Creator tools" accordion={!noAccordions} open={section === "tools"}>
+        <Link href={"/tools/token-tool"} passHref>
+          <Button
+            variant={page === "token-tool" ? "contained" : "outlined"}
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Tokens />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            Token Tool
+          </Button>
+        </Link>
+        <Link href={"https://nfts.dandies.xyz"} passHref>
+          <Button
+            variant={page === "nft-suite" ? "contained" : "outlined"}
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Nfts />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            NFT Suite
+          </Button>
+        </Link>
+        <Link href={"https://vanity.dandies.xyz"} passHref>
+          <Button
+            variant={page === "grind-address" ? "contained" : "outlined"}
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Address />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            Grind address
+          </Button>
+        </Link>
+        <Link href={"https://snap.dandies.xyz"} passHref>
+          <Button
+            variant={page === "snap" ? "contained" : "outlined"}
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Snap />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            Snapshot
+          </Button>
+        </Link>
+      </MenuSection>
       {/* {filters && (
           <Accordion
             defaultExpanded

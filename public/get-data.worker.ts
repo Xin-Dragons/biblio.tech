@@ -376,8 +376,6 @@ self.addEventListener("message", async (event) => {
 
         let delegate
 
-        console.log("WEEE", item)
-
         if (item.tokenRecord) {
           delegate = unwrapOption(item.tokenRecord?.delegate!)
         } else if (item.token) {

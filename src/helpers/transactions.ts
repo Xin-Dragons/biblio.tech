@@ -26,7 +26,6 @@ export async function buildTransactions(umi: Umi, chunks: InstructionSet[][]) {
   return await Promise.all(
     chunks.map(async (builders) => {
       const txn = builders.reduce((t, item) => t.add(item.instructions), transactionBuilder())
-      console.log(txn.getTransactionSize(umi))
       return {
         txn: await txn.buildWithLatestBlockhash(umi),
         signers: txn.getSigners(umi),

@@ -209,40 +209,36 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
       rules: rules,
     })
 
-    console.log(Transaction.from(data.ixn))
+    const tx = Transaction.from(data.ixn)
 
-    throw new Error("Nope")
+    const txns = [fromWeb3JsLegacyTransaction(tx)]
 
-    // const tx = Transaction.from(data.ixn)
+    if (!isAdmin) {
+      txns.push(
+        await transferSol(umi, {
+          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+          amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
+        }).buildWithLatestBlockhash(umi)
+      )
+    }
 
-    // const txns = [fromWeb3JsLegacyTransaction(tx)]
+    const signed = await umi.identity.signAllTransactions(txns)
+    await Promise.all(
+      signed.map(async (tx) => {
+        const sig = await umi.rpc.sendTransaction(tx, { commitment: "processed" })
+        const confirmed = await umi.rpc.confirmTransaction(sig, {
+          strategy: {
+            type: "blockhash",
+            ...(await umi.rpc.getLatestBlockhash()),
+          },
+          commitment: "processed",
+        })
 
-    // if (!isAdmin) {
-    //   txns.push(
-    //     await transferSol(umi, {
-    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-    //       amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
-    //     }).buildWithLatestBlockhash(umi)
-    //   )
-    // }
-
-    // const signed = await umi.identity.signAllTransactions(txns)
-    // await Promise.all(
-    //   signed.map(async (tx) => {
-    //     const sig = await umi.rpc.sendTransaction(tx, { commitment: "processed" })
-    //     const confirmed = await umi.rpc.confirmTransaction(sig, {
-    //       strategy: {
-    //         type: "blockhash",
-    //         ...(await umi.rpc.getLatestBlockhash()),
-    //       },
-    //       commitment: "processed",
-    //     })
-
-    //     if (confirmed.value.err) {
-    //       throw new Error("Error taking loan")
-    //     }
-    //   })
-    // )
+        if (confirmed.value.err) {
+          throw new Error("Error taking loan")
+        }
+      })
+    )
   }
 
   async function getBestCitrusLoanFromLoan(loanId: string) {
