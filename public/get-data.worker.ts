@@ -302,8 +302,6 @@ self.addEventListener("message", async (event) => {
       owner?: string
     }
 
-    console.log("1", owner)
-
     const types = groupBy(
       umiTokens.map((item: DigitalAssetWithStatus) => {
         let tokenStandard: Option<ExtendedTokenStandard> = item.metadata.tokenStandard
@@ -344,13 +342,13 @@ self.addEventListener("message", async (event) => {
       (token) => token.metadata.tokenStandard
     )
 
-    console.log("2", owner)
-
     const nonFungibles = [
       ...(types[ExtendedTokenStandard.NonFungible] || []),
       ...(types[ExtendedTokenStandard.ProgrammableNonFungible] || []),
       ...(types[ExtendedTokenStandard.OCP] || []),
     ]
+
+    console.log("mapping non fungibles")
 
     const nfts = nonFungibles
       .map((item) => {
@@ -415,7 +413,7 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    console.log("3", owner)
+    console.log("getting rarity")
 
     self.postMessage({
       type: "get-rarity",
@@ -447,6 +445,8 @@ self.addEventListener("message", async (event) => {
       }
     }
 
+    console.log("getting collections")
+
     const collections = (
       await Promise.all(
         nftPerCollection.map(async (nft) => {
@@ -472,6 +472,7 @@ self.addEventListener("message", async (event) => {
                 collectionId: nft.collectionId,
               }
             } catch (err) {
+              console.log(1, err)
               try {
                 const { data: json } = await axios.get(nft.metadata.uri!)
                 return {
@@ -480,7 +481,8 @@ self.addEventListener("message", async (event) => {
                   collectionName: getCollectionName(nft, json),
                   ...helloMoonCollection,
                 }
-              } catch {
+              } catch (err) {
+                console.log(2, err)
                 return size(helloMoonCollection) ? { ...helloMoonCollection, collectionId: "unknown" } : null
               }
             }
@@ -493,7 +495,8 @@ self.addEventListener("message", async (event) => {
                 collectionName: getCollectionName(nft, json),
                 ...helloMoonCollection,
               }
-            } catch {
+            } catch (err) {
+              console.log(3, err)
               return size(helloMoonCollection) ? { ...helloMoonCollection, collectionId: "unknown" } : null
             }
           } else {
@@ -507,6 +510,8 @@ self.addEventListener("message", async (event) => {
       ...(types[ExtendedTokenStandard.Fungible] || []),
       ...(types[ExtendedTokenStandard.FungibleAsset] || []),
     ]
+
+    console.log("got collections")
 
     const prices = await getTokenPrices(fungibles.map((n) => n.nftMint))
 

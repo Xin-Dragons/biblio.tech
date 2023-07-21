@@ -293,7 +293,8 @@ const Home: NextPage = () => {
   }
 
   let filteredCollections = collections.filter((item: any) => {
-    return (!search || item?.name.toLowerCase().includes(search?.toLowerCase())) && item.nfts.length
+    console.log(item)
+    return (!search || item?.name?.toLowerCase().includes(search?.toLowerCase())) && item.nfts.length
   })
 
   if (sort === "value") {
