@@ -214,7 +214,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             NFT Suite
           </Button>
         </Link>
-        <Link href={"https://vanity.dandies.xyz"} passHref>
+        <Link href={"/tools/grind-address"} passHref>
           <Button
             variant={page === "grind-address" ? "contained" : "outlined"}
             startIcon={
@@ -227,9 +227,9 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             Grind address
           </Button>
         </Link>
-        <Link href={"https://snap.dandies.xyz"} passHref>
+        <Link href={"/tools/snapshot"} passHref>
           <Button
-            variant={page === "snap" ? "contained" : "outlined"}
+            variant={page === "snapshot" ? "contained" : "outlined"}
             startIcon={
               <SvgIcon fontSize="large">
                 <Snap />
