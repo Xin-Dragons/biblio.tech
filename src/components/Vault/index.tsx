@@ -142,7 +142,6 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                 publicKey(nft.nftMint),
                 umi.identity.publicKey
               )
-              console.log({ digitalAsset })
               let txn = transactionBuilder()
               if (unwrapOption(digitalAsset.metadata.tokenStandard) === 4) {
                 txn = txn.add(
@@ -251,8 +250,6 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       })
                     })
                 )
-
-                console.log("NAH")
 
                 if (transfer) {
                   txn = txn

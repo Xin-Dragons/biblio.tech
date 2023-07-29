@@ -15,6 +15,8 @@ const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { basePublicKey, publicKey, signature, message, usingLedger, statement, nonce, rawTransaction } = req.body
 
+  console.log(req.body)
+
   async function validate() {
     if (usingLedger) {
       const txn = umi.transactions.deserialize(base58.decode(rawTransaction))

@@ -65,6 +65,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
       return
     }
     if (!session?.user?.active && wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
+      console.log("ah shit")
       signOutIn()
     }
   }, [wallet.publicKey, session])

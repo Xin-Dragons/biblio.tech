@@ -348,8 +348,6 @@ self.addEventListener("message", async (event) => {
       ...(types[ExtendedTokenStandard.OCP] || []),
     ]
 
-    console.log("mapping non fungibles")
-
     const nfts = nonFungibles
       .map((item) => {
         const loanTaken = loanStats.find((l: Loan) => l.collateralMint === item.nftMint)
@@ -413,8 +411,6 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    console.log("getting rarity")
-
     self.postMessage({
       type: "get-rarity",
       nfts: nfts.map((n) => omit(n, "edition", "mint", "publicKey")),
@@ -445,8 +441,6 @@ self.addEventListener("message", async (event) => {
       }
     }
 
-    console.log("getting collections")
-
     const collections = (
       await Promise.all(
         nftPerCollection.map(async (nft) => {
@@ -472,7 +466,6 @@ self.addEventListener("message", async (event) => {
                 collectionId: nft.collectionId,
               }
             } catch (err) {
-              console.log(1, err)
               try {
                 const { data: json } = await axios.get(nft.metadata.uri!)
                 return {
@@ -482,7 +475,6 @@ self.addEventListener("message", async (event) => {
                   ...helloMoonCollection,
                 }
               } catch (err) {
-                console.log(2, err)
                 return size(helloMoonCollection) ? { ...helloMoonCollection, collectionId: "unknown" } : null
               }
             }
@@ -496,7 +488,6 @@ self.addEventListener("message", async (event) => {
                 ...helloMoonCollection,
               }
             } catch (err) {
-              console.log(3, err)
               return size(helloMoonCollection) ? { ...helloMoonCollection, collectionId: "unknown" } : null
             }
           } else {
@@ -510,8 +501,6 @@ self.addEventListener("message", async (event) => {
       ...(types[ExtendedTokenStandard.Fungible] || []),
       ...(types[ExtendedTokenStandard.FungibleAsset] || []),
     ]
-
-    console.log("got collections")
 
     const prices = await getTokenPrices(fungibles.map((n) => n.nftMint))
 

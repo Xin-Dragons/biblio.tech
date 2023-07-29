@@ -77,9 +77,24 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const router = useRouter()
 
   useEffect(() => {
-    if (bypassWallet) {
+    if (bypassWallet || !wallet.publicKey) {
       return
     }
+    console.log("FUCK THIS")
+    const wallets = session?.user?.wallets.map((wallet) => wallet.public_key) || []
+    if (wallets.includes(wallet.publicKey?.toBase58())) {
+      return
+    } else {
+      signOut().then(signIn)
+    }
+  }, [wallet.publicKey])
+
+  useEffect(() => {
+    if (bypassWallet) {
+      console.log("Wallet listener bypassed, returning")
+      return
+    }
+    console.log("FUCK THAT")
     const publicKey = (router.query.publicKey as string) || wallet.publicKey?.toBase58()
     if (!publicKey) {
       setPublicKey("")

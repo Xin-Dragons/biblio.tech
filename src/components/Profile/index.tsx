@@ -79,7 +79,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
   const [publicKey, setPublicKey] = useState<string>("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const wallet = useWallet()
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
   const umi = useUmi()
   const { setBypassWallet } = useWalletBypass()
 
@@ -126,7 +126,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
           const message = new SigninMessage({
             domain: window.location.host,
             publicKey,
-            statement: `Sign this message to sign in to Biblio.\n\n`,
+            statement: `Sign this message to connect wallet to Biblio.\n\n`,
             nonce: csrf,
           })
 
@@ -137,7 +137,8 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
           const result = await axios.post("/api/add-wallet", {
             message: JSON.stringify(message),
             signature: serializedSignature,
-            publicKey: wallet.publicKey.toBase58(),
+            // @ts-ignore
+            publicKey: window.solana?.publicKey?.toBase58(),
             basePublicKey: session?.publicKey,
           })
         }
@@ -152,6 +153,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
       })
 
       await linkWalletPromise
+      await update()
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error linking wallet")
@@ -160,7 +162,6 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
       console.log(err)
       toast.error(err.message)
     } finally {
-      console.log("FUCK")
       setLoading(false)
     }
   }
@@ -700,6 +701,10 @@ function LinkedWallets() {
       await signMessagePromise
 
       await update()
+      // @ts-ignore
+      if (wallet.publicKey?.toBase58() === publicKey) {
+        await signOut()
+      }
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error unlinking")
