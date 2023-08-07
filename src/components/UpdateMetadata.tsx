@@ -51,7 +51,7 @@ export const UpdateMetadata = ({
 
         const file = await createGenericFileFromBrowserFile(newImage)
         const [imageUrl] = await umi.uploader.upload([file])
-        meta.image = imageUrl
+        meta.image = `${imageUrl}?ext=${newImage.type.split("/")[1]}`
       }
 
       meta.name = name

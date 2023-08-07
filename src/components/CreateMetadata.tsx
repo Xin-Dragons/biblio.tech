@@ -32,46 +32,59 @@ export const CreateMetadata = ({ mint, isAdmin }: { mint: Mint; isAdmin: boolean
   async function submit() {
     try {
       setLoading(true)
-      const meta = {} as any
-      if (newImage) {
-        if (newImage.size > 2_000_000) {
-          throw new Error("Image should be 2MB or less")
+      const creatingPromise = Promise.resolve().then(async () => {
+        const meta = {} as any
+        if (newImage) {
+          if (newImage.size > 2_000_000) {
+            throw new Error("Image should be 2MB or less")
+          }
+
+          if (!["image/png", "image/jpg", "image/jpeg", "image/gif"].includes(newImage.type)) {
+            throw new Error("Invalid image format")
+          }
+
+          const file = await createGenericFileFromBrowserFile(newImage)
+          const [imageUrl] = await umi.uploader.upload([file])
+          meta.image = `${imageUrl}?ext=${newImage.type.split("/")[1]}`
         }
 
-        if (!["image/png", "image/jpg", "image/jpeg", "image/gif"].includes(newImage.type)) {
-          throw new Error("Invalid image format")
-        }
+        meta.name = name
+        meta.symbol = symbol
+        meta.description = description
 
-        const file = await createGenericFileFromBrowserFile(newImage)
-        const [imageUrl] = await umi.uploader.upload([file])
-        meta.image = imageUrl
-      }
+        const uri = await umi.uploader.uploadJson(meta)
 
-      meta.name = name
-      meta.symbol = symbol
-      meta.description = description
-
-      const uri = await umi.uploader.uploadJson(JSON.stringify(meta))
-
-      let txn = transactionBuilder().add(
-        createV1(umi, {
-          mint: mint.publicKey,
-          tokenStandard: TokenStandard.Fungible,
-          decimals: mint.decimals,
-          name,
-          uri,
-          sellerFeeBasisPoints: percentAmount(0),
-        })
-      )
-
-      if (!isAdmin) {
-        txn = txn.add(
-          transferSol(umi, {
-            destination: FEES_WALLET,
-            amount: sol(0.5),
+        let txn = transactionBuilder().add(
+          createV1(umi, {
+            mint: mint.publicKey,
+            tokenStandard: TokenStandard.Fungible,
+            decimals: mint.decimals,
+            symbol,
+            name,
+            uri,
+            sellerFeeBasisPoints: percentAmount(0),
           })
         )
-      }
+
+        if (!isAdmin) {
+          txn = txn.add(
+            transferSol(umi, {
+              destination: FEES_WALLET,
+              amount: sol(0.2),
+            })
+          )
+        }
+
+        await txn.sendAndConfirm(umi)
+      })
+
+      toast.promise(creatingPromise, {
+        loading: "Creating metadata account",
+        success: "Metadata account created successfully",
+        error: "Error creating metadata account",
+      })
+
+      await creatingPromise
     } catch (err: any) {
       toast.error(err.message)
     } finally {
