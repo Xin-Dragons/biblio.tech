@@ -1,4 +1,9 @@
-import { DigitalAsset, JsonMetadata, fetchDigitalAsset } from "@metaplex-foundation/mpl-token-metadata"
+import {
+  DigitalAsset,
+  JsonMetadata,
+  fetchDigitalAsset,
+  fetchJsonMetadata,
+} from "@metaplex-foundation/mpl-token-metadata"
 import { Mint, fetchMint } from "@metaplex-foundation/mpl-toolbox"
 import { PublicKey, publicKey, unwrapOption } from "@metaplex-foundation/umi"
 import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters"
@@ -12,7 +17,6 @@ import { UpdateMetadata } from "./UpdateMetadata"
 import { FreezeTokens } from "./FreezeTokens"
 import { UpdateAuths } from "./UpdateAuths"
 import { shorten } from "../helpers/utils"
-import axios from "axios"
 
 export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null }) => {
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
@@ -38,8 +42,7 @@ export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null
         } else {
           setDigitalAsset(da)
           setMint(da.mint)
-          const jsonMetadata = (await umi.downloader.downloadJson(da.metadata.uri)) as JsonMetadata
-          const { data } = await axios.get(da.metadata.uri)
+          const jsonMetadata = await fetchJsonMetadata(umi, da.metadata.uri)
           setJsonMetadata(jsonMetadata)
         }
 
