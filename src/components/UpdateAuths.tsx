@@ -102,6 +102,17 @@ export const UpdateAuths = ({
           })
         )
       }
+
+      const updatePromise = txn.sendAndConfirm(umi)
+
+      toast.promise(updatePromise, {
+        loading: "Updating auths",
+        success: "Auths updated successfully",
+        error: "Error updating auths",
+      })
+
+      await updatePromise
+      await refresh()
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -265,7 +276,7 @@ export const UpdateAuths = ({
         <TextField
           disabled={!canUpdateMintAuth || !mint || !unwrapOption(mint.mintAuthority)}
           label={mint && unwrapOption(mint.mintAuthority) ? "Mint authority" : "Mint authority revoked"}
-          value={newMintAuthority}
+          value={newMintAuthority || (mint && unwrapOption(mint.mintAuthority)) || ""}
           placeholder={(mint && unwrapOption(mint.mintAuthority)) || ""}
           onChange={(e) => setNewMintAuthority(e.target.value)}
           helperText="Authority to mint new tokens"
@@ -284,7 +295,7 @@ export const UpdateAuths = ({
         <TextField
           disabled={!canUpdateFreezeAuth || !mint || !unwrapOption(mint.freezeAuthority)}
           label={mint && unwrapOption(mint.freezeAuthority) ? "Freeze authority" : "Freeze authority revoked"}
-          value={newFreezeAuthority}
+          value={newFreezeAuthority || (mint && unwrapOption(mint.freezeAuthority))}
           placeholder={(mint && unwrapOption(mint.freezeAuthority)) || ""}
           onChange={(e) => setNewFreezeAuthority(e.target.value)}
           helperText="Authority to freeze token accounts"
@@ -303,7 +314,7 @@ export const UpdateAuths = ({
         <TextField
           disabled={!canUpdateUpdateAuth}
           label={metadata?.isMutable ? "Update authority" : "Token metadata immutable"}
-          value={newUpdateAuthority}
+          value={newUpdateAuthority || metadata?.updateAuthority || ""}
           placeholder={metadata?.updateAuthority || ""}
           onChange={(e) => setNewUpdateAuthority(e.target.value)}
           helperText="Authority to update token metadata"

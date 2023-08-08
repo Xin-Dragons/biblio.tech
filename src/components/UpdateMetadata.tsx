@@ -18,23 +18,23 @@ export const UpdateMetadata = ({
   jsonMetadata?: JsonMetadata | null
   isAdmin: boolean
 }) => {
-  const [name, setName] = useState(jsonMetadata?.name)
-  const [symbol, setSymbol] = useState(jsonMetadata?.symbol)
-  const [description, setDescription] = useState(jsonMetadata?.description)
+  const [name, setName] = useState(jsonMetadata?.name || "")
+  const [symbol, setSymbol] = useState(jsonMetadata?.symbol || "")
+  const [description, setDescription] = useState(jsonMetadata?.description || "")
   const [newImage, setNewImage] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const umi = useUmi()
 
   useEffect(() => {
-    setName(jsonMetadata?.name)
-    setSymbol(jsonMetadata?.symbol)
-    setDescription(jsonMetadata?.description)
+    setName(jsonMetadata?.name || "")
+    setSymbol(jsonMetadata?.symbol || "")
+    setDescription(jsonMetadata?.description || "")
   }, [jsonMetadata])
 
   function cancel() {
-    setName(jsonMetadata?.name)
-    setSymbol(jsonMetadata?.symbol)
-    setDescription(jsonMetadata?.description)
+    setName(jsonMetadata?.name || "")
+    setSymbol(jsonMetadata?.symbol || "")
+    setDescription(jsonMetadata?.description || "")
     setNewImage(null)
   }
 

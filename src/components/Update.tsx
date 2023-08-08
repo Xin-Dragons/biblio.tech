@@ -17,6 +17,7 @@ import { UpdateMetadata } from "./UpdateMetadata"
 import { FreezeTokens } from "./FreezeTokens"
 import { UpdateAuths } from "./UpdateAuths"
 import { shorten } from "../helpers/utils"
+import { toast } from "react-hot-toast"
 
 export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null }) => {
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
@@ -56,11 +57,21 @@ export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null
           setPublicKeyError(null)
         }
       } catch (err: any) {
+        console.log(err)
         if (err.message.includes("The account of type [Metadata] was not found at the provided address")) {
-          const mint = await fetchMint(umi, publicKey(pk))
-          setMint(mint)
+          try {
+            const mint = await fetchMint(umi, publicKey(pk))
+            setMint(mint)
+          } catch {
+            console.log(err.stack)
+            toast.error("Invalid SPL token address")
+            setPublicKeyError("Invalid token mint address")
+            setMint(null)
+            setDigitalAsset(null)
+          }
         } else {
           console.log(err.stack)
+          toast.error("Invalid SPL token address")
           setPublicKeyError("Invalid token mint address")
           setMint(null)
           setDigitalAsset(null)
