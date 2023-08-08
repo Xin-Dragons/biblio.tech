@@ -77,7 +77,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const router = useRouter()
 
   useEffect(() => {
-    if (bypassWallet || !wallet.publicKey) {
+    if (bypassWallet || !wallet.publicKey || !session) {
       return
     }
     const wallets = session?.user?.wallets.map((wallet) => wallet.public_key) || []
@@ -86,7 +86,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
     } else {
       signOut().then(signIn)
     }
-  }, [wallet.publicKey])
+  }, [wallet.publicKey, session])
 
   useEffect(() => {
     if (bypassWallet) {

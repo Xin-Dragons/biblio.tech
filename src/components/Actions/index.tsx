@@ -85,6 +85,7 @@ import { AddressSelector } from "../AddressSelector"
 import { Vault } from "../Vault"
 import { useEnsName } from "wagmi"
 import { useUiSettings } from "../../context/ui-settings"
+import { SecureDelist } from "../SecureDelist"
 
 const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address, returnToWallet }) => {
   // const { data: ensName } = useEnsName({ address })
@@ -128,6 +129,11 @@ export const Actions: FC = () => {
   const { isInScope, isAdmin, isBasic } = useAccess()
   const { selected, setSelected } = useSelection()
   const { loanType, setLoanType } = useUiSettings()
+  const [delistOpen, setDelistOpen] = useState(false)
+
+  function toggleDelist() {
+    setDelistOpen(!delistOpen)
+  }
 
   const [sending, setSending] = useState(false)
   const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
@@ -516,10 +522,6 @@ export const Actions: FC = () => {
     }
   }
 
-  async function onDelist() {
-    await delist(selected)
-  }
-
   function toggleActionDrawer() {
     setActionDrawerShowing(!actionDrawerShowing)
   }
@@ -671,7 +673,7 @@ export const Actions: FC = () => {
                             isDisabled
                           }
                           color="info"
-                          onClick={listedSelected ? onDelist : list}
+                          onClick={listedSelected ? toggleDelist : list}
                         >
                           <Sell />
                         </IconButton>
@@ -809,6 +811,12 @@ export const Actions: FC = () => {
           </Card>
         </Dialog>
 
+        <Dialog open={delistOpen} onClose={toggleDelist} fullWidth maxWidth="md">
+          <Card sx={{ overflowY: "auto" }}>
+            <SecureDelist onDismiss={toggleDelist} />
+          </Card>
+        </Dialog>
+
         <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
           <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
             <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>
@@ -899,7 +907,7 @@ export const Actions: FC = () => {
                       nonOwnedSelected ||
                       selected.length > 20
                     }
-                    onClick={listedSelected ? onDelist : list}
+                    onClick={listedSelected ? toggleDelist : list}
                     variant="contained"
                     size="large"
                     fullWidth

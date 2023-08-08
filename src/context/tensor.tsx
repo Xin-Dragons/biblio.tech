@@ -7,14 +7,18 @@ import { useUmi } from "./umi"
 import {
   fromWeb3JsInstruction,
   fromWeb3JsLegacyTransaction,
-  fromWeb3JsPublicKey,
   fromWeb3JsTransaction,
-  toWeb3JsInstruction,
   toWeb3JsPublicKey,
 } from "@metaplex-foundation/umi-web3js-adapters"
 import { PublicKey } from "@solana/web3.js"
 import { findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
-import { publicKey, sol, transactionBuilder } from "@metaplex-foundation/umi"
+import {
+  publicKey,
+  sol,
+  transactionBuilder,
+  unwrapOption,
+  Transaction as UmiTransaction,
+} from "@metaplex-foundation/umi"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { flatten, groupBy, noop } from "lodash"
 import { toast } from "react-hot-toast"
@@ -26,6 +30,7 @@ import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-w
 import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
 import axios, { AxiosError } from "axios"
 import { useAccess } from "./access"
+import { fetchAllDigitalAsset, transferV1 } from "@metaplex-foundation/mpl-token-metadata"
 
 export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop, buy: noop })
 
@@ -353,7 +358,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     notifyStatus(errs, successes, "buy", "bought")
   }
 
-  async function delist(mints: string[]) {
+  async function delist(mints: string[], delistTo?: string) {
     try {
       const byMarketplace = groupBy(mints, (mint) => {
         const nft = nfts.find((nft) => nft.nftMint === mint) as Nft
@@ -394,13 +399,61 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         txns = [...txns, ...meTxns]
       }
 
-      const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
+      let rescueTxns: UmiTransaction[] = []
+      if (delistTo) {
+        const das = await fetchAllDigitalAsset(
+          umi,
+          mints.map((mint) => publicKey(mint))
+        )
+        let builder = transactionBuilder()
+        das.forEach(async (da) => {
+          builder = builder.add(
+            transferV1(umi, {
+              mint: da.publicKey,
+              destinationOwner: publicKey(delistTo),
+              tokenStandard: unwrapOption(da.metadata.tokenStandard) || 0,
+            })
+          )
+        })
+
+        const txs = await Promise.all(
+          builder.unsafeSplitByTransactionSize(umi).map((tx) => tx.buildWithLatestBlockhash(umi))
+        )
+
+        rescueTxns = txs
+      }
+
+      const signedTransactions = await umi.identity.signAllTransactions([
+        ...flatten(txns.map((t) => t.txn)),
+        ...rescueTxns,
+      ])
       const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
+        signedTransactions.slice(0, txns.length),
         txns.map((txn) => txn.mints),
         "delist",
         nftsDelisted
       )
+
+      if (rescueTxns.length) {
+        const signed = signedTransactions.slice(txns.length)
+        await Promise.all(
+          signed.map(async (s) => {
+            const sig = await umi.rpc.sendTransaction(s)
+            const conf = await umi.rpc.confirmTransaction(sig, {
+              strategy: {
+                type: "blockhash",
+                ...(await umi.rpc.getLatestBlockhash()),
+              },
+            })
+
+            if (conf.value.err) {
+              toast.error(
+                "Error transferring delisted asset. If you are using secure delist you will need to secure this asset manually"
+              )
+            }
+          })
+        )
+      }
 
       notifyStatus(errs, successes, "delist", "delisted")
     } catch (err: any) {
