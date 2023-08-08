@@ -1,6 +1,6 @@
 import { Stack, Typography, TextField, Button, Alert } from "@mui/material"
-import { isEqual } from "lodash"
-import { useState } from "react"
+import { isEqual, pick } from "lodash"
+import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
 import Spinner from "./Spinner"
 import { DigitalAsset, JsonMetadata, Metadata, updateV1 } from "@metaplex-foundation/mpl-token-metadata"
@@ -25,6 +25,12 @@ export const UpdateMetadata = ({
   const [loading, setLoading] = useState(false)
   const umi = useUmi()
 
+  useEffect(() => {
+    setName(jsonMetadata?.name)
+    setSymbol(jsonMetadata?.symbol)
+    setDescription(jsonMetadata?.description)
+  }, [jsonMetadata])
+
   function cancel() {
     setName(jsonMetadata?.name)
     setSymbol(jsonMetadata?.symbol)
@@ -39,7 +45,7 @@ export const UpdateMetadata = ({
     try {
       setLoading(true)
       let uri = digitalAsset?.metadata.uri
-      let meta = { ...jsonMetadata }
+      let meta = pick(jsonMetadata, "name", "image", "symbol", "description")
       if (newImage) {
         if (newImage.size > 2_000_000) {
           throw new Error("Image should be 2MB or less")
