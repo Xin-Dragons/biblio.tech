@@ -60,20 +60,20 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
     await signIn()
   }
 
-  useEffect(() => {
-    if (status !== "authenticated") {
-      return
-    }
-    if (!session?.user?.active && wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
-      signOutIn()
-    }
-  }, [wallet.publicKey, session])
+  // useEffect(() => {
+  //   if (status !== "authenticated") {
+  //     return
+  //   }
+  //   if (!session?.user?.active && wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
+  //     signOutIn()
+  //   }
+  // }, [wallet.publicKey, session])
 
-  useEffect(() => {
-    if (wallet.connected && status === "unauthenticated" && document.hasFocus()) {
-      signIn()
-    }
-  }, [wallet.publicKey])
+  // useEffect(() => {
+  //   if (wallet.connected && status === "unauthenticated" && document.hasFocus()) {
+  //     signIn()
+  //   }
+  // }, [wallet.publicKey])
 
   const toggleVisible = () => {
     handleClose()
