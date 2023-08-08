@@ -75,15 +75,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
               })
             })
 
-            if (!isAdmin) {
-              txn = txn.add(
-                transferSol(umi, {
-                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                  amount: sol(0.002),
-                })
-              )
-            }
-
             return {
               instructions: txn,
               mint,
