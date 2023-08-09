@@ -41,6 +41,10 @@ const inital = {
   extendLoan: noop,
 }
 
+const mappings = {
+  smb_gen3: "SMB Gen3",
+}
+
 export const SharkyContext = createContext<SharkyContextProps>(inital)
 
 type SharkyProviderProps = {
@@ -100,8 +104,6 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
         },
       ])
     )
-
-    console.log({ orderBooksByName })
 
     return orderBooksByName
   }
@@ -166,6 +168,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     let meIdentifier = collection.meIdentifier
     if (!meIdentifier) {
       const { data } = await axios.get("/api/get-me-collection", { params: { mint: nft.nftMint } })
+      console.log(data)
       meIdentifier = data.collection
       if (meIdentifier) {
         await updateCollection(collection.id, { meIdentifier })
@@ -175,7 +178,9 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       }
     }
 
-    const sharkyCollection = findKey(Sharky.magicEdenSymbols, (item) => item === meIdentifier)
+    const sharkyCollection =
+      mappings[meIdentifier as keyof typeof mappings] ||
+      findKey(Sharky.magicEdenSymbols, (item) => item === meIdentifier)
 
     const orderBooks = dbOrderBooks.length ? dbOrderBooks : await fetchOrderBooks()
 
@@ -207,7 +212,6 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       program,
       nftListPubKey: orderBook.orderBookType.nftList!.listAccount,
     })
-    console.log(program.provider.connection.rpcEndpoint)
     if (!nftList) {
       throw Error(
         `NFTList ${orderBook.orderBookType.nftList!.listAccount.toString()} doesn't exist, or you're using the default solana public RPC which doesn't support some calls.`
@@ -373,7 +377,6 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
     if (!isAdmin) {
       // 0.5%
       const amount = sol(Number(BigInt(newLoan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
-      console.log(amount)
       tx = tx.add(
         transferSol(umi, {
           destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
