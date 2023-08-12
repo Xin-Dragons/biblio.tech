@@ -243,7 +243,7 @@ export const CreateNft = () => {
       })
 
       const txns = await Promise.all(getUmiChunks(anonUmi, builders))
-      const batches = chunk(txns, 10)
+      const batches = chunk(txns, 50)
 
       const sentTxns = sendBatches(batches, umi)
 
