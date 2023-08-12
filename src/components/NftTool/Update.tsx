@@ -575,7 +575,7 @@ export function UpdateNft() {
       )
     }
 
-    await tx.sendAndConfirm(umi)
+    await tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
   }
 
   async function updateNft() {
@@ -705,7 +705,7 @@ export function UpdateNft() {
         )
       }
 
-      const promise = tx.sendAndConfirm(umi)
+      const promise = tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
 
       toast.promise(promise, {
         loading: "Migrating to sized collection",

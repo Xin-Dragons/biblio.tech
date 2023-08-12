@@ -708,7 +708,7 @@ export const BatchUpdateNfts = () => {
             await Promise.all(
               signed.map(async (txn) => {
                 try {
-                  const txnId = await umi.rpc.sendTransaction(txn)
+                  const txnId = await umi.rpc.sendTransaction(txn, { skipPreflight: true })
                   const conf = await umi.rpc.confirmTransaction(txnId, {
                     strategy: {
                       type: "blockhash",

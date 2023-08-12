@@ -240,7 +240,7 @@ export const CreateNft = () => {
 
       const sentTxns = Promise.all(
         signed.map(async (txn) => {
-          const txnId = await umi.rpc.sendTransaction(txn)
+          const txnId = await umi.rpc.sendTransaction(txn, { skipPreflight: true })
 
           const state = await umi.rpc.confirmTransaction(txnId, {
             strategy: {
@@ -316,7 +316,7 @@ export const CreateNft = () => {
         )
       }
 
-      const mintingPromise = tx.sendAndConfirm(umi)
+      const mintingPromise = tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
 
       toast.promise(mintingPromise, {
         loading: "Minting NFT...",
