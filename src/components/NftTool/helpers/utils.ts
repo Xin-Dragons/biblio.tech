@@ -1,7 +1,9 @@
-import { TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
+import { TransactionBuilder, Umi, transactionBuilder, Transaction } from "@metaplex-foundation/umi"
 import { chunkBy } from "chunkier"
 import { findKey } from "lodash"
 import { FEES } from "../constants"
+import { toast } from "react-hot-toast"
+import { getAnonUmi } from "./umi"
 
 export type MultimediaCategory = "image" | "video" | "audio" | "vr"
 
@@ -57,4 +59,42 @@ export function getFee(type: string, dandies: number) {
 
 export function shorten(address: string) {
   return `${address.substring(0, 4)}...${address.substring(address.length - 4, address.length)}`
+}
+
+export async function sendBatches(batches: TransactionBuilder[][], signer: Umi) {
+  const anonUmi = getAnonUmi(signer.identity.publicKey)
+  return batches.reduce((promise, batch, index) => {
+    return promise.then(async () => {
+      async function processBatch() {
+        const txns = await Promise.all(batch.map((item) => item.buildAndSign(anonUmi)))
+        const signed = await signer.identity.signAllTransactions(txns)
+
+        await Promise.all(
+          signed.map(async (txn) => {
+            try {
+              const txnId = await signer.rpc.sendTransaction(txn, { skipPreflight: true })
+              const conf = await signer.rpc.confirmTransaction(txnId, {
+                strategy: {
+                  type: "blockhash",
+                  ...(await signer.rpc.getLatestBlockhash()),
+                },
+              })
+            } catch (err) {
+              console.log(err)
+            }
+          })
+        )
+      }
+
+      const batchPromise = processBatch()
+
+      toast.promise(batchPromise, {
+        loading: `Batch ${index + 1} of ${batches.length}. Sending ${batch.length} transactions.`,
+        success: `Finished batch ${index + 1} of ${batches.length}`,
+        error: "Error updating",
+      })
+
+      await batchPromise
+    })
+  }, Promise.resolve())
 }

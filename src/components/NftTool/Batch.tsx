@@ -64,7 +64,7 @@ import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { METAPLEX_RULE_SET, METAPLEX_COMPATIBILITY_RULE_SET, SYSTEM_PROGRAM_PK, FEES_WALLET } from "./constants"
 import { useNfts } from "./context/nft"
-import { getFee, getUmiChunks, shorten } from "./helpers/utils"
+import { getFee, getUmiChunks, sendBatches, shorten } from "./helpers/utils"
 import { NftSelector } from "./NftSelector"
 import { NftsList } from "./NftsList"
 import { AddCircleRounded, CheckCircleRounded, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
@@ -689,7 +689,7 @@ export const BatchUpdateNfts = () => {
       const updates = [...toUpdate.sort((a, b) => a.publicKey.localeCompare(b.publicKey))]
       const builders: TransactionBuilder[] = await Promise.all(updates.map((da: DigitalAsset) => getInstruction(da)))
 
-      const txs = await Promise.all(getUmiChunks(umi, builders).map((builder) => builder.buildWithLatestBlockhash(umi)))
+      const txs = await Promise.all(getUmiChunks(umi, builders))
 
       const batches = chunk(txs, 100)
 
@@ -700,39 +700,7 @@ export const BatchUpdateNfts = () => {
             .use(signerIdentity(createSignerFromKeypair(umi, keypair)))
         : umi
 
-      return batches.reduce((promise, batch, index) => {
-        return promise.then(async () => {
-          async function processBatch() {
-            const signed = await signer.identity.signAllTransactions(batch)
-
-            await Promise.all(
-              signed.map(async (txn) => {
-                try {
-                  const txnId = await umi.rpc.sendTransaction(txn, { skipPreflight: true })
-                  const conf = await umi.rpc.confirmTransaction(txnId, {
-                    strategy: {
-                      type: "blockhash",
-                      ...(await umi.rpc.getLatestBlockhash()),
-                    },
-                  })
-                } catch (err) {
-                  console.log(err)
-                }
-              })
-            )
-          }
-
-          const batchPromise = processBatch()
-
-          toast.promise(batchPromise, {
-            loading: `Batch ${index + 1} of ${batches.length}. Sending ${batch.length} transactions.`,
-            success: `Finished batch ${index + 1} of ${batches.length}`,
-            error: "Error updating",
-          })
-
-          await batchPromise
-        })
-      }, Promise.resolve())
+      await sendBatches(batches, signer)
     }
 
     const updatePromise = doUpdate()

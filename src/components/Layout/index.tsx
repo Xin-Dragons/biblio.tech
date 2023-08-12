@@ -56,9 +56,10 @@ type LayoutProps = {
   selection?: boolean
   title?: string
   actions?: ReactNode
+  allowDevnet?: boolean
 }
 
-export const Layout: FC<LayoutProps> = ({ children, title, filtered = [], nfts = [], actions }) => {
+export const Layout: FC<LayoutProps> = ({ children, title, filtered = [], nfts = [], actions, allowDevnet }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
   const { loanType, setLoanType } = useUiSettings()
@@ -95,6 +96,7 @@ export const Layout: FC<LayoutProps> = ({ children, title, filtered = [], nfts =
           toggleMenu={toggleMenu}
           toggleSolTransferOpen={toggleSolTransferOpen}
           title={title}
+          allowDevnet={allowDevnet}
         />
         <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
           <Stack direction="row" sx={{ height: "100%", overflowY: "auto" }}>

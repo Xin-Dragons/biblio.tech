@@ -38,13 +38,13 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { useNfts } from "./context/nft"
-import { MultimediaCategory, getFee, getMultimediaType, getUmiChunks, shorten } from "./helpers/utils"
+import { MultimediaCategory, getFee, getMultimediaType, getUmiChunks, sendBatches, shorten } from "./helpers/utils"
 import { useUmi } from "./context/umi"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { NftSelector } from "./NftSelector"
 import { PreviewNft } from "./PreviewNft"
 import { AddCircleRounded, RemoveCircleRounded } from "@mui/icons-material"
-import { isEqual } from "lodash"
+import { chunk, isEqual } from "lodash"
 import { getAnonUmi } from "./helpers/umi"
 import { FEES_WALLET, METAPLEX_RULE_SET } from "./constants"
 import Link from "next/link"
@@ -86,6 +86,9 @@ export const CreateNft = () => {
   const [multimediaType, setMultimediaType] = useState<MultimediaCategory | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [createMany, setCreateMany] = useState(false)
+  const [cachedImage, setCachedImage] = useState<string | null>(null)
+  const [cachedJson, setCachedJson] = useState<string | null>(null)
+  const [cachedMedia, setCachedMedia] = useState<string | null>(null)
   const [pNft, setPNft] = useState(true)
   const [ruleSet, setRuleSet] = useState(METAPLEX_RULE_SET)
   const [creators, setCreators] = useState([emptyCreator])
@@ -132,10 +135,18 @@ export const CreateNft = () => {
       },
     }
 
+    async function uploadFile(file: File, ext?: string) {
+      const genericFile = await createGenericFileFromBrowserFile(file)
+      let [uri] = await umi.uploader.upload([genericFile])
+      if (ext) {
+        uri = `${uri}?ext=${ext}`
+      }
+      return uri
+    }
+
     if (image) {
-      const file = await createGenericFileFromBrowserFile(image)
-      let [imageUrl] = await umi.uploader.upload([file])
-      imageUrl = `${imageUrl}?ext=${image.type.replace("image/", "")}`
+      const imageUrl = cachedImage || (await uploadFile(image, `${image.type.replace("image/", "")}`))
+      setCachedImage(imageUrl)
       metadata.image = imageUrl
       metadata.properties = metadata.properties || { files: [] }
       metadata.properties.files?.push({
@@ -145,13 +156,11 @@ export const CreateNft = () => {
     }
 
     if (multimedia) {
-      const file = await createGenericFileFromBrowserFile(multimedia)
       const parts = multimedia.name.split(".")
       const ext = parts[parts.length - 1]
-
-      let [animation_url] = await umi.uploader.upload([file])
-      animation_url = `${animation_url}?ext=${ext}`
-      metadata.animation_url = animation_url
+      const animationUrl = cachedMedia || (await uploadFile(multimedia, ext))
+      setCachedMedia(animationUrl)
+      metadata.animation_url = animationUrl
 
       metadata.properties = metadata.properties || {
         category: "",
@@ -160,12 +169,13 @@ export const CreateNft = () => {
 
       metadata.properties.category = getMultimediaType(ext)
       metadata.properties.files?.push({
-        uri: animation_url,
+        uri: animationUrl,
         type: multimedia.type,
       })
     }
 
-    const uri = await umi.uploader.uploadJson(metadata)
+    const uri = cachedJson || (await umi.uploader.uploadJson(metadata))
+    setCachedJson(uri)
     return uri
   }
 
@@ -232,29 +242,10 @@ export const CreateNft = () => {
         return tx
       })
 
-      const txns = await Promise.all(getUmiChunks(anonUmi, builders).map((builder) => builder.buildAndSign(anonUmi)))
-      const signed = await umi.identity.signAllTransactions(txns)
+      const txns = await Promise.all(getUmiChunks(anonUmi, builders))
+      const batches = chunk(txns, 10)
 
-      let success = 0
-      let error = 0
-
-      const sentTxns = Promise.all(
-        signed.map(async (txn) => {
-          const txnId = await umi.rpc.sendTransaction(txn, { skipPreflight: true })
-
-          const state = await umi.rpc.confirmTransaction(txnId, {
-            strategy: {
-              type: "blockhash",
-              ...(await umi.rpc.getLatestBlockhash()),
-            },
-          })
-          if (state.value.err) {
-            error += 1
-          } else {
-            success += 1
-          }
-        })
-      )
+      const sentTxns = sendBatches(batches, umi)
 
       toast.promise(sentTxns, {
         loading: "Minting NFTs",
@@ -263,7 +254,6 @@ export const CreateNft = () => {
       })
 
       await sentTxns
-      await refresh()
     } else {
       let tx = transactionBuilder().add(
         func(umi, {
@@ -379,6 +369,9 @@ export const CreateNft = () => {
       await createPromise
 
       setDialogOpen(true)
+      setCachedImage(null)
+      setCachedJson(null)
+      setCachedMedia(null)
     } catch (err: any) {
       console.log(err)
       toast.error(err.message)
@@ -386,6 +379,18 @@ export const CreateNft = () => {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    setCachedJson(null)
+  }, [name, symbol, attributes, description, image, multimedia, website])
+
+  useEffect(() => {
+    setCachedImage(null)
+  }, [image])
+
+  useEffect(() => {
+    setCachedMedia(null)
+  }, [multimedia])
 
   function uploadKeypair(e: any) {
     const file = e.target.files[0]

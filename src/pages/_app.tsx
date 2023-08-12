@@ -30,6 +30,7 @@ import { BriceProvider } from "../context/brice"
 import { AlchemyProvider } from "../context/alchemy"
 import { SortProvider } from "../context/sort"
 import { CitrusProvider } from "../context/citrus"
+import { ClusterProvider } from "../context/cluster"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -49,66 +50,68 @@ const App: FC<Props> = ({ Component, pageProps: { session, ...pageProps } }) => 
   const wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()]
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <AlchemyProvider>
-          <WagmiConfig config={wagmiConfig}>
-            <BriceProvider>
-              <WalletBypassProvider>
-                <SessionProvider session={session}>
-                  <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
-                    <AccessProvider>
-                      <BasePathProvider publicKey={pageProps.publicKey}>
-                        <DatabaseProvider>
-                          <WalletsProvider>
-                            <UiSettingsProvider>
-                              <FiltersProvider>
-                                <NftsProvider>
-                                  <SortProvider>
-                                    <TransactionStatusProvider>
-                                      <WalletModalProvider>
-                                        <MetaplexProvider>
-                                          <TagsProvider>
-                                            <ThemeProvider>
-                                              <SharkyProvider>
-                                                <CitrusProvider>
-                                                  <TensorProvider>
-                                                    <Script
-                                                      async
-                                                      strategy="afterInteractive"
-                                                      type="module"
-                                                      src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                                    />
-                                                    <CssBaseline />
-                                                    <SelectionProvider>
-                                                      <DialogProvider>
-                                                        <Component {...pageProps} />
-                                                      </DialogProvider>
-                                                    </SelectionProvider>
-                                                  </TensorProvider>
-                                                </CitrusProvider>
-                                              </SharkyProvider>
-                                            </ThemeProvider>
-                                          </TagsProvider>
-                                        </MetaplexProvider>
-                                      </WalletModalProvider>
-                                    </TransactionStatusProvider>
-                                  </SortProvider>
-                                </NftsProvider>
-                              </FiltersProvider>
-                            </UiSettingsProvider>
-                          </WalletsProvider>
-                        </DatabaseProvider>
-                      </BasePathProvider>
-                    </AccessProvider>
-                  </UmiProvider>
-                </SessionProvider>
-              </WalletBypassProvider>
-            </BriceProvider>
-          </WagmiConfig>
-        </AlchemyProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <ClusterProvider>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <AlchemyProvider>
+            <WagmiConfig config={wagmiConfig}>
+              <BriceProvider>
+                <WalletBypassProvider>
+                  <SessionProvider session={session}>
+                    <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+                      <AccessProvider>
+                        <BasePathProvider publicKey={pageProps.publicKey}>
+                          <DatabaseProvider>
+                            <WalletsProvider>
+                              <UiSettingsProvider>
+                                <FiltersProvider>
+                                  <NftsProvider>
+                                    <SortProvider>
+                                      <TransactionStatusProvider>
+                                        <WalletModalProvider>
+                                          <MetaplexProvider>
+                                            <TagsProvider>
+                                              <ThemeProvider>
+                                                <SharkyProvider>
+                                                  <CitrusProvider>
+                                                    <TensorProvider>
+                                                      <Script
+                                                        async
+                                                        strategy="afterInteractive"
+                                                        type="module"
+                                                        src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                                      />
+                                                      <CssBaseline />
+                                                      <SelectionProvider>
+                                                        <DialogProvider>
+                                                          <Component {...pageProps} />
+                                                        </DialogProvider>
+                                                      </SelectionProvider>
+                                                    </TensorProvider>
+                                                  </CitrusProvider>
+                                                </SharkyProvider>
+                                              </ThemeProvider>
+                                            </TagsProvider>
+                                          </MetaplexProvider>
+                                        </WalletModalProvider>
+                                      </TransactionStatusProvider>
+                                    </SortProvider>
+                                  </NftsProvider>
+                                </FiltersProvider>
+                              </UiSettingsProvider>
+                            </WalletsProvider>
+                          </DatabaseProvider>
+                        </BasePathProvider>
+                      </AccessProvider>
+                    </UmiProvider>
+                  </SessionProvider>
+                </WalletBypassProvider>
+              </BriceProvider>
+            </WagmiConfig>
+          </AlchemyProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </ClusterProvider>
   )
 }
 

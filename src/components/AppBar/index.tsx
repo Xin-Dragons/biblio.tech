@@ -177,9 +177,10 @@ type AppBarProps = {
   toggleMenu?: Function
   toggleSolTransferOpen: Function
   title?: string
+  allowDevnet?: boolean
 }
 
-export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen, title }) => {
+export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu, toggleSolTransferOpen, title, allowDevnet }) => {
   const [open, setOpen] = useState(false)
   const { tag, updateTag } = useTags()
   const breakLine = useMediaQuery("(max-width:500px)")

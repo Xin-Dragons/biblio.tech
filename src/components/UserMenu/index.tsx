@@ -35,13 +35,16 @@ import { useAccess } from "../../context/access"
 import { shorten } from "../../helpers/utils"
 import { useTheme } from "../../context/theme"
 import { SignUp } from "../SignUp"
+import { useCluster } from "../../context/cluster"
 
 type UserMenuProps = {
   large?: boolean
   toggleSolTransferOpen: Function
+  allowDevnet?: boolean
 }
 
-export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) => {
+export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allowDevnet }) => {
+  const { cluster, setCluster } = useCluster()
   const { setVisible, visible } = useWalletModal()
   const { multiWallet, signOut, signIn, isSigningIn, isAdmin } = useAccess()
   const [signUpShowing, setSignUpShowing] = useState(false)
@@ -226,6 +229,18 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen }) =>
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
               </MenuItem>
+              {/* <MenuItem onClick={() => setCluster(cluster === "devnet" ? "mainnet" : "devnet")} disabled={isSigningIn}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Switch
+                    checked={cluster === "devnet"}
+                    onChange={(e) => setCluster(cluster === "devnet" ? "mainnet" : "devnet")}
+                    inputProps={{ "aria-label": "controlled" }}
+                    disabled={isSigningIn}
+                    size="small"
+                  />
+                </ListItemIcon>
+                <ListItemText>Devnet</ListItemText>
+              </MenuItem> */}
             </div>
           )}
         </MenuList>
