@@ -47,6 +47,7 @@ import { AddCircleRounded, RemoveCircleRounded } from "@mui/icons-material"
 import { isEqual } from "lodash"
 import { getAnonUmi } from "./helpers/umi"
 import { FEES_WALLET, METAPLEX_RULE_SET } from "./constants"
+import Link from "next/link"
 
 export const emptyAttribute = {
   trait_type: "",
@@ -626,9 +627,13 @@ export const CreateNft = () => {
               )}
 
               <FormHelperText color="GrayText" sx={{ paddingLeft: 2 }}>
-                Create a vanity token address using the{" "}
-                <a href="https://vanity.dandies.xyz">Vanity Address Generator</a>, download the JSON keypair file, and
-                upload here to create a vanity token. This is particularly useful for Collection NFTs or 1/1s
+                <Link href="/tools/grind-address">
+                  <Typography color="primary" display="inline" variant="body2" sx={{ cursor: "pointer" }}>
+                    Grind a vanity token address,
+                  </Typography>
+                </Link>{" "}
+                download the JSON keypair file, upload here to create a vanity token. This is particularly useful for
+                Collection NFTs or 1/1s
               </FormHelperText>
 
               {!createMany && (
