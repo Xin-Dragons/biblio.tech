@@ -762,13 +762,13 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("verify", dandies.length)
+        const fee = getFee("batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
             transferSol(anonUmi, {
               destination: FEES_WALLET,
-              amount: sol(getFee("verify", dandies.length)),
+              amount: sol(fee),
             })
           )
         }
@@ -828,7 +828,7 @@ export const BatchUpdateNfts = () => {
           )
         }
 
-        const fee = getFee("verifyCollection", dandies.length)
+        const fee = getFee("batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -910,8 +910,20 @@ export const BatchUpdateNfts = () => {
           })
         )
 
+        const fee = getFee("batch", dandies.length)
+
+        if (fee) {
+          tx = tx.add(
+            transferSol(anonUmi, {
+              destination: FEES_WALLET,
+              amount: sol(fee),
+            })
+          )
+        }
+
         return tx
       }
+
       await sendUpdates(getInstruction)
     } catch (err) {
       toast.error("Error unverfying")
@@ -934,8 +946,9 @@ export const BatchUpdateNfts = () => {
       }
 
       const getInstruction = (da: DigitalAsset) => {
+        const anonUmi = getAnonUmi(umi.identity.publicKey)
         let tx = transactionBuilder().add(
-          updateV1(umi, {
+          updateV1(anonUmi, {
             mint: da.publicKey,
             newUpdateAuthority: updateAuthority ? publicKey(updateAuthority) : undefined,
             authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
@@ -948,6 +961,17 @@ export const BatchUpdateNfts = () => {
             },
           })
         )
+
+        const fee = getFee("batch", dandies.length)
+
+        if (fee) {
+          tx = tx.add(
+            transferSol(anonUmi, {
+              destination: FEES_WALLET,
+              amount: sol(fee),
+            })
+          )
+        }
 
         return tx
       }
@@ -989,18 +1013,31 @@ export const BatchUpdateNfts = () => {
     try {
       setLoading(true)
       const getInstruction = async (da: DigitalAsset) => {
-        let txn = transactionBuilder()
+        const anonUmi = getAnonUmi(umi.identity.publicKey)
         const mint = generateSigner(umi)
-        createAndMint(umi, {
-          uri: da.metadata.uri,
-          name: da.metadata.name,
-          sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints),
-          mint,
-          symbol: da.metadata.symbol,
-          creators: da.metadata.creators,
-          primarySaleHappened: da.metadata.primarySaleHappened,
-          tokenStandard: tokenStandard || unwrapOption(da.metadata.tokenStandard) || 0,
-        })
+        let tx = transactionBuilder().add(
+          createAndMint(anonUmi, {
+            uri: da.metadata.uri,
+            name: da.metadata.name,
+            sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints),
+            mint,
+            symbol: da.metadata.symbol,
+            creators: da.metadata.creators,
+            primarySaleHappened: da.metadata.primarySaleHappened,
+            tokenStandard: tokenStandard || unwrapOption(da.metadata.tokenStandard) || 0,
+          })
+        )
+
+        const fee = getFee("batch", dandies.length)
+
+        if (fee) {
+          tx = tx.add(
+            transferSol(anonUmi, {
+              destination: FEES_WALLET,
+              amount: sol(fee),
+            })
+          )
+        }
       }
 
       await sendUpdates(getInstruction)

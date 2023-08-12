@@ -31,7 +31,7 @@ export function getUmiChunks(umi: Umi, transactionBuilders: TransactionBuilder[]
   }, [])
 }
 
-function getLevel(dandies: number) {
+export function getLevel(dandies: number) {
   if (!dandies) {
     return "basic"
   }

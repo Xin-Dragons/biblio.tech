@@ -11,8 +11,8 @@ export const FEES_WALLET = publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!)
 export const FEES = {
   create: {
     basic: 0.01,
-    advanced: 0.05,
-    pro: 0.025,
+    advanced: 0.005,
+    pro: 0.0025,
   },
   update: {
     basic: 0.001,

@@ -93,8 +93,6 @@ export function UpdateNft() {
   const [newMultimedia, setNewMultimedia] = useState<File | null>(null)
   const [multimediaType, setMultimediaType] = useState<MultimediaCategory | null>(null)
 
-  const { connection } = useConnection()
-
   const wallet = useWallet()
 
   useEffect(() => {
@@ -685,14 +683,38 @@ export function UpdateNft() {
         }
       }
 
-      setCollectionSize(umi, {
-        setCollectionSizeArgs: {
-          size: newCollectionSize,
-        },
-        collectionAuthority: umi.identity,
-        collectionMint: nft?.publicKey,
-        collectionMetadata: nft?.metadata.publicKey,
-      }).sendAndConfirm(umi)
+      let tx = transactionBuilder().add(
+        setCollectionSize(umi, {
+          setCollectionSizeArgs: {
+            size: newCollectionSize,
+          },
+          collectionAuthority: umi.identity,
+          collectionMint: nft?.publicKey,
+          collectionMetadata: nft?.metadata.publicKey,
+        })
+      )
+
+      const fee = getFee("update", dandies.length)
+
+      if (fee) {
+        tx = tx.add(
+          transferSol(umi, {
+            destination: FEES_WALLET,
+            amount: sol(fee),
+          })
+        )
+      }
+
+      const promise = tx.sendAndConfirm(umi)
+
+      toast.promise(promise, {
+        loading: "Migrating to sized collection",
+        success: "Migration complete",
+        error: "Error migrating collection",
+      })
+
+      await promise
+      await checkToken()
     } catch (err: any) {
       toast.error(err.message)
     } finally {

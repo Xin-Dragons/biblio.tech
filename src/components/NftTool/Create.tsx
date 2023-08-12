@@ -38,7 +38,7 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { useNfts } from "./context/nft"
-import { MultimediaCategory, getMultimediaType, getUmiChunks, shorten } from "./helpers/utils"
+import { MultimediaCategory, getFee, getMultimediaType, getUmiChunks, shorten } from "./helpers/utils"
 import { useUmi } from "./context/umi"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { NftSelector } from "./NftSelector"
@@ -218,11 +218,13 @@ export const CreateNft = () => {
           }
         }
 
-        if (!dandies.length) {
+        const fee = getFee("create", dandies.length)
+
+        if (fee) {
           tx = tx.add(
-            transferSol(umi, {
+            transferSol(anonUmi, {
               destination: FEES_WALLET,
-              amount: sol(0.01),
+              amount: sol(fee),
             })
           )
         }
@@ -303,11 +305,13 @@ export const CreateNft = () => {
         }
       }
 
-      if (!dandies.length) {
+      const fee = getFee("create", dandies.length)
+
+      if (fee) {
         tx = tx.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.01),
+            amount: sol(fee),
           })
         )
       }
