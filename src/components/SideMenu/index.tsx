@@ -201,7 +201,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             Token Tool
           </Button>
         </Link>
-        <Link href={"https://nfts.dandies.xyz"} passHref>
+        <Link href={"/tools/nft-suite"} passHref>
           <Button
             variant={page === "nft-suite" ? "contained" : "outlined"}
             startIcon={

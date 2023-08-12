@@ -3250,10 +3250,10 @@
   dependencies:
     node-fetch "^2.6.7"
 
-"@metaplex-foundation/umi-options@^0.8.2":
-  version "0.8.2"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-options/-/umi-options-0.8.2.tgz#f604e1241c80855e59aedc2ef01f44ab917b32f0"
-  integrity sha512-xFoViuyVHZ1xtZjd7r6AieecfoRbx9bEwlUByqqWs8tmeA1MZb8bg/neO3vUN4aB3DbWxUbJZTEHZrq8fUP1AA==
+"@metaplex-foundation/umi-options@^0.8.5":
+  version "0.8.5"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-options/-/umi-options-0.8.5.tgz#d61cbff5d7b0614d102af5befbcc69c2f8ac9f3a"
+  integrity sha512-MYLmc6SPkIIeiG7xReAxHyTRWrIvKNCgFExPtvBazggCYev9sLpTOD0RmV5iYL9M2JVEMMgNtN2iJmhIGsSYyg==
 
 "@metaplex-foundation/umi-program-repository@^0.8.4":
   version "0.8.4"
@@ -3303,12 +3303,12 @@
   dependencies:
     "@metaplex-foundation/umi-serializers-core" "^0.8.2"
 
-"@metaplex-foundation/umi-serializers@^0.8.2":
-  version "0.8.2"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-serializers/-/umi-serializers-0.8.2.tgz#94cea95559eafd6cabb10bb60616d18008d6c84d"
-  integrity sha512-N+BCKGb2RnLWvNHY+U3B9dfZUATDLWHp9/5ufJLqGDY1uFS84aTmSPGb3/lOisdtHG6//t6IBY9cprnEOP0l8g==
+"@metaplex-foundation/umi-serializers@^0.8.5":
+  version "0.8.5"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi-serializers/-/umi-serializers-0.8.5.tgz#3374c342f668da77aef78e036650f1880e03e0d6"
+  integrity sha512-mCOdcV2KfyFtf9zfA/4VXQR+QULQY0R76V9QISjOxf+b9ltxZy5q84VMuDLHTk12RTHnTaKnxrfk125acqaPpA==
   dependencies:
-    "@metaplex-foundation/umi-options" "^0.8.2"
+    "@metaplex-foundation/umi-options" "^0.8.5"
     "@metaplex-foundation/umi-public-keys" "^0.8.2"
     "@metaplex-foundation/umi-serializers-core" "^0.8.2"
     "@metaplex-foundation/umi-serializers-encodings" "^0.8.2"
@@ -3357,14 +3357,14 @@
   dependencies:
     buffer "^6.0.3"
 
-"@metaplex-foundation/umi@^0.8.4":
-  version "0.8.4"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi/-/umi-0.8.4.tgz#e88e1d7cf0c1fde42ef2f79bba977ddcf62a0ac7"
-  integrity sha512-54GDu5cwCMe8DZJRqnnXII4ooFdSXMUQp1ok4ukBihLaChqL44Orc31c4DnpnupFgCovwV1dl45CHDjoF8yRxA==
+"@metaplex-foundation/umi@^0.8.7":
+  version "0.8.7"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/umi/-/umi-0.8.7.tgz#e751dd262e4210a4961b450e3a710450877531cc"
+  integrity sha512-33K7kiaXKX1IDLMje+wD4bcl22EXUx2QTsQfUlsJgS6lDX8P77ntXKPUF1amPLjAcw6CeyMWKSz5CzsosoKjog==
   dependencies:
-    "@metaplex-foundation/umi-options" "^0.8.2"
+    "@metaplex-foundation/umi-options" "^0.8.5"
     "@metaplex-foundation/umi-public-keys" "^0.8.2"
-    "@metaplex-foundation/umi-serializers" "^0.8.2"
+    "@metaplex-foundation/umi-serializers" "^0.8.5"
 
 "@motionone/animation@^10.15.1":
   version "10.15.1"
