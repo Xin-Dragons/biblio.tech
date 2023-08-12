@@ -59,7 +59,7 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
 import axios from "axios"
 import base58 from "bs58"
-import { isEqual, uniqBy, flatten, uniq, sample, chunk, filter } from "lodash"
+import { isEqual, uniqBy, flatten, uniq, sample, chunk, filter, findKey } from "lodash"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { METAPLEX_RULE_SET, METAPLEX_COMPATIBILITY_RULE_SET, SYSTEM_PROGRAM_PK, FEES_WALLET } from "./constants"
@@ -69,9 +69,10 @@ import { NftSelector } from "./NftSelector"
 import { NftsList } from "./NftsList"
 import { AddCircleRounded, CheckCircleRounded, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
 import { useUmi } from "./context/umi"
-import { mplToolbox, transferSol } from "@metaplex-foundation/mpl-toolbox"
+import { findAssociatedTokenPda, mplToolbox, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { getAnonUmi } from "./helpers/umi"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
+import { takeSnapshot } from "../../helpers/snapshot"
 
 export const BatchUpdateNfts = () => {
   const { dandies, collections, loading: nftsLoading } = useNfts()
@@ -353,7 +354,7 @@ export const BatchUpdateNfts = () => {
         error: "Error parsing NFTs",
       })
 
-      const nfts = (await nftsPromise).filter(Boolean)
+      const nfts = (await nftsPromise).filter(Boolean).filter((item) => item.mint.supply === BigInt(1))
 
       setNfts(nfts.sort((a, b) => a.publicKey.localeCompare(b.publicKey)))
     } catch (err: any) {
@@ -824,25 +825,33 @@ export const BatchUpdateNfts = () => {
     try {
       setLoading(true)
 
-      // const ownerPromise = Promise.all(
-      //   toUpdate.map(async (item) => (await fetchAllDigitalAssetWithTokenByMint(umi, item.publicKey))[0])
-      // )
+      const snapPromise = takeSnapshot(
+        toUpdate.map((da) => da.publicKey),
+        60,
+        () => {}
+      )
 
-      // toast.promise(ownerPromise, {
-      //   loading:
-      //     "Looking up owners for NFTs. If this takes too long you can use the hashlist selector to split collection into smaller chunks",
-      //   success: "Done",
-      //   error: "Error looking up owners, try a smaller batch",
-      // })
+      toast.promise(snapPromise, {
+        loading: "Taking snapshot of owners",
+        success: "Snap completed",
+        error: "Error taking snap",
+      })
 
-      // const allWithOwnerTokens: DigitalAssetWithToken[] = await ownerPromise
+      const snap = await snapPromise
 
       const getInstruction = async (da: DigitalAsset) => {
+        const owner = findKey(snap, (item) => item.mints.includes(da.publicKey))
+        if (!owner) {
+          return transactionBuilder()
+        }
         let tx = transactionBuilder().add(
           updateV1(umi, {
             authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
             mint: da.publicKey,
-            // token: allWithOwnerTokens.find((item) => item.publicKey === da.publicKey).token.publicKey,
+            token: findAssociatedTokenPda(umi, {
+              mint: da.publicKey,
+              owner: publicKey(owner),
+            }),
             ruleSet: ruleSet
               ? {
                   __kind: "Set",

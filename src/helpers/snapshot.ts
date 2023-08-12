@@ -22,6 +22,7 @@ async function getNftOwner(addresses: string[]): Promise<any> {
     })
 
     const res = await axios.post(process.env.NEXT_PUBLIC_RPC_HOST!, data, { headers })
+    console.log(res)
 
     const accounts = res.data
       .map((item: any, i: number) => {
