@@ -1,5 +1,5 @@
 import { aprToApy, apyToApr, aprToInterestRatio, interestRatioToApr } from "@sharkyfi/client"
-import { createSharkyClient, createProvider, OrderBook, enabledOrderBooks } from "@sharkyfi/client"
+import { createSharkyClient, createProvider, OrderBook, enabledOrderBooks, SHARKY_PROGRAM_ID } from "@sharkyfi/client"
 import * as Sharky from "@sharkyfi/client"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js"
@@ -56,7 +56,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   const wallet = useWallet()
   const { settleLoans, updateCollection } = useDatabase()
   const provider = createProvider(connection, wallet as any)
-  const sharkyClient = createSharkyClient(provider)
+  const sharkyClient = createSharkyClient(provider, SHARKY_PROGRAM_ID, "mainnet")
   const { nfts } = useNfts()
   const { isAdmin } = useAccess()
   const { setTransactionInProgress, setTransactionComplete, setTransactionErrors, clearTransactions } =
