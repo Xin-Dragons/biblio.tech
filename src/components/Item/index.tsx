@@ -1672,6 +1672,10 @@ export const Item: FC<ItemProps> = ({
     image = "/usdc.png"
   } else if (item.json?.image) {
     image = item.json.image.replace("ipfs://", "https://ipfs.io/ipfs/")
+    image =
+      layoutSize === "collage" || enlarged
+        ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
+        : `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image}`
   } else {
     image = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
   }
