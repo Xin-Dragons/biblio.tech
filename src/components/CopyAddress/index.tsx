@@ -7,6 +7,9 @@ import DoneIcon from "@mui/icons-material/Done"
 import { shorten } from "../../helpers/utils"
 import { useUiSettings } from "../../context/ui-settings"
 import { useBasePath } from "../../context/base-path"
+import { useUmi } from "../../context/umi"
+import { PROGRAMS } from "../RuleSets/constants"
+import { unwrapOptionRecursively } from "@metaplex-foundation/umi"
 
 type CopyAddressProps = {
   children: any
@@ -16,12 +19,40 @@ type CopyAddressProps = {
 
 export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", wallet }) => {
   const [copied, setCopied] = useState(false)
+  const [nameOverride, setNameOverride] = useState<string | null>(null)
+  const umi = useUmi()
   const { lightMode } = useUiSettings()
 
   function copyPk() {
     navigator.clipboard.writeText(children)
     setCopied(true)
   }
+
+  async function getOwner() {
+    if (chain !== "solana") {
+      setNameOverride(null)
+      return
+    }
+    try {
+      const da = await umi.rpc.getAccount(children)
+      if (da.exists) {
+        const ownedBy = PROGRAMS.find((p) => p.value === da.owner)
+        if (ownedBy) {
+          setNameOverride(ownedBy.label)
+        } else {
+          setNameOverride(null)
+        }
+      } else {
+        setNameOverride(null)
+      }
+    } catch {
+      setNameOverride(null)
+    }
+  }
+
+  useEffect(() => {
+    getOwner()
+  }, [chain, children])
 
   useEffect(() => {
     if (!copied) return
@@ -69,7 +100,7 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", 
           <Link underline="hover">{shorten(children)}</Link>
         </NextLink>
       ) : (
-        <Typography>{shorten(children)}</Typography>
+        <Typography>{nameOverride || shorten(children)}</Typography>
       )}
 
       {copied ? (

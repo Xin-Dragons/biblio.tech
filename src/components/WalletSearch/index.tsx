@@ -1,27 +1,18 @@
-import { Close, ConnectingAirportsOutlined, Search } from "@mui/icons-material"
-import { IconButton, InputAdornment, Stack, SvgIcon, TextField, Typography } from "@mui/material"
-import { Connection, PublicKey } from "@solana/web3.js"
+import { Stack, SvgIcon, Typography } from "@mui/material"
+import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { FC, useEffect, useRef, useState } from "react"
 import BinocularsIcon from "./binoculars.svg"
-import {
-  getDomainKeySync,
-  NameRegistryState,
-  getTwitterRegistry,
-  reverseLookup,
-  getReverseKeySync,
-  performReverseLookup,
-} from "@bonfida/spl-name-service"
+import { getDomainKeySync, NameRegistryState } from "@bonfida/spl-name-service"
 import { useEnsAddress } from "wagmi"
 import { isAddress } from "viem"
-import { isPublicKey, publicKey } from "@metaplex-foundation/umi"
 import { AddressSelector } from "../AddressSelector"
 import { useAlchemy } from "../../context/alchemy"
-import { isValidPublicKey } from "../../helpers/utils"
+import { isDigitalAsset, isValidPublicKey, isWallet } from "../../helpers/utils"
 import { toast } from "react-hot-toast"
 import { useWallets } from "../../context/wallets"
 import { Wallet } from "../../db"
-
+import { useUmi } from "../../context/umi"
 const ENS_CONTRACT_ADDRESS = "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
@@ -71,9 +62,16 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const { wallets, addWallet } = useWallets()
   const router = useRouter()
+  const umi = useUmi()
 
   useEffect(() => {
-    if (wallet) {
+    if (!wallet) {
+      return
+    }
+    // @ts-ignore
+    if (wallet.isCollection) {
+      router.push(`/collection/${wallet?.publicKey}`)
+    } else if (wallet?.publicKey) {
       router.push(`/wallet/${wallet.publicKey}`)
     }
   }, [wallet])
@@ -100,7 +98,13 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
         addAndSelectWallet(address, "solana", item)
       }
     } else if (isValidPublicKey(item)) {
-      addAndSelectWallet(item, "solana")
+      if (await isWallet(umi, item)) {
+        return addAndSelectWallet(item, "solana")
+      } else if (await isDigitalAsset(umi, item)) {
+        return router.push(`/digital-asset/${item}`)
+      } else {
+        toast.error("Only wallets and digital assets can be looked up at present")
+      }
     } else {
       toast.error("Invalid address")
     }
@@ -116,11 +120,11 @@ export const WalletSearch: FC<WalletSearchProps> = ({ large }) => {
           <SvgIcon>
             <BinocularsIcon />
           </SvgIcon>
-          <Typography>Wallet Peek</Typography>
+          <Typography>Lookup anything</Typography>
         </Stack>
       }
-      size="small"
       showChain
+      lookupCollection
       addDialog={false}
       onNotFound={checkWallet}
       deletable={true}

@@ -201,6 +201,19 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             Token Tool
           </Button>
         </Link>
+        <Link href={"/tools/rule-sets"} passHref>
+          <Button
+            variant={page === "rule-sets" ? "contained" : "outlined"}
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Nfts />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            pNFT Rule Sets
+          </Button>
+        </Link>
         <Link href={"/tools/nft-suite"} passHref>
           <Button
             variant={page === "nft-suite" ? "contained" : "outlined"}

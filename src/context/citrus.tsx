@@ -1,6 +1,5 @@
 import { FC, ReactNode, createContext, useContext } from "react"
 import { CitrusSdk, Collection, Loan, Status } from "@famousfoxfederation/citrus-sdk"
-import { getBorrowTxn } from "@famousfoxfederation/citrus-sdk/lib/helpers/instructions"
 import {
   AUTH_RULES_PROGRAM,
   getBorrowAuthority,

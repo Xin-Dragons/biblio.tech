@@ -13,7 +13,7 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material"
-import { FC, FormEvent, useEffect, useState } from "react"
+import { FC, FormEvent, useEffect, useMemo, useState } from "react"
 import { useWallets } from "../../context/wallets"
 import { PublicKey } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
@@ -24,12 +24,15 @@ import { useSession } from "next-auth/react"
 import { orderBy, uniqBy } from "lodash"
 import { Close } from "@mui/icons-material"
 import { Wallet } from "../../db"
+import { CollectionNameRequest, CollectionName } from "@hellomoon/api"
+import { hmClient } from "../../helpers/hello-moon"
 
 type AddressSelectorProps = {
   wallet: Wallet | null
   setWallet: Function
   addDialog?: boolean
   onNotFound?: Function
+  lookupCollection?: boolean
   [x: string]: any
 }
 
@@ -40,6 +43,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
   setWallet,
   addDialog = true,
   onNotFound,
+  lookupCollection,
   ...props
 }) => {
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
@@ -49,12 +53,6 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
     deleteWallet,
   }: { wallets: Wallet[]; addWallet: Function; deleteWallet: Function } = useWallets()
   const { data: session } = useSession()
-
-  const [open, toggleOpen] = useState(false)
-  const [dialogValue, setDialogValue] = useState({
-    publicKey: "",
-    nickname: "",
-  })
 
   const linkedWallets =
     session?.user?.wallets?.map((w) => {
@@ -67,11 +65,52 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
       } as Wallet
     }) || []
 
-  const wallets = orderBy(
-    uniqBy([...addressBookWallets, ...linkedWallets], (item) => item.publicKey),
-    (item) => item.added || -1,
-    "desc"
-  )
+  const [wallets, setWallets] = useState<Wallet[]>([])
+  const [options, setOptions] = useState<any[]>([])
+  const [collections, setCollections] = useState<CollectionName[]>([])
+
+  const [open, toggleOpen] = useState(false)
+  const [dialogValue, setDialogValue] = useState({
+    publicKey: "",
+    nickname: "",
+  })
+
+  useEffect(() => {
+    setWallets(
+      orderBy(
+        uniqBy([...addressBookWallets, ...linkedWallets], (item) => item.publicKey),
+        (item) => item.added || -1,
+        "desc"
+      )
+    )
+  }, [addressBookWallets, linkedWallets])
+
+  useMemo(() => {
+    setOptions([
+      ...wallets,
+      ...collections.map((c: CollectionName) => {
+        return {
+          publicKey: c.helloMoonCollectionId,
+          nickname: c.collectionName,
+          chain: "Solana collection",
+          isCollection: true,
+        }
+      }),
+    ])
+  }, [wallets, collections])
+
+  async function lookupCollections(input: string) {
+    const result = await hmClient.send(
+      new CollectionNameRequest({
+        collectionName: input,
+      })
+    )
+    console.log(result.data)
+
+    setCollections(result.data)
+
+    // setWallets(result.data)
+  }
 
   useEffect(() => {
     if (!dialogValue.publicKey) {
@@ -175,7 +214,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
 
           return filtered
         }}
-        options={wallets}
+        options={options}
         getOptionLabel={(option) => {
           // e.g value selected with enter, right from the input
           if (typeof option === "string") {
@@ -208,14 +247,27 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
                 </Stack>
                 <Stack direction="row" justifyContent="space-between" width="100%">
                   <FormHelperText>{option.publicKey && shorten(option.publicKey)}</FormHelperText>
-                  {props.showChain && <FormHelperText>{getAddressType(option.publicKey as string)}</FormHelperText>}
+                  {props.showChain && (
+                    <FormHelperText>{option.chain || getAddressType(option.publicKey as string)}</FormHelperText>
+                  )}
                 </Stack>
               </Stack>
             </li>
           )
         }}
         freeSolo
-        renderInput={(params) => <TextField {...params} label={props.label || "Recipient"} />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            onChange={(e: any) => {
+              if (lookupCollection) {
+                lookupCollections(e.target.value)
+              }
+              return params.inputProps.onChange?.(e)
+            }}
+            label={props.label || "Recipient"}
+          />
+        )}
       />
       <Dialog open={open} onClose={handleClose} fullWidth>
         <Card>
