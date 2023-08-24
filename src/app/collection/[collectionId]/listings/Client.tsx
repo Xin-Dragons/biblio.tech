@@ -1,5 +1,6 @@
 "use client"
 
+import { SelectControls } from "@/components/SelectControls"
 import { useSelection } from "@/context/selection"
 import { useTensor } from "@/context/tensor"
 import { Button, Stack } from "@mui/material"
@@ -34,6 +35,7 @@ export function ListingActions({ listings }: { listings: any[] }) {
 
   return (
     <Stack direction="row" justifyContent="space-between">
+      <SelectControls max={50} />
       <Button disabled={!selected.length} onClick={buyItems} variant="contained" size="large">
         Buy
       </Button>
