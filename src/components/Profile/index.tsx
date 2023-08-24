@@ -451,7 +451,7 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
       </IconButton>
       <Stack spacing={2} alignItems="center">
         <Stack mt={5}>
-          <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
+          <Typography variant="h4" fontWeight="bold" textAlign="center">
             Profile settings
           </Typography>
           <Typography variant="h6" color="primary" textAlign="center">

@@ -1,13 +1,145 @@
+// "use client"
+// import { useLiveQuery } from "dexie-react-hooks"
+// import { createContext, useContext, useState } from "react"
+// import { useDatabase } from "./database"
+// import { useAccess } from "./access"
+// import { useUiSettings } from "./ui-settings"
+// import { useParams } from "next/navigation"
+// import { useFilters } from "./filters"
+
+// const Context = createContext()
+
+// export function NftsProvider({ children }) {
+//   const { db } = useDatabase()
+//   const [nfts, setNfts] = useState([])
+//   const { showAllWallets, loanType } = useUiSettings()
+//   const params = useParams()
+//   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
+//   const { publicKey, userId, publicKeys, isAdmin } = useAccess()
+
+//   const nftsFromDb = useLiveQuery(
+//     () => {
+//       const query =
+//         showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
+//       if (filter === "loans") {
+//         if (loanType === "borrowed") {
+//           return query
+//             .filter((item) => Boolean(item.loan && item.loan.status === "active" && item.status === "loan-taken"))
+//             .toArray()
+//         } else {
+//           const pks = showAllWallets && isAdmin ? publicKeys : [publicKey]
+//           return db.nfts.filter((item) => pks.includes(item.loan?.lender!)).toArray()
+//         }
+//       }
+//       if (filter === "sfts") {
+//         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
+//       }
+//       if (filter === "starred") {
+//         return query.filter((item) => starredNfts.map((n) => n.nftId).includes(item.nftMint)).toArray()
+//       }
+//       if (filter === "spl") {
+//         return query.filter((item) => item.metadata.tokenStandard === 2).toArray()
+//       }
+//       if (filter === "editions") {
+//         return query.filter((item) => item.metadata.tokenStandard === 3).toArray()
+//       }
+//       if (filter === "nfts") {
+//         return query.filter((item) => [0, null, 4].includes(item.metadata.tokenStandard)).toArray()
+//       }
+//       if (filter === "vault") {
+//         return query.filter((item) => item.status === "inVault").toArray()
+//       }
+//       if (filter === "listings") {
+//         return query.filter((item) => item.status === "listed").toArray()
+//       }
+//       if (!filter && !collectionId && !tag) {
+//         return query.filter((item) => [0, 4, 5].includes(item.metadata.tokenStandard!)).toArray()
+//       }
+//       if (filter === "junk") {
+//         return query
+//           .filter((item) =>
+//             Boolean(
+//               // things on HR or MR probably aren't junk
+//               !rarity.find((r) => r.nftMint === item.nftMint) &&
+//                 // things categorised by HM prob aren't junk
+//                 !item.helloMoonCollectionId &&
+//                 // we dont know about these yet
+//                 item.jsonLoaded &&
+//                 // frozen things are probably cool
+//                 !item.status &&
+//                 // things that have a value aren't junk
+//                 !item.price &&
+//                 // NFT editions probably aren't junk
+//                 item.metadata.tokenStandard !== 3 &&
+//                 // missing json probably junk
+//                 (!item.json ||
+//                   // website in description is probably junk
+//                   (item.json.description || "").match(
+//                     /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+//                   ) ||
+//                   // includes junk words - probably junk
+//                   [
+//                     "whitelist",
+//                     "invited",
+//                     "upgrade",
+//                     "reward",
+//                     "free",
+//                     "reveal here",
+//                     "upgrade here",
+//                     "mystery box",
+//                     "claim",
+//                     "exchange here",
+//                     "airdrop",
+//                     "mystery",
+//                   ].some((trigger) => (item?.json?.description || "").toLowerCase().includes(trigger)))
+//             )
+//           )
+//           .toArray()
+//       }
+//       if (tag) {
+//         if (tag === "untagged") {
+//           return query.filter((item) => !allTaggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
+//         }
+//         return query.filter((item) => taggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
+//       }
+//       if (collectionId) {
+//         if (collectionId === "uncategorized") {
+//           return query
+//             .filter(
+//               (item) =>
+//                 [0, 4, 5].includes(item.metadata.tokenStandard!) &&
+//                 !item.collectionId &&
+//                 !item.helloMoonCollectionId &&
+//                 allNFts.filter((n) => n.firstVerifiedCreator === item.firstVerifiedCreator).length === 1
+//             )
+//             .toArray()
+//         }
+//         return query.filter((item) => item.collectionIdentifier === collectionId).toArray()
+//       }
+//       return []
+//     },
+//     [publicKey, showStarred, sort, params, taggedNfts, allNFts, publicKeys, showAllWallets, loanType],
+//     []
+//   )
+
+//   return <Context.Provider value={{ nfts, filtered: nfts }}>{children}</Context.Provider>
+// }
+
+// export const useNfts = () => {
+//   return useContext(Context)
+// }
+
+"use client"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useDatabase } from "./database"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useUiSettings } from "./ui-settings"
 import { useFilters } from "./filters"
-import { useRouter } from "next/router"
 import { useAccess } from "./access"
 import { orderBy, sortBy } from "lodash"
 import { base58PublicKey } from "@metaplex-foundation/umi"
 import { Nft, Rarity } from "../db"
+import { useParams, usePathname } from "next/navigation"
 
 type NftsContextProps = {
   nfts: any[]
@@ -16,7 +148,7 @@ type NftsContextProps = {
   filtered: any[]
   loading: boolean
   rarity: Rarity[]
-  allNfts: any[]
+  // allNfts: any[]
 }
 
 const initial = {
@@ -26,7 +158,7 @@ const initial = {
   filtered: [],
   loading: false,
   rarity: [],
-  allNfts: [],
+  // allNfts: [],
 }
 
 export const NftsContext = createContext<NftsContextProps>(initial)
@@ -36,21 +168,18 @@ type NftsProviderProps = {
 }
 
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
-  const router = useRouter()
+  const { filter, collectionId, tag } = useParams()
+  const path = usePathname()
   const { publicKey, userId, publicKeys, isAdmin } = useAccess()
   const { sort, showAllWallets, loanType } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
-  const {} = useFilters()
   const [nfts, setNfts] = useState<Nft[]>([])
 
   const { db } = useDatabase()
   const tags = useLiveQuery(() => db.tags.filter((t) => t.id !== "starred").toArray(), [], [])
   const taggedNfts = useLiveQuery(
-    () =>
-      db.taggedNfts
-        .filter((item) => router.query.tag === "untagged" || !router.query.tag || item.tagId === router.query.tag)
-        .toArray(),
-    [router.query.tag],
+    () => db.taggedNfts.filter((item) => tag === "untagged" || !tag || item.tagId === tag).toArray(),
+    [tag],
     []
   )
 
@@ -59,7 +188,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], [])
 
   const order = useLiveQuery(() => db.order.toArray(), [], [])
-  const allNFts = useLiveQuery(() => db.nfts.toArray(), [], [])
+  const allNfts = useLiveQuery(() => db.nfts.toArray(), [], [])
 
   const rarity = useLiveQuery(
     () =>
@@ -72,13 +201,11 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     []
   )
 
-  const allNfts = useLiveQuery(() => db.nfts.toArray(), [], [])
-
   const nftsFromDb = useLiveQuery(
     () => {
       const query =
         showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
-      if (router.query.filter === "loans") {
+      if (filter === "loans") {
         if (loanType === "borrowed") {
           return query
             .filter((item) => Boolean(item.loan && item.loan.status === "active" && item.status === "loan-taken"))
@@ -88,31 +215,31 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
           return db.nfts.filter((item) => pks.includes(item.loan?.lender!)).toArray()
         }
       }
-      if (router.query.filter === "sfts") {
+      if (filter === "sfts") {
         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
       }
-      if (router.query.filter === "starred") {
+      if (filter === "starred") {
         return query.filter((item) => starredNfts.map((n) => n.nftId).includes(item.nftMint)).toArray()
       }
-      if (router.query.filter === "spl") {
+      if (filter === "spl") {
         return query.filter((item) => item.metadata.tokenStandard === 2).toArray()
       }
-      if (router.query.filter === "editions") {
+      if (filter === "editions") {
         return query.filter((item) => item.metadata.tokenStandard === 3).toArray()
       }
-      if (router.query.filter === "nfts") {
+      if (filter === "nfts") {
         return query.filter((item) => [0, null, 4].includes(item.metadata.tokenStandard)).toArray()
       }
-      if (router.query.filter === "vault") {
+      if (filter === "vault") {
         return query.filter((item) => item.status === "inVault").toArray()
       }
-      if (router.query.filter === "listings") {
+      if (filter === "listings") {
         return query.filter((item) => item.status === "listed").toArray()
       }
-      if (!router.query.filter && !router.query.collectionId && !router.query.tag) {
+      if (!filter && !collectionId && !tag) {
         return query.filter((item) => [0, 4, 5].includes(item.metadata.tokenStandard!)).toArray()
       }
-      if (router.query.filter === "junk") {
+      if (filter === "junk") {
         return query
           .filter((item) =>
             Boolean(
@@ -153,29 +280,29 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
           )
           .toArray()
       }
-      if (router.query.tag) {
-        if (router.query.tag === "untagged") {
+      if (tag) {
+        if (tag === "untagged") {
           return query.filter((item) => !allTaggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
         }
         return query.filter((item) => taggedNfts.map((t) => t.nftId).includes(item.nftMint)).toArray()
       }
-      if (router.query.collectionId) {
-        if (router.query.collectionId === "uncategorized") {
+      if (collectionId) {
+        if (collectionId === "uncategorized") {
           return query
             .filter(
               (item) =>
                 [0, 4, 5].includes(item.metadata.tokenStandard!) &&
                 !item.collectionId &&
                 !item.helloMoonCollectionId &&
-                allNFts.filter((n) => n.firstVerifiedCreator === item.firstVerifiedCreator).length === 1
+                allNfts.filter((n) => n.firstVerifiedCreator === item.firstVerifiedCreator).length === 1
             )
             .toArray()
         }
-        return query.filter((item) => item.collectionIdentifier === router.query.collectionId).toArray()
+        return query.filter((item) => item.collectionIdentifier === collectionId).toArray()
       }
       return []
     },
-    [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets, loanType],
+    [publicKey, showStarred, sort, path, taggedNfts, publicKeys, showAllWallets, loanType, allNfts],
     []
   )
 
@@ -185,7 +312,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   useEffect(() => {
     setNfts([])
-  }, [router.query, publicKey])
+  }, [path, publicKey])
 
   // if (collections.length && nfts.find((n) => !n.helloMoonCollectionId)) {
   //   collections.push({
@@ -351,12 +478,12 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   if (sort === "custom") {
     let key: string
-    if (router.query.filter) {
-      key = router.query.filter as string
-    } else if (router.query.collectionId) {
-      key = router.query.collectionId as string
-    } else if (router.query.tag) {
-      key = router.query.tag as string
+    if (filter) {
+      key = filter as string
+    } else if (collectionId) {
+      key = collectionId as string
+    } else if (tag) {
+      key = tag as string
     }
     filtered = sortBy(filtered, (item) => order.find((i) => i.nftMint === item.nftMint)?.[key as keyof object])
   }
@@ -378,7 +505,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         filtered,
         loading: !nfts,
         rarity,
-        allNfts,
+        // allNfts,
       }}
     >
       {children}
@@ -387,5 +514,11 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 }
 
 export const useNfts = () => {
-  return useContext(NftsContext)
+  const context = useContext(NftsContext)
+
+  if (context === undefined) {
+    throw new Error("useNfts must be used in a NftsProvider")
+  }
+
+  return context
 }

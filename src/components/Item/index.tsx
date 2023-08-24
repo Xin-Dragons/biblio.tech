@@ -61,7 +61,7 @@ import { Loan as CitrusLoan } from "@famousfoxfederation/citrus-sdk"
 
 import { useAccess } from "../../context/access"
 import { useTransactionStatus } from "../../context/transactions"
-import PlaneIcon from "../Actions/plane.svg"
+import PlaneIcon from "@/../public/plane.svg"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
@@ -76,8 +76,7 @@ import {
   revokeUtilityV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
-import { useNfts } from "../../context/nfts"
-import { useBasePath } from "../../context/base-path"
+import { useNfts } from "../../context/nfts.tsx"
 import { useSharky } from "../../context/sharky"
 import { useTheme } from "../../context/theme"
 import { useTensor } from "../../context/tensor"
@@ -1037,7 +1036,6 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const [revoking, setRevoking] = useState(false)
   const router = useRouter()
   const { collections } = useDatabase()
-  const basePath = useBasePath()
   const umi = useUmi()
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
@@ -1243,14 +1241,14 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
         </Box>
         <CardContent sx={{ width: "100%" }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h4" fontFamily="Lato" fontWeight="bold">
+            <Typography variant="h4" fontWeight="bold">
               {item.json?.name || item.metadata.name}
             </Typography>
             <Typography color="primary">{item.json?.symbol || item.metadata.symbol}</Typography>
           </Stack>
           <hr />
           <Stack spacing={2}>
-            <Typography variant="h5" color="primary" fontFamily="Lato" fontWeight="bold">
+            <Typography variant="h5" color="primary" fontWeight="bold">
               Details
             </Typography>
             <Table>
@@ -1305,7 +1303,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
                       <Typography>
-                        <NextLink href={`${basePath}/collections/${collection.id}`} passHref>
+                        <NextLink href={`collection/${collection.id}`} passHref>
                           <Link underline="hover">{collection.collectionName}</Link>
                         </NextLink>
                       </Typography>
@@ -1404,7 +1402,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
               </TableBody>
             </Table>
             <Typography>{item.json?.description}</Typography>
-            <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">
+            <Typography variant="h5" fontWeight="bold" color="primary">
               Traits
             </Typography>
             {item.json?.attributes?.length ? (
@@ -1426,7 +1424,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             )}
             {isInScope && !router.query.publicKey && (
               <>
-                <Typography variant="h5" fontFamily="Lato" color="primary" fontWeight="bold">
+                <Typography variant="h5" color="primary" fontWeight="bold">
                   Tags
                 </Typography>
                 <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>

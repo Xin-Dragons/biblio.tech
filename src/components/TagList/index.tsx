@@ -10,12 +10,12 @@ import { FC, useState } from "react"
 import { useTheme } from "../../context/theme"
 import { Collection, Nft, Tag, Tag as TagType } from "../../db"
 import { ChipPropsColorOverrides } from "@mui/material/Chip"
-import { CollectionItem } from "../../pages/collections"
+import { CollectionItem } from "../../app/bags/collection/page"
 import { noop } from "lodash"
 import { useFilters } from "../../context/filters"
 import { useRouter } from "next/router"
 import { Close, LabelOff, TakeoutDining } from "@mui/icons-material"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 
 type TagProps = {
   isSelected: boolean

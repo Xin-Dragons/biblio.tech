@@ -1,12 +1,7 @@
+"use client"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { useDatabase } from "./database"
-import { useLiveQuery } from "dexie-react-hooks"
-import { isArray, mergeWith, noop, uniq } from "lodash"
-import { usePrevious } from "../hooks/use-previous"
-import { useRouter } from "next/router"
-import { useUiSettings } from "./ui-settings"
-import { useAccess } from "./access"
-import { useNfts } from "./nfts"
+import { noop, uniq } from "lodash"
+import { usePathname } from "next/navigation"
 
 type FiltersContextProps = {
   selectedFilters: any
@@ -53,16 +48,14 @@ type FiltersProviderProps = {
 }
 
 export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
+  const path = usePathname()
   const [selectedFilters, setSelectedFilters] = useState({})
-  const { isAdmin } = useAccess()
   const [search, setSearch] = useState("")
 
   const [showLoans, setShowLoans] = useState<boolean>(false)
   const [showStarred, setShowStarred] = useState<boolean>(false)
   const [showUntagged, setShowUntagged] = useState<boolean>(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const { filtered } = useNfts()
-  const router = useRouter()
 
   function clearFilters() {
     setShowLoans(false)
@@ -89,7 +82,7 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
 
   useEffect(() => {
     setSelectedFilters([])
-  }, [router.query, router.route])
+  }, [path])
 
   return (
     <FiltersContext.Provider
@@ -118,5 +111,11 @@ export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
 }
 
 export const useFilters = () => {
-  return useContext(FiltersContext)
+  const context = useContext(FiltersContext)
+
+  if (context === undefined) {
+    throw new Error("useFilters must be used in a FiltersProvider")
+  }
+
+  return context
 }

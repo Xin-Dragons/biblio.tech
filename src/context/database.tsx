@@ -1,3 +1,4 @@
+"use client"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { Collection, DB, Loan, Nft, NftMetadata, Rarity, SharkyOrderBooks } from "../db"
 import { useLiveQuery } from "dexie-react-hooks"
@@ -7,7 +8,7 @@ import { merge, noop, partition, uniqBy } from "lodash"
 import { useUiSettings } from "./ui-settings"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { isAddress } from "viem"
-import { useRouter } from "next/router"
+import { useParams } from "next/navigation"
 
 export const MS_PER_DAY = 8.64e7
 
@@ -70,6 +71,7 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
+  const params = useParams()
   const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
   const { showAllWallets } = useUiSettings()
   const [syncing, setSyncing] = useState(false)
@@ -78,7 +80,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const [syncProgress, setSyncProgress] = useState(0)
   const [workers, setWorkers] = useState<Worker[]>([])
   const wallet = useWallet()
-  const router = useRouter()
+
   const nfts = useLiveQuery(
     () =>
       (showAllWallets && isAdmin
@@ -336,33 +338,35 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     }
   }
 
-  useEffect(() => {
-    workers.forEach((worker) => worker.terminate())
-    setWorkers([])
-    setLoadedMints(0)
-    setTotalMints(0)
-    if (!publicKey) {
-      return
-    }
-    if (router.query.publicKey) {
-      if (isAddress(router.query.publicKey as string)) {
-        getEthNftsWorker(router.query.publicKey as string)
-      } else {
-        syncDataWorker(router.query.publicKey as string)
-      }
-      return
-    }
-    if (isAdmin && publicKeys.length) {
-      publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk)))
-    } else {
-      if (isAddress(publicKey)) {
-        getEthNftsWorker(publicKey)
-      } else {
-        syncDataWorker(publicKey)
-      }
-    }
-    getSharkyOrderBooksWorker()
-  }, [publicKey])
+  // useEffect(() => {
+  //   workers.forEach((worker) => worker.terminate())
+  //   setWorkers([])
+  //   setLoadedMints(0)
+  //   setTotalMints(0)
+  //   if (!publicKey) {
+  //     return
+  //   }
+
+  //   console.log(params)
+  //   // if (router.query.publicKey) {
+  //   //   if (isAddress(router.query.publicKey as string)) {
+  //   //     getEthNftsWorker(router.query.publicKey as string)
+  //   //   } else {
+  //   //     syncDataWorker(router.query.publicKey as string)
+  //   //   }
+  //   //   return
+  //   // }
+  //   if (isAdmin && publicKeys.length) {
+  //     publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk)))
+  //   } else {
+  //     if (isAddress(publicKey)) {
+  //       getEthNftsWorker(publicKey)
+  //     } else {
+  //       syncDataWorker(publicKey)
+  //     }
+  //   }
+  //   getSharkyOrderBooksWorker()
+  // }, [publicKey])
 
   function getSharkyOrderBooksWorker() {
     if (isOffline) {
@@ -854,5 +858,11 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 }
 
 export const useDatabase = () => {
-  return useContext(DatabaseContext)
+  const context = useContext(DatabaseContext)
+
+  if (context === undefined) {
+    throw new Error("useDatabase must be used in a DatabaseProvider")
+  }
+
+  return context
 }

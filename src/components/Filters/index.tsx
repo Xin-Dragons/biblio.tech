@@ -16,7 +16,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 import { useRouter } from "next/router"
 import { useFilters } from "../../context/filters"
 import { useUiSettings } from "../../context/ui-settings"

@@ -1,3 +1,4 @@
+"use client"
 import { Dispatch, ReactNode, SetStateAction, createContext, useContext, useState } from "react"
 
 type Cluster = "mainnet" | "devnet"

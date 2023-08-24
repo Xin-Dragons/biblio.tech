@@ -1,10 +1,11 @@
+"use client"
 import { Transaction } from "@metaplex-foundation/umi"
 import { FC, ReactElement, createContext, useContext, useEffect, useState } from "react"
 import { useUmi } from "./umi"
 import { sleep } from "../helpers/utils"
 import { noop, uniq } from "lodash"
 import { toast } from "react-hot-toast"
-import { useNfts } from "./nfts"
+import { useNfts } from "./nfts.tsx"
 
 type TransactionStatusContextProps = {
   transactions: TransactionStatus[]
@@ -167,5 +168,11 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
 }
 
 export const useTransactionStatus = () => {
-  return useContext(TransactionStatusContext)
+  const context = useContext(TransactionStatusContext)
+
+  if (context === undefined) {
+    throw new Error("useTransactionStatus must be used in a TransactionStatusProvider")
+  }
+
+  return context
 }

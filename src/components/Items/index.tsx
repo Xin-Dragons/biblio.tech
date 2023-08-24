@@ -1,9 +1,10 @@
+"use client"
 import { Box, Button, Stack, Typography } from "@mui/material"
-import { useUiSettings } from "../../context/ui-settings"
+import { useUiSettings } from "@/context/ui-settings"
 import { Item } from "../Item"
 import { ElementType, FC, useEffect, useState } from "react"
 import Masonry from "@mui/lab/Masonry"
-import { useDatabase } from "../../context/database"
+import { useDatabase } from "@/context/database"
 import { sample } from "lodash"
 import { CSS } from "@dnd-kit/utilities"
 import {
@@ -11,7 +12,6 @@ import {
   DragOverlay,
   KeyboardSensor,
   MouseSensor,
-  PointerSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -20,8 +20,6 @@ import {
 import DragHandleIcon from "@mui/icons-material/DragHandle"
 import { FixedSizeGrid } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
-import useMediaQuery from "@mui/material/useMediaQuery"
-import { useTheme } from "@mui/material/styles"
 
 import {
   arrayMove,
@@ -30,19 +28,13 @@ import {
   rectSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable"
-import { useWidth } from "../../hooks/use-width"
+import { useWidth } from "@/hooks/use-width"
 import { WalletSearch } from "../WalletSearch"
-import { useBasePath } from "../../context/base-path"
 import Link from "next/link"
-import { useNfts } from "../../context/nfts"
-import { Nft } from "../../db"
-import { CollectionItem } from "../../pages/collections"
-import { Router, useRouter } from "next/router"
-import { useFilters } from "../../context/filters"
-import { useAccess } from "../../context/access"
-import { useSession } from "next-auth/react"
-import { useDialog } from "../../context/dialog"
-import { Profile } from "../Profile"
+import { useNfts } from "@/context/nfts"
+import { Nft } from "@/db"
+import { CollectionItem } from "@/app/bags/collection/page"
+import { useFilters } from "@/context/filters"
 
 interface ItemsProps {
   items: Nft[] | CollectionItem[]
@@ -138,7 +130,7 @@ type CellProps = {
 }
 
 const Cell: FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
-  const { cards, columnCount, Component, select } = data
+  const { cards, columnCount, Component } = data
   const singleColumnIndex = columnIndex + rowIndex * columnCount
   const card = cards[singleColumnIndex]
   const Child = Component || Item
@@ -185,20 +177,19 @@ type CardsProps = {
 const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
   const { layoutSize, showInfo } = useUiSettings()
   const pageWidth = useWidth()
-  const router = useRouter()
 
   return (
     <Box sx={{ height: "100%" }}>
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }: { width: number; height: number }) => {
-            const isCollectionsView =
-              !router.query.filter && !router.query.collectionId && !router.query.tag && !router.query.id
+            const isCollectionsView = false
             const adjust = isCollectionsView ? 40 : 90
             const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
             const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
             const columnCount = Math.floor(width! / cardWidth)
             const rowCount = Math.ceil(cards.length / columnCount)
+
             return (
               <FixedSizeGrid
                 className="grid"
@@ -229,25 +220,16 @@ export const Items: FC<ItemsProps> = ({
 }) => {
   const [activeId, setActiveId] = useState(null)
   const { layoutSize, sort } = useUiSettings()
-  const { renderItem } = useDialog()
   const { syncing } = useDatabase()
   const { loading } = useNfts()
   const [items, setItems] = useState(initialItems)
   const width = useWidth()
-  const basePath = useBasePath()
   const { filtersActive, clearFilters, setSearch } = useFilters()
-  const { isActive } = useAccess()
-  const { data: session } = useSession()
-  const router = useRouter()
 
   const sizes = {
     small: 1,
     medium: 1.5,
     large: 2,
-  }
-
-  function isTouchDevice() {
-    return "ontouchstart" in window || navigator.maxTouchPoints > 0
   }
 
   const sensors = useSensors(
@@ -338,8 +320,6 @@ export const Items: FC<ItemsProps> = ({
     )
   }
 
-  const noAccess = session?.publicKey && !isActive && !router.query.publicKey
-
   function clearAllFilters() {
     clearFilters()
     setSearch("")
@@ -405,7 +385,8 @@ export const Items: FC<ItemsProps> = ({
             </Typography>
             <>
               {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
-              <Link href={`${basePath}/`} passHref>
+
+              <Link href={`/`} passHref>
                 <Button>View all collections</Button>
               </Link>
             </>

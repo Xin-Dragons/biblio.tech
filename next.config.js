@@ -1,15 +1,13 @@
 /** @type {import('next').NextConfig} */
 
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-})
-module.exports = withBundleAnalyzer({
-  reactStrictMode: false,
+module.exports = {
   webpack(config, { isServer }) {
     config.module.rules.push({
       test: /\.svg$/,
-      use: ["@svgr/webpack"]
-    });
+      use: ["@svgr/webpack"],
+    })
+
+    config.externals.push("pino-pretty", "lokijs", "encoding")
 
     if (isServer) {
       return config
@@ -23,7 +21,7 @@ module.exports = withBundleAnalyzer({
           ...config.resolve.fallback,
           fs: false,
         },
-      }
+      },
     }
-  }
-})
+  },
+}

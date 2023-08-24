@@ -1,3 +1,4 @@
+"use client"
 import { createContext, FC, useContext, useEffect, useState } from "react"
 import { Connection } from "@solana/web3.js"
 import { Metaplex, walletAdapterIdentity } from "@metaplex-foundation/js"
@@ -27,5 +28,11 @@ export const MetaplexProvider: FC<MetaplexContextProps> = ({ children }) => {
 }
 
 export function useMetaplex() {
-  return useContext(MetaplexContext)
+  const context = useContext(MetaplexContext)
+
+  if (context === undefined) {
+    throw new Error("useMetaplex must be used in a MetaplexProvider")
+  }
+
+  return context
 }

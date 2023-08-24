@@ -1,3 +1,4 @@
+"use client"
 import { noop } from "lodash"
 import { FC, ReactNode, createContext, useContext, useState } from "react"
 
@@ -16,5 +17,11 @@ export const WalletBypassProvider: FC<WalletBypassProviderProps> = ({ children }
 }
 
 export const useWalletBypass = () => {
-  return useContext(WalletBypassContext)
+  const context = useContext(WalletBypassContext)
+
+  if (context === undefined) {
+    throw new Error("useWalletBypass must be used in a WalletBypassProvider")
+  }
+
+  return context
 }

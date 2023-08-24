@@ -1,9 +1,12 @@
 import {
   Button,
+  Card,
   CardContent,
   Container,
+  Dialog,
   FormControl,
   FormHelperText,
+  IconButton,
   InputLabel,
   List,
   ListItem,
@@ -12,6 +15,7 @@ import {
   Stack,
   SvgIcon,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
@@ -46,7 +50,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useTransactionStatus } from "../../context/transactions"
 import { useDatabase } from "../../context/database"
 import { useSelection } from "../../context/selection"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 import { useSession } from "next-auth/react"
 import { shorten, sleep, waitForWalletChange } from "../../helpers/utils"
 import { PublicKey } from "@solana/web3.js"
@@ -57,14 +61,16 @@ import VaultIcon from "./vault.svg"
 import { closeToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { useAccess } from "../../context/access"
 
-export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
+export function Vault({ small }: { small?: boolean }) {
+  const [vaultShowing, setVaultShowing] = useState(false)
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [transferTo, setTransferTo] = useState<string | null>(null)
   const { isAdmin } = useAccess()
   const { setBypassWallet } = useWalletBypass()
   const [type, setType] = useState("secure")
-  const { selected } = useSelection()
+  const { selected, selectedItems, frozenSelected } = useSelection()
+
   const { nfts } = useNfts()
   const metaplex = useMetaplex()
   const umi = useUmi()
@@ -73,10 +79,19 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const { data: session } = useSession()
   const { sendSignedTransactions } = useTransactionStatus()
   const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
-  const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
 
+  function toggleVaultShowing() {
+    setVaultShowing(!vaultShowing)
+  }
+
+  const nonInVaultStatusesSelected = selectedItems.some((item) => item.status && item.status !== "inVault")
+  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority)
+  const allInVault = selectedItems.every((item: any) => item.status === "inVault")
+  const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
   const onlyFrozenSelected = selectedItems.every((item) => item.status === "inVault")
   const onlyThawedSelected = selectedItems.every((item) => !item.status)
+
+  const canFreezeThaw = allInVault || noneInVault
 
   async function signAllTransactions(txns: Transaction[], signers: string[]) {
     return signers.reduce(async (promise, signer, index) => {
@@ -130,7 +145,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
         throw new Error("Can only transfer when thawing")
       }
 
-      onClose()
+      setVaultShowing(false)
 
       const items = all ? nfts : selectedItems
 
@@ -502,164 +517,231 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const owners = uniq(selectedItems.map((item) => item.owner))
 
   return (
-    <CardContent>
-      <Container maxWidth="sm">
-        <Stack spacing={2}>
-          <Typography variant="h4" fontWeight={"normal"} textTransform="uppercase" textAlign="center" mb={5} mt={3}>
-            {onlyFrozenSelected ? "Remove items from" : "Add items to"} The Vault
-          </Typography>
-          <Typography>
-            {onlyFrozenSelected ? (
-              <span>
-                Removing{" "}
-                <strong>
-                  {selected.length} item{selected.length === 1 ? "" : "s"}
-                </strong>{" "}
-                from The Vault.
-              </span>
-            ) : (
-              <span>
-                Adding{" "}
-                <strong>
-                  {selected.length} item{selected.length === 1 ? "" : "s"}
-                </strong>{" "}
-                to The Vault.
-              </span>
-            )}
-          </Typography>
-          {onlyFrozenSelected ? (
-            <Stack spacing={1} sx={{ marginBottom: "5em !important" }}>
-              <Typography variant="body2">Authorities needed to unlock:</Typography>
-              {authorities.map((auth, index) => (
-                <TextField key={index} value={shorten(auth)} disabled />
-              ))}
-            </Stack>
-          ) : (
-            <Stack spacing={4}>
-              <Typography variant="body2">
-                If you have more than one wallet linked, you can choose to defer freeze authority to any of these
-                wallets. This method of locking is much more secure as if anyone were to obtain your private key, they
-                would still be unable to unfreeze your items unless they had also obtained access to the wallet used to
-                freeze.
-              </Typography>
-
-              <Stack direction="row" spacing={2}>
-                <Button
-                  variant={type === "basic" ? "contained" : "outlined"}
-                  fullWidth
-                  onClick={() => setType("basic")}
+    <>
+      {small ? (
+        <Button
+          disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+          onClick={() => toggleVaultShowing()}
+          fullWidth
+          variant="contained"
+          size="large"
+        >
+          <Stack direction="row" spacing={1}>
+            <SvgIcon>
+              <VaultIcon />
+            </SvgIcon>
+            <Typography>{frozenSelected ? "Remove from vault" : "Add to vault"}</Typography>
+          </Stack>
+        </Button>
+      ) : (
+        <Tooltip
+          title={
+            nonInVaultStatusesSelected
+              ? "Selection contains items that cannot be frozen/thawed"
+              : !hasFreezeAuth
+              ? "Some items cannot be frozen"
+              : onlyNftsSelected
+              ? canFreezeThaw
+                ? frozenSelected
+                  ? "Remove selected items from vault"
+                  : "Add selected items to vault"
+                : "Cannot freeze and thaw in same transaction"
+              : "Only NFTs and pNFTs can be locked in the vault"
+          }
+        >
+          <span>
+            <IconButton
+              disabled={
+                !selected.length || !canFreezeThaw || !onlyNftsSelected || nonInVaultStatusesSelected || !hasFreezeAuth
+              }
+              sx={{
+                color: "#a6e3e0",
+              }}
+              onClick={() => toggleVaultShowing()}
+            >
+              <SvgIcon>
+                <VaultIcon />
+              </SvgIcon>
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      <Dialog open={vaultShowing} onClose={toggleVaultShowing} fullWidth maxWidth="md">
+        <Card sx={{ overflowY: "auto" }}>
+          <CardContent>
+            <Container maxWidth="sm">
+              <Stack spacing={2}>
+                <Typography
+                  variant="h4"
+                  fontWeight={"normal"}
+                  textTransform="uppercase"
+                  textAlign="center"
+                  mb={5}
+                  mt={3}
                 >
-                  <Typography>Basic freeze</Typography>
-                </Button>
-                <Button
-                  variant={type === "secure" ? "contained" : "outlined"}
-                  fullWidth
-                  onClick={() => setType("secure")}
-                  sx={{ fontSize: "1.25em" }}
-                  disabled={!isAdmin}
-                >
-                  <Stack>
-                    <Typography variant="body1">Secure freeze</Typography>
-                    <Typography
-                      textTransform="none"
-                      variant="body2"
-                      sx={{ color: !isAdmin ? "#faaf00 !important" : "unset" }}
-                    >
-                      {!isAdmin ? "PREMIUM" : "(recommended)"}
-                    </Typography>
+                  {onlyFrozenSelected ? "Remove items from" : "Add items to"} The Vault
+                </Typography>
+                <Typography>
+                  {onlyFrozenSelected ? (
+                    <span>
+                      Removing{" "}
+                      <strong>
+                        {selected.length} item{selected.length === 1 ? "" : "s"}
+                      </strong>{" "}
+                      from The Vault.
+                    </span>
+                  ) : (
+                    <span>
+                      Adding{" "}
+                      <strong>
+                        {selected.length} item{selected.length === 1 ? "" : "s"}
+                      </strong>{" "}
+                      to The Vault.
+                    </span>
+                  )}
+                </Typography>
+                {onlyFrozenSelected ? (
+                  <Stack spacing={1} sx={{ marginBottom: "5em !important" }}>
+                    <Typography variant="body2">Authorities needed to unlock:</Typography>
+                    {authorities.map((auth, index) => (
+                      <TextField key={index} value={shorten(auth as string)} disabled />
+                    ))}
                   </Stack>
-                </Button>
-              </Stack>
-              {type === "secure" ? (
-                <>
-                  <FormControl disabled={!canSecureLock}>
-                    <InputLabel id="demo-simple-select-label">Select wallet for secure freeze</InputLabel>
-                    <Select
-                      value={lockingWallet}
-                      label={"Select wallet for secure freeze"}
-                      onChange={(e) => setLockingWallet(e.target.value)}
-                    >
-                      {wallets
-                        ?.filter((w) => {
-                          return !owners.includes(w.public_key)
-                        })
-                        .map((w, index) => (
+                ) : (
+                  <Stack spacing={4}>
+                    <Typography variant="body2">
+                      If you have more than one wallet linked, you can choose to defer freeze authority to any of these
+                      wallets. This method of locking is much more secure as if anyone were to obtain your private key,
+                      they would still be unable to unfreeze your items unless they had also obtained access to the
+                      wallet used to freeze.
+                    </Typography>
+
+                    <Stack direction="row" spacing={2}>
+                      <Button
+                        variant={type === "basic" ? "contained" : "outlined"}
+                        fullWidth
+                        onClick={() => setType("basic")}
+                      >
+                        <Typography>Basic freeze</Typography>
+                      </Button>
+                      <Button
+                        variant={type === "secure" ? "contained" : "outlined"}
+                        fullWidth
+                        onClick={() => setType("secure")}
+                        sx={{ fontSize: "1.25em" }}
+                        disabled={!isAdmin}
+                      >
+                        <Stack>
+                          <Typography variant="body1">Secure freeze</Typography>
+                          <Typography
+                            textTransform="none"
+                            variant="body2"
+                            sx={{ color: !isAdmin ? "#faaf00 !important" : "unset" }}
+                          >
+                            {!isAdmin ? "PREMIUM" : "(recommended)"}
+                          </Typography>
+                        </Stack>
+                      </Button>
+                    </Stack>
+                    {type === "secure" ? (
+                      <>
+                        <FormControl disabled={!canSecureLock}>
+                          <InputLabel id="demo-simple-select-label">Select wallet for secure freeze</InputLabel>
+                          <Select
+                            value={lockingWallet}
+                            label={"Select wallet for secure freeze"}
+                            onChange={(e) => setLockingWallet(e.target.value)}
+                          >
+                            {wallets
+                              ?.filter((w) => {
+                                return !owners.includes(w.public_key)
+                              })
+                              .map((w, index) => (
+                                <MenuItem key={index} value={w.public_key}>
+                                  {shorten(w.public_key)}
+                                </MenuItem>
+                              ))}
+                          </Select>
+                          <FormHelperText>
+                            Choose a wallet to defer freeze authority to. This must be a wallet you own.
+                          </FormHelperText>
+                        </FormControl>
+                      </>
+                    ) : (
+                      <TextField
+                        label="Freeze auth retained by"
+                        value={shorten(owners[0] as string)}
+                        disabled
+                        helperText="The owner wallet will retain freeze authority"
+                      />
+                    )}
+                  </Stack>
+                )}
+
+                <Stack direction="row" justifyContent="space-between" spacing={2}>
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    onClick={() => setVaultShowing(false)}
+                    size="large"
+                    fullWidth
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => lockUnlock()}
+                    disabled={loading || (!onlyFrozenSelected && !lockingWallet && type === "secure")}
+                    size="large"
+                    fullWidth
+                  >
+                    <Stack direction="row" spacing={0.5}>
+                      <Typography>
+                        {onlyFrozenSelected ? "Thaw" : "Freeze"} item{selected.length === 1 ? "" : "s"}
+                      </Typography>
+                      <SvgIcon>
+                        <VaultIcon />
+                      </SvgIcon>
+                    </Stack>
+                  </Button>
+                </Stack>
+                {onlyFrozenSelected && (
+                  <Stack spacing={2}>
+                    <Typography variant="h6">Recover items</Typography>
+                    <Typography variant="body2">
+                      In the event of your wallet being compromised, you can use &quot;Recover&quot; to unlock AND send
+                      your assets to a safe place in a single transaction.
+                    </Typography>
+                    <Typography variant="body2">
+                      This means the hacker wont be able to steal the items when you unfreeze them.
+                    </Typography>
+                    <FormControl disabled={!canSecureLock}>
+                      <InputLabel id="demo-simple-select-label">Select a secure wallet</InputLabel>
+                      <Select
+                        value={transferTo}
+                        label={"Select a secure wallet"}
+                        onChange={(e) => setTransferTo(e.target.value)}
+                      >
+                        {wallets?.map((w, index) => (
                           <MenuItem key={index} value={w.public_key}>
                             {shorten(w.public_key)}
                           </MenuItem>
                         ))}
-                    </Select>
-                    <FormHelperText>
-                      Choose a wallet to defer freeze authority to. This must be a wallet you own.
-                    </FormHelperText>
-                  </FormControl>
-                </>
-              ) : (
-                <TextField
-                  label="Freeze auth retained by"
-                  value={shorten(owners[0])}
-                  disabled
-                  helperText="The owner wallet will retain freeze authority"
-                />
-              )}
-            </Stack>
-          )}
-
-          <Stack direction="row" justifyContent="space-between" spacing={2}>
-            <Button color="error" variant="outlined" onClick={() => onClose()} size="large" fullWidth>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => lockUnlock()}
-              disabled={loading || (!onlyFrozenSelected && !lockingWallet && type === "secure")}
-              size="large"
-              fullWidth
-            >
-              <Stack direction="row" spacing={0.5}>
-                <Typography>
-                  {onlyFrozenSelected ? "Thaw" : "Freeze"} item{selected.length === 1 ? "" : "s"}
-                </Typography>
-                <SvgIcon>
-                  <VaultIcon />
-                </SvgIcon>
+                      </Select>
+                      <FormHelperText>
+                        Choose a secure wallet to send your assets to. This must be linked in Biblio.
+                      </FormHelperText>
+                    </FormControl>
+                    <Button color="secondary" variant="contained" size="large" onClick={() => lockUnlock(false, true)}>
+                      Recover
+                    </Button>
+                  </Stack>
+                )}
               </Stack>
-            </Button>
-          </Stack>
-          {onlyFrozenSelected && (
-            <Stack spacing={2}>
-              <Typography variant="h6">Recover items</Typography>
-              <Typography variant="body2">
-                In the event of your wallet being compromised, you can use &quot;Recover&quot; to unlock AND send your
-                assets to a safe place in a single transaction.
-              </Typography>
-              <Typography variant="body2">
-                This means the hacker wont be able to steal the items when you unfreeze them.
-              </Typography>
-              <FormControl disabled={!canSecureLock}>
-                <InputLabel id="demo-simple-select-label">Select a secure wallet</InputLabel>
-                <Select
-                  value={transferTo}
-                  label={"Select a secure wallet"}
-                  onChange={(e) => setTransferTo(e.target.value)}
-                >
-                  {wallets?.map((w, index) => (
-                    <MenuItem key={index} value={w.public_key}>
-                      {shorten(w.public_key)}
-                    </MenuItem>
-                  ))}
-                </Select>
-                <FormHelperText>
-                  Choose a secure wallet to send your assets to. This must be linked in Biblio.
-                </FormHelperText>
-              </FormControl>
-              <Button color="secondary" variant="contained" size="large" onClick={() => lockUnlock(false, true)}>
-                Recover
-              </Button>
-            </Stack>
-          )}
-        </Stack>
-      </Container>
-    </CardContent>
+            </Container>
+          </CardContent>
+        </Card>
+      </Dialog>
+    </>
   )
 }

@@ -1,3 +1,4 @@
+"use client"
 import {
   Autocomplete,
   Stack,
@@ -21,31 +22,30 @@ import { getAddressType, isValidPublicKey, shorten } from "../../helpers/utils"
 import { isPublicKey, publicKey } from "@metaplex-foundation/umi"
 import { isAddress } from "viem"
 import { useSession } from "next-auth/react"
-import { orderBy, uniqBy } from "lodash"
+import { omit, orderBy, uniqBy } from "lodash"
 import { Close } from "@mui/icons-material"
 import { Wallet } from "../../db"
 import { CollectionNameRequest, CollectionName } from "@hellomoon/api"
 import { hmClient } from "../../helpers/hello-moon"
 
-type AddressSelectorProps = {
-  wallet: Wallet | null
-  setWallet: Function
-  addDialog?: boolean
-  onNotFound?: Function
-  lookupCollection?: boolean
-  [x: string]: any
-}
-
 const filter = createFilterOptions<Wallet>({ stringify: (opt) => `${opt.nickname}${opt.publicKey}` })
 
-export const AddressSelector: FC<AddressSelectorProps> = ({
+export function AddressSelector({
   wallet,
   setWallet,
   addDialog = true,
   onNotFound,
   lookupCollection,
   ...props
-}) => {
+}: {
+  wallet: Wallet | null
+  setWallet: Function
+  addDialog?: boolean
+  onNotFound?: Function
+  lookupCollection?: boolean
+  [x: string]: any
+}) {
+  // return null
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const {
     wallets: addressBookWallets,
@@ -65,7 +65,13 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
       } as Wallet
     }) || []
 
-  const [wallets, setWallets] = useState<Wallet[]>([])
+  const wallets = addressBookWallets
+
+  // const wallets = orderBy(
+  //   uniqBy([...addressBookWallets, ...linkedWallets], (item) => item.publicKey),
+  //   (item) => item.added || -1,
+  //   "desc"
+  // )
   const [options, setOptions] = useState<any[]>([])
   const [collections, setCollections] = useState<CollectionName[]>([])
 
@@ -75,17 +81,9 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
     nickname: "",
   })
 
-  useEffect(() => {
-    setWallets(
-      orderBy(
-        uniqBy([...addressBookWallets, ...linkedWallets], (item) => item.publicKey),
-        (item) => item.added || -1,
-        "desc"
-      )
-    )
-  }, [addressBookWallets, linkedWallets])
+  useEffect(() => {}, [addressBookWallets, linkedWallets])
 
-  useMemo(() => {
+  useEffect(() => {
     setOptions([
       ...wallets,
       ...collections.map((c: CollectionName) => {
@@ -188,7 +186,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
   return (
     <>
       <Autocomplete
-        {...props}
+        {...omit(props, "showChain")}
         value={wallet}
         onChange={(event, newValue) => {
           if (typeof newValue === "string") {

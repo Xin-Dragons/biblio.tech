@@ -140,10 +140,10 @@ export const SignUp: FC = () => {
     <Card sx={{ overflowY: "auto", height: fullScreen ? "100vh" : "auto" }}>
       <CardContent>
         <Stack spacing={2} justifyContent="center" alignItems="center">
-          <Typography variant="h4" fontFamily="lato" fontWeight="bold">
+          <Typography variant="h4" fontWeight="bold">
             Biblio Premium
           </Typography>
-          <Typography variant="h4" color="primary" fontFamily="lato" display="inline">
+          <Typography variant="h4" color="primary" display="inline">
             {shorten(wallet.publicKey?.toBase58())}
           </Typography>
           <Selector onSubmit={createAccount} onCancel={() => wallet.disconnect()} loading={loading} />

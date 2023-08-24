@@ -1,3 +1,4 @@
+"use client"
 import type { Umi } from "@metaplex-foundation/umi"
 import { createContext, useContext } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
@@ -33,8 +34,10 @@ export const UmiProvider = ({ children, endpoint }: { children: ReactNode; endpo
 
 export function useUmi(): Umi {
   const umi = useContext(UmiContext).umi
+
   if (!umi) {
     throw new Error("Umi context was not initialized. " + "Did you forget to wrap your app with <UmiProvider />?")
   }
+
   return umi
 }

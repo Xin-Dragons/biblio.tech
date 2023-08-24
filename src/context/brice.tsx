@@ -1,4 +1,4 @@
-import { Typography } from "@mui/material"
+"use client"
 import axios from "axios"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { toast } from "react-hot-toast"
@@ -93,5 +93,11 @@ export const BriceProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useBrice = () => {
-  return useContext(BriceContext)
+  const context = useContext(BriceContext)
+
+  if (context === undefined) {
+    throw new Error("useBrice must be used in a BriceProvider")
+  }
+
+  return context
 }

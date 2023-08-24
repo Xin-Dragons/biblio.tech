@@ -1,3 +1,4 @@
+"use client"
 import { useLiveQuery } from "dexie-react-hooks"
 import { FC, ReactNode, createContext, useContext } from "react"
 import { useDatabase } from "./database"
@@ -91,5 +92,11 @@ export const WalletsProvider: FC<WalletsProviderProps> = ({ children }) => {
 }
 
 export const useWallets = () => {
-  return useContext(WalletsContext)
+  const context = useContext(WalletsContext)
+
+  if (context === undefined) {
+    throw new Error("useWallets must be used in a WalletsProvider")
+  }
+
+  return context
 }

@@ -146,6 +146,11 @@ export interface SharkyOrderBooks {
   enabled: boolean
 }
 
+export interface DigitalAsset {
+  id: string
+  collectionId: string
+}
+
 export class DB extends Dexie {
   nfts!: Table<Nft>
   collections!: Table<Collection>
@@ -156,10 +161,11 @@ export class DB extends Dexie {
   preferences!: Table<Preferences>
   wallets!: Table<Wallet>
   sharkyOrderBooks!: Table<SharkyOrderBooks>
+  digitalAssets!: Table<DigitalAsset>
 
   constructor() {
     super("biblio.tech")
-    this.version(3).stores({
+    this.version(4).stores({
       nfts: "nftMint,collectionId,owner",
       collections: "id,helloMoonCollectionId,collectionId,name",
       rarity: "nftMint,howRare,moonRank",
@@ -169,6 +175,7 @@ export class DB extends Dexie {
       preferences: "page",
       wallets: "publicKey",
       sharkyOrderBooks: "collectionId",
+      digitalAssets: "id,collectionId",
     })
   }
 }

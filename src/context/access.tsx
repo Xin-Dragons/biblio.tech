@@ -1,12 +1,9 @@
-import { PublicKey } from "@metaplex-foundation/js"
+"use client"
 import { useWallet } from "@solana/wallet-adapter-react"
-import axios from "axios"
 import { signOut as authSignOut, signIn as authSignIn, useSession, getCsrfToken } from "next-auth/react"
-import { useRouter } from "next/router"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { getPublicKeyFromSolDomain } from "../components/WalletSearch"
 import { Nft, User } from "../types/nextauth"
-import { noop, partition, sortBy } from "lodash"
+import { noop, sortBy } from "lodash"
 import { addMemo } from "@metaplex-foundation/mpl-toolbox"
 import { useUmi } from "./umi"
 import { toast } from "react-hot-toast"
@@ -15,6 +12,7 @@ import { SigninMessage } from "../utils/SigninMessge"
 import { useWallets } from "./wallets"
 import { useWalletBypass } from "./wallet-bypass"
 import { getAddressType } from "../helpers/utils"
+import { useParams } from "next/navigation"
 
 type AccessContextProps = {
   publicKey: string | null
@@ -74,7 +72,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const umi = useUmi()
   const wallet = useWallet()
   const { data: session } = useSession()
-  const router = useRouter()
+  const params = useParams()
 
   useEffect(() => {
     if (bypassWallet || !wallet.publicKey || !session || !session?.user?.wallets?.length) {
@@ -93,13 +91,13 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
       console.log("Wallet listener bypassed, returning")
       return
     }
-    const publicKey = (router.query.publicKey as string) || wallet.publicKey?.toBase58()
+    const publicKey = (params.publicKey as string) || wallet.publicKey?.toBase58()
     if (!publicKey) {
       setPublicKey("")
     } else {
       setPublicKey(publicKey)
     }
-  }, [router.query.publicKey, wallet.publicKey, isActive, isOffline, bypassWallet])
+  }, [params.publicKey, wallet.publicKey, isActive, isOffline, bypassWallet])
 
   async function getUser() {
     if (session?.user) {
@@ -154,7 +152,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   useEffect(() => {
     setIsOffline(Boolean(session?.user?.offline))
     const isActive = session?.user?.active || session?.user?.offline
-    const isLocalScope = !router.query.publicKey
+    const isLocalScope = !params.publicKey
     const isAdmin = (session?.user?.wallets || [])
       .filter((wallet) => wallet.active)
       .map((wallet: any) => wallet.public_key)
@@ -162,8 +160,8 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
 
     setIsAdmin(Boolean(isAdmin && isLocalScope && isActive) || isOffline)
     setIsBasic(Boolean(session?.user && isLocalScope))
-    setIsInScope(!router.query.publicKey || wallet.publicKey?.toBase58() === router.query.publicKey)
-  }, [session, user, wallet.publicKey, router.query])
+    setIsInScope(!params.publicKey || wallet.publicKey?.toBase58() === params.publicKey)
+  }, [session, user, wallet.publicKey, params])
 
   useEffect(() => {
     getUser()
@@ -294,5 +292,10 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
 }
 
 export const useAccess = () => {
+  const context = useContext(AccessContext)
+
+  if (context === undefined) {
+    throw new Error("useAccess must be used in an AccessProvider")
+  }
   return useContext(AccessContext)
 }

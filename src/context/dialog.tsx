@@ -1,3 +1,4 @@
+"use client"
 import { Close } from "@mui/icons-material"
 import { Dialog, IconButton, Theme, alpha, useMediaQuery } from "@mui/material"
 import { initial, noop } from "lodash"
@@ -62,5 +63,11 @@ export const DialogProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useDialog = () => {
-  return useContext(DialogContext)
+  const context = useContext(DialogContext)
+
+  if (context === undefined) {
+    throw new Error("useDialog must be used in a DialogProvider")
+  }
+
+  return context
 }

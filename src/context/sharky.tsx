@@ -1,3 +1,4 @@
+"use client"
 import { aprToApy, apyToApr, aprToInterestRatio, interestRatioToApr } from "@sharkyfi/client"
 import { createSharkyClient, createProvider, OrderBook, enabledOrderBooks, SHARKY_PROGRAM_ID } from "@sharkyfi/client"
 import * as Sharky from "@sharkyfi/client"
@@ -6,7 +7,7 @@ import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js"
 import { findKey, flatten, noop, update } from "lodash"
 import { FC, ReactNode, createContext, useContext } from "react"
 import { toast } from "react-hot-toast"
-import { useNfts } from "./nfts"
+import { useNfts } from "./nfts.tsx"
 import { useUmi } from "./umi"
 import { useTransactionStatus } from "./transactions"
 import { Nft } from "../db"
@@ -445,5 +446,11 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
 }
 
 export const useSharky = () => {
-  return useContext(SharkyContext)
+  const context = useContext(SharkyContext)
+
+  if (context === undefined) {
+    throw new Error("useSharky must be used in a SharkyProvider")
+  }
+
+  return context
 }

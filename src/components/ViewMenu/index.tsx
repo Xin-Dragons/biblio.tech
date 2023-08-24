@@ -5,7 +5,7 @@ import { FC } from "react"
 import GridIcon from "./grid.svg"
 import GridIcon2 from "./grid-2.svg"
 import GridIcon3 from "./grid-3.svg"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
 
 export const ViewMenu: FC = () => {

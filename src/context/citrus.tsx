@@ -1,3 +1,4 @@
+"use client"
 import { FC, ReactNode, createContext, useContext } from "react"
 import { CitrusSdk, Collection, Loan, Status } from "@famousfoxfederation/citrus-sdk"
 import {
@@ -256,5 +257,11 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useCitrus = () => {
-  return useContext(CitrusContext)
+  const context = useContext(CitrusContext)
+
+  if (context === undefined) {
+    throw new Error("useCitrus must be used in a CitrusProvider")
+  }
+
+  return context
 }

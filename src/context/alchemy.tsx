@@ -1,3 +1,4 @@
+"use client"
 import { Alchemy, Network } from "alchemy-sdk"
 import { FC, ReactNode, createContext, useContext } from "react"
 
@@ -15,5 +16,11 @@ export const AlchemyProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useAlchemy = () => {
-  return useContext(AlchemyContext)
+  const context = useContext(AlchemyContext)
+
+  if (context === undefined) {
+    throw new Error("useAlchemy must be used in an AlchemyProvider")
+  }
+
+  return context
 }

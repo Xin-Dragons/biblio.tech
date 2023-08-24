@@ -5,7 +5,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import BN from "bn.js"
 import base58 from "bs58"
 import { isAddress } from "viem"
-import { SYSTEM_PROGRAM_PK } from "../components/NftTool/constants"
+import { SYSTEM_PROGRAM_PK } from "@/constants"
 import { fetchDigitalAsset } from "@metaplex-foundation/mpl-token-metadata"
 
 export async function signMessage(wallet: WalletContextState, nonce: string) {
@@ -35,11 +35,11 @@ export function shorten(address: string) {
 }
 
 export const isWallet = async (umi: Umi, input: string) => {
-  if (!isValidPublicKey(input)) {
+  if (isValidPublicKey(input)) {
     const acc = await umi.rpc.getAccount(publicKey(input))
-    console.log(acc)
     return acc.exists && acc.owner === publicKey(SYSTEM_PROGRAM_PK)
   }
+  return false
 }
 
 export const isDigitalAsset = async (umi: Umi, input: string) => {
@@ -73,3 +73,5 @@ export async function waitForWalletChange(signer: string): Promise<void> {
   await sleep(1000)
   return waitForWalletChange(signer)
 }
+
+export const bigNumberFormatter = Intl.NumberFormat("en", { notation: "compact" })

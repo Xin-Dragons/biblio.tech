@@ -2,7 +2,7 @@ import { styled } from "@mui/material/styles"
 import ClearIcon from "@mui/icons-material/Clear"
 import { TextField, IconButton } from "@mui/material"
 import { useFilters } from "../../context/filters"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 import { FC } from "react"
 
 // const StyledTextField = styled(TextField)(theme =>{

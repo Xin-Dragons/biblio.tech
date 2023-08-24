@@ -1,3 +1,4 @@
+"use client"
 import { AnchorProvider, BN, Wallet } from "@project-serum/anchor"
 import { LAMPORTS_PER_SOL, Transaction, VersionedTransaction } from "@solana/web3.js"
 import { TensorSwapSDK, TensorWhitelistSDK, castPoolConfigAnchor, findWhitelistPDA } from "@tensor-oss/tensorswap-sdk"
@@ -25,7 +26,7 @@ import { toast } from "react-hot-toast"
 import { useTransactionStatus } from "./transactions"
 import { useDatabase } from "./database"
 import { Nft } from "../db"
-import { useNfts } from "./nfts"
+import { useNfts } from "./nfts.tsx"
 import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
 import axios, { AxiosError } from "axios"
@@ -336,6 +337,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   }
 
   async function buy(items: BuyItem[]) {
+    console.log(items)
     const txns = await getBuyInstructions(items)
 
     const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
@@ -521,5 +523,11 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useTensor = () => {
-  return useContext(TensorContext)
+  const context = useContext(TensorContext)
+
+  if (context === undefined) {
+    throw new Error("useTensor must be used in a TensorProvider")
+  }
+
+  return context
 }

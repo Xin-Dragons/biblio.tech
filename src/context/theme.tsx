@@ -1,13 +1,22 @@
-import { ThemeProvider as BaseThemeProvider, Theme, createTheme } from "@mui/material"
+"use client"
+import { ThemeProvider as BaseThemeProvider, CssBaseline, Theme, createTheme } from "@mui/material"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useTags } from "./tags"
 import { merge } from "lodash"
 import { useUiSettings } from "./ui-settings"
+import { Lato } from "next/font/google"
+
+const lato = Lato({ weight: ["400", "700"], subsets: ["latin"] })
 
 export const ThemeContext = createContext<Theme>(createTheme())
 
 const getTheme = (mode: "light" | "dark") => {
   return {
+    MuiCssBaseline: {
+      "a:-webkit-any-link": {
+        textDecoration: "none",
+      },
+    },
     palette: {
       mode,
       primary: {
@@ -23,37 +32,37 @@ const getTheme = (mode: "light" | "dark") => {
     },
     typography: {
       h1: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "bold",
       },
       h2: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "bold",
       },
       h3: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "bold",
       },
       h4: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "bold",
       },
       h5: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "bold",
       },
       h6: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
         fontWeight: "normal",
       },
       body1: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
       },
       body2: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
       },
       button: {
-        fontFamily: "Lato",
+        fontFamily: lato.style.fontFamily,
       },
     },
   }
@@ -90,11 +99,20 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
 
   return (
     <ThemeContext.Provider value={theme}>
-      <BaseThemeProvider theme={theme}>{children}</BaseThemeProvider>
+      <BaseThemeProvider theme={theme}>
+        <CssBaseline />
+        {children}
+      </BaseThemeProvider>
     </ThemeContext.Provider>
   )
 }
 
 export const useTheme = () => {
-  return useContext(ThemeContext)
+  const context = useContext(ThemeContext)
+
+  if (context === undefined) {
+    throw new Error("useTheme must be used in a themeProvider")
+  }
+
+  return context
 }

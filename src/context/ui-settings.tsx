@@ -1,12 +1,10 @@
-import { useLocalStorage, useWallet } from "@solana/wallet-adapter-react"
-import { useRouter } from "next/router"
-import { createContext, FC, useCallback, useContext, useEffect, useState } from "react"
-import { useNfts } from "./nfts"
-import { toast } from "react-hot-toast"
+"use client"
+import { createContext, FC, useContext, useState } from "react"
 import { useDatabase } from "./database"
 import { useLiveQuery } from "dexie-react-hooks"
 import { noop } from "lodash"
 import type { Currency } from "./brice"
+import { useParams } from "next/navigation"
 
 export type LayoutSize = "small" | "medium" | "large" | "collage"
 export type LoanType = "lent" | "borrowed"
@@ -53,7 +51,7 @@ const initialProps: UiSettingsContextProps = {
   loanType: "borrowed",
 }
 
-export const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
+const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
 
 type UiSettingsProviderProps = {
   children: JSX.Element
@@ -61,21 +59,20 @@ type UiSettingsProviderProps = {
 
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
   const [profileModalShowing, setProfileModalShowing] = useState(false)
-  const { nfts } = useNfts()
-  const router = useRouter()
+  const { filter, collectionId, tag } = useParams()
 
   const { db } = useDatabase()
 
   const uiSettings = useLiveQuery(
     () => {
-      const page = router.query.filter || router.query.collectionId || router.query.tag
+      const page = filter || collectionId || tag
       if (page) {
         return db.preferences.get(page)
       } else {
         return {}
       }
     },
-    [router.query],
+    [filter, collectionId, tag],
     {}
   )
 
@@ -83,7 +80,6 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   async function updatePreferences(key: string, value: any, isDefault = false) {
     let page: string
-    let { tag, collectionId, filter } = router.query
     if (isDefault || (!tag && !collectionId && !filter)) {
       page = "defaults"
     } else {
@@ -193,5 +189,11 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 }
 
 export const useUiSettings = () => {
-  return useContext(UiSettingsContext)
+  const context = useContext(UiSettingsContext)
+
+  if (context === undefined) {
+    throw new Error("useUiSettings must be used in a UiSettingsProvider")
+  }
+
+  return context
 }

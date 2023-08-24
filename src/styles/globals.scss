@@ -1,37 +1,8 @@
-@font-face {
-  font-family: 'Barmeno';
-  src: url('/Barmeno-Regular.woff2') format('woff2'),
-      url('/Barmeno-Regular.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/Lato-Regular.woff2') format('woff2'),
-      url('/Lato-Regular.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/Lato-Bold.woff2') format('woff2'),
-      url('/Lato-Bold.woff') format('woff');
-  font-weight: bold;
-  font-style: normal;
-  font-display: swap;
-}
-
-
 .wallet-adapter-button-trigger {
   background-color: transparent !important;
   font-family: Lato;
   color: #6cbec9;
   white-space: nowrap;
-
 }
 
 .wallet-adapter-modal {
@@ -39,11 +10,11 @@
 }
 
 .wallet-adapter-button-start-icon {
-  display: none
+  display: none;
 }
 
 .wallet-adapter-modal-list .wallet-adapter-button-start-icon {
-  display: flex
+  display: flex;
 }
 
 a {
@@ -55,24 +26,20 @@ a {
   box-sizing: border-box;
   // user-select: none;
 }
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: "Lato";
-}
 // * {
 //   -ms-overflow-style: none;  /* Internet Explorer 10+ */
 //   scrollbar-width: none;  /* Firefox */
 // }
 
-// *::-webkit-scrollbar { 
+// *::-webkit-scrollbar {
 //   display: none;  /* Safari and Chrome */
 // }
 
-.no-items-wrap a{
+.no-items-wrap a {
   color: rgb(17 54 58) !important;
-  font-weight: 800  !important;
-  background-color: #6cbec9  !important;
-  font-size: 18px  !important
+  font-weight: 800 !important;
+  background-color: #6cbec9 !important;
+  font-size: 18px !important;
 }
 
 // /* Works on Firefox */
@@ -88,17 +55,16 @@ h1, h2, h3, h4, h5, h6 {
 // }
 
 ::-webkit-scrollbar {
-    width: 3px;
-    height: 3px
+  width: 3px;
+  height: 3px;
 }
 
- ::-webkit-scrollbar-track {
-   background: #000000;
-   /* border: 2px solid #000000; */
- }
+::-webkit-scrollbar-track {
+  background: #000000;
+  /* border: 2px solid #000000; */
+}
 
-
- ::-webkit-scrollbar-thumb {
-   background: #6cbec9;
-   /* border: 2px solid #000000; */
- }
+::-webkit-scrollbar-thumb {
+  background: #6cbec9;
+  /* border: 2px solid #000000; */
+}

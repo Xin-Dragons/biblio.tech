@@ -1,3 +1,4 @@
+"use client"
 import { useRouter } from "next/router"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useAccess } from "./access"
@@ -5,6 +6,7 @@ import { useNfts } from "./nfts"
 import { useUiSettings } from "./ui-settings"
 import { Nft } from "../db"
 import { flatten, uniq } from "lodash"
+import { useParams } from "next/navigation"
 
 export const SortContext = createContext<{ sortOptions: Sort[] }>({ sortOptions: [] })
 
@@ -92,17 +94,16 @@ const allOptions = {
 export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [sortOptions, setSortOptions] = useState<Sort[]>([])
   const { sort, setSort } = useUiSettings()
-  const router = useRouter()
   const { isAdmin } = useAccess()
+  const { filter, tag, collectionId } = useParams()
   const { filtered } = useNfts()
 
   useEffect(() => {
     let type: Type
-    const filter = router.query.filter as string
-    const isCollectionsIndex = !router.query.filter && !router.query.tag && !router.query.collectionId
+    const isCollectionsIndex = !filter && !tag && !collectionId
     if (filter === "loans") {
       type = "loans"
-    } else if (["sfts", "spl"].includes(filter)) {
+    } else if (["sfts", "spl"].includes(filter as string)) {
       type = "fungible"
     } else if (filter === "editions") {
       type = "editions"
@@ -117,7 +118,7 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
       options = options.filter((opt) => !["howRare", "howRareDesc", "moonRank", "moonRankDesc"].includes(opt))
     }
 
-    const traits = router.query.collectionId
+    const traits = collectionId
       ? uniq(
           flatten(filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att?.trait_type)).filter(Boolean))
         )
@@ -134,7 +135,7 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
     ]
 
     setSortOptions(opts as any)
-  }, [router.query, isAdmin, filtered])
+  }, [isAdmin, filtered])
 
   useEffect(() => {
     if (!sortOptions.length) return
@@ -146,5 +147,11 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useSort = () => {
-  return useContext(SortContext)
+  const context = useContext(SortContext)
+
+  if (context === undefined) {
+    throw new Error("useSort must be used in a SortProvider")
+  }
+
+  return context
 }

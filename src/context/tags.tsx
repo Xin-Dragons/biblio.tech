@@ -1,3 +1,4 @@
+"use client"
 import { v4 as uuid } from "uuid"
 import { FC, createContext, useContext, useEffect, useState } from "react"
 import { useDatabase } from "./database"
@@ -11,7 +12,6 @@ import { useWallet } from "@solana/wallet-adapter-react"
 
 type TagsContextProps = {
   tags: Tag[]
-  tag: Tag | null
   starredNfts: string[]
   addTag: Function
   updateTag: Function
@@ -24,7 +24,6 @@ type TagsContextProps = {
 
 const initial: TagsContextProps = {
   tags: [],
-  tag: null,
   starredNfts: [],
   addTag: noop,
   updateTag: noop,
@@ -43,8 +42,6 @@ type TagsProviderProps = {
 
 export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   const { db } = useDatabase()
-  const router = useRouter()
-  const [tag, setTag] = useState<Tag | null>(null)
   const { userId } = useAccess()
   const wallet = useWallet()
   const tags =
@@ -144,19 +141,6 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
     })
   }
 
-  useEffect(() => {
-    if (!tags.length || !router.query.tag || router.query.tag === "untagged") {
-      setTag(null)
-      return
-    }
-    const tag = tags.find((t) => t.id === router.query.tag)
-    if (tag) {
-      setTag(tag)
-    } else {
-      setTag(null)
-    }
-  }, [tags, router.query.tag])
-
   return (
     <TagsContext.Provider
       value={{
@@ -166,7 +150,6 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
         addNftsToTag,
         removeNftsFromTag,
         tags,
-        tag,
         addNftToStarred,
         removeNftFromStarred,
         starredNfts,
@@ -178,5 +161,11 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
 }
 
 export const useTags = () => {
-  return useContext(TagsContext)
+  const context = useContext(TagsContext)
+
+  if (context === undefined) {
+    throw new Error("useTags must be used in a TagsProvider")
+  }
+
+  return context
 }

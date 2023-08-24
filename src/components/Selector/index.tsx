@@ -21,7 +21,7 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import axios from "axios"
 import { Items } from "../Items"
 import { Nft } from "../../types/nextauth"
-import { useNfts } from "../../context/nfts"
+import { useNfts } from "../../context/nfts.tsx"
 import { shorten } from "../../helpers/utils"
 import { useTheme } from "../../context/theme"
 

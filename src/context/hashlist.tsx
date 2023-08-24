@@ -1,3 +1,4 @@
+"use client"
 import { PublicKey } from "@solana/web3.js"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
 import toast from "react-hot-toast"
@@ -64,5 +65,11 @@ export const HashlistProvider: FC<{ children: ReactNode }> = ({ children }) => {
 }
 
 export const useHashlist = () => {
-  return useContext(HashlistContext)
+  const context = useContext(HashlistContext)
+
+  if (context === undefined) {
+    throw new Error("useHashlist must be used in a HashlistProvider")
+  }
+
+  return context
 }

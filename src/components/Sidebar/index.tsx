@@ -7,7 +7,7 @@ type SidebarProps = {
 }
 
 export const Sidebar: FC<SidebarProps> = ({ children }) => {
-  const { lightMode } = useUiSettings()
+  // const { lightMode } = useUiSettings()
   return (
     <Box
       sx={{
@@ -15,7 +15,7 @@ export const Sidebar: FC<SidebarProps> = ({ children }) => {
         width: "220px",
         borderRight: 1,
         borderColor: "divider",
-        backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
+        // backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "bottom center",
         backgroundSize: "80%",
