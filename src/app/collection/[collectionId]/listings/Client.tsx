@@ -35,7 +35,7 @@ export function ListingActions({ listings }: { listings: any[] }) {
 
   return (
     <Stack direction="row" justifyContent="space-between">
-      <SelectControls max={50} />
+      <SelectControls max={50} items={listings} />
       <Button disabled={!selected.length} onClick={buyItems} variant="contained" size="large">
         Buy
       </Button>

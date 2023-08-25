@@ -91,3 +91,17 @@ export async function getDigitalAsset(mintAddress: string) {
 
   return data.result
 }
+
+export async function fetchAllDigitalAssetsByIds(ids: string[]) {
+  const batch = ids.map((id, i) => ({
+    jsonrpc: "2.0",
+    method: "getAsset",
+    id: `my-id-${i}`,
+    params: {
+      id,
+    },
+  }))
+
+  const { data } = await axios.post(`https://rpc.helius.xyz/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`, batch)
+  return data.filter((item: any) => !item.error).map((item: any) => item.result)
+}

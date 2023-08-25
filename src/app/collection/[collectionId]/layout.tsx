@@ -23,8 +23,8 @@ import { Sidebar } from "@/components/Sidebar"
 import { AttributeFilters } from "@/components/AttributeFilters"
 import { FiltersProvider } from "@/context/filters"
 import { umi } from "@/app/helpers/umi"
-import { SYSTEM_PROGRAM_PK } from "@/constants"
 import { fetchDigitalAsset } from "@metaplex-foundation/mpl-token-metadata"
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token"
 
 export default async function Collection({
   params,
@@ -94,8 +94,6 @@ export default async function Collection({
       })
     )
 
-    console.log(data)
-
     if (!data.length) {
       throw new Error("Error looking up mint")
     }
@@ -104,17 +102,22 @@ export default async function Collection({
 
     if (item.nftCollectionMint) {
       const info = await umi.rpc.getAccount(publicKey(item.nftCollectionMint))
-      if (info.exists && info.owner === SYSTEM_PROGRAM_PK) {
+      console.log(info)
+      if (info.exists && info.owner === TOKEN_PROGRAM_ID.toBase58()) {
         return redirect(`/collection/${item.nftCollectionMint}`)
       } else {
-        const da = await fetchDigitalAsset(umi, publicKey(item.nftMint as string))
-        const collection = unwrapOption(da.metadata.collection)
-        if (collection?.verified) {
-          return redirect(`/collection/${collection.key}`)
-        }
+        try {
+          const da = await fetchDigitalAsset(umi, publicKey(item.nftMint as string))
+          const collection = unwrapOption(da.metadata.collection)
+          if (collection?.verified) {
+            return redirect(`/collection/${collection.key}`)
+          }
+        } catch {}
       }
     }
   }
+
+  console.log({ helloMoonCollectionId })
 
   return (
     <FiltersProvider>
@@ -126,7 +129,7 @@ export default async function Collection({
                 <AttributeFilters />
               </Box>
             </Sidebar>
-            <Stack height="100%" spacing={2} padding={4} paddingTop={2} paddingRight={2} flexGrow={1} width="100%">
+            <Stack height="100%" spacing={2} padding={2} flexGrow={1} width="100%">
               <Stack direction="row" alignItems="center" spacing={2} justifyContent="space-between">
                 <Stack direction="row" alignItems="center" spacing={2}>
                   <Typography variant="h4">{collection.collectionName}</Typography>

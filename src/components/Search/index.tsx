@@ -1,3 +1,4 @@
+"use client"
 import { styled } from "@mui/material/styles"
 import ClearIcon from "@mui/icons-material/Clear"
 import { TextField, IconButton } from "@mui/material"

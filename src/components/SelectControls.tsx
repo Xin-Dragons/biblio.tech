@@ -1,53 +1,68 @@
 import { useNfts } from "@/context/nfts"
 import { useSelection } from "@/context/selection"
-import { Button, Slider, Stack } from "@mui/material"
+import { Box, Button, Slider, Stack, TextField } from "@mui/material"
 import { uniq } from "lodash"
 import { useDigitalAssets } from "../context/digital-assets"
+import { useListings } from "@/context/listings"
 
-export function SelectControls({ max }: { max?: number }) {
-  const { filtered } = useDigitalAssets()
+export function SelectControls({ max, items }: { max?: number; items: any[] }) {
   const { selected, selectAll, deselectAll, setSelected } = useSelection()
 
   function handleSelectionChange(value: number) {
-    setSelected(filtered.slice(0, value).map((item) => item.id))
+    setSelected(items.slice(0, value).map((item) => item.id))
   }
 
   function selectMax() {
     if (max) {
-      handleSelectionChange(Math.min(max, filtered.length))
+      handleSelectionChange(Math.min(max, items.length))
     } else {
       selectAll()
     }
   }
 
-  const allSelected = selected.length >= (max ? Math.min(max, filtered.length) : filtered.length)
+  const allSelected = selected.length >= (max ? Math.min(max, items.length) : items.length)
 
   return (
-    <Stack direction="row" alignItems="center">
-      <Button
-        onClick={() => deselectAll()}
-        disabled={!filtered.length || !selected.length}
-        size="small"
-        variant="outlined"
-        sx={{ whiteSpace: "nowrap", overflow: "hidden" }}
-      >
-        Deselect all
-      </Button>
+    <Stack direction="row" alignItems="center" spacing={2}>
+      <Box>
+        <Button
+          onClick={() => deselectAll()}
+          disabled={!items.length || !selected.length}
+          size="small"
+          variant="outlined"
+          sx={{ whiteSpace: "nowrap", overflow: "hidden" }}
+        >
+          Deselect all
+        </Button>
+      </Box>
       <Slider
         aria-label="Selection"
         value={selected.length}
         onChange={(e, value) => handleSelectionChange(value as number)}
-        max={max ? Math.min(max, filtered.length) : filtered.length}
+        max={max ? Math.min(max, items.length) : items.length}
+        sx={{ minWidth: "100px" }}
       />
-      <Button
-        onClick={selectMax}
-        disabled={!filtered.length || allSelected}
-        size="small"
-        variant="outlined"
-        sx={{ whiteSpace: "nowrap" }}
-      >
-        Select {max ? "max" : "all"}
-      </Button>
+      <Box>
+        <Button
+          onClick={selectMax}
+          disabled={!items.length || allSelected}
+          size="small"
+          variant="outlined"
+          sx={{ whiteSpace: "nowrap" }}
+        >
+          Select {max ? "max" : "all"}
+        </Button>
+      </Box>
+      <Box>
+        <TextField
+          size="small"
+          value={selected.length}
+          onChange={(e) => handleSelectionChange(Number(e.target.value))}
+          inputProps={{
+            max: max ? Math.min(max, items.length) : items.length,
+          }}
+        />
+      </Box>
     </Stack>
   )
 }

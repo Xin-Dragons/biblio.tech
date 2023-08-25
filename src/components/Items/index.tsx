@@ -2,7 +2,7 @@
 import { Box, Button, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "@/context/ui-settings"
 import { Item } from "../Item"
-import { ElementType, FC, useEffect, useState } from "react"
+import { ElementType, FC, useEffect, useLayoutEffect, useRef, useState } from "react"
 import Masonry from "@mui/lab/Masonry"
 import { useDatabase } from "@/context/database"
 import { sample } from "lodash"
@@ -176,17 +176,26 @@ type CardsProps = {
 
 const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
   const { layoutSize, showInfo } = useUiSettings()
+  const [cardHeight, setCardHeight] = useState(0)
+  const [cardWidth, setCardWidth] = useState(0)
+  const elementRef = useRef<HTMLDivElement | null>(null)
   const pageWidth = useWidth()
+
+  useLayoutEffect(() => {
+    setCardHeight(elementRef.current?.offsetHeight || 0)
+  }, [cardWidth])
 
   return (
     <Box sx={{ height: "100%" }}>
+      <div ref={elementRef} style={{ width: cardWidth, visibility: "hidden", position: "absolute" }}>
+        <Component item={cards[0]} />
+      </div>
       <SortableContext items={cards.map((item) => item.nftMint)} strategy={rectSortingStrategy}>
         <AutoSizer defaultWidth={1920} defaultHeight={1080}>
           {({ width, height }: { width: number; height: number }) => {
-            const isCollectionsView = false
-            const adjust = isCollectionsView ? 40 : 90
-            const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object] - 3
-            const cardHeight = showInfo && !squareChildren ? (cardWidth * 4) / 3.5 + adjust : cardWidth
+            const cardWidth = width! / cols[pageWidth as keyof object][layoutSize as keyof object]
+            setCardWidth(cardWidth)
+
             const columnCount = Math.floor(width! / cardWidth)
             const rowCount = Math.ceil(cards.length / columnCount)
 
@@ -200,6 +209,7 @@ const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
                 rowCount={rowCount!}
                 rowHeight={cardHeight!}
                 itemData={{ cards, columnCount, Component }}
+                overscanRowCount={3}
               >
                 {Cell}
               </FixedSizeGrid>

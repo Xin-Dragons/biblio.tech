@@ -7,7 +7,7 @@ export function WalletManagerMenu() {
   const isWallet = path.replace("/", "").split("/").shift() === "bags"
   return (
     <Button LinkComponent={Link} href="/bags" sx={{ color: isWallet ? "primary.main" : "white" }}>
-      Bags
+      Bag
     </Button>
   )
 }

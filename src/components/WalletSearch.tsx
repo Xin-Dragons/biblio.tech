@@ -60,6 +60,7 @@ export function WalletSearch({ large }: { large?: boolean }) {
   }
 
   async function checkWallet(item: string) {
+    console.log({ item })
     if (item.includes(".eth")) {
       const address = await alchemy.core.resolveName(item)
       if (address) {

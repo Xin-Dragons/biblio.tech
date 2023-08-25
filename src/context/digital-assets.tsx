@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks"
 import { ReactNode, createContext, useContext, useEffect, useState } from "react"
 import { useFilters } from "./filters"
 import { size } from "lodash"
+import { useListings } from "./listings"
 const db = new DB()
 
 const Context = createContext<
@@ -19,34 +20,55 @@ export function DigitalAssetsProvider({
   children: ReactNode
   collectionId?: string
 }) {
-  const { selectedFilters } = useFilters()
+  const { selectedFilters, search } = useFilters()
   const [loading, setLoading] = useState(false)
+  const { listings } = useListings()
 
   const digitalAssets = useLiveQuery(
     () => {
-      console.log({ collectionId })
       const query = collectionId ? db.digitalAssets.where({ collectionId }) : db.digitalAssets
-      return query.filter((item) => !wallet || item.ownership.owner === wallet).toArray()
+      return query
+        .filter((item) => {
+          // stupid fix for stupid y00ts.
+          return item.content.json_uri !== "https://brref1.site" && (!wallet || item.ownership.owner === wallet)
+        })
+        .toArray()
     },
     [collectionId, wallet],
     []
   )
 
-  const filtered = digitalAssets.filter((item) => {
+  let filtered = digitalAssets.filter((item) => {
     return (
       !size(selectedFilters) ||
       Object.keys(selectedFilters).every((key) => {
         const vals = selectedFilters[key]
         return (
           !vals.length ||
-          vals.includes((item.content.metadata.attributes || []).find((att) => att.trait_type === key)?.value)
+          vals.includes(
+            (item.content.metadata.attributes || []).filter(Boolean).find((att) => att.trait_type === key)?.value
+          )
         )
       })
     )
   })
 
+  if (search) {
+    const s = search.toLowerCase()
+    filtered = filtered.filter((item) => {
+      return item.content.metadata.name.toLowerCase().includes(s)
+    })
+  }
+
+  useEffect(() => {
+    const mints = digitalAssets.map((da) => da.id)
+    const toLoad = listings.filter((listing) => !mints.includes(listing.nftMint)).map((l) => l.nftMint)
+    if (toLoad.length) {
+      getDigitalAssets(toLoad)
+    }
+  }, [listings, digitalAssets])
+
   async function setDigitalAssets(digitalAssets) {
-    console.log({ digitalAssets })
     await db.digitalAssets.bulkPut(
       digitalAssets.map((da) => ({
         ...da,
@@ -55,14 +77,15 @@ export function DigitalAssetsProvider({
     )
   }
 
-  function getDigitalAssets() {
-    if (!collectionId && !wallet) {
+  function getDigitalAssets(ids?: string[]) {
+    if (!collectionId && !wallet && !ids) {
       return
     }
     const worker = new Worker(new URL("@/../public/get-digital-assets.worker.ts", import.meta.url))
 
     worker.onmessage = (event) => {
-      setDigitalAssets(event.data.digitalAssets)
+      // y00ts fucking stupid fail of a burn.
+      setDigitalAssets(event.data.digitalAssets.filter((da) => da.content.json_uri !== "https://brref1.site"))
       worker.terminate()
     }
 
@@ -70,7 +93,7 @@ export function DigitalAssetsProvider({
       worker.terminate()
     }
 
-    worker.postMessage({ collectionId, wallet })
+    worker.postMessage({ collectionId, wallet, ids })
   }
 
   useEffect(() => {

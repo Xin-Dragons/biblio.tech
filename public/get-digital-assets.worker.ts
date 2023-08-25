@@ -1,4 +1,5 @@
 import {
+  fetchAllDigitalAssetsByIds,
   fetchDigitalAssetsByCollection,
   fetchDigitalAssetsByCreator,
   fetchDigitalAssetsByOwner,
@@ -37,7 +38,9 @@ async function getDigitalAssets(collectionId: string) {
 
   if (item.nftCollectionMint) {
     const digitalAssets = await fetchDigitalAssetsByCollection(collectionId)
-    return digitalAssets
+    if (digitalAssets.length) {
+      return digitalAssets
+    }
   }
 
   const creator = (item.nftMetadataJson.creators.find((c: any) => c.verified) as any)?.address
@@ -48,9 +51,12 @@ async function getDigitalAssets(collectionId: string) {
 
 self.addEventListener("message", async (event) => {
   try {
-    const { collectionId, wallet } = event.data
+    const { collectionId, wallet, ids } = event.data
 
-    if (wallet && !collectionId) {
+    if (ids) {
+      const digitalAssets = await fetchAllDigitalAssetsByIds(ids)
+      self.postMessage({ digitalAssets })
+    } else if (wallet && !collectionId) {
       const digitalAssets = await fetchDigitalAssetsByOwner(wallet)
       self.postMessage({ digitalAssets })
     } else {

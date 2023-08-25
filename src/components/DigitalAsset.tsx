@@ -3,13 +3,14 @@ import { useUiSettings } from "@/context/ui-settings"
 import { Card, CardContent, Stack, SvgIcon, Typography, Link as MuiLink } from "@mui/material"
 import Link from "next/link"
 import { ImageWithFallback } from "./ImageWithFallback"
-import { fetchJsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
+import { fetchDigitalAsset, fetchJsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import { umi } from "@/app/helpers/umi"
 import { useEffect, useState } from "react"
 import { lamportsToSol } from "@/helpers/utils"
 import Tensor from "@/../public/tensor.svg"
 import Solana from "@/../public/solana.svg"
 import { useSelection } from "@/context/selection"
+import { publicKey } from "@metaplex-foundation/umi"
 
 const margins = {
   small: 0.5,
@@ -23,8 +24,16 @@ export function DigitalAsset({ item }: { item: any }) {
   const [image, setImage] = useState(item.content.links.image)
 
   async function getImage() {
-    const image = (await fetchJsonMetadata(umi, item.content.json_uri)).image
-    setImage(image)
+    try {
+      const image = (await fetchJsonMetadata(umi, item.content.json_uri)).image
+      setImage(image)
+    } catch (err) {
+      try {
+        const da = await fetchDigitalAsset(umi, publicKey(item.id))
+        const image = (await fetchJsonMetadata(umi, da.metadata.uri)).image
+        setImage(image)
+      } catch {}
+    }
   }
 
   useEffect(() => {
@@ -50,7 +59,7 @@ export function DigitalAsset({ item }: { item: any }) {
               fontWeight="bold"
               sx={{ textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}
             >
-              {item.content.metadata.name}
+              {item.content.metadata.name || "Unnamed item"}
             </Typography>
             {/* <Stack spacing={1} alignItems="center" direction="row" justifyContent="space-between">
               {item.marketplace === "MEv2" && <img src="/me.png" width={30} />}

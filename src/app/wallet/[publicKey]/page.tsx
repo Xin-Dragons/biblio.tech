@@ -4,6 +4,11 @@ import { useDigitalAssets } from "@/context/digital-assets"
 import { DigitalAsset } from "@/components/DigitalAsset"
 
 export default function wallet({ params }: { params: Record<string, string> }) {
-  const { digitalAssets } = useDigitalAssets()
-  return <Items items={digitalAssets} Component={DigitalAsset} />
+  const { filtered } = useDigitalAssets()
+  return (
+    <Items
+      items={filtered.sort((a, b) => a.content.metadata.name.localeCompare(b.content.metadata.name))}
+      Component={DigitalAsset}
+    />
+  )
 }

@@ -31,6 +31,8 @@ export function Listing({ item }: { item: any }) {
   useEffect(() => {
     if (!item.content.links.image) {
       getImage()
+    } else {
+      setImage(item.content.links.image)
     }
   }, [item])
 

@@ -33,11 +33,14 @@ export async function getListings(
 }
 
 export async function getHelloMoonCollectionIdFromNft(nftMint: string) {
-  const { data } = await hmClient.send(
+  console.log(nftMint)
+  const { data, ...rest } = await hmClient.send(
     new CollectionMintsRequest({
       nftMint,
     })
   )
+
+  console.log({ data, rest })
 
   return data[0]?.helloMoonCollectionId
 }
@@ -52,6 +55,8 @@ export async function getHelloMoonCollectionId(collectionId: string) {
     const randoNft = await fetchDigitalAssetByCollection(collectionId)
     console.log({ randoNft })
     const helloMoonCollectionId = await getHelloMoonCollectionIdFromNft(randoNft.id)
+    console.log({ helloMoonCollectionId })
+
     return helloMoonCollectionId
   } else {
     const valid = await isValidHelloMoonCollectionId(collectionId)
