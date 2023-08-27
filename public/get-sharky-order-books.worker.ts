@@ -1,5 +1,5 @@
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet"
-import { OrderBook, createProvider, createSharkyClient, enabledOrderBooks } from "@sharkyfi/client"
+import { OrderBook, SHARKY_PROGRAM_ID, createProvider, createSharkyClient, enabledOrderBooks } from "@sharkyfi/client"
 import { Connection, Keypair } from "@solana/web3.js"
 import { flatten, noop } from "lodash"
 
@@ -7,7 +7,7 @@ const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitmen
 
 process.env.ANCHOR_PROVIDER_URL = process.env.NEXT_PUBLIC_RPC_HOST
 const provider = createProvider(connection, new NodeWallet(Keypair.generate()))
-const sharkyClient = createSharkyClient(provider)
+const sharkyClient = createSharkyClient(provider, SHARKY_PROGRAM_ID, "mainnet")
 
 const { program } = sharkyClient
 
