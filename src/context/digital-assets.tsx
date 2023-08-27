@@ -85,8 +85,10 @@ export function DigitalAssetsProvider({
 
     worker.onmessage = (event) => {
       // y00ts fucking stupid fail of a burn.
-      setDigitalAssets(event.data.digitalAssets.filter((da) => da.content.json_uri !== "https://brref1.site"))
-      worker.terminate()
+      if (event.data.digitalAssets) {
+        setDigitalAssets(event.data.digitalAssets.filter((da) => da.content.json_uri !== "https://brref1.site"))
+        worker.terminate()
+      }
     }
 
     worker.onerror = () => {

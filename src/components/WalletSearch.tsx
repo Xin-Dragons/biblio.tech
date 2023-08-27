@@ -55,8 +55,8 @@ export function WalletSearch({ large }: { large?: boolean }) {
   }, [wallet])
 
   async function addAndSelectWallet(publicKey: string, chain: string, nickname?: string) {
-    const wallet = await addWallet(publicKey, nickname, false, true, chain)
-    setWallet(wallet)
+    // const wallet = await addWallet(publicKey, nickname, false, true, chain)
+    setWallet({ publicKey, chain })
   }
 
   async function checkWallet(item: string) {

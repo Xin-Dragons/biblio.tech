@@ -25,6 +25,9 @@ import { FiltersProvider } from "@/context/filters"
 import { umi } from "@/app/helpers/umi"
 import { fetchDigitalAsset } from "@metaplex-foundation/mpl-token-metadata"
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token"
+import axios from "axios"
+import client from "@/helpers/apollo"
+import { gql } from "@apollo/client"
 
 export default async function Collection({
   params,
@@ -35,7 +38,7 @@ export default async function Collection({
 }) {
   let collection: Pick<
     LeaderboardStats,
-    "collectionName" | "sample_image" | "floorPrice" | "price_percent_change" | "volume"
+    "collectionName" | "sample_image" | "floorPrice" | "price_percent_change" | "volume" | "listing_count" | "supply"
   > & {
     totalVolumeLamports: number
   } = {
@@ -45,6 +48,8 @@ export default async function Collection({
     totalVolumeLamports: 0,
     price_percent_change: 0,
     volume: 0,
+    listing_count: 0,
+    supply: 0,
   }
 
   const helloMoonCollectionId = await getHelloMoonCollectionId(params.collectionId)
@@ -74,6 +79,39 @@ export default async function Collection({
 
     collection.collectionName = da.content.metadata.name
     collection.sample_image = da.content.links.image
+
+    if (!helloMoonCollectionId || !collection.floorPrice) {
+      const collectionInfo = await client.query({
+        query: gql`
+          query CollectionStats($slug: String!) {
+            instrumentTV2(slug: $slug) {
+              slug
+              name
+              statsV2 {
+                buyNowPrice
+                numListed
+                numMints
+                floor24h
+                volume24h
+                volumeAll
+              }
+            }
+          }
+        `,
+        variables: {
+          slug: params.collectionId,
+        },
+      })
+
+      console.log(collectionInfo.data.instrumentTV2)
+      collection.collectionName = collectionInfo.data.instrumentTV2.name
+      collection.floorPrice = collectionInfo.data.instrumentTV2.statsV2.buyNowPrice
+      collection.totalVolumeLamports = collectionInfo.data.instrumentTV2.statsV2.volumeAll
+      collection.price_percent_change = collectionInfo.data.instrumentTV2.statsV2.floor24h * 100
+      collection.listing_count = collectionInfo.data.instrumentTV2.statsV2.numListed
+      collection.supply = collectionInfo.data.instrumentTV2.statsV2.numMints
+      collection.volume = collectionInfo.data.instrumentTV2.statsV2.volume24h
+    }
   } else {
     const { data: nfts } = await hmClient.send(
       new CollectionMintsRequest({
@@ -116,8 +154,7 @@ export default async function Collection({
       }
     }
   }
-
-  console.log({ helloMoonCollectionId })
+  const fp = collection.floorPrice / Math.pow(10, 9)
 
   return (
     <FiltersProvider>
@@ -140,7 +177,13 @@ export default async function Collection({
                           <Solana />
                         </SvgIcon>
                         <Typography color="primary" variant="h5">
-                          {lamportsToSol(collection.floorPrice)}
+                          {fp < 1
+                            ? fp.toLocaleString(undefined, {
+                                minimumFractionDigits: 3,
+                              })
+                            : fp.toLocaleString(undefined, {
+                                maximumFractionDigits: 2,
+                              })}
                         </Typography>
                       </Stack>
                       <Typography variant="body2">FLOOR PRICE</Typography>
@@ -186,7 +229,24 @@ export default async function Collection({
                       </Stack>
                       <Typography variant="body2">TOTAL VOLUME</Typography>
                     </Stack>
-                    <HoldersInfo />
+                    <Stack>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography color="primary" variant="h5">
+                          {bigNumberFormatter.format(collection.supply)}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2">SUPPLY</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={2}>
+                      <Stack>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Typography color="primary" variant="h5">
+                            {bigNumberFormatter.format(collection.listing_count)}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2">LISTED</Typography>
+                      </Stack>
+                    </Stack>
                   </Stack>
                 </Stack>
                 <Tabs />

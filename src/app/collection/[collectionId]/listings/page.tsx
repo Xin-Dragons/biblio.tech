@@ -4,13 +4,11 @@ import { Listing } from "@/components/Listing"
 import { SelectionProvider } from "@/context/selection"
 import { TensorProvider } from "@/context/tensor"
 import { TransactionStatusProvider } from "@/context/transactions"
-import { ListingActions } from "./Client"
-import { useListings } from "@/context/listings"
+import { ListingActions } from "./ListingActions"
 import { useDigitalAssets } from "@/context/digital-assets"
 
-export default function Listings() {
-  const { listings } = useListings()
-  const { filtered } = useDigitalAssets()
+export default function Listings({ params }: { params: Record<string, string> }) {
+  const { filtered, listings } = useDigitalAssets()
 
   const listed = listings?.map((l) => l.nftMint)
   let items = filtered
@@ -22,7 +20,6 @@ export default function Listings() {
         ...listing,
       }
     })
-    .sort((a, b) => a.price - b.price)
 
   // items = items.filter((item) => item.price > collectionStats.floorPrice * 0.8)
 

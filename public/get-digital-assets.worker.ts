@@ -58,13 +58,14 @@ self.addEventListener("message", async (event) => {
       self.postMessage({ digitalAssets })
     } else if (wallet && !collectionId) {
       const digitalAssets = await fetchDigitalAssetsByOwner(wallet)
+      console.log("BY OWNER YA", digitalAssets)
       self.postMessage({ digitalAssets })
     } else {
       const digitalAssets = await getDigitalAssets(collectionId)
       self.postMessage({ digitalAssets })
     }
   } catch (err: any) {
-    console.log(err)
+    console.log("WELLL THIS IS FUCKED", err)
     self.postMessage({ ok: false })
   }
 })

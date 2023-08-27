@@ -36,6 +36,8 @@ export function Listing({ item }: { item: any }) {
     }
   }, [item])
 
+  const price = item.price / Math.pow(10, 9)
+
   return (
     <MuiLink component={Link} href={`/digital-asset/${item.id}`} underline="none">
       <Card
@@ -71,7 +73,9 @@ export function Listing({ item }: { item: any }) {
                   <Solana />
                 </SvgIcon>
                 <Typography variant="h5" color="primary">
-                  {lamportsToSol(item.price)}
+                  {price < 1
+                    ? price.toLocaleString(undefined, { minimumSignificantDigits: 4 })
+                    : price.toLocaleString(undefined, { maximumSignificantDigits: 3 })}
                 </Typography>
               </Stack>
             </Stack>

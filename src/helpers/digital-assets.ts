@@ -35,7 +35,7 @@ export async function fetchDigitalAssetsByCollection(collection: string, page = 
     },
   })
 
-  if (data.result.total < 1000 || data.result.items[0]?.compression?.compressed) {
+  if (data.result.total < 1000) {
     return data.result.items
   }
 
