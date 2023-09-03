@@ -7,7 +7,7 @@ import { ReactNode } from "react"
 import { NftsProvider } from "@/context/nfts"
 import { SelectionProvider } from "@/context/selection"
 import { FiltersProvider } from "@/context/filters"
-import { SortProvider } from "@/context/sort"
+import { SortProvider } from "@/context/xxsort"
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (

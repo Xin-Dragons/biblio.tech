@@ -1,4 +1,4 @@
-import { getHelloMoonCollectionId, getListings, hmClient } from "@/helpers/hello-moon"
+import { getHelloMoonCollectionId, getListings, getSingleMint, hmClient } from "@/helpers/hello-moon"
 import {
   CollectionAllTimeRequest,
   CollectionMintsRequest,
@@ -28,6 +28,8 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token"
 import axios from "axios"
 import client from "@/helpers/apollo"
 import { gql } from "@apollo/client"
+import { SortProvider } from "@/context/sort"
+import { RarityProvider } from "@/context/rarity"
 
 export default async function Collection({
   params,
@@ -113,22 +115,11 @@ export default async function Collection({
       collection.volume = collectionInfo.data.instrumentTV2.statsV2.volume24h
     }
   } else {
-    const { data: nfts } = await hmClient.send(
-      new CollectionMintsRequest({
-        helloMoonCollectionId: params.collectionId,
-        limit: 1,
-      })
-    )
-
-    console.log(nfts)
-
-    if (!nfts.length) {
-      throw new Error("Error looking up mints")
-    }
+    const singleMint = await getSingleMint(params.collectionId)
 
     const { data } = await hmClient.send(
       new NftMintInformationRequest({
-        nftMint: nfts[0].nftMint,
+        nftMint: singleMint,
       })
     )
 
@@ -140,7 +131,6 @@ export default async function Collection({
 
     if (item.nftCollectionMint) {
       const info = await umi.rpc.getAccount(publicKey(item.nftCollectionMint))
-      console.log(info)
       if (info.exists && info.owner === TOKEN_PROGRAM_ID.toBase58()) {
         return redirect(`/collection/${item.nftCollectionMint}`)
       } else {
@@ -158,7 +148,7 @@ export default async function Collection({
 
   return (
     <FiltersProvider>
-      <ListingsProvider helloMoonCollectionId={helloMoonCollectionId}>
+      <ListingsProvider collectionId={params.collectionId}>
         <DigitalAssetsProvider collectionId={params.collectionId}>
           <Stack direction="row" height="100%" width="100%">
             <Sidebar>

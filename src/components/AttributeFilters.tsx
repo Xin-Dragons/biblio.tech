@@ -4,7 +4,6 @@ import { Stack } from "@mui/system"
 import { isArray, map, mergeWith, uniq } from "lodash"
 import { FC, useEffect, useState } from "react"
 import { useFilters } from "../context/filters"
-import { Nft } from "../db"
 import { useDigitalAssets } from "@/context/digital-assets"
 import { useListings } from "@/context/listings"
 import { usePathname } from "next/navigation"
@@ -19,7 +18,7 @@ export function AttributeFilters() {
   const { digitalAssets } = useDigitalAssets()
   const { selectedFilters, setSelectedFilters } = useFilters()
 
-  const onlyListings = path.split("/").pop() !== "all"
+  const onlyListings = path.split("/").pop() === "listings"
 
   const [filters, setFilters] = useState<FiltersObject>({})
 

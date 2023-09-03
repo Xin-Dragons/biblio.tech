@@ -1,0 +1,157 @@
+"use client"
+import { useRouter } from "next/router"
+import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
+import { useAccess } from "./access"
+import { useNfts } from "./nfts"
+import { useUiSettings } from "./ui-settings"
+import { Nft } from "../db"
+import { flatten, uniq } from "lodash"
+import { useParams } from "next/navigation"
+
+export const SortContext = createContext<{ sortOptions: Sort[] }>({ sortOptions: [] })
+
+type Sort = {
+  label: string
+  value: SortType
+}
+
+type Type = "loans" | "fungible" | "editions" | "collections" | "nonFungible"
+type SortType =
+  | "expiring"
+  | "outstanding"
+  | "name"
+  | "custom"
+  | "howRare"
+  | "moonRank"
+  | "balance"
+  | "value"
+  | "holdings"
+  | "price"
+
+const sortOptionsConfig = {
+  loans: ["expiring", "outstanding", "name"],
+  nonFungible: ["custom", "name", "howRare", "howRareDesc", "moonRank", "moonRankDesc"],
+  fungible: ["value", "custom", "balance", "name"],
+  editions: ["custom", "name", "creator"],
+  collections: ["value", "name", "holdings"],
+}
+
+const allOptions = {
+  expiring: {
+    label: "Expiring",
+    value: "expiring",
+  },
+  outstanding: {
+    label: "Outstanding amount",
+    value: "ourstanding",
+  },
+  background: {
+    label: "Background",
+    value: "background",
+  },
+  custom: {
+    label: "Custom",
+    value: "custom",
+  },
+  name: {
+    label: "Name",
+    value: "name",
+  },
+  howRare: {
+    label: "How Rare [rare to common]",
+    value: "howRare",
+  },
+  howRareDesc: {
+    label: "How Rare [common to rare]",
+    value: "howRareDesc",
+  },
+  moonRank: {
+    label: "Moon Rank [rare to common]",
+    value: "moonRank",
+  },
+  moonRankDesc: {
+    label: "Moon Rank [common to rare]",
+    value: "moonRankDesc",
+  },
+  balance: {
+    label: "Balance",
+    value: "balance",
+  },
+  value: {
+    label: "Value",
+    value: "value",
+  },
+  creator: {
+    label: "Creator",
+    value: "creator",
+  },
+  holdings: {
+    label: "Holdings",
+    value: "holdings",
+  },
+}
+
+export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
+  const [sortOptions, setSortOptions] = useState<Sort[]>([])
+  const { sort, setSort } = useUiSettings()
+  const { isAdmin } = useAccess()
+  const { filter, tag, collectionId } = useParams()
+  const { filtered } = useNfts()
+
+  useEffect(() => {
+    let type: Type
+    const isCollectionsIndex = !filter && !tag && !collectionId
+    if (filter === "loans") {
+      type = "loans"
+    } else if (["sfts", "spl"].includes(filter as string)) {
+      type = "fungible"
+    } else if (filter === "editions") {
+      type = "editions"
+    } else if (isCollectionsIndex) {
+      type = "collections"
+    } else {
+      type = "nonFungible"
+    }
+    let options = sortOptionsConfig[type]
+
+    if (!filtered.some((n) => n.chain === "solana")) {
+      options = options.filter((opt) => !["howRare", "howRareDesc", "moonRank", "moonRankDesc"].includes(opt))
+    }
+
+    const traits = collectionId
+      ? uniq(
+          flatten(filtered.map((nft: Nft) => nft.json?.attributes?.map((att: any) => att?.trait_type)).filter(Boolean))
+        )
+      : []
+
+    const opts = [
+      ...options.map((opt) => allOptions[opt as keyof object]),
+      ...traits.map((trait) => {
+        return {
+          label: trait,
+          value: `attribute.${trait?.toLowerCase()}`,
+        }
+      }),
+    ]
+
+    setSortOptions(opts as any)
+  }, [isAdmin, filtered])
+
+  useEffect(() => {
+    if (!sortOptions.length) return
+    if (!sortOptions.find((s) => s.value === sort)) {
+      setSort(sortOptions[0].value)
+    }
+  }, [sortOptions, sort])
+  return <SortContext.Provider value={{ sortOptions }}>{children}</SortContext.Provider>
+}
+
+export const useSort = () => {
+  const context = useContext(SortContext)
+
+  if (context === undefined) {
+    throw new Error("useSort must be used in a SortProvider")
+  }
+
+  return context
+}

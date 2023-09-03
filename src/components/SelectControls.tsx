@@ -1,12 +1,16 @@
 import { useNfts } from "@/context/nfts"
 import { useSelection } from "@/context/selection"
-import { Box, Button, Slider, Stack, TextField } from "@mui/material"
+import { Box, Button, FormControlLabel, IconButton, Slider, Stack, Switch, TextField } from "@mui/material"
 import { uniq } from "lodash"
 import { useDigitalAssets } from "../context/digital-assets"
 import { useListings } from "@/context/listings"
+import { useState } from "react"
+import { AdsClick } from "@mui/icons-material"
+import { useUiSettings } from "@/context/ui-settings"
 
 export function SelectControls({ max, items }: { max?: number; items: any[] }) {
   const { selected, selectAll, deselectAll, setSelected } = useSelection()
+  const { easySelect, setEasySelect } = useUiSettings()
 
   function handleSelectionChange(value: number) {
     setSelected(items.slice(0, value).map((item) => item.id))
@@ -63,6 +67,9 @@ export function SelectControls({ max, items }: { max?: number; items: any[] }) {
           }}
         />
       </Box>
+      <IconButton color={easySelect ? "primary" : "default"} onClick={() => setEasySelect(!easySelect)}>
+        <AdsClick />
+      </IconButton>
     </Stack>
   )
 }

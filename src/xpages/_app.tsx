@@ -27,7 +27,7 @@ import { WagmiConfig } from "wagmi"
 import { wagmiConfig } from "../helpers/wagmi"
 import { BriceProvider } from "../context/brice"
 import { AlchemyProvider } from "../context/alchemy"
-import { SortProvider } from "../context/sort"
+import { SortProvider } from "../context/xxsort"
 import { CitrusProvider } from "../context/citrus"
 import { ClusterProvider } from "../context/cluster"
 

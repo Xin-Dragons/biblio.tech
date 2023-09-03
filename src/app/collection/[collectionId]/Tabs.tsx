@@ -1,22 +1,24 @@
 "use client"
 import { Tabs as MuiTabs, Tab } from "@mui/material"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useParams, usePathname } from "next/navigation"
 
 export function Tabs() {
+  const { collectionId } = useParams()
   const path = usePathname()
   let activeTab = path.split("/").pop()
 
-  const basePath = path.replace("/all", "").replace("/listings", "")
+  const basePath = `/collection/${collectionId}`
 
-  if (!["all", "listings"].includes(activeTab as string)) {
+  if (!["all", "listings", "activity"].includes(activeTab as string)) {
     activeTab = "listings"
   }
 
   return (
     <MuiTabs value={activeTab}>
       <Tab LinkComponent={Link} label="Listings" value="listings" href={`${basePath}/listings`} />
-      <Tab LinkComponent={Link} label="All" value="all" href={`${basePath}/all`} />
+      <Tab LinkComponent={Link} label="Collection" value="all" href={`${basePath}/all`} />
+      <Tab LinkComponent={Link} label="Activity" value="activity" href={`${basePath}/activity`} />
     </MuiTabs>
   )
 }

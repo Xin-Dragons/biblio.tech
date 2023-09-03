@@ -21,6 +21,7 @@ import { ScrollingBrice } from "./ScrollingBrice"
 import { TPS } from "./Tps"
 import { Balance } from "./Balance"
 import { PortfolioValue } from "./PortfolioValue"
+import { useProgress } from "@/context/progress"
 
 const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean; last?: boolean }> = ({
   children,
@@ -45,8 +46,9 @@ const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean;
 }
 
 export const Footer: FC = () => {
-  const { syncing, sync, syncProgress } = useDatabase()
+  const { syncing, sync } = useDatabase()
   const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
+  const { progress } = useProgress()
   // const { filtered, nfts } = useNfts()
   // const { db } = useDatabase()
 
@@ -178,9 +180,9 @@ export const Footer: FC = () => {
           </Stack>
         </Stack>
       </Container>
-      {syncing && (
+      {progress && (
         <LinearProgress
-          value={syncProgress}
+          value={progress}
           variant="determinate"
           sx={{ height: "2px", position: "fixed", bottom: 0, left: 0, right: 0 }}
         />

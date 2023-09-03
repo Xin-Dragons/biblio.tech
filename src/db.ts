@@ -1,4 +1,4 @@
-import { DigitalAsset, JsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
+import { JsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import Dexie, { Table } from "dexie"
 import { Currency } from "./context/brice"
 import { LoanType } from "./context/ui-settings"
@@ -149,6 +149,7 @@ export interface SharkyOrderBooks {
 export interface DigitalAsset {
   id: string
   collectionId: string
+  owner: string
 }
 
 export class DB extends Dexie {
@@ -175,7 +176,9 @@ export class DB extends Dexie {
       preferences: "page",
       wallets: "publicKey",
       sharkyOrderBooks: "collectionId",
-      digitalAssets: "id,collectionId",
+      digitalAssets: "id,collectionId,owner",
     })
   }
 }
+
+export default new DB()

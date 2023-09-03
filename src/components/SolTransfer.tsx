@@ -14,7 +14,7 @@ import {
 import { FC, useEffect, useRef, useState } from "react"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { lamportsToSol } from "@/helpers/utils"
-import Solana from "./Listing/solana.svg"
+import Solana from "@/../public/solana.svg"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { Close } from "@mui/icons-material"
 import { toast } from "react-hot-toast"

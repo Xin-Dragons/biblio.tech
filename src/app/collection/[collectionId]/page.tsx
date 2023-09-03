@@ -1,3 +1,5 @@
-import Listings from "./listings/page"
+import { redirect } from "next/navigation"
 
-export default Listings
+export default function page() {
+  redirect("listings")
+}

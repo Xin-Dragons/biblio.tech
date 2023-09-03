@@ -1,9 +1,15 @@
-"use client"
-import { DigitalAsset } from "@/components/DigitalAsset"
-import { Items } from "@/components/Items"
-import { useDigitalAssets } from "@/context/digital-assets"
+import { Stack } from "@mui/material"
+import { DigitalAssetsProviders } from "../DigitalAssetsProviders"
+import { Client } from "./client"
+import { FilterBar } from "../../../../components/FilterBar"
 
-export default function Listings() {
-  const { filtered } = useDigitalAssets()
-  return <Items items={filtered} Component={DigitalAsset} />
+export default function All({ params }: { params: Record<string, string> }) {
+  return (
+    <DigitalAssetsProviders defaultSort="name.asc" collectionId={params.collectionId}>
+      <Stack spacing={1} height="100%">
+        <FilterBar sortOptions={["name", "rarity"]} />
+        <Client />
+      </Stack>
+    </DigitalAssetsProviders>
+  )
 }

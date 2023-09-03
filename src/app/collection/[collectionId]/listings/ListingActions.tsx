@@ -5,6 +5,7 @@ import { useSelection } from "@/context/selection"
 import { useTensor } from "@/context/tensor"
 import { Button, Stack } from "@mui/material"
 import { useState } from "react"
+import { toast } from "react-hot-toast"
 
 export function ListingActions({ listings }: { listings: any[] }) {
   const [loading, setLoading] = useState(false)
@@ -17,15 +18,20 @@ export function ListingActions({ listings }: { listings: any[] }) {
       const items = selected.map((id) => {
         const listing = listings.find((l) => l.id === id)
         return {
-          maxPrice: listing.price,
+          maxPrice: listing.listing.price,
           mint: id,
-          owner: listing.seller,
+          owner: listing.listing.seller,
           royalties: true,
-          marketplace: listing.marketplace,
+          marketplace: listing.listing.marketplace,
         }
       })
 
-      await buy(items)
+      const buyPromise = buy(items)
+      toast.promise(buyPromise, {
+        loading: `Buying item${items.length === 1 ? "" : "s"}`,
+        success: "Done!",
+        error: `Error buying item${items.length === 1 ? "" : "s"}`,
+      })
     } catch (err) {
       console.error(err)
     } finally {

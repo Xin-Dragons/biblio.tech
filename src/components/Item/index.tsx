@@ -156,7 +156,6 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
   const [urgent, setUrgent] = useState(false)
   const [extendShowing, setExtendShowing] = useState(false)
   const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
-  const { showInfo } = useUiSettings()
   const [loading, setLoading] = useState(false)
   const [citrusBestLoan, setCitrusBestLoan] = useState<CitrusLoan | null>(null)
   const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
@@ -586,117 +585,6 @@ async function getType(uri: string) {
     console.error(err)
     return
   }
-}
-
-const Listing = ({
-  listing,
-  sellerFeeBasisPoints,
-  defaultPayRoyalties,
-  royaltiesEnforced,
-}: {
-  listing: Listing
-  defaultPayRoyalties: boolean
-  sellerFeeBasisPoints: number
-  royaltiesEnforced: boolean
-}) => {
-  const { isInScope } = useAccess()
-  const [payRoyalties, setPayRoyalties] = useState(royaltiesEnforced || defaultPayRoyalties)
-  const [loading, setLoading] = useState(false)
-  const { buy } = useTensor()
-
-  if (isInScope) {
-    return null
-  }
-
-  async function buyItem() {
-    try {
-      setLoading(true)
-      const buyPromise = buy([
-        {
-          owner: listing.seller,
-          maxPrice: listing.price,
-          mint: listing.nftMint,
-          royalties: payRoyalties,
-          marketplace: listing.marketplace,
-        },
-      ]) as unknown as Promise<void>
-
-      toast.promise(buyPromise, {
-        loading: "Buying item",
-        success: "Item bought successfully",
-        error: "Error buying item",
-      })
-
-      await buyPromise
-    } catch (err: any) {
-      toast.error(err.message || "Error buying item")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const price = listing?.price || 0
-  const fee = (price / 100) * 1.5
-  const rent = 2030000
-  const royalties = ((listing?.price || 0) / 10000) * sellerFeeBasisPoints
-  const total = payRoyalties ? price + fee + rent + royalties : price + fee + rent
-
-  return (
-    <Stack spacing={2} width="100%">
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography variant="h5">Listed for sale:</Typography>
-        <Typography color="primary" variant="h5">
-          {lamportsToSol(price)} SOL
-        </Typography>
-      </Stack>
-      <Stack direction="row" justifyContent="space-between">
-        <FormControlLabel
-          label="Pay full royalties"
-          control={
-            <Switch
-              checked={payRoyalties}
-              onChange={(e) => setPayRoyalties(e.target.checked)}
-              disabled={royaltiesEnforced}
-            />
-          }
-        />
-        <Stack direction="row" alignItems="center" spacing={0.5}>
-          <SvgIcon
-            // @ts-ignore
-            color={payRoyalties ? "gold" : "disabled"}
-          >
-            <Crown />
-          </SvgIcon>
-          <Typography variant="h6" color="primary">
-            {lamportsToSol(royalties)}
-          </Typography>
-        </Stack>
-      </Stack>
-      <Stack direction="row" justifyContent="space-between">
-        <Typography>Marketplace fee (1.5%)</Typography>
-        <Typography color="primary">{lamportsToSol(fee)}</Typography>
-      </Stack>
-      <Stack direction="row" justifyContent="space-between">
-        <Typography>Account opening rent</Typography>
-        <Typography color="primary">{lamportsToSol(rent)}</Typography>
-      </Stack>
-      <Button size="large" variant="contained" onClick={buyItem} disabled={loading}>
-        <Stack direction={"row"} spacing={1} alignItems="center">
-          <Typography>BUY NOW for {lamportsToSol(total)}</Typography>
-          {listing?.marketplace === "MEv2" && <img src="/me.png" height="18px" />}
-          {listing?.marketplace === "TensorSwap" && (
-            <SvgIcon>
-              <Tensor />
-            </SvgIcon>
-          )}
-        </Stack>
-      </Button>
-      <Alert severity="info">
-        Marketplace fee assumed to be 1.5% but is subject to change. The actual total including marketplace fee can be
-        seen in your wallet simulation
-      </Alert>
-    </Stack>
-  )
 }
 
 const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
@@ -1470,44 +1358,6 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
         </Card>
       </Dialog>
     </Card>
-  )
-}
-
-const colors = {
-  Mythic: "#c62828",
-  Legendary: "#e65100",
-  Epic: "#7b1fa2",
-  Rare: "#1565c0",
-  Uncommon: "#1b5e20",
-  Common: "#333333",
-}
-
-type RarityProps = {
-  rank: number
-  type: "moonRank" | "howRare"
-  tier: RarityTier
-}
-
-const Rarity: FC<RarityProps> = ({ rank, type, tier }) => {
-  const { layoutSize } = useUiSettings()
-
-  const sizes = {
-    small: "12px",
-    medium: "16x",
-    large: "16px",
-  }
-
-  return (
-    <Chip
-      icon={type === "howRare" ? <HowRare style={{ marginLeft: "0.5em" }} /> : undefined}
-      label={`${type === "moonRank" ? "⍜" : ""} ${rank}`}
-      sx={{
-        backgroundColor: colors[tier as keyof object],
-        fontSize: sizes[layoutSize as keyof object] || "inherit",
-        color: "white",
-      }}
-      size={"small"}
-    />
   )
 }
 

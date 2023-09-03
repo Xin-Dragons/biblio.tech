@@ -28,6 +28,8 @@ type UiSettingsContextProps = {
   setPreferredCurrency: Function
   setLoanType: Function
   loanType: LoanType
+  easySelect: boolean
+  setEasySelect: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -49,6 +51,8 @@ const initialProps: UiSettingsContextProps = {
   setPreferredCurrency: noop,
   setLoanType: noop,
   loanType: "borrowed",
+  easySelect: false,
+  setEasySelect: noop,
 }
 
 const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -59,6 +63,7 @@ type UiSettingsProviderProps = {
 
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
   const [profileModalShowing, setProfileModalShowing] = useState(false)
+  const [easySelect, setEasySelect] = useState(false)
   const { filter, collectionId, tag } = useParams()
 
   const { db } = useDatabase()
@@ -181,6 +186,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         loanType: defaults?.loanType || "borrowed",
         setLoanType,
         setPreferredCurrency,
+        easySelect,
+        setEasySelect,
       }}
     >
       {children}

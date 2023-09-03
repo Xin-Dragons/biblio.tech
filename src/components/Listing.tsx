@@ -1,87 +1,116 @@
 "use client"
-import { useUiSettings } from "@/context/ui-settings"
-import { Card, CardContent, Stack, SvgIcon, Typography, Link as MuiLink } from "@mui/material"
-import Link from "next/link"
-import { ImageWithFallback } from "./ImageWithFallback"
-import { fetchJsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
-import { umi } from "@/app/helpers/umi"
-import { useEffect, useState } from "react"
+import { useTensor } from "@/context/tensor"
 import { lamportsToSol } from "@/helpers/utils"
+import { Stack, Typography, FormControlLabel, Switch, SvgIcon, Button, Alert } from "@mui/material"
+import { useState } from "react"
+import toast from "react-hot-toast"
+import Crown from "@/../public/crown.svg"
 import Tensor from "@/../public/tensor.svg"
-import Solana from "@/../public/solana.svg"
-import { useSelection } from "@/context/selection"
+import { NftListingStatus } from "@hellomoon/api"
 
-const margins = {
-  small: 0.5,
-  medium: 0.75,
-  large: 1,
-  collage: 5,
-}
+export function Listing({
+  listing,
+  sellerFeeBasisPoints,
+  defaultPayRoyalties = true,
+  royaltiesEnforced,
+}: {
+  listing: NftListingStatus
+  defaultPayRoyalties?: boolean
+  sellerFeeBasisPoints: number
+  royaltiesEnforced: boolean
+}) {
+  const [payRoyalties, setPayRoyalties] = useState(royaltiesEnforced || defaultPayRoyalties)
+  const [loading, setLoading] = useState(false)
+  const { buy } = useTensor()
 
-export function Listing({ item }: { item: any }) {
-  const { selected, select } = useSelection()
-  const { layoutSize } = useUiSettings()
-  const [image, setImage] = useState(item.content.links.image)
+  async function buyItem() {
+    try {
+      setLoading(true)
+      const buyPromise = buy([
+        {
+          owner: listing.seller,
+          maxPrice: listing.price,
+          mint: listing.nftMint,
+          royalties: payRoyalties,
+          marketplace: listing.marketplace as any,
+        },
+      ]) as unknown as Promise<void>
 
-  async function getImage() {
-    const image = (await fetchJsonMetadata(umi, item.content.json_uri)).image
-    setImage(image)
+      toast.promise(buyPromise, {
+        loading: "Buying item",
+        success: "Item bought successfully",
+        error: "Error buying item",
+      })
+
+      await buyPromise
+    } catch (err: any) {
+      toast.error(err.message || "Error buying item")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => {
-    if (!item.content.links.image) {
-      getImage()
-    } else {
-      setImage(item.content.links.image)
-    }
-  }, [item])
-
-  const price = item.price / Math.pow(10, 9)
+  const price = listing?.price || 0
+  const fee = (price / 100) * 1.5
+  const rent = 2030000
+  const royalties = ((listing?.price || 0) / 10000) * sellerFeeBasisPoints
+  console.log({ royalties })
+  const total = payRoyalties ? price + fee + rent + royalties : price + fee + rent
 
   return (
-    <MuiLink component={Link} href={`/digital-asset/${item.id}`} underline="none">
-      <Card
-        sx={{
-          margin: margins[layoutSize as keyof typeof margins],
-          outline: selected.includes(item.id) ? "3px solid white" : "none",
-          outlineOffset: "-3px",
-        }}
-        onClick={(e) => {
-          e.preventDefault()
-          select(item.id)
-        }}
-      >
-        <ImageWithFallback src={image} />
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography
-              textTransform="uppercase"
-              fontWeight="bold"
-              sx={{ textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}
-            >
-              {item.content.metadata.name}
-            </Typography>
-            <Stack spacing={1} alignItems="center" direction="row" justifyContent="space-between">
-              {item.marketplace === "MEv2" && <img src="/me.png" width={30} />}
-              {item.marketplace === "TensorSwap" && (
-                <SvgIcon>
-                  <Tensor />
-                </SvgIcon>
-              )}
-              <Stack direction="row" alignItems="center">
-                <SvgIcon sx={{ color: "transparent" }}>
-                  <Solana />
-                </SvgIcon>
-                <Typography variant="h5" color="primary">
-                  {price < 1
-                    ? price.toLocaleString(undefined, { minimumSignificantDigits: 4 })
-                    : price.toLocaleString(undefined, { maximumSignificantDigits: 3 })}
-                </Typography>
-              </Stack>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-    </MuiLink>
+    <Stack spacing={2} width="100%">
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="h5">Listed for sale:</Typography>
+        <Typography color="primary" variant="h5">
+          {lamportsToSol(price)} SOL
+        </Typography>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <FormControlLabel
+          label="Pay full royalties"
+          control={
+            <Switch
+              checked={payRoyalties}
+              onChange={(e) => setPayRoyalties(e.target.checked)}
+              disabled={royaltiesEnforced}
+            />
+          }
+        />
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <SvgIcon
+            // @ts-ignore
+            color={payRoyalties ? "gold" : "disabled"}
+          >
+            <Crown />
+          </SvgIcon>
+          <Typography variant="h6" color="primary">
+            {lamportsToSol(royalties)}
+          </Typography>
+        </Stack>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <Typography>Marketplace fee (1.5%)</Typography>
+        <Typography color="primary">{lamportsToSol(fee)}</Typography>
+      </Stack>
+      <Stack direction="row" justifyContent="space-between">
+        <Typography>Account opening rent</Typography>
+        <Typography color="primary">{lamportsToSol(rent)}</Typography>
+      </Stack>
+      <Button size="large" variant="contained" onClick={buyItem} disabled={loading}>
+        <Stack direction={"row"} spacing={1} alignItems="center">
+          <Typography>BUY NOW for {lamportsToSol(total)}</Typography>
+          {listing?.marketplace === "MEv2" && <img src="/me.png" height="18px" />}
+          {listing?.marketplace === "TensorSwap" && (
+            <SvgIcon>
+              <Tensor />
+            </SvgIcon>
+          )}
+        </Stack>
+      </Button>
+      <Alert severity="info">
+        Marketplace fee assumed to be 1.5% but is subject to change. The actual total including marketplace fee can be
+        seen in your wallet simulation
+      </Alert>
+    </Stack>
   )
 }

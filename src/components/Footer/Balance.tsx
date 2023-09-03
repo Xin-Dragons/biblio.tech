@@ -24,7 +24,7 @@ export function Balance() {
     clearInterval(interval.current)
     if (wallet.publicKey) {
       getBalance()
-      interval.current = setInterval(getBalance, 1000)
+      interval.current = setInterval(getBalance, 5000)
     } else {
       setBalance(0)
       clearInterval(interval.current)

@@ -11,6 +11,7 @@ import { SelectionProvider } from "@/context/selection"
 import { AccessProvider } from "@/context/access"
 import { SessionProvider } from "next-auth/react"
 import { UiSettingsProvider } from "@/context/ui-settings"
+import { ProgressProvider } from "@/context/progress"
 
 export function SharedProviders({ children }: { children: ReactNode }) {
   const endpoint = process.env.NEXT_PUBLIC_RPC_HOST!
@@ -24,7 +25,9 @@ export function SharedProviders({ children }: { children: ReactNode }) {
               <UiSettingsProvider>
                 <NextAuthProvider>
                   <AccessProvider>
-                    <ThemeProvider>{children}</ThemeProvider>
+                    <ThemeProvider>
+                      <ProgressProvider>{children}</ProgressProvider>
+                    </ThemeProvider>
                   </AccessProvider>
                 </NextAuthProvider>
               </UiSettingsProvider>

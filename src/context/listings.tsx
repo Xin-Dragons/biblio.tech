@@ -1,22 +1,21 @@
 "use client"
+import { getHelloMoonCollectionId } from "@/helpers/hello-moon"
 import { useParams } from "next/navigation"
 import { ReactNode, createContext, useContext, useEffect, useState } from "react"
 
 const Context = createContext<{ listings: any[]; fetchListings: Function } | undefined>(undefined)
 
-export function ListingsProvider({
-  children,
-  helloMoonCollectionId,
-}: {
-  children: ReactNode
-  helloMoonCollectionId?: string | null
-}) {
+export function ListingsProvider({ children, collectionId }: { children: ReactNode; collectionId?: string | null }) {
   const [listings, setListings] = useState([])
   const { publicKey } = useParams()
 
-  function fetchListings() {
+  async function fetchListings() {
+    let helloMoonCollectionId
+    if (collectionId) {
+      helloMoonCollectionId = await getHelloMoonCollectionId(collectionId)
+    }
+
     if (!helloMoonCollectionId && !publicKey) {
-      console.log("LAME")
       return
     }
 
@@ -36,7 +35,7 @@ export function ListingsProvider({
 
   useEffect(() => {
     fetchListings()
-  }, [helloMoonCollectionId, publicKey])
+  }, [collectionId, publicKey])
 
   return <Context.Provider value={{ listings, fetchListings }}>{children}</Context.Provider>
 }
@@ -45,7 +44,7 @@ export const useListings = () => {
   const context = useContext(Context)
 
   if (context === undefined) {
-    throw new Error("listingsContext must be used in a ListingsProvider")
+    throw new Error("useListings must be used in a ListingsProvider")
   }
 
   return context

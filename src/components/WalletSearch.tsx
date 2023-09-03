@@ -80,7 +80,6 @@ export function WalletSearch({ large }: { large?: boolean }) {
       if (await isWallet(umi, item)) {
         return addAndSelectWallet(item, "solana")
       } else if (await isDigitalAsset(umi, item)) {
-        console.log("NAVIGATING")
         router.replace(`/digital-asset/${item}`)
         return
       } else {
@@ -119,7 +118,7 @@ export function WalletSearch({ large }: { large?: boolean }) {
       addDialog={false}
       onNotFound={checkWallet}
       deletable={true}
-      size="large"
+      size="medium"
     />
   )
 }

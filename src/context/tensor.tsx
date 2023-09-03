@@ -26,14 +26,46 @@ import { toast } from "react-hot-toast"
 import { useTransactionStatus } from "./transactions"
 import { useDatabase } from "./database"
 import { Nft } from "../db"
-import { useNfts } from "./nfts.tsx"
+import { useNfts } from "./nfts"
 import { createSignerFromWalletAdapter } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { InstructionSet, buildTransactions, getUmiChunks, notifyStatus } from "../helpers/transactions"
 import axios, { AxiosError } from "axios"
 import { useAccess } from "./access"
 import { fetchAllDigitalAsset, transferV1 } from "@metaplex-foundation/mpl-token-metadata"
+import { NftListingStatus } from "@hellomoon/api"
 
-export const TensorContext = createContext({ delist: noop, list: noop, sellNow: noop, buy: noop })
+type SellItem = {
+  pool: string
+  mint: string
+  price: number
+  id: string
+  type: "trade" | "token"
+  royalties: boolean
+  slug: string
+}
+
+type BuyItem = {
+  maxPrice: number
+  mint: string
+  owner: string
+  royalties: boolean
+  marketplace: Pick<NftListingStatus, "marketplace"> | "TensorSwap" | "MEv2"
+}
+
+type ListingItem = {
+  mint: string
+  price: number
+}
+
+export const TensorContext = createContext<
+  | {
+      delist(mints: string[], deslistTo?: string): Promise<void>
+      list(items: ListingItem[]): Promise<void>
+      sellNow(items: SellItem[]): Promise<void>
+      buy(items: BuyItem[]): Promise<void>
+    }
+  | undefined
+>(undefined)
 
 export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const umi = useUmi()
@@ -44,10 +76,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const provider = new AnchorProvider(connection, wallet as any, {
     commitment: "confirmed",
   })
-  const { isAdmin } = useAccess()
   const { nfts } = useNfts()
   const swapSdk = new TensorSwapSDK({ provider })
-  const wlSdk = new TensorWhitelistSDK({ provider })
 
   async function getDelistInstructions(mints: string[]) {
     return (
@@ -88,11 +118,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     ).filter(Boolean)
   }
 
-  type ListingItem = {
-    mint: string
-    price: number
-  }
-
   async function getListInstructions(items: ListingItem[]) {
     return await Promise.all(
       items.map(async (item) => {
@@ -124,24 +149,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         }
       })
     )
-  }
-
-  type SellItem = {
-    pool: string
-    mint: string
-    price: number
-    id: string
-    type: "trade" | "token"
-    royalties: boolean
-    slug: string
-  }
-
-  type BuyItem = {
-    maxPrice: number
-    mint: string
-    owner: string
-    royalties: boolean
-    marketplace: string
   }
 
   async function getBuyInstructions(items: BuyItem[]) {
@@ -190,6 +197,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
               mint: item.mint,
             }
           } else {
+            console.log(item)
             throw new Error("Marketplace not supported")
           }
         })
@@ -337,7 +345,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   }
 
   async function buy(items: BuyItem[]) {
-    console.log(items)
     const txns = await getBuyInstructions(items)
 
     const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
