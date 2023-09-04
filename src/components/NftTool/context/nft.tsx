@@ -52,10 +52,7 @@ export const NftsProvider = ({ children }: { children: ReactNode }) => {
         if (!collection) {
           return false
         }
-        return (
-          (collection.verified && collection.key === process.env.NEXT_PUBLIC_COLLECTION_ID) ||
-          nft.metadata.updateAuthority === umi.identity.publicKey
-        )
+        return collection.verified && collection.key === process.env.NEXT_PUBLIC_COLLECTION_ID
       })
 
       const createdNfts = await Promise.all(
@@ -69,8 +66,6 @@ export const NftsProvider = ({ children }: { children: ReactNode }) => {
             }
           })
       )
-
-      console.log(createdNfts)
 
       const collections = createdNfts.filter((da) => isSome(da.metadata.collectionDetails))
 
