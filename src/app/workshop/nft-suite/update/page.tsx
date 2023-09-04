@@ -26,7 +26,7 @@ import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { FEES_WALLET, METAPLEX_COMPATIBILITY_RULE_SET, METAPLEX_RULE_SET, SYSTEM_PROGRAM_PK } from "@/constants"
 import { useNfts } from "../nfts-context"
-import { MultimediaCategory, getFee, getMultimediaType, shorten } from "@/app/tools/nft-suite/helpers"
+import { MultimediaCategory, getFee, getMultimediaType, shorten } from "@/app/workshop/nft-suite/helpers"
 import { NftSelector } from "../NftSelector"
 import { PreviewNft } from "../PreviewNft"
 import {
@@ -270,8 +270,6 @@ export default function UpdateNft() {
       !isEqual(creators, unwrapOptionRecursively(nft.metadata.creators)) ||
       updateAuthority !== nft.metadata.updateAuthority ||
       ruleSet !== unwrapOptionRecursively(nft.metadata.programmableConfig)?.ruleSet)
-
-  console.log(ruleSet, unwrapOptionRecursively(nft?.metadata?.programmableConfig)?.ruleSet)
 
   function addAttribute() {
     setAttributes((prevState) => {
@@ -521,6 +519,16 @@ export default function UpdateNft() {
 
     const [withToken] = await fetchAllDigitalAssetWithTokenByMint(umi, nft.publicKey)
 
+    const existingCollection = unwrapOption(nft.metadata.collection)
+    if (!collection && existingCollection?.key && existingCollection.verified) {
+      tx = tx.add(
+        unverifyCollectionV1(umi, {
+          collectionMint: existingCollection.key,
+          metadata: nft.metadata.publicKey,
+        })
+      )
+    }
+
     tx = tx.add(
       updateV1(umi, {
         mint: nft.publicKey,
@@ -539,7 +547,7 @@ export default function UpdateNft() {
           updateAuthority !== nft.metadata.updateAuthority ? umiPublicKey(updateAuthority) : undefined,
         isMutable: isMutable !== nft.metadata.isMutable && !isCollection ? isMutable : undefined,
         collection:
-          collection && collection !== unwrapOption(nft.metadata.collection)?.key
+          collection && collection !== existingCollection?.key
             ? {
                 __kind: "Set",
                 fields: [
@@ -548,6 +556,10 @@ export default function UpdateNft() {
                     verified: false,
                   },
                 ],
+              }
+            : !collection
+            ? {
+                __kind: "Clear",
               }
             : undefined,
       })

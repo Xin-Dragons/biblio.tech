@@ -12,7 +12,7 @@ import {
 } from "@mui/material"
 import { FEES } from "./NftTool/constants"
 import { useNfts } from "./NftTool/context/nft"
-import { getLevel } from "../app/tools/nft-suite/helpers"
+import { getLevel } from "../app/workshop/nft-suite/helpers"
 
 export function Pricing({ onClose }: { onClose: Function }) {
   const { dandies } = useNfts()

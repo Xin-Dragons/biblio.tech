@@ -1,6 +1,6 @@
 "use client"
 import { Stack } from "@mui/material"
-import { FilterBar } from "../../../../components/FilterBar"
+import { FilterBar } from "../../../../../components/FilterBar"
 import { Items } from "@/components/Items"
 import { ListingActions } from "./ListingActions"
 import { useFiltered } from "@/context/filtered"

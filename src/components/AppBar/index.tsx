@@ -5,12 +5,8 @@ import MenuRoundedIcon from "@mui/icons-material/MenuRounded"
 import { WalletSearch } from "../WalletSearch"
 import { UserMenu } from "../UserMenu"
 import { FC, ReactNode } from "react"
-import { ViewMenu } from "../ViewMenu"
-import { ShowInfo } from "../ShowInfo"
-import { Collage } from "../Collage"
-import { LightDarkMode } from "../LightDarkMode"
 import Logo from "./logo.svg"
-import { CreatorToolsMenu } from "../CreatorToolsMenu"
+import { WorkshopMenu } from "../WorkshopMenu"
 import { WalletManagerMenu } from "../WalletManagerMenu"
 import { BarterMenu } from "../BarterMenu"
 
@@ -56,7 +52,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
             </Link>
             <BarterMenu />
             <WalletManagerMenu />
-            <CreatorToolsMenu />
+            <WorkshopMenu />
           </Stack>
           <Box sx={{ flexGrow: 1 }}>
             <WalletSearch />

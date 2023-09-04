@@ -47,7 +47,7 @@ import {
   getUmiChunks,
   sendBatches,
   shorten,
-} from "@/app/tools/nft-suite/helpers"
+} from "@/app/workshop/nft-suite/helpers"
 import { useUmi } from "@/context/umi"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { NftSelector } from "../NftSelector"

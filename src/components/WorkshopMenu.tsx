@@ -1,11 +1,11 @@
 "use client"
-import { routes } from "@/app/tools/routes"
+import { routes } from "@/app/workshop/routes"
 import { Box, Button, List, ListItemButton, ListSubheader, Menu, MenuItem, Typography } from "@mui/material"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 
-export function CreatorToolsMenu() {
+export function WorkshopMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)
   const path = usePathname()
@@ -29,7 +29,7 @@ export function CreatorToolsMenu() {
         onClick={handleClick}
         sx={{ color: toolsActive ? "primary.main" : "white" }}
       >
-        Creator Tools
+        Workshop
       </Button>
       <Menu
         id="basic-menu"

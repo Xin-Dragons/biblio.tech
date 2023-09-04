@@ -27,6 +27,9 @@ import { Close } from "@mui/icons-material"
 import { Wallet } from "../../db"
 import { CollectionNameRequest, CollectionName } from "@hellomoon/api"
 import { hmClient } from "../../helpers/hello-moon"
+import { ethAlchemy } from "@/helpers/alchemy"
+import { NftContract } from "alchemy-sdk"
+import { levDist, levenshteinDistance } from "@/helpers/lev"
 
 const filter = createFilterOptions<Wallet>({ stringify: (opt) => `${opt.nickname}${opt.publicKey}` })
 
@@ -73,7 +76,9 @@ export function AddressSelector({
   //   "desc"
   // )
   const [options, setOptions] = useState<any[]>([])
-  const [collections, setCollections] = useState<CollectionName[]>([])
+  const [solanaCollections, setSolanaCollections] = useState<CollectionName[]>([])
+  const [ethCollections, setEthCollections] = useState<NftContract[]>([])
+  const [input, setInput] = useState("")
 
   const [open, toggleOpen] = useState(false)
   const [dialogValue, setDialogValue] = useState({
@@ -84,18 +89,31 @@ export function AddressSelector({
   useEffect(() => {}, [addressBookWallets, linkedWallets])
 
   useEffect(() => {
-    setOptions([
-      ...wallets,
-      ...collections.map((c: CollectionName) => {
-        return {
-          publicKey: c.helloMoonCollectionId,
-          nickname: c.collectionName,
-          chain: "Solana collection",
-          isCollection: true,
-        }
-      }),
-    ])
-  }, [wallets, collections])
+    setOptions(
+      orderBy(
+        [
+          ...wallets,
+          ...solanaCollections.map((c: CollectionName) => {
+            return {
+              publicKey: c.helloMoonCollectionId,
+              nickname: c.collectionName,
+              chain: "SOL collection",
+              isCollection: true,
+            }
+          }),
+          ...ethCollections.map((c) => {
+            return {
+              publicKey: c.address,
+              nickname: c.name || "Unknown collection",
+              chain: "ETH collection",
+              isCollection: true,
+            }
+          }),
+        ],
+        (item) => levenshteinDistance(item.nickname || "", input)
+      )
+    )
+  }, [wallets, solanaCollections, input])
 
   async function lookupCollections(input: string) {
     const result = await hmClient.send(
@@ -103,9 +121,12 @@ export function AddressSelector({
         collectionName: input,
       })
     )
-    console.log(result.data)
 
-    setCollections(result.data)
+    setSolanaCollections(result.data)
+
+    const ethResult = await ethAlchemy.nft.searchContractMetadata(input)
+
+    setEthCollections(ethResult)
 
     // setWallets(result.data)
   }
@@ -258,6 +279,7 @@ export function AddressSelector({
           <TextField
             {...params}
             onChange={(e: any) => {
+              setInput(e.target.value)
               if (lookupCollection) {
                 lookupCollections(e.target.value)
               }

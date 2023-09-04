@@ -63,7 +63,7 @@ import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { METAPLEX_RULE_SET, METAPLEX_COMPATIBILITY_RULE_SET, SYSTEM_PROGRAM_PK, FEES_WALLET } from "@/constants"
 import { useNfts } from "../nfts-context"
-import { getFee, getUmiChunks, sendBatches, shorten } from "@/app/tools/nft-suite/helpers"
+import { getFee, getUmiChunks, sendBatches, shorten } from "@/app/workshop/nft-suite/helpers"
 import { NftSelector } from "../NftSelector"
 import { NftsList } from "../NftsList"
 import { AddCircleRounded, CheckCircleRounded, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
@@ -989,16 +989,18 @@ export default function BatchUpdateNfts() {
     try {
       setLoading(true)
       const getInstruction = async (da: DigitalAsset) => {
+        console.log(da)
         const anonUmi = getAnonUmi(umi.identity.publicKey)
+        console.log(anonUmi)
         const mint = generateSigner(umi)
         let tx = transactionBuilder().add(
           createAndMint(anonUmi, {
             uri: da.metadata.uri,
             name: da.metadata.name,
-            sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints),
+            sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints / 100),
             mint,
             symbol: da.metadata.symbol,
-            creators: da.metadata.creators,
+            creators: (unwrapOption(da.metadata.creators) || []).map((c) => ({ ...c, verified: false })),
             primarySaleHappened: da.metadata.primarySaleHappened,
             tokenStandard: tokenStandard || unwrapOption(da.metadata.tokenStandard) || 0,
           })
@@ -1014,6 +1016,8 @@ export default function BatchUpdateNfts() {
             })
           )
         }
+
+        return tx
       }
 
       await sendUpdates(getInstruction)
