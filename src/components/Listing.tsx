@@ -6,15 +6,18 @@ import { useState } from "react"
 import toast from "react-hot-toast"
 import Crown from "@/../public/crown.svg"
 import Tensor from "@/../public/tensor.svg"
-import { NftListingStatus } from "@hellomoon/api"
+import { LAMPORTS_PER_SOL } from "@solana/web3.js"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { useWalletModal } from "@solana/wallet-adapter-react-ui"
+import { DigitalAsset } from "@/app/models/DigitalAsset"
 
 export function Listing({
-  listing,
+  digitalAsset,
   sellerFeeBasisPoints,
   defaultPayRoyalties = true,
   royaltiesEnforced,
 }: {
-  listing: NftListingStatus
+  digitalAsset: DigitalAsset
   defaultPayRoyalties?: boolean
   sellerFeeBasisPoints: number
   royaltiesEnforced: boolean
@@ -22,19 +25,16 @@ export function Listing({
   const [payRoyalties, setPayRoyalties] = useState(royaltiesEnforced || defaultPayRoyalties)
   const [loading, setLoading] = useState(false)
   const { buy } = useTensor()
+  const wallet = useWallet()
+  const { setVisible, visible } = useWalletModal()
 
   async function buyItem() {
     try {
+      if (!wallet.connected) {
+        return setVisible(true)
+      }
       setLoading(true)
-      const buyPromise = buy([
-        {
-          owner: listing.seller,
-          maxPrice: listing.price,
-          mint: listing.nftMint,
-          royalties: payRoyalties,
-          marketplace: listing.marketplace as any,
-        },
-      ]) as unknown as Promise<void>
+      const buyPromise = buy([digitalAsset]) as unknown as Promise<void>
 
       toast.promise(buyPromise, {
         loading: "Buying item",
@@ -44,17 +44,17 @@ export function Listing({
 
       await buyPromise
     } catch (err: any) {
+      console.log(err)
       toast.error(err.message || "Error buying item")
     } finally {
       setLoading(false)
     }
   }
 
-  const price = listing?.price || 0
+  const price = digitalAsset.listing?.price || 0
   const fee = (price / 100) * 1.5
   const rent = 2030000
-  const royalties = ((listing?.price || 0) / 10000) * sellerFeeBasisPoints
-  console.log({ royalties })
+  const royalties = ((digitalAsset.listing?.price || 0) / 10000) * sellerFeeBasisPoints
   const total = payRoyalties ? price + fee + rent + royalties : price + fee + rent
 
   return (
@@ -94,13 +94,17 @@ export function Listing({
       </Stack>
       <Stack direction="row" justifyContent="space-between">
         <Typography>Account opening rent</Typography>
-        <Typography color="primary">{lamportsToSol(rent)}</Typography>
+        <Typography color="primary">
+          {(rent / LAMPORTS_PER_SOL).toLocaleString(undefined, {
+            minimumFractionDigits: 3,
+          })}
+        </Typography>
       </Stack>
       <Button size="large" variant="contained" onClick={buyItem} disabled={loading}>
         <Stack direction={"row"} spacing={1} alignItems="center">
           <Typography>BUY NOW for {lamportsToSol(total)}</Typography>
-          {listing?.marketplace === "MEv2" && <img src="/me.png" height="18px" />}
-          {listing?.marketplace === "TensorSwap" && (
+          {digitalAsset.listing?.marketplace === "ME" && <img src="/me.png" height="18px" />}
+          {digitalAsset.listing?.marketplace === "TENSOR" && (
             <SvgIcon>
               <Tensor />
             </SvgIcon>

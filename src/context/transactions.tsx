@@ -5,7 +5,6 @@ import { useUmi } from "./umi"
 import { sleep } from "../helpers/utils"
 import { noop, uniq } from "lodash"
 import { toast } from "react-hot-toast"
-import { useNfts } from "./nfts.tsx"
 
 type TransactionStatusContextProps = {
   transactions: TransactionStatus[]
@@ -30,7 +29,7 @@ export const TransactionStatusContext = createContext<TransactionStatusContextPr
 type TransactionStatusType = "burn" | "lock" | "unlock" | "send" | "repay" | "list" | "delist"
 
 type TransactionStatus = {
-  nftMint: string
+  id: string
   status: string
   type: TransactionStatusType
 }
@@ -42,7 +41,6 @@ type TransactionProviderProps = {
 export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ children }) => {
   const [transactions, setTransactions] = useState<TransactionStatus[]>([])
   const umi = useUmi()
-  const { nfts } = useNfts()
 
   async function sendSignedTransactions(
     signedTransactions: Transaction[],
@@ -74,11 +72,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
             clearTransactions(mints)
           } else {
             setTransactionComplete(mints)
-            onSuccess &&
-              (await onSuccess(
-                nfts.filter((n) => mints.includes(n.nftMint)),
-                recipient
-              ))
+            onSuccess && (await onSuccess(mints, recipient))
 
             await sleep(2000)
 
@@ -102,13 +96,13 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     }
   }
 
-  function setTransactionInProgress(nftMints: string[], type: TransactionStatusType) {
+  function setTransactionInProgress(ids: string[], type: TransactionStatusType) {
     setTransactions((prevState: TransactionStatus[]) => {
       return [
         ...prevState,
-        ...nftMints.map((nftMint) => {
+        ...ids.map((id) => {
           return {
-            nftMint,
+            id,
             status: "pending",
             type,
           }
@@ -117,10 +111,10 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     })
   }
 
-  function setTransactionErrors(nftMints: string[]) {
+  function setTransactionErrors(ids: string[]) {
     setTransactions((prevState: TransactionStatus[]) => {
       return prevState.map((item) => {
-        if (nftMints.includes(item.nftMint)) {
+        if (ids.includes(item.id)) {
           return {
             ...item,
             status: "error",
@@ -131,10 +125,10 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     })
   }
 
-  function setTransactionComplete(nftMints: string[]) {
+  function setTransactionComplete(ids: string[]) {
     setTransactions((prevState: TransactionStatus[]) => {
       return prevState.map((item) => {
-        if (nftMints.includes(item.nftMint)) {
+        if (ids.includes(item.id)) {
           return {
             ...item,
             status: "success",
@@ -147,7 +141,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
 
   function clearTransactions(nftMints: string[]) {
     setTransactions((prevState: TransactionStatus[]) => {
-      return prevState.filter((item) => !nftMints.includes(item.nftMint))
+      return prevState.filter((item) => !nftMints.includes(item.id))
     })
   }
 

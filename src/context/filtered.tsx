@@ -1,132 +1,97 @@
 "use client"
-import { PropsWithChildren, createContext, useContext } from "react"
-import { useDigitalAssets } from "./digital-assets"
-import { useListings } from "./listings"
-import { useRarity } from "./rarity"
+import { PropsWithChildren, createContext, useContext, useEffect } from "react"
 import { useFilters } from "./filters"
-import { useSort } from "./sort"
-import { orderBy, size } from "lodash"
-import { useParams } from "next/navigation"
+import { size } from "lodash"
+import { DigitalAsset } from "@/app/models/DigitalAsset"
+import { Listing } from "@/app/models/Listing"
+import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
+import { useUiSettings } from "./ui-settings"
+import { useSearchParams } from "next/navigation"
 
-const Context = createContext<any[] | undefined>(undefined)
+const Context = createContext<{ filter: Function } | undefined>(undefined)
 
 export function FilteredProvider({ children, listing }: PropsWithChildren & { listing?: boolean }) {
-  const params = useParams()
-  const { digitalAssets } = useDigitalAssets()
-  const { listings } = useListings()
-  const { howRare } = useRarity()
-  const { selectedFilters, search } = useFilters()
-  const { type, direction } = useSort()
+  const { selectedFilters, search, tokenStandards, status, selectedCollections } = useFilters()
+  const { includeUnverified } = useUiSettings()
 
-  let filtered = digitalAssets
-
-  if (params.publicKey) {
-    filtered = filtered.filter((item) => item.owner === params.publicKey)
-  }
-
-  if (params.collectionId) {
-    filtered = filtered.filter(
-      (item) =>
-        params.collectionId === item.collectionId || item.grouping.find((g) => g.group_value === params.collectionId)
-    )
-  }
-
-  filtered = filtered
-    .map((da) => {
-      const listing = listings.find((l) => l.nftMint === da.id)
-      const rarity = howRare.find((h) => h.mint === da.id)
-      return {
-        ...da,
-        listing,
-        rarity,
-      }
-    })
-    .filter((item) => !listing || item.listing)
-
-  filtered = filtered.filter((item) => {
-    return (
-      !size(selectedFilters) ||
-      Object.keys(selectedFilters).every((key) => {
-        const vals = selectedFilters[key]
-        return (
-          !vals.length ||
-          vals.includes(
-            (item.content.metadata.attributes || []).filter(Boolean).find((att) => att.trait_type === key)?.value
-          )
-        )
-      })
-    )
-  })
-
-  if (search) {
-    const s = search.toLowerCase()
-
-    filtered = filtered.filter((nft) => {
-      let name = nft.content.metadata.name || ""
-      if (typeof name !== "string") {
-        name = `${name}`
-      }
-      const symbol = nft.content.metadata.symbol || ""
-      const description = nft.content.metadata.description || ""
-      const attributes = (nft.content.metadata.attributes || []).filter(Boolean)
-
-      if (s.includes("traits:")) {
-        const num = parseInt(s.split(":")[1])
-        if (num) {
-          return (
-            attributes
-              .filter(Boolean)
-              .filter((att) => att.value !== "none" && att.value !== "None" && att.value !== "NONE").length === num
-          )
-        }
-      }
-
-      if (s.includes(":")) {
-        const [trait_type, value] = s.split(":").map((item) => item.trim().toLocaleLowerCase())
-        if (trait_type && value) {
-          return (
-            attributes
-              .filter(Boolean)
-              .find((att) => att.trait_type?.toLowerCase() === trait_type)
-              ?.value?.toLowerCase() === value
-          )
-        }
-      }
-
-      const values = (attributes || []).filter(Boolean).map((att: any) => `${att.value || ""}`.toLowerCase())
+  function filter(items: DigitalAsset[]) {
+    let filtered = items.filter((item) => {
       return (
-        nft.id === search ||
-        name.toLowerCase().includes(s) ||
-        description.toLowerCase().includes(s) ||
-        symbol.toLowerCase().includes(s) ||
-        values.some((val: any) => val.includes(s))
+        !size(selectedFilters) ||
+        Object.keys(selectedFilters).every((key) => {
+          const vals = selectedFilters[key]
+          return (
+            !vals.length ||
+            vals.includes((item.attributes || []).filter(Boolean).find((att) => att.trait_type === key)?.value)
+          )
+        })
       )
     })
+
+    if (tokenStandards.length) {
+      filtered = filtered.filter((item) => tokenStandards.includes(item.tokenStandard || 0))
+    }
+
+    if (status.length) {
+      filtered = filtered.filter((item) => status.includes(item.status || ""))
+    }
+
+    if (selectedCollections.length) {
+      filtered = filtered.filter((item) => selectedCollections.includes(item.collectionId || ""))
+    }
+
+    if (!includeUnverified) {
+      filtered = filtered.filter((item) => item.verified || item.tensorVerified)
+    }
+
+    if (search) {
+      const s = search.toLowerCase()
+
+      filtered = filtered.filter((nft) => {
+        let name = nft.name || ""
+        if (typeof name !== "string") {
+          name = `${name}`
+        }
+        const symbol = nft.symbol || ""
+        const attributes = (nft.attributes || []).filter(Boolean)
+
+        if (s.includes("traits:")) {
+          const num = parseInt(s.split(":")[1])
+          if (num) {
+            return (
+              attributes
+                .filter(Boolean)
+                .filter((att) => att.value !== "none" && att.value !== "None" && att.value !== "NONE").length === num
+            )
+          }
+        }
+
+        if (s.includes(":")) {
+          const [trait_type, value] = s.split(":").map((item) => item.trim().toLocaleLowerCase())
+          if (trait_type && value) {
+            return (
+              attributes
+                .filter(Boolean)
+                .find((att) => att.trait_type?.toLowerCase() === trait_type)
+                ?.value?.toLowerCase() === value
+            )
+          }
+        }
+
+        const values = (attributes || []).filter(Boolean).map((att: any) => `${att.value || ""}`.toLowerCase())
+        return (
+          nft.id === search ||
+          name.toLowerCase().includes(s) ||
+          symbol.toLowerCase().includes(s) ||
+          values.some((val: any) => val.includes(s))
+        )
+      })
+    }
+
+    return filtered
   }
 
-  if (type === "name") {
-    filtered = orderBy(
-      filtered,
-      [
-        (item) => (item.content.metadata.name || "").toLowerCase(),
-        (item) => {
-          const name = (item.content.metadata.name || "").toLowerCase()
-          return /\d/.test(name) ? Number(name.replace(/^\D+/g, "")) : name
-        },
-      ],
-      [direction, direction]
-    )
-  }
-
-  if (type === "rarity") {
-    filtered = orderBy(filtered, (item) => howRare.find((r) => r.mint === item.id)?.rank, direction)
-  }
-
-  if (type === "price") {
-    filtered = orderBy(filtered, (item) => item.listing?.price, direction)
-  }
-
-  return <Context.Provider value={filtered}>{children}</Context.Provider>
+  return <Context.Provider value={{ filter }}>{children}</Context.Provider>
 }
 
 export const useFiltered = () => {

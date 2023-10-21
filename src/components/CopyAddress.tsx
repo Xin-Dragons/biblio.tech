@@ -10,14 +10,29 @@ import { useUiSettings } from "@/context/ui-settings"
 import { useUmi } from "@/context/umi"
 import { PROGRAMS } from "@/components/RuleSets/constants"
 import { unwrapOptionRecursively } from "@metaplex-foundation/umi"
+import { Variant } from "@mui/material/styles/createTypography"
 
 type CopyAddressProps = {
   children: any
   chain?: string
   linkPath?: string
+  plainLink?: boolean
+  tx?: boolean
+  link?: boolean
+  variant?: Variant
+  align?: "right" | "left"
 }
 
-export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", linkPath }) => {
+export const CopyAddress: FC<CopyAddressProps> = ({
+  children,
+  chain = "SOL",
+  linkPath,
+  plainLink,
+  tx,
+  link = true,
+  variant = "body1",
+  align = "right",
+}) => {
   const [copied, setCopied] = useState(false)
   const [nameOverride, setNameOverride] = useState<string | null>(null)
   const umi = useUmi()
@@ -29,7 +44,7 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", 
   }
 
   async function getOwner() {
-    if (chain !== "solana") {
+    if (chain !== "SOL") {
       setNameOverride(null)
       return
     }
@@ -66,18 +81,20 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", 
     }
   }, [copied])
 
+  const path = tx ? "tx" : "token"
+
   const targets = {
-    eth: {
+    ETH: {
       name: "Etherscan",
       url: "https://etherscan.io/address/",
       image: lightMode ? "etherscan-light.svg" : "/etherscan.svg",
     },
-    solana: {
+    SOL: {
       name: "Solscan",
-      url: "https://solscan.io/token/",
+      url: `https://solscan.io/${path}/`,
       image: "/solscan.png",
     },
-    matic: {
+    MATIC: {
       name: "Polygonscan",
       url: "https://polygonscan.com/address/",
       image: "/polygonscan.svg",
@@ -87,26 +104,40 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", 
   const target = targets[chain as keyof object] as any
 
   return (
-    <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-      <Tooltip title={`View on ${target.name}`}>
-        <Link href={`${target.url}${children}`} target="_blank">
-          <Link underline="hover" component="span">
-            <img src={target.image} width="15px" style={{ display: "block" }} />
+    <Stack
+      direction="row"
+      spacing={1}
+      justifyContent={align === "left" ? "flex-start" : "flex-end"}
+      alignItems="center"
+    >
+      {!plainLink && link && (
+        <Tooltip title={`View on ${target.name}`}>
+          <Link href={`${target.url}${children}`} target="_blank">
+            <Link underline="hover" component="span">
+              <img src={target.image} width="15px" style={{ display: "block" }} />
+            </Link>
           </Link>
-        </Link>
-      </Tooltip>
+        </Tooltip>
+      )}
+
       {linkPath ? (
         <Link component={NextLink} href={`/${linkPath}/${children}`}>
-          {shorten(children)}
+          <Typography variant={variant}>{tx ? `${children.subtring(0, 10)}...` : shorten(children)}</Typography>
+        </Link>
+      ) : plainLink ? (
+        <Link href={children}>
+          <Typography variant={variant}>{children.substring(0, 20)}...</Typography>
         </Link>
       ) : (
-        <Typography>{nameOverride || shorten(children)}</Typography>
+        <Typography variant={variant}>
+          {nameOverride || tx ? `${children.substring(0, 10)}...` : shorten(children)}
+        </Typography>
       )}
 
       {copied ? (
         <DoneIcon fontSize="small" color="success" />
       ) : (
-        <Tooltip title="Copy address">
+        <Tooltip title={`Copy ${tx ? "transaction" : "address"}`}>
           <ContentCopyIcon sx={{ cursor: "pointer" }} fontSize="small" onClick={copyPk} />
         </Tooltip>
       )}

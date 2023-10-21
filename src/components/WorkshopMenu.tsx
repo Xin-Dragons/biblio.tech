@@ -47,12 +47,12 @@ export function WorkshopMenu() {
       >
         <List>
           {Object.keys(routes).map((key) => {
-            const settings = routes[key]
+            const settings = routes[key as keyof typeof routes]
             return (
               <>
                 <ListSubheader>{settings.title}</ListSubheader>
-                {settings.routes.map((route) => (
-                  <ListItemButton LinkComponent={Link} href={route.href} disabled={route.href === path}>
+                {settings.routes.map((route, index) => (
+                  <ListItemButton key={index} LinkComponent={Link} href={route.href} disabled={route.href === path}>
                     {route.label}
                   </ListItemButton>
                 ))}

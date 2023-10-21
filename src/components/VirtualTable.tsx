@@ -44,6 +44,7 @@ export function VirtualTable({
     <VirtualTableContext.Provider value={{ top, setTop, header, footer }}>
       <FixedSizeList
         {...rest}
+        // @ts-ignore
         innerElementType={Inner}
         onItemsRendered={(props) => {
           const style =

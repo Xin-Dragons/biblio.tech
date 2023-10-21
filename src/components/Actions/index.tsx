@@ -14,21 +14,23 @@ import {
   Slider,
 } from "@mui/material"
 import { FC, useState } from "react"
-import { TagList } from "../TagList"
+// import { TagList } from "../TagList"
 import { Close, Label, Sell } from "@mui/icons-material"
-import { useAccess } from "../../context/access"
+// import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
-import { useNfts } from "../../context/nfts"
-import { Vault } from "../Vault"
+// import { Vault } from "../Vault"
 import { SelectControls } from "../SelectControls"
 import { BulkSend } from "../BulkSend"
 import { Burn } from "../Burn"
-import { ListDelist } from "../ListDelist"
+import { useAccess } from "@/context/access"
+import { Vault } from "../Vault"
+// import { ListDelist } from "../ListDelist"
 
 export const Actions: FC = () => {
-  const { filtered } = useNfts()
-  const { isInScope, isAdmin, isBasic } = useAccess()
-  const { selected, setSelected, allSelected, selectAll, deselectAll } = useSelection()
+  // const { isInScope, isAdmin, isBasic } = useAccess()
+  const accessLevel = useAccess()
+
+  console.log(accessLevel)
 
   const [tagMenuOpen, setTagMenuOpen] = useState<boolean>(false)
   const [actionDrawerShowing, setActionDrawerShowing] = useState(false)
@@ -43,11 +45,7 @@ export const Actions: FC = () => {
     setActionDrawerShowing(!actionDrawerShowing)
   }
 
-  function handleSelectionChange(value: number) {
-    setSelected(filtered.slice(0, value).map((item) => item.nftMint))
-  }
-
-  const isDisabled = isInScope && !isAdmin && !isBasic
+  // const isDisabled = isInScope && !isAdmin && !isBasic
 
   return (
     <Stack spacing={2}>
@@ -55,35 +53,36 @@ export const Actions: FC = () => {
         <>
           {!showMinMenu ? (
             <>
-              <SelectControls />
               <BulkSend />
               <Burn />
-              <ListDelist />
+              <Vault />
               <Tooltip title="Toggle tag menu">
                 <span>
-                  <IconButton onClick={toggleTagMenuOpen} color="secondary" disabled={!selected.length || isDisabled}>
-                    <Label />
-                  </IconButton>
+                  <Button onClick={toggleTagMenuOpen} color="secondary" variant="outlined">
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Label />
+                      <Typography textTransform="uppercase">Tags</Typography>
+                    </Stack>
+                  </Button>
                 </span>
               </Tooltip>
-              {!!selected.length && <Typography fontWeight="bold">{selected.length} Selected</Typography>}
             </>
           ) : (
-            <Button variant="outlined" onClick={toggleActionDrawer} disabled={isDisabled}>
+            <Button variant="outlined" onClick={toggleActionDrawer} disabled={false}>
               Actions
             </Button>
           )}
         </>
-        <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
+        {/* <Dialog open={tagMenuOpen} onClose={toggleTagMenuOpen}>
           <Card>
             <DialogTitle>Tag items</DialogTitle>
             <DialogContent>
               <TagList edit />
             </DialogContent>
           </Card>
-        </Dialog>
+        </Dialog> */}
 
-        <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
+        {/* <Drawer open={actionDrawerShowing} onClose={toggleActionDrawer} anchor="bottom">
           <Card sx={{ minHeight: "50vh", overflowY: "auto" }}>
             <IconButton sx={{ position: "absolute", top: "0.5em", right: "0.5em" }} onClick={toggleActionDrawer}>
               <Close />
@@ -134,7 +133,7 @@ export const Actions: FC = () => {
               </Stack>
             </CardContent>
           </Card>
-        </Drawer>
+        </Drawer> */}
       </Stack>
     </Stack>
   )

@@ -2,26 +2,28 @@ import {
   Box,
   CircularProgress,
   Container,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   Link,
   Stack,
+  Switch,
   Theme,
   Tooltip,
   Typography,
   useMediaQuery,
 } from "@mui/material"
 import { FC, ReactNode } from "react"
-import { useDatabase } from "../../context/database"
 import SyncIcon from "@mui/icons-material/Sync"
-import { AccountBalanceWallet } from "@mui/icons-material"
-import { useNfts } from "../../context/nfts.tsx"
+import { AccountBalanceWallet, Fullscreen, SelfImprovement } from "@mui/icons-material"
 import { Time } from "./Time"
 import { ScrollingBrice } from "./ScrollingBrice"
 import { TPS } from "./Tps"
 import { Balance } from "./Balance"
 import { PortfolioValue } from "./PortfolioValue"
 import { useProgress } from "@/context/progress"
+import { Pulse } from "../Pulse"
+import { useUiSettings } from "@/context/ui-settings"
 
 const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean; last?: boolean }> = ({
   children,
@@ -46,8 +48,9 @@ const FooterSection: FC<{ children: ReactNode; first?: boolean; right?: boolean;
 }
 
 export const Footer: FC = () => {
-  const { syncing, sync } = useDatabase()
+  // const { syncing, sync } = useDatabase()
   const attachWeb = useMediaQuery((theme: Theme) => theme.breakpoints.down("xl"))
+  const { zenMode, setZenMode, setFullScreen } = useUiSettings()
   const { progress } = useProgress()
   // const { filtered, nfts } = useNfts()
   // const { db } = useDatabase()
@@ -69,13 +72,6 @@ export const Footer: FC = () => {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Link href="https://dandies.xyz" target="_blank" rel="noreferrer">
                     <img width="24px" src="/logo.png" style={{ display: "block" }} />
-                  </Link>
-                </Stack>
-              </FooterSection>
-              <FooterSection>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Link href="https://hellomoon.io/developers" target="_blank" rel="noreferrer">
-                    <img width="20px" src="/hello-moon.svg" style={{ display: "block" }} />
                   </Link>
                 </Stack>
               </FooterSection>
@@ -119,18 +115,7 @@ export const Footer: FC = () => {
                   </Link>
                 </Stack>
               </FooterSection>
-              <FooterSection>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  {!isSmall && (
-                    <Typography variant="body2" fontWeight="bold">
-                      Powered by
-                    </Typography>
-                  )}
-                  <Link href="https://hellomoon.io/developers" target="_blank" rel="noreferrer">
-                    <img width="20px" src="/hello-moon.svg" style={{ display: "block" }} />
-                  </Link>
-                </Stack>
-              </FooterSection>
+
               {/* {attachWeb && (
                 // <FooterSection>
                 //   <PortfolioValue />
@@ -151,6 +136,21 @@ export const Footer: FC = () => {
                 {filtered.length} {isSmall ? "/" : "of"} {nfts.length}
               </Typography>
             </FooterSection> */}
+            <FooterSection right>
+              <IconButton size="small" onClick={() => setFullScreen(true)}>
+                <Fullscreen />
+              </IconButton>
+            </FooterSection>
+            <FooterSection right>
+              <Tooltip title="Zen mode">
+                <FormControlLabel
+                  control={<Switch size="small" checked={zenMode} onChange={(e) => setZenMode(e.target.checked)} />}
+                  label={<SelfImprovement sx={{ display: "block" }} />}
+                  sx={{ marginRight: 0, marginLeft: 0.5 }}
+                />
+              </Tooltip>
+            </FooterSection>
+
             {!hideBalance && !hideWeb && (
               <FooterSection right>
                 <Stack
@@ -167,7 +167,8 @@ export const Footer: FC = () => {
             )}
 
             <FooterSection right last>
-              <Tooltip title="Refetch data">
+              <Pulse />
+              {/* <Tooltip title="Refetch data">
                 {syncing ? (
                   <CircularProgress size="1rem" />
                 ) : (
@@ -175,7 +176,7 @@ export const Footer: FC = () => {
                     <SyncIcon sx={{ cursor: "pointer" }} />
                   </IconButton>
                 )}
-              </Tooltip>
+              </Tooltip> */}
             </FooterSection>
           </Stack>
         </Stack>

@@ -15,6 +15,7 @@ export const Sidebar: FC<SidebarProps> = ({ children }) => {
         width: "220px",
         borderRight: 1,
         borderColor: "divider",
+        backgroundColor: "background.default",
         // backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "bottom center",

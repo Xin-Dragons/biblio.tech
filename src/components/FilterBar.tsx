@@ -2,10 +2,38 @@
 import { Search } from "@/components/Search"
 import { Sort } from "@/components/Sort"
 import { useRarity } from "@/context/rarity"
-import { Box, Stack } from "@mui/material"
+import { Box, FormControlLabel, Stack, Switch } from "@mui/material"
 import { flatten } from "lodash"
+import { SizeSlider } from "./SizeSlider"
+import { SelfImprovement } from "@mui/icons-material"
 
 const SORT_OPTIONS = {
+  lastSale: [
+    {
+      label: "Last sale ⬇",
+      value: "lastSale.asc",
+    },
+    {
+      label: "Last sale ⬆",
+      value: "lastSale.desc",
+    },
+  ],
+  listed: [
+    {
+      label: "Listed ⬇",
+      value: "listed.desc",
+    },
+  ],
+  price: [
+    {
+      label: "Price ⬇",
+      value: "price.asc",
+    },
+    {
+      label: "Price ⬆",
+      value: "price.desc",
+    },
+  ],
   name: [
     {
       label: "Name ⬇",
@@ -19,21 +47,11 @@ const SORT_OPTIONS = {
   rarity: [
     {
       label: "Rarity ⬇",
-      value: "rarity.asc",
+      value: "rankHrtt.asc",
     },
     {
       label: "Rarity ⬆",
-      value: "rarity.desc",
-    },
-  ],
-  price: [
-    {
-      label: "Price ⬇",
-      value: "price.asc",
-    },
-    {
-      label: "Price ⬆",
-      value: "price.desc",
+      value: "rankHrtt.desc",
     },
   ],
   blocktime: [
@@ -58,12 +76,22 @@ const SORT_OPTIONS = {
   ],
   value: [
     {
-      label: "Value ⬇",
+      label: "Est value ⬇",
       value: "value.desc",
     },
     {
-      label: "Value ⬆",
+      label: "Est value ⬆",
       value: "value.asc",
+    },
+  ],
+  floor: [
+    {
+      label: "Floor price ⬇",
+      value: "floor.desc",
+    },
+    {
+      label: "Floor price ⬆",
+      value: "floor.asc",
     },
   ],
 }
@@ -75,6 +103,7 @@ export function FilterBar({ sortOptions }: { sortOptions: string[] }) {
       <Box flexGrow={1}>
         <Search fullWidth />
       </Box>
+      <SizeSlider />
       <Sort options={options} />
     </Stack>
   )

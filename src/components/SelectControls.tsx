@@ -1,15 +1,10 @@
-import { useNfts } from "@/context/nfts"
 import { useSelection } from "@/context/selection"
-import { Box, Button, FormControlLabel, IconButton, Slider, Stack, Switch, TextField } from "@mui/material"
-import { uniq } from "lodash"
-import { useDigitalAssets } from "../context/digital-assets"
-import { useListings } from "@/context/listings"
-import { useState } from "react"
+import { Box, Button, IconButton, Slider, Stack, TextField } from "@mui/material"
 import { AdsClick } from "@mui/icons-material"
 import { useUiSettings } from "@/context/ui-settings"
 
 export function SelectControls({ max, items }: { max?: number; items: any[] }) {
-  const { selected, selectAll, deselectAll, setSelected } = useSelection()
+  const { selected, deselectAll, setSelected } = useSelection()
   const { easySelect, setEasySelect } = useUiSettings()
 
   function handleSelectionChange(value: number) {
@@ -20,7 +15,7 @@ export function SelectControls({ max, items }: { max?: number; items: any[] }) {
     if (max) {
       handleSelectionChange(Math.min(max, items.length))
     } else {
-      selectAll()
+      handleSelectionChange(items.length)
     }
   }
 

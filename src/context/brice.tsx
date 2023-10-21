@@ -52,8 +52,13 @@ export const BriceContext = createContext({
     gbp: 0,
     eur: 0,
   },
+  apecoin: {
+    usd: 0,
+    gbp: 0,
+    eur: 0,
+  },
 })
-const BRICE_API = `https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum&vs_currencies=${CURRENCIES.map(
+const BRICE_API = `https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,apecoin&vs_currencies=${CURRENCIES.map(
   (c) => c.code
 ).join(",")}`
 
@@ -65,6 +70,11 @@ export const BriceProvider: FC<{ children: ReactNode }> = ({ children }) => {
       eur: 0,
     },
     ethereum: {
+      usd: 0,
+      gbp: 0,
+      eur: 0,
+    },
+    apecoin: {
       usd: 0,
       gbp: 0,
       eur: 0,

@@ -2,6 +2,8 @@ import { JsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import Dexie, { Table } from "dexie"
 import { Currency } from "./context/brice"
 import { LoanType } from "./context/ui-settings"
+import { DigitalAsset } from "./app/models/DigitalAsset"
+import { Collection } from "./app/models/Collection"
 
 export interface NftMetadata {
   name?: string
@@ -40,17 +42,6 @@ export interface Nft {
   price?: number
   value?: number
   tokenType?: string
-}
-
-export interface Collection {
-  id: string
-  chain: "eth" | "solana"
-  helloMoonCollectionId?: string
-  collectionId?: string
-  collectionName: string
-  image?: string
-  floorPrice: number
-  meIdentifier?: string
 }
 
 export interface Tag {
@@ -146,12 +137,6 @@ export interface SharkyOrderBooks {
   enabled: boolean
 }
 
-export interface DigitalAsset {
-  id: string
-  collectionId: string
-  owner: string
-}
-
 export class DB extends Dexie {
   nfts!: Table<Nft>
   collections!: Table<Collection>
@@ -166,7 +151,7 @@ export class DB extends Dexie {
 
   constructor() {
     super("biblio.tech")
-    this.version(4).stores({
+    this.version(5).stores({
       nfts: "nftMint,collectionId,owner",
       collections: "id,helloMoonCollectionId,collectionId,name",
       rarity: "nftMint,howRare,moonRank",

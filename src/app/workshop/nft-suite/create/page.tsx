@@ -57,16 +57,7 @@ import { chunk, isEqual } from "lodash"
 import { getAnonUmi } from "@/helpers/umi"
 import { FEES_WALLET, METAPLEX_RULE_SET } from "@/constants"
 import Link from "next/link"
-
-export const emptyAttribute = {
-  trait_type: "",
-  value: "",
-}
-
-export const emptyCreator = {
-  address: "",
-  share: 0,
-}
+import { emptyAttribute, emptyCreator } from "./constants"
 
 export default function CreateNft() {
   const { collections, loading: nftsLoading, dandies, refresh } = useNfts()

@@ -15,7 +15,6 @@ import {
   Tooltip,
 } from "@mui/material"
 import { FC, FormEvent, useEffect, useMemo, useState } from "react"
-import { useWallets } from "../../context/wallets"
 import { PublicKey } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
 import { getAddressType, isValidPublicKey, shorten } from "../../helpers/utils"
@@ -29,7 +28,9 @@ import { CollectionNameRequest, CollectionName } from "@hellomoon/api"
 import { hmClient } from "../../helpers/hello-moon"
 import { ethAlchemy } from "@/helpers/alchemy"
 import { NftContract } from "alchemy-sdk"
-import { levDist, levenshteinDistance } from "@/helpers/lev"
+import { levenshteinDistance } from "@/helpers/lev"
+import { collectionSearch } from "@/app/helpers/supabase"
+import { Collection } from "@/types/database"
 
 const filter = createFilterOptions<Wallet>({ stringify: (opt) => `${opt.nickname}${opt.publicKey}` })
 
@@ -50,25 +51,25 @@ export function AddressSelector({
 }) {
   // return null
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
-  const {
-    wallets: addressBookWallets,
-    addWallet,
-    deleteWallet,
-  }: { wallets: Wallet[]; addWallet: Function; deleteWallet: Function } = useWallets()
+  // const {
+  //   wallets: addressBookWallets,
+  //   addWallet,
+  //   deleteWallet,
+  // }: { wallets: Wallet[]; addWallet: Function; deleteWallet: Function } = useWallets()
   const { data: session } = useSession()
 
-  const linkedWallets =
-    session?.user?.wallets?.map((w) => {
-      const addressBookWallet = addressBookWallets.find((a) => a.publicKey === w.public_key)
-      return {
-        publicKey: w.public_key,
-        chain: w.chain,
-        nickname: addressBookWallet?.nickname || null,
-        added: Date.parse(w.created_at),
-      } as Wallet
-    }) || []
+  // const linkedWallets =
+  //   session?.user?.wallets?.map((w) => {
+  //     const addressBookWallet = addressBookWallets.find((a) => a.publicKey === w.public_key)
+  //     return {
+  //       publicKey: w.public_key,
+  //       chain: w.chain,
+  //       nickname: addressBookWallet?.nickname || null,
+  //       added: Date.parse(w.created_at),
+  //     } as Wallet
+  //   }) || []
 
-  const wallets = addressBookWallets
+  // const wallets = addressBookWallets
 
   // const wallets = orderBy(
   //   uniqBy([...addressBookWallets, ...linkedWallets], (item) => item.publicKey),
@@ -76,8 +77,9 @@ export function AddressSelector({
   //   "desc"
   // )
   const [options, setOptions] = useState<any[]>([])
-  const [solanaCollections, setSolanaCollections] = useState<CollectionName[]>([])
-  const [ethCollections, setEthCollections] = useState<NftContract[]>([])
+  const [solanaCollections, setSolanaCollections] = useState<Pick<Collection, "slug" | "name" | "tensor_verified">[]>(
+    []
+  )
   const [input, setInput] = useState("")
 
   const [open, toggleOpen] = useState(false)
@@ -86,47 +88,31 @@ export function AddressSelector({
     nickname: "",
   })
 
-  useEffect(() => {}, [addressBookWallets, linkedWallets])
+  // useEffect(() => {}, [addressBookWallets, linkedWallets])
 
   useEffect(() => {
-    setOptions(
-      orderBy(
-        [
-          ...wallets,
-          ...solanaCollections.map((c: CollectionName) => {
-            return {
-              publicKey: c.helloMoonCollectionId,
-              nickname: c.collectionName,
-              chain: "SOL collection",
-              isCollection: true,
-            }
-          }),
-          ...ethCollections.map((c) => {
-            return {
-              publicKey: c.address,
-              nickname: c.name || "Unknown collection",
-              chain: "ETH collection",
-              isCollection: true,
-            }
-          }),
-        ],
-        (item) => levenshteinDistance(item.nickname || "", input)
-      )
-    )
-  }, [wallets, solanaCollections, input])
+    setOptions([
+      // ...wallets,
+      ...solanaCollections.map((c) => {
+        return {
+          publicKey: c.slug,
+          nickname: c.name,
+          chain: "SOL collection",
+          isCollection: true,
+        }
+      }),
+    ])
+  }, [solanaCollections, input])
 
   async function lookupCollections(input: string) {
-    const result = await hmClient.send(
-      new CollectionNameRequest({
-        collectionName: input,
-      })
-    )
+    const collections = await collectionSearch(input)
+    // const result = await hmClient.send(
+    //   new CollectionNameRequest({
+    //     collectionName: input,
+    //   })
+    // )
 
-    setSolanaCollections(result.data)
-
-    const ethResult = await ethAlchemy.nft.searchContractMetadata(input)
-
-    setEthCollections(ethResult)
+    setSolanaCollections(collections)
 
     // setWallets(result.data)
   }
@@ -176,10 +162,10 @@ export function AddressSelector({
       if (publicKeyError) {
         throw new Error("Invalid public key")
       }
-      if (wallets.map((w) => w.publicKey).includes(dialogValue.publicKey)) {
-        throw new Error("Public key already exists")
-      }
-      await addWallet(dialogValue.publicKey, dialogValue.nickname)
+      // if (wallets.map((w) => w.publicKey).includes(dialogValue.publicKey)) {
+      //   throw new Error("Public key already exists")
+      // }
+      // await addWallet(dialogValue.publicKey, dialogValue.nickname)
       setWallet({
         publicKey: dialogValue.publicKey,
         nickname: dialogValue.nickname,
@@ -198,7 +184,7 @@ export function AddressSelector({
         throw new Error("Cannot remove Address Book items, use the Address Book section in the Profile menu")
       }
 
-      await deleteWallet(wallet.publicKey)
+      // await deleteWallet(wallet.publicKey)
     } catch (err: any) {
       toast.error(err.message || "Error removing item from history")
     }

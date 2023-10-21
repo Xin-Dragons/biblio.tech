@@ -21,7 +21,7 @@ export function ActivityLog({ activity, Row }: { activity: any[]; Row: FC<any> }
   }, [activity])
 
   return (
-    <Box height="100%" width="100%">
+    <Box height="100%" width="100%" position="relative">
       {!!activity.length && (
         <Table ref={ref} style={{ width: "100%", position: "absolute", visibility: "hidden" }}>
           <TableBody>

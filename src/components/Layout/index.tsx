@@ -26,7 +26,15 @@ export const Layout: FC<LayoutProps> = ({ children, title, actions, allowDevnet 
       <Toaster />
       <Stack height="100vh" width="100vw">
         <AppBar showMenu={!hideMenu} title={title} allowDevnet={allowDevnet} />
-        <Box flexGrow={1} sx={{ overflow: "hidden", width: "100vw" }}>
+        <Box
+          flexGrow={1}
+          sx={{
+            overflow: "hidden",
+            width: "100vw",
+            backgroundImage: "url(/tapestry-dark.svg)",
+            backgroundSize: "100px",
+          }}
+        >
           {children}
         </Box>
         <Footer />

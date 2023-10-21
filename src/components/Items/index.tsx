@@ -1,10 +1,11 @@
 "use client"
 import { Box, Button, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "@/context/ui-settings"
-import { Item } from "../Item"
 import { ElementType, FC, useEffect, useLayoutEffect, useRef, useState } from "react"
 import Masonry from "@mui/lab/Masonry"
-import { useDatabase } from "@/context/database"
+// import { useDatabase } from "@/context/database"
+import fscreen from "fscreen"
+
 import { sample } from "lodash"
 import { CSS } from "@dnd-kit/utilities"
 import {
@@ -29,19 +30,16 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { useWidth } from "@/hooks/use-width"
-import { WalletSearch } from "../WalletSearch"
-import Link from "next/link"
-import { useNfts } from "@/context/nfts"
 import { Nft } from "@/db"
-import { CollectionItem } from "@/app/bags/collection/page"
 import { useFilters } from "@/context/filters"
 
 interface ItemsProps {
-  items: Nft[] | CollectionItem[]
-  Component?: FC<any>
+  items: any[]
+  Component: FC<any>
   updateOrder?: Function
   sortable?: boolean
   squareChildren?: boolean
+  onEndReached?: Function
 }
 
 const WaitingMessage: FC = () => {
@@ -95,7 +93,7 @@ const SortableItem: FC<SortableItemProps> = (props) => {
     opacity: isDragging ? 0 : 1,
   }
 
-  const Child = props.Component || Item
+  const Child = props.Component
 
   const DragHandle = (
     <DragHandleIcon
@@ -133,7 +131,7 @@ const Cell: FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
   const { cards, columnCount, Component } = data
   const singleColumnIndex = columnIndex + rowIndex * columnCount
   const card = cards[singleColumnIndex]
-  const Child = Component || Item
+  const Child = Component
 
   return (
     <div style={style}>{card && <Child item={card} id={card.nftMint} index={card.nftMint} key={card.nftMint} />}</div>
@@ -172,21 +170,31 @@ type CardsProps = {
   cards: any[]
   Component: ElementType
   squareChildren?: boolean
+  onEndReached?: Function
 }
 
-const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
-  const { layoutSize, showInfo } = useUiSettings()
+const Cards: FC<CardsProps> = ({ cards, Component, onEndReached }) => {
+  const { layoutSize, zenMode, fullScreen } = useUiSettings()
   const [cardHeight, setCardHeight] = useState(0)
   const [cardWidth, setCardWidth] = useState(0)
   const elementRef = useRef<HTMLDivElement | null>(null)
+  const ref = useRef()
   const pageWidth = useWidth()
+
+  useEffect(() => {
+    if (fullScreen && ref.current) {
+      fscreen.requestFullscreen(ref.current)
+    } else {
+      fscreen.exitFullscreen()
+    }
+  }, [fullScreen])
 
   useLayoutEffect(() => {
     setCardHeight(elementRef.current?.offsetHeight || 0)
-  }, [cardWidth])
+  }, [cardWidth, zenMode])
 
   return (
-    <Box sx={{ height: "100%" }}>
+    <Box sx={{ height: "100%", "&:fullscreen": { padding: 2 } }} ref={ref}>
       <div ref={elementRef} style={{ width: cardWidth, visibility: "hidden", position: "absolute" }}>
         <Component item={cards[0]} />
       </div>
@@ -210,8 +218,18 @@ const Cards: FC<CardsProps> = ({ cards, Component, squareChildren }) => {
                 rowHeight={cardHeight!}
                 itemData={{ cards, columnCount, Component }}
                 overscanRowCount={3}
+                onScroll={(props) => {
+                  if (!onEndReached || !props.scrollTop) {
+                    return
+                  }
+
+                  const endReached = (props.scrollTop + height) / (rowCount * cardHeight) >= 1
+                  if (endReached) {
+                    onEndReached()
+                  }
+                }}
               >
-                {Cell}
+                {Cell as any}
               </FixedSizeGrid>
             )
           }}
@@ -227,11 +245,11 @@ export const Items: FC<ItemsProps> = ({
   sortable = false,
   updateOrder,
   squareChildren,
+  onEndReached,
 }) => {
   const [activeId, setActiveId] = useState(null)
   const { layoutSize, sort } = useUiSettings()
-  const { syncing } = useDatabase()
-  const { loading } = useNfts()
+  // const { syncing } = useDatabase()
   const [items, setItems] = useState(initialItems)
   const width = useWidth()
   const { filtersActive, clearFilters, setSearch } = useFilters()
@@ -282,7 +300,7 @@ export const Items: FC<ItemsProps> = ({
     }
   }
 
-  const Child = Component || Item
+  const Child = Component
 
   if (layoutSize === "collage") {
     const masonrySizes = {
@@ -335,7 +353,7 @@ export const Items: FC<ItemsProps> = ({
     setSearch("")
   }
 
-  return !loading && items.length ? (
+  return items.length ? (
     <Box
       sx={{
         overflowY: "hidden",
@@ -351,7 +369,7 @@ export const Items: FC<ItemsProps> = ({
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
         >
-          <Cards cards={items} Component={SortableItem} squareChildren={squareChildren} />
+          <Cards cards={items} Component={SortableItem} squareChildren={squareChildren} onEndReached={onEndReached} />
           <DragOverlay>
             {activeId ? (
               <Child
@@ -371,7 +389,7 @@ export const Items: FC<ItemsProps> = ({
           </DragOverlay>
         </DndContext>
       ) : (
-        <Cards cards={items} Component={Component as any} squareChildren={squareChildren} />
+        <Cards cards={items} Component={Component as any} squareChildren={squareChildren} onEndReached={onEndReached} />
       )}
     </Box>
   ) : (
@@ -386,25 +404,7 @@ export const Items: FC<ItemsProps> = ({
       }}
     >
       <Stack spacing={2} width="100%" justifyContent="flex-start" alignItems="center">
-        {syncing ? (
-          <WaitingMessage />
-        ) : (
-          <Stack spacing={2} className="no-items-wrap">
-            <Typography variant="h5" textAlign="center" fontWeight="normal">
-              {"Nothing here yet..."}
-            </Typography>
-            <>
-              {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
-
-              <Link href={`/`} passHref>
-                <Button>View all collections</Button>
-              </Link>
-            </>
-
-            <Typography textAlign="center">or</Typography>
-            <WalletSearch />
-          </Stack>
-        )}
+        <WaitingMessage />
       </Stack>
     </Box>
   )

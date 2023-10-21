@@ -1,5 +1,3 @@
-import { DigitalAssetView } from "./DigitalAsset"
+import Overview from "./overview/page"
 
-export default async function DigitalAssetPage({ params }: { params: Record<string, string> }) {
-  return <DigitalAssetView mintAddress={params.mintAddress} />
-}
+export default Overview

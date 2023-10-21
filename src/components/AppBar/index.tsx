@@ -31,7 +31,7 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
           justifyContent="space-between"
           padding={0}
           alignItems="center"
-          spacing={10}
+          spacing={2}
           overflow="hidden"
           maxWidth="100%"
         >
@@ -50,13 +50,23 @@ export const AppBar: FC<AppBarProps> = ({ showMenu, toggleMenu }) => {
                 <Logo />
               </SvgIcon>
             </Link>
-            <BarterMenu />
-            <WalletManagerMenu />
-            <WorkshopMenu />
+            {/* <BarterMenu /> */}
           </Stack>
-          <Box sx={{ flexGrow: 1 }}>
+          <Box sx={{ flexGrow: 1, paddingX: 10 }}>
             <WalletSearch />
           </Box>
+
+          <WorkshopMenu />
+
+          <WalletManagerMenu />
+
+          <Button LinkComponent={Link} href="/about" sx={{ color: "white" }}>
+            About
+          </Button>
+
+          <Button LinkComponent={Link} href="/about" sx={{ color: "white" }}>
+            Help
+          </Button>
 
           {/* <Box sx={{ flexGrow: breakLine ? 0 : 1 }}>
             <Typography variant="h5" fontWeight="bold" textAlign="center" textTransform="uppercase">

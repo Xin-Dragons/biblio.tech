@@ -27,6 +27,7 @@ export const Search: FC<SearchProps> = ({ large, fullWidth }) => {
   return (
     <TextField
       sx={{
+        backgroundColor: "background.default",
         minWidth: "300px",
         "& .MuiFormLabel-root": {
           display: "flex",

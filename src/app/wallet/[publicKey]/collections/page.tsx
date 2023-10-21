@@ -1,22 +1,16 @@
-import { DigitalAsset } from "@/components/DigitalAsset"
-import { FilterBar } from "@/components/FilterBar"
+"use client"
+import { Collection } from "@/components/Collection"
 import { Items } from "@/components/Items"
-import { useDigitalAssets } from "@/context/digital-assets"
-import { SortProvider } from "@/context/sort"
-import { Stack } from "@mui/material"
-import { useParams } from "next/navigation"
-import { Client } from "./client"
-import { CollectionsProvider } from "@/context/collections"
+import { useFiltered } from "@/context/filtered"
+import { useOwnedAssets } from "@/context/owned-assets"
+import { useSort } from "@/context/sort"
 
-export default function Collections() {
-  return (
-    <Stack spacing={2} height="100%" width="100%">
-      <SortProvider defaultSort="value.desc">
-        <CollectionsProvider>
-          <FilterBar sortOptions={["value", "amount", "name"]} />
-          <Client />
-        </CollectionsProvider>
-      </SortProvider>
-    </Stack>
-  )
+export default function Collections({ edit }: { edit: boolean }) {
+  const { collections } = useOwnedAssets()
+  const { filter } = useFiltered()
+  const { doSort } = useSort()
+
+  const filtered = doSort(filter(collections))
+
+  return <Items items={filtered} Component={(props) => <Collection {...props} edit={edit} />} />
 }

@@ -1,10 +1,12 @@
 "use client"
-import { createContext, FC, useContext, useState } from "react"
-import { useDatabase } from "./database"
+import { createContext, FC, useContext, useEffect, useState } from "react"
+// import { useDatabase } from "./database"
 import { useLiveQuery } from "dexie-react-hooks"
 import { noop } from "lodash"
 import type { Currency } from "./brice"
 import { useParams } from "next/navigation"
+import db from "@/db"
+import fscreen from "fscreen"
 
 export type LayoutSize = "small" | "medium" | "large" | "collage"
 export type LoanType = "lent" | "borrowed"
@@ -30,6 +32,12 @@ type UiSettingsContextProps = {
   loanType: LoanType
   easySelect: boolean
   setEasySelect: Function
+  zenMode: boolean
+  setZenMode: Function
+  includeUnverified: boolean
+  setIncludeUnverified: Function
+  fullScreen: boolean
+  setFullScreen: Function
 }
 
 const initialProps: UiSettingsContextProps = {
@@ -53,6 +61,12 @@ const initialProps: UiSettingsContextProps = {
   loanType: "borrowed",
   easySelect: false,
   setEasySelect: noop,
+  zenMode: false,
+  setZenMode: noop,
+  includeUnverified: false,
+  setIncludeUnverified: noop,
+  fullScreen: false,
+  setFullScreen: noop,
 }
 
 const UiSettingsContext = createContext<UiSettingsContextProps>(initialProps)
@@ -64,9 +78,8 @@ type UiSettingsProviderProps = {
 export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) => {
   const [profileModalShowing, setProfileModalShowing] = useState(false)
   const [easySelect, setEasySelect] = useState(false)
+  const [fullScreen, setFullScreen] = useState(false)
   const { filter, collectionId, tag } = useParams()
-
-  const { db } = useDatabase()
 
   const uiSettings = useLiveQuery(
     () => {
@@ -119,6 +132,8 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
       lightMode: false,
       preferredCurrency: "usd",
       loanType: "borrowed",
+      zenMode: false,
+      setIncludeUnverified: false,
     }
   ) as {
     showInfo: boolean
@@ -131,7 +146,23 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     lightMode: boolean
     preferredCurrency: Currency
     loanType: LoanType
+    zenMode: boolean
+    includeUnverified: boolean
   }
+
+  useEffect(() => {
+    if (fscreen.fullscreenEnabled) {
+      fscreen.addEventListener("fullscreenchange", handler, false)
+    }
+
+    function handler() {
+      if (fscreen.fullscreenElement !== null) {
+        setFullScreen(true)
+      } else {
+        setFullScreen(false)
+      }
+    }
+  }, [])
 
   async function setSort(sort: string) {
     await updatePreferences("sort", sort)
@@ -143,6 +174,14 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
 
   async function setShowInfo(show: boolean) {
     await updatePreferences("showInfo", show)
+  }
+
+  async function setZenMode(zenMode: boolean) {
+    await updatePreferences("zenMode", zenMode)
+  }
+
+  async function setGroupByCollection(groupByCollection: boolean) {
+    await updatePreferences("groupByCollection", groupByCollection)
   }
 
   async function setPayRoyalties(pay: boolean) {
@@ -165,11 +204,17 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
     await updatePreferences("loanType", loanType, true)
   }
 
+  async function setIncludeUnverified(includeUnverified: boolean) {
+    await updatePreferences("includeUnverified", includeUnverified, true)
+  }
+
   return (
     <UiSettingsContext.Provider
       value={{
         layoutSize: preferences.layoutSize,
         setLayoutSize,
+        groupByCollection: preferences.groupByCollection,
+        setGroupByCollection,
         showInfo: preferences.showInfo,
         setShowInfo,
         sort: preferences.sort,
@@ -188,6 +233,12 @@ export const UiSettingsProvider: FC<UiSettingsProviderProps> = ({ children }) =>
         setPreferredCurrency,
         easySelect,
         setEasySelect,
+        zenMode: preferences.zenMode,
+        includeUnverified: preferences.includeUnverified,
+        setIncludeUnverified,
+        setZenMode,
+        fullScreen,
+        setFullScreen,
       }}
     >
       {children}

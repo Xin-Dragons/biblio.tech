@@ -8,14 +8,14 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await client.query({
       query: gql`
-        query TswapBuySingleListingTx(
+        query TcompBuyTx(
           $buyer: String!
           $maxPrice: Decimal!
           $mint: String!
           $owner: String!
           $optionalRoyaltyPct: Int
         ) {
-          tswapBuySingleListingTx(
+          tcompBuyTx(
             buyer: $buyer
             maxPrice: $maxPrice
             mint: $mint
@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
             optionalRoyaltyPct: $optionalRoyaltyPct
           ) {
             txs {
-              lastValidBlockHeight
               tx
-              txV0 # If this is present, use this!
+              txV0 # use this if present!
+              lastValidBlockHeight
             }
           }
         }
@@ -39,8 +39,11 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json(resp.data.tswapBuySingleListingTx)
+    return NextResponse.json(resp.data.tcompBuyTx)
   } catch (err: any) {
+    return new NextResponse("Error getting tensor buy tx", {
+      status: 500,
+    })
     // if (err.graphQLErrors && err.graphQLErrors.length) {
     //   console.error(err.graphQLErrors[0].message)
     //   return res.status(500).send(err.graphQLErrors[0].message)

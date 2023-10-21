@@ -1,7 +1,6 @@
 "use client"
 import { ThemeProvider as BaseThemeProvider, CssBaseline, Theme, createTheme } from "@mui/material"
 import { FC, ReactNode, createContext, useContext, useEffect, useState } from "react"
-import { useTags } from "./tags"
 import { merge } from "lodash"
 import { useUiSettings } from "./ui-settings"
 import { Lato } from "next/font/google"
@@ -28,6 +27,7 @@ const getTheme = (mode: "light" | "dark") => {
       },
       gold: {
         main: "#faaf00",
+        // main: "#F8D744",
       },
     },
     typography: {
@@ -77,25 +77,25 @@ type ThemeProviderProps = {
 export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
   const { lightMode } = useUiSettings()
   const [theme, setTheme] = useState<Theme>(createTheme(getTheme("dark") as any))
-  const { tags } = useTags()
+  // const { tags } = useTags()
 
-  useEffect(() => {
-    const colors = tags
-      .filter((t) => t.color)
-      .reduce((all, item) => {
-        return {
-          ...all,
-          [item.id]: palette.augmentColor({
-            color: {
-              main: item.color as string,
-            },
-          }),
-        }
-      }, {})
-    const theme = createTheme(merge({}, getTheme(lightMode ? "light" : "dark"), { palette: colors }) as any)
+  // useEffect(() => {
+  //   const colors = tags
+  //     .filter((t: any) => t.color)
+  //     .reduce((all: any, item: any) => {
+  //       return {
+  //         ...all,
+  //         [item.id]: palette.augmentColor({
+  //           color: {
+  //             main: item.color as string,
+  //           },
+  //         }),
+  //       }
+  //     }, {})
+  //   const theme = createTheme(merge({}, getTheme(lightMode ? "light" : "dark"), { palette: colors }) as any)
 
-    setTheme(theme)
-  }, [tags, lightMode])
+  //   setTheme(theme)
+  // }, [tags, lightMode])
 
   return (
     <ThemeContext.Provider value={theme}>

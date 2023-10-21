@@ -88,13 +88,14 @@ async function getDigitalAssets(collectionId: string, gradual?: boolean) {
 }
 
 self.addEventListener("message", async (event) => {
+  console.log("GOT MSG")
+  const { collectionId, wallet, ids, gradual } = event.data
   try {
-    const { collectionId, wallet, ids, gradual } = event.data
+    console.log(event.data)
 
     if (ids) {
-      gradual
-        ? await fetchResultsGradually(fetchAllDigitalAssetsByIds, ids)
-        : await fetchAllResults(fetchAllDigitalAssetsByIds, ids)
+      const digitalAssets = await fetchAllDigitalAssetsByIds(ids)
+      self.postMessage({ digitalAssets })
     } else if (wallet && !collectionId) {
       gradual
         ? await fetchResultsGradually(fetchDigitalAssetsByOwner, wallet)
@@ -103,7 +104,7 @@ self.addEventListener("message", async (event) => {
       await getDigitalAssets(collectionId, gradual)
     }
   } catch (err: any) {
-    console.log("WELLL THIS IS FUCKED", err)
+    console.log("ERRORR", { err, collectionId, wallet, ids })
     self.postMessage({ ok: false })
   }
 })

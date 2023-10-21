@@ -10,7 +10,7 @@ import { AddressSelector } from "./AddressSelector"
 import { useAlchemy } from "../context/alchemy"
 import { isDigitalAsset, isValidPublicKey, isWallet } from "../helpers/utils"
 import { toast } from "react-hot-toast"
-import { useWallets } from "../context/wallets"
+// import { useWallets } from "../context/wallets"
 import { Wallet } from "../db"
 import { useUmi } from "../context/umi"
 import { useRouter } from "next/navigation"
@@ -36,7 +36,7 @@ type WalletSearchProps = {
 export function WalletSearch({ large }: { large?: boolean }) {
   const alchemy = useAlchemy()
   const [wallet, setWallet] = useState<Wallet | null>(null)
-  const { addWallet } = useWallets()
+  // const { addWallet } = useWallets()s
   const router = useRouter()
   const umi = useUmi()
 

@@ -25,7 +25,7 @@ export function SecureDelist({ onDismiss }: { onDismiss: Function }) {
 
   async function onDelist() {
     onDismiss()
-    await delist(selected, delistTo)
+    // await delist(selected, delistTo)
   }
 
   return (

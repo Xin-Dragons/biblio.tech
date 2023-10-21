@@ -48,9 +48,7 @@ import { useMetaplex } from "../../context/metaplex"
 import { useUmi } from "../../context/umi"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useTransactionStatus } from "../../context/transactions"
-import { useDatabase } from "../../context/database"
 import { useSelection } from "../../context/selection"
-import { useNfts } from "../../context/nfts.tsx"
 import { useSession } from "next-auth/react"
 import { shorten, sleep, waitForWalletChange } from "../../helpers/utils"
 import { PublicKey } from "@solana/web3.js"
@@ -60,36 +58,41 @@ import { toast } from "react-hot-toast"
 import VaultIcon from "./vault.svg"
 import { closeToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { useAccess } from "../../context/access"
+import { DigitalAsset, Status } from "@/app/models/DigitalAsset"
+import { useOwnedAssets } from "@/context/owned-assets"
+import { AccessLevel, FEES } from "@/constants"
 
 export function Vault({ small }: { small?: boolean }) {
   const [vaultShowing, setVaultShowing] = useState(false)
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [transferTo, setTransferTo] = useState<string | null>(null)
-  const { isAdmin } = useAccess()
+  const { accessLevel } = useAccess()
+  const { digitalAssets } = useOwnedAssets()
   const { setBypassWallet } = useWalletBypass()
   const [type, setType] = useState("secure")
-  const { selected, selectedItems, frozenSelected } = useSelection()
+  const { selected, setSelected } = useSelection()
+  const wallets = []
 
-  const { nfts } = useNfts()
   const metaplex = useMetaplex()
   const umi = useUmi()
   const wallet = useWallet()
   const { connection } = useConnection()
   const { data: session } = useSession()
   const { sendSignedTransactions } = useTransactionStatus()
-  const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
 
   function toggleVaultShowing() {
     setVaultShowing(!vaultShowing)
   }
 
-  const nonInVaultStatusesSelected = selectedItems.some((item) => item.status && item.status !== "inVault")
-  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority)
-  const allInVault = selectedItems.every((item: any) => item.status === "inVault")
-  const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
-  const onlyFrozenSelected = selectedItems.every((item) => item.status === "inVault")
-  const onlyThawedSelected = selectedItems.every((item) => !item.status)
+  const selectedItems = digitalAssets.filter((da) => selected.includes(da.id))
+
+  const onlyNonFungiblesSelected = selectedItems.every((item) => item.isNonFungible)
+  const nonInVaultStatusesSelected = selectedItems.some((item) => !["NONE", "SECURED"].includes(item.status as Status))
+  const allInVault = selectedItems.every((item) => item.status === "SECURED")
+  const noneInVault = selectedItems.every((item) => item.status === "NONE")
+  const frozenSelected = selectedItems.some((item) => item.status === "SECURED")
+  const thawedSelected = selectedItems.some((item) => item.status === "NONE")
 
   const canFreezeThaw = allInVault || noneInVault
 
@@ -129,11 +132,11 @@ export function Vault({ small }: { small?: boolean }) {
 
   async function lockUnlock(all: boolean = false, transfer: boolean = false) {
     try {
-      if (!onlyFrozenSelected && !onlyThawedSelected) {
+      if (frozenSelected && thawedSelected) {
         throw new Error("Cannot freeze and thaw in same transaction")
       }
 
-      if (!onlyFrozenSelected && !lockingWallet && type === "secure") {
+      if (thawedSelected && !lockingWallet && type === "secure") {
         throw new Error("Locking wallet is required")
       }
 
@@ -141,20 +144,22 @@ export function Vault({ small }: { small?: boolean }) {
         throw new Error("Select a wallet to transfer to")
       }
 
-      if (transfer && !onlyFrozenSelected) {
+      if (transfer && !frozenSelected) {
         throw new Error("Can only transfer when thawing")
       }
 
       setVaultShowing(false)
 
-      const items = all ? nfts : selectedItems
+      const items = all ? digitalAssets : selectedItems
 
-      const instructionGroups = onlyFrozenSelected
+      console.log(items)
+
+      const instructionGroups = allInVault
         ? await Promise.all(
             items.map(async (nft: any) => {
               const digitalAsset = await fetchDigitalAssetWithAssociatedToken(
                 umi,
-                publicKey(nft.nftMint),
+                publicKey(nft.id),
                 umi.identity.publicKey
               )
               let txn = transactionBuilder()
@@ -354,14 +359,14 @@ export function Vault({ small }: { small?: boolean }) {
               }
               return {
                 instructions: txn,
-                mint: nft.nftMint,
+                mint: nft.id,
               }
             })
           )
         : await Promise.all(
             items.map(async (nft: any) => {
               const delegate = type === "basic" ? publicKey(nft.owner) : publicKey(lockingWallet!)
-              const digitalAsset = await fetchDigitalAssetWithTokenByMint(umi, publicKey(nft.nftMint))
+              const digitalAsset = await fetchDigitalAssetWithTokenByMint(umi, publicKey(nft.id))
               let txn = transactionBuilder()
               if (unwrapOption(digitalAsset.metadata.tokenStandard) === 4) {
                 if (digitalAsset.tokenRecord?.delegate) {
@@ -448,18 +453,19 @@ export function Vault({ small }: { small?: boolean }) {
                   )
               }
 
-              if (!isAdmin) {
+              if (accessLevel !== AccessLevel.UNLIMITED) {
+                const fee = type === "secure" ? FEES.SECURE_LOCK[accessLevel] : FEES.LOCK[accessLevel]
                 txn = txn.add(
                   transferSol(umi, {
                     destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                    amount: type === "secure" ? sol(0.02) : sol(0.01),
+                    amount: fee,
                   })
                 )
               }
 
               return {
                 instructions: txn,
-                mint: nft.nftMint,
+                mint: nft.id,
               }
             })
           )
@@ -480,12 +486,29 @@ export function Vault({ small }: { small?: boolean }) {
       const freezeThawPromise = sendSignedTransactions(
         signedTransactions,
         txns.map((t) => t.mints),
-        onlyFrozenSelected ? "thaw" : "freeze",
-        onlyFrozenSelected ? (transfer ? updateOwnerForNfts : removeNftsFromVault) : addNftsToVault
+        allInVault ? "thaw" : "freeze",
+        async (mints: string[]) => {
+          return Promise.all(
+            digitalAssets
+              .filter((da) => mints.includes(da.id))
+              .map((da) => {
+                if (allInVault) {
+                  if (transfer) {
+                    return da.recovered(transferTo!)
+                  } else {
+                    return da.unsecured()
+                  }
+                } else {
+                  return da.secured()
+                }
+              })
+          )
+        }
+        // allInVault ? (transfer ? updateOwnerForNfts : removeNftsFromVault) : addNftsToVault
       )
 
       toast.promise(freezeThawPromise, {
-        loading: `${onlyFrozenSelected ? (transfer ? "Recovering" : "Thawing") : "Freezing"} ${selected.length} item${
+        loading: `${allInVault ? (transfer ? "Recovering" : "Thawing") : "Freezing"} ${selected.length} item${
           selected.length === 1 ? "" : "s"
         }`,
         success: "Success",
@@ -497,21 +520,20 @@ export function Vault({ small }: { small?: boolean }) {
       notifyStatus(
         errs,
         successes,
-        onlyFrozenSelected ? (transfer ? "recover" : "thaw") : "freeze",
-        onlyFrozenSelected ? (transfer ? "recovered" : "thawed") : "frozen"
+        allInVault ? (transfer ? "recover" : "thaw") : "freeze",
+        allInVault ? (transfer ? "recovered" : "thawed") : "frozen"
       )
     } catch (err) {
       console.log(err)
     } finally {
+      setSelected([])
       setBypassWallet(false)
     }
   }
 
-  const wallets = session?.user?.wallets
-
-  const canSecureLock = (session?.user?.wallets?.length || 0) > 1
+  const canSecureLock = (wallets?.length || 0) > 1
   const authorities = uniq([
-    ...selectedItems.map((item) => item.delegate),
+    ...selectedItems.map((item) => item.ownership?.delegate),
     ...selectedItems.map((item) => item.owner),
   ]).filter(Boolean)
   const owners = uniq(selectedItems.map((item) => item.owner))
@@ -520,7 +542,7 @@ export function Vault({ small }: { small?: boolean }) {
     <>
       {small ? (
         <Button
-          disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+          disabled={!selected.length || !canFreezeThaw || !onlyNonFungiblesSelected}
           onClick={() => toggleVaultShowing()}
           fullWidth
           variant="contained"
@@ -538,9 +560,9 @@ export function Vault({ small }: { small?: boolean }) {
           title={
             nonInVaultStatusesSelected
               ? "Selection contains items that cannot be frozen/thawed"
-              : !hasFreezeAuth
-              ? "Some items cannot be frozen"
-              : onlyNftsSelected
+              : // : !hasFreezeAuth
+              // ? "Some items cannot be frozen"
+              onlyNonFungiblesSelected
               ? canFreezeThaw
                 ? frozenSelected
                   ? "Remove selected items from vault"
@@ -550,19 +572,24 @@ export function Vault({ small }: { small?: boolean }) {
           }
         >
           <span>
-            <IconButton
+            <Button
               disabled={
-                !selected.length || !canFreezeThaw || !onlyNftsSelected || nonInVaultStatusesSelected || !hasFreezeAuth
+                !selected.length || !canFreezeThaw || !onlyNonFungiblesSelected || nonInVaultStatusesSelected
+                // || !hasFreezeAuth
               }
               sx={{
                 color: "#a6e3e0",
               }}
+              variant="outlined"
               onClick={() => toggleVaultShowing()}
             >
-              <SvgIcon>
-                <VaultIcon />
-              </SvgIcon>
-            </IconButton>
+              <Stack direction="row">
+                <SvgIcon>
+                  <VaultIcon />
+                </SvgIcon>
+                <Typography>Vault</Typography>
+              </Stack>
+            </Button>
           </span>
         </Tooltip>
       )}
@@ -579,10 +606,10 @@ export function Vault({ small }: { small?: boolean }) {
                   mb={5}
                   mt={3}
                 >
-                  {onlyFrozenSelected ? "Remove items from" : "Add items to"} The Vault
+                  {allInVault ? "Remove items from" : "Add items to"} The Vault
                 </Typography>
                 <Typography>
-                  {onlyFrozenSelected ? (
+                  {allInVault ? (
                     <span>
                       Removing{" "}
                       <strong>
@@ -600,7 +627,7 @@ export function Vault({ small }: { small?: boolean }) {
                     </span>
                   )}
                 </Typography>
-                {onlyFrozenSelected ? (
+                {allInVault ? (
                   <Stack spacing={1} sx={{ marginBottom: "5em !important" }}>
                     <Typography variant="body2">Authorities needed to unlock:</Typography>
                     {authorities.map((auth, index) => (
@@ -629,16 +656,12 @@ export function Vault({ small }: { small?: boolean }) {
                         fullWidth
                         onClick={() => setType("secure")}
                         sx={{ fontSize: "1.25em" }}
-                        disabled={!isAdmin}
+                        // disabled={!isAdmin}
                       >
                         <Stack>
                           <Typography variant="body1">Secure freeze</Typography>
-                          <Typography
-                            textTransform="none"
-                            variant="body2"
-                            sx={{ color: !isAdmin ? "#faaf00 !important" : "unset" }}
-                          >
-                            {!isAdmin ? "PREMIUM" : "(recommended)"}
+                          <Typography textTransform="none" variant="body2">
+                            Multisig locking
                           </Typography>
                         </Stack>
                       </Button>
@@ -654,11 +677,11 @@ export function Vault({ small }: { small?: boolean }) {
                           >
                             {wallets
                               ?.filter((w) => {
-                                return !owners.includes(w.public_key)
+                                return !owners.includes(w.publicKey)
                               })
                               .map((w, index) => (
-                                <MenuItem key={index} value={w.public_key}>
-                                  {shorten(w.public_key)}
+                                <MenuItem key={index} value={w.publicKey}>
+                                  {shorten(w.publicKey!)}
                                 </MenuItem>
                               ))}
                           </Select>
@@ -691,13 +714,13 @@ export function Vault({ small }: { small?: boolean }) {
                   <Button
                     variant="contained"
                     onClick={() => lockUnlock()}
-                    disabled={loading || (!onlyFrozenSelected && !lockingWallet && type === "secure")}
+                    disabled={loading || (!allInVault && !lockingWallet && type === "secure")}
                     size="large"
                     fullWidth
                   >
                     <Stack direction="row" spacing={0.5}>
                       <Typography>
-                        {onlyFrozenSelected ? "Thaw" : "Freeze"} item{selected.length === 1 ? "" : "s"}
+                        {allInVault ? "Thaw" : "Freeze"} item{selected.length === 1 ? "" : "s"}
                       </Typography>
                       <SvgIcon>
                         <VaultIcon />
@@ -705,7 +728,7 @@ export function Vault({ small }: { small?: boolean }) {
                     </Stack>
                   </Button>
                 </Stack>
-                {onlyFrozenSelected && (
+                {allInVault && (
                   <Stack spacing={2}>
                     <Typography variant="h6">Recover items</Typography>
                     <Typography variant="body2">
@@ -723,8 +746,8 @@ export function Vault({ small }: { small?: boolean }) {
                         onChange={(e) => setTransferTo(e.target.value)}
                       >
                         {wallets?.map((w, index) => (
-                          <MenuItem key={index} value={w.public_key}>
-                            {shorten(w.public_key)}
+                          <MenuItem key={index} value={w.publicKey}>
+                            {shorten(w.publicKey!)}
                           </MenuItem>
                         ))}
                       </Select>

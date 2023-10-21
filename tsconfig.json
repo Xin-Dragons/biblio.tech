@@ -29,7 +29,10 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "src/context/nfts.tsx",
-    "src/app/api/get-tensor-collection-stats"
+    "src/app/api/get-tensor-collection-stats",
+    "src/components/List/index.xtsx",
+    "src/app/workshop/nft-suite/rulesets/page.xxtsx",
+    "src/components/Pricing.xtsx"
   ],
   "exclude": ["node_modules"]
 }

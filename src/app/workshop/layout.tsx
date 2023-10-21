@@ -15,17 +15,19 @@ export default function Layout({ children }: { children: ReactNode }) {
       <Stack direction="row" height="100%">
         <Sidebar>
           <Stack>
-            {Object.keys(routes).map((key) => {
+            {Object.keys(routes).map((key, index) => {
               const settings = routes[key as keyof typeof routes]
               return (
                 <MenuSection
+                  key={index}
                   title={settings.title}
                   accordion
                   open={!!settings.routes.find((route) => route.href === path)}
                 >
-                  {settings.routes.map((route: any) => {
+                  {settings.routes.map((route: any, index: number) => {
                     return (
                       <Button
+                        key={index}
                         LinkComponent={Link}
                         href={route.href}
                         variant={route.href === path ? "contained" : "outlined"}

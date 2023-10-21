@@ -1,10 +1,11 @@
 "use client"
 import { fetchDigitalAssetByCollection } from "@/helpers/digital-assets"
-import { getSingleMint } from "@/helpers/hello-moon"
+import { getSingleMint } from "@/helpers/hello-moon-server-actions"
 import { isPublicKey } from "@metaplex-foundation/umi"
 import axios from "axios"
 import { useParams } from "next/navigation"
 import { ReactNode, createContext, useContext, useEffect, useState } from "react"
+import { useDigitalAssets } from "./digital-assets"
 
 const Context = createContext<{ howRare: RarityItem[] } | undefined>(undefined)
 

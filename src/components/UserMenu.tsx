@@ -3,6 +3,10 @@ import { useSession } from "next-auth/react"
 import { AccountBalanceWallet, MonetizationOn, PersonAdd, Star } from "@mui/icons-material"
 import {
   Box,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
   Dialog,
   IconButton,
   Link,
@@ -12,6 +16,7 @@ import {
   MenuItem,
   MenuList,
   Stack,
+  SvgIcon,
   Switch,
   Theme,
   Typography,
@@ -21,7 +26,7 @@ import {
 import { FC, MouseEvent, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
-import { Profile } from "./Profile"
+// import { Profile } from "./Profile"
 import PermIdentityIcon from "@mui/icons-material/PermIdentity"
 import LinkOffIcon from "@mui/icons-material/LinkOff"
 import LogoutIcon from "@mui/icons-material/Logout"
@@ -30,12 +35,18 @@ import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalance
 import { useUiSettings } from "../context/ui-settings"
 import { useUmi } from "../context/umi"
 import { useRouter } from "next/router"
-import { useWallets } from "../context/wallets"
-import { useAccess } from "../context/access"
+// import { useAccess } from "../context/access"
 import { shorten } from "../helpers/utils"
 import { useTheme } from "../context/theme"
-import { SignUp } from "./SignUp"
+// import { SignUp } from "./SignUp"
 import { useCluster } from "../context/cluster"
+import { useAccess } from "@/context/access"
+import LinkIcon from "@mui/icons-material/Link"
+import { Modal } from "./Modal"
+import { LinkedWallets } from "./LinkedWallets"
+import { AccessLevel } from "@/constants"
+import WalletPremium from "@/../public/walletpremium.svg"
+import { CircularProgressWithLabel } from "./CircularProgressWithLabel"
 
 type UserMenuProps = {
   large?: boolean
@@ -43,24 +54,27 @@ type UserMenuProps = {
 }
 
 export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
-  const { cluster, setCluster } = useCluster()
   const { setVisible, visible } = useWalletModal()
-  const { multiWallet, signOut, signIn, isSigningIn, isAdmin } = useAccess()
-  const [signUpShowing, setSignUpShowing] = useState(false)
   const { data: session, status } = useSession()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const { profileModalShowing, setProfileModalShowing, showAllWallets, setShowAllWallets } = useUiSettings()
   const open = Boolean(anchorEl)
   const wallet = useWallet()
-  const { isLedger, setIsLedger } = useWallets()
+  const [linkWalletsModalShowing, setLinkWalletsModalShowing] = useState(false)
+  const { accessLevel, loading } = useAccess()
   const theme = useTheme()
 
-  async function signOutIn() {
-    await signOut()
-    await signIn()
+  console.log(accessLevel)
+
+  function toggleLinkModal() {
+    handleClose()
+    setLinkWalletsModalShowing(!linkWalletsModalShowing)
   }
 
-  console.log(visible)
+  // async function signOutIn() {
+  //   await signOut()
+  //   await signIn()
+  // }
 
   // useEffect(() => {
   //   if (status !== "authenticated") {
@@ -76,6 +90,13 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
   //     signIn()
   //   }
   // }, [wallet.publicKey])
+
+  const colours = {
+    [AccessLevel.BASIC]: "white",
+    [AccessLevel.ADVANCED]: "primary.main",
+    [AccessLevel.PRO]: "secondary.main",
+    [AccessLevel.UNLIMITED]: "gold.main",
+  }
 
   const toggleVisible = () => {
     handleClose()
@@ -110,17 +131,28 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
         sx={{
-          color: wallet.connected ? (session?.user?.id ? "gold.main" : session?.user ? "primary" : "#999") : "unset",
+          color: colours[accessLevel],
         }}
       >
-        <Stack alignItems="center">
-          <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
-          {wallet.connected && session?.user && (
+        {loading ? (
+          <CircularProgressWithLabel size="3rem">
+            <AccountBalanceWallet />
+          </CircularProgressWithLabel>
+        ) : (
+          <Stack alignItems="center">
+            {accessLevel === AccessLevel.UNLIMITED ? (
+              <SvgIcon fontSize={large ? "large" : "inherit"}>
+                <WalletPremium />
+              </SvgIcon>
+            ) : (
+              <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
+            )}
+
             <Typography fontStyle="italic" variant="body2" fontWeight="bold" sx={{ fontSize: "10px" }}>
-              {session?.user?.id ? "PREMIUM" : "BASIC"}
+              {AccessLevel[accessLevel]}
             </Typography>
-          )}
-        </Stack>
+          </Stack>
+        )}
       </IconButton>
       <Menu
         anchorEl={anchorEl}
@@ -140,29 +172,35 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
             width: "220px",
           }}
         >
-          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }} disabled={isSigningIn}>
+          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }}>
             <ListItemIcon>
-              <AccountBalanceWalletOutlinedIcon color={wallet.connected ? "primary" : "inherit"} />
+              {accessLevel === AccessLevel.UNLIMITED ? (
+                <SvgIcon sx={{ color: colours[accessLevel] }}>
+                  <WalletPremium />
+                </SvgIcon>
+              ) : (
+                <AccountBalanceWalletOutlinedIcon sx={{ color: colours[accessLevel] }} />
+              )}
             </ListItemIcon>
             <ListItemText>
-              <Link underline="none" fontWeight="bold">
+              <Link underline="none" fontWeight="bold" sx={{ color: colours[accessLevel] }}>
                 {wallet.connected ? shorten(wallet.publicKey?.toBase58() as string) : "Connect wallet"}
               </Link>
             </ListItemText>
           </MenuItem>
           {wallet.connected && (
             <div>
-              {session?.user && (
+              {/* {session?.user && (
                 <>
                   {session.user.id ? (
-                    <MenuItem onClick={openProfile} disabled={isSigningIn}>
+                    <MenuItem onClick={openProfile}>
                       <ListItemIcon sx={{ width: "50px" }}>
                         <PermIdentityIcon />
                       </ListItemIcon>
                       <ListItemText>Profile</ListItemText>
                     </MenuItem>
                   ) : (
-                    <MenuItem onClick={() => setSignUpShowing(true)} disabled={isSigningIn}>
+                    <MenuItem onClick={() => setSignUpShowing(true)}>
                       <ListItemIcon sx={{ width: "50px" }}>
                         <Star
                           // @ts-ignore
@@ -173,9 +211,9 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
                     </MenuItem>
                   )}
                 </>
-              )}
+              )} */}
 
-              {session?.user ? (
+              {/* {session?.user ? (
                 <MenuItem onClick={() => signOut()} disabled={isSigningIn}>
                   <ListItemIcon sx={{ width: "50px" }}>
                     <LogoutIcon />
@@ -189,8 +227,14 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
                   </ListItemIcon>
                   <ListItemText>Sign in</ListItemText>
                 </MenuItem>
-              )}
-              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
+              )} */}
+              <MenuItem onClick={toggleLinkModal}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <LinkIcon />
+                </ListItemIcon>
+                <ListItemText>Link wallets</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={wallet.disconnect}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <LinkOffIcon />
                 </ListItemIcon>
@@ -202,7 +246,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
                 </ListItemIcon>
                 <ListItemText>Transfer SOL</ListItemText>
               </MenuItem>
-              {multiWallet && isAdmin && (
+              {/* {multiWallet && isAdmin && (
                 <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
                   <ListItemIcon sx={{ width: "50px" }}>
                     <Switch
@@ -215,19 +259,18 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
                   </ListItemIcon>
                   <ListItemText>Show all wallets</ListItemText>
                 </MenuItem>
-              )}
-              <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())} disabled={isSigningIn}>
+              )} */}
+              {/* <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
                     checked={isLedger}
                     onChange={(e) => setIsLedger(e.target.checked, wallet.publicKey?.toBase58())}
                     inputProps={{ "aria-label": "controlled" }}
-                    disabled={isSigningIn}
                     size="small"
                   />
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
-              </MenuItem>
+              </MenuItem> */}
               {/* <MenuItem onClick={() => setCluster(cluster === "devnet" ? "mainnet" : "devnet")} disabled={isSigningIn}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
@@ -244,7 +287,10 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
           )}
         </MenuList>
       </Menu>
-      {session?.user?.id && (
+      <Modal open={linkWalletsModalShowing} setOpen={setLinkWalletsModalShowing} title="Manage linked wallets">
+        <LinkedWallets />
+      </Modal>
+      {/* {session?.user?.id && (
         <Dialog
           open={profileModalShowing}
           onClose={toggleProfileModal}
@@ -254,8 +300,8 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
         >
           <Profile user={session.user} publicKey={session.publicKey} onClose={toggleProfileModal} />
         </Dialog>
-      )}
-      <Dialog
+      )} */}
+      {/* <Dialog
         open={signUpShowing}
         onClose={() => setSignUpShowing(false)}
         fullWidth={true}
@@ -263,7 +309,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, allowDevnet }) => {
         fullScreen={isXs}
       >
         <SignUp />
-      </Dialog>
+      </Dialog> */}
     </Box>
   )
 }

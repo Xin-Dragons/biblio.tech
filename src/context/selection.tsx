@@ -1,21 +1,19 @@
 "use client"
 import { createContext, FC, ReactNode, useContext, useEffect, useState } from "react"
-import { useNfts } from "./nfts"
-import { uniq } from "lodash"
 import { useWallet } from "@solana/wallet-adapter-react"
-import { Nft } from "@/db"
+import { useOwnedAssets } from "./owned-assets"
 
 type SelectionContextProps = {
   selected: string[]
   setSelected: Function
   select: Function
-  statusesSelected: boolean
-  selectedItems: Nft[]
-  nonOwnedSelected: boolean
-  frozenSelected: boolean
-  onlyNftsSelected: boolean
-  allSelected: boolean
-  selectAll: Function
+  // statusesSelected: boolean
+  // selectedItems: Nft[]
+  // nonOwnedSelected: boolean
+  // frozenSelected: boolean
+  // onlyNftsSelected: boolean
+  // allSelected: boolean
+  // selectAll: Function
   deselectAll: Function
 }
 
@@ -27,17 +25,18 @@ type SelectionProviderProps = {
 
 export const SelectionProvider: FC<SelectionProviderProps> = ({ children }) => {
   const [selected, setSelected] = useState<string[]>([])
-  const { filtered } = useNfts()
+  // const { digitalAssets } = useOwnedAssets()
+  // const { filtered } = useNfts()
   const wallet = useWallet()
 
-  useEffect(() => {
-    const toRemove = selected.filter((item) => !filtered.map((n) => n.nftMint).includes(item))
-    if (toRemove.length) {
-      setSelected((prev: string[]) => {
-        return prev.filter((item: any) => !toRemove.includes(item))
-      })
-    }
-  }, [filtered])
+  // useEffect(() => {
+  //   const toRemove = selected.filter((item) => !filtered.map((n) => n.nftMint).includes(item))
+  //   if (toRemove.length) {
+  //     setSelected((prev: string[]) => {
+  //       return prev.filter((item: any) => !toRemove.includes(item))
+  //     })
+  //   }
+  // }, [filtered])
 
   const select = (nftMint: string) => {
     setSelected((selected: string[]) => {
@@ -48,29 +47,29 @@ export const SelectionProvider: FC<SelectionProviderProps> = ({ children }) => {
     })
   }
 
-  const selectedItems = selected
-    .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
-    .filter(Boolean)
+  // const selectedItems = selected
+  //   .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
+  //   .filter(Boolean)
 
-  const statusesSelected = selectedItems.some((item) => item.status)
+  // const statusesSelected = selectedItems.some((item) => item.status)
 
-  const nonOwnedSelected = selectedItems.some((item) => {
-    return item.owner !== wallet.publicKey?.toBase58() && item.delegate !== wallet.publicKey?.toBase58()
-  })
+  // const nonOwnedSelected = selectedItems.some((item) => {
+  //   return item.owner !== wallet.publicKey?.toBase58() && item.delegate !== wallet.publicKey?.toBase58()
+  // })
 
-  const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
+  // const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
 
-  const allSelected = selected.length >= filtered.length
+  // const allSelected = selected.length >= filtered.length
 
-  const onlyNftsSelected = selectedItems.every((item: any) => {
-    return [0, 3, 4].includes(item.metadata.tokenStandard)
-  })
+  // const onlyNftsSelected = selectedItems.every((item: any) => {
+  //   return [0, 3, 4].includes(item.metadata.tokenStandard)
+  // })
 
-  function selectAll() {
-    setSelected((prevState: string[]) => {
-      return uniq([...prevState, ...filtered.map((f) => f.nftMint)])
-    })
-  }
+  // function selectAll() {
+  //   setSelected((prevState: string[]) => {
+  //     return uniq([...prevState, ...filtered.map((f) => f.nftMint)])
+  //   })
+  // }
 
   function deselectAll() {
     setSelected([])
@@ -82,13 +81,14 @@ export const SelectionProvider: FC<SelectionProviderProps> = ({ children }) => {
         selected,
         setSelected,
         select,
-        selectedItems,
-        statusesSelected,
-        nonOwnedSelected,
-        frozenSelected,
-        allSelected,
-        onlyNftsSelected,
-        selectAll,
+        // selectedAssets: digitalAssets.filter((da) => selected.includes(da.id)),
+        // selectedItems,
+        // statusesSelected,
+        // nonOwnedSelected,
+        // frozenSelected,
+        // allSelected,
+        // onlyNftsSelected,
+        // selectAll,
         deselectAll,
       }}
     >

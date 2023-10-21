@@ -16,83 +16,164 @@ import {
 } from "@mui/material"
 import PlaneIcon from "@/../public/plane.svg"
 import { useState } from "react"
-import { useNfts } from "@/context/nfts"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { AddressSelector } from "./AddressSelector"
 import { useUmi } from "@/context/umi"
-import { publicKey, sol, transactionBuilder, unwrapOption } from "@metaplex-foundation/umi"
-import { useAccess } from "@/context/access"
+import {
+  PublicKey,
+  TransactionBuilder,
+  Umi,
+  publicKey,
+  sol,
+  transactionBuilder,
+  unwrapOption,
+} from "@metaplex-foundation/umi"
+// import { useAccess } from "@/context/access"
 import { fetchAllDigitalAsset, transferV1 } from "@metaplex-foundation/mpl-token-metadata"
 import { closeToken, fetchToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { buildTransactions, getUmiChunks, notifyStatus } from "@/helpers/transactions"
 import { useTransactionStatus } from "@/context/transactions"
-import { useDatabase } from "@/context/database"
 import { toast } from "react-hot-toast"
+import { partition } from "lodash"
+import { transfer } from "@metaplex-foundation/mpl-bubblegum"
+import { fetchAllDigitalAssetProofsByIds, fetchAllDigitalAssetsByIds } from "@/helpers/digital-assets"
+import { DAS } from "helius-sdk"
+import { publicKey as publicKeySerializer } from "@metaplex-foundation/umi/serializers"
+
+import { MPL_BUBBLEGUM_PROGRAM_ID, TreeConfig } from "@metaplex-foundation/mpl-bubblegum"
+import base58 from "bs58"
+import { useOwnedAssets } from "@/context/owned-assets"
+import { useAccess } from "@/context/access"
+import { AccessLevel, FEES } from "@/constants"
+
+function getBubblegumAuthorityPDA(umi: Umi, merkleTree: PublicKey) {
+  const [bubblegumAuthorityPDAKey] = umi.eddsa.findPda(MPL_BUBBLEGUM_PROGRAM_ID, [
+    publicKeySerializer().serialize(merkleTree),
+  ])
+  return bubblegumAuthorityPDAKey
+}
+
+function bufferToArray(buffer: Buffer): number[] {
+  const nums = []
+  for (let i = 0; i < buffer.length; i++) {
+    nums.push(buffer[i])
+  }
+  return nums
+}
 
 export function BulkSend({ small }: { small?: boolean }) {
   const [bulkSendOpen, setBulkSendOpen] = useState(false)
-  const { selected, setSelected, nonOwnedSelected, frozenSelected, statusesSelected } = useSelection()
+  const { selected } = useSelection()
+  const { digitalAssets } = useOwnedAssets()
+  const isAdmin = false
   const [sending, setSending] = useState(false)
-  const { isAdmin } = useAccess()
+  const { accessLevel } = useAccess()
   const { sendSignedTransactions } = useTransactionStatus()
-  const { updateOwnerForNfts } = useDatabase()
   const [recipient, setRecipient] = useState<any>(null)
   const wallet = useWallet()
   const umi = useUmi()
 
+  const selectedAssets = selected.map((id) => digitalAssets.find((d) => d.id === id)).filter(Boolean)
+  const canSend = selectedAssets.every((da) => da?.status === "NONE")
+  const disabled = !selected.length || !canSend
+
   function cancelSend() {
     toggleBulkSendOpen()
     setRecipient(null)
-    setSelected([])
+    // setSelected([])
   }
 
   function toggleBulkSendOpen() {
     setBulkSendOpen(!bulkSendOpen)
   }
 
+  async function getInstructionsForCompressed(items: any, recipient: string) {
+    const proofs = await fetchAllDigitalAssetProofsByIds(items.map((item) => item.id))
+    const assets = await fetchAllDigitalAssetsByIds(items.map((item) => item.id))
+    const txs = await Promise.all(
+      assets.map(async (item) => {
+        if (!item.compression) {
+          throw new Error("Not a compressed item")
+        }
+        const proof = proofs[item.id] as DAS.GetAssetProofResponse
+
+        let proofPath = proof.proof.map((node: string) => ({
+          pubkey: publicKey(node),
+          isSigner: false,
+          isWritable: false,
+        }))
+
+        const treeAuthority = getBubblegumAuthorityPDA(umi, publicKey(proof.tree_id))
+
+        const leafDelegate = item.ownership.delegate
+          ? publicKey(item.ownership.delegate)
+          : publicKey(item.ownership.owner)
+
+        const leafNonce = item.compression!.leaf_id
+
+        return {
+          instructions: transfer(umi, {
+            treeConfig: treeAuthority,
+            leafOwner: umi.identity,
+            leafDelegate,
+            newLeafOwner: publicKey(recipient),
+            merkleTree: publicKey(item.compression?.tree!),
+            proof: proof.proof.map((item) => publicKey(item)),
+            root: base58.decode(proof.root),
+            dataHash: base58.decode(item.compression.data_hash.trim()),
+            nonce: leafNonce,
+            index: leafNonce,
+            creatorHash: base58.decode(item.compression.creator_hash.trim()),
+          }),
+          mint: item.id,
+        }
+      })
+    )
+
+    return txs
+  }
+
   async function bulkSend() {
     try {
       setSending(true)
-      if (nonOwnedSelected) {
-        throw new Error("Some selected items are owned by a linked wallet")
-      }
       if (!recipient) {
         throw new Error("No recipient selected")
       }
-      if (frozenSelected) {
-        throw new Error("Frozen NFTs in selection")
+      if (!canSend) {
+        throw new Error("Some selected items cannot be sent")
       }
+      const [compressed, normal] = partition(selectedAssets, (asset) => {
+        return asset!.tokenStandard === -1
+      })
+
+      const compressedIxs = await getInstructionsForCompressed(compressed, recipient)
 
       const toSend = await fetchAllDigitalAsset(
         umi,
-        selected.map((item) => publicKey(item))
+        normal.map((item) => publicKey(item.id))
       )
 
       const instructionSets = await Promise.all(
         toSend.map(async (item) => {
           let amount = BigInt(1)
-
           const ata = findAssociatedTokenPda(umi, {
             owner: umi.identity.publicKey,
             mint: item.publicKey,
           })
-
           if ([1, 2].includes(unwrapOption(item.metadata.tokenStandard) || 0)) {
             const token = await fetchToken(umi, ata)
-
             amount = token.amount
           }
           let txn = transactionBuilder()
-
-          if (!isAdmin) {
+          if (accessLevel !== AccessLevel.UNLIMITED) {
+            const fee = FEES.SEND[accessLevel]
             txn = txn.add(
               transferSol(umi, {
                 destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                amount: sol(0.002),
+                amount: fee,
               })
             )
           }
-
           txn = txn.add(
             transferV1(umi, {
               destinationOwner: publicKey(recipient.publicKey),
@@ -101,7 +182,6 @@ export function BulkSend({ small }: { small?: boolean }) {
               amount,
             })
           )
-
           txn = txn.add(
             closeToken(umi, {
               account: ata,
@@ -109,29 +189,25 @@ export function BulkSend({ small }: { small?: boolean }) {
               owner: umi.identity,
             })
           )
-
           return {
             instructions: txn,
             mint: item.publicKey,
           }
         })
       )
-
-      const chunks = getUmiChunks(umi, instructionSets)
+      const chunks = getUmiChunks(umi, [...instructionSets, ...compressedIxs])
       const txns = await buildTransactions(umi, chunks)
-
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-
       setBulkSendOpen(false)
-
       const { errs, successes } = await sendSignedTransactions(
         signedTransactions,
         txns.map((t) => t.mints),
         "send",
-        updateOwnerForNfts,
-        recipient.publicKey
+        async (ids: string[]) =>
+          Promise.all(
+            digitalAssets.filter((da) => ids.includes(da.id)).map((da) => da.updateOwner(recipient.publicKey))
+          )
       )
-
       notifyStatus(errs, successes, "send", "sent")
     } catch (err: any) {
       console.error(err.stack)
@@ -146,13 +222,7 @@ export function BulkSend({ small }: { small?: boolean }) {
   return (
     <>
       {small ? (
-        <Button
-          disabled={!selected.length || statusesSelected}
-          onClick={toggleBulkSendOpen}
-          fullWidth
-          variant="contained"
-          size="large"
-        >
+        <Button disabled={disabled} onClick={toggleBulkSendOpen} fullWidth variant="contained" size="large">
           <Stack spacing={1} direction="row">
             <SvgIcon>
               <PlaneIcon />
@@ -163,23 +233,22 @@ export function BulkSend({ small }: { small?: boolean }) {
       ) : (
         <Tooltip
           title={
-            nonOwnedSelected
-              ? "Some selected items are owned by a linked wallet"
-              : statusesSelected
-              ? "Selection contains items that cannot be sent"
-              : "Bulk send selected items"
+            canSend
+              ? "Bulk send selected items"
+              : selected.length
+              ? "Some selected items cannot be sent"
+              : "No items selected"
           }
         >
           <span>
-            <IconButton
-              disabled={!selected.length || statusesSelected || nonOwnedSelected}
-              onClick={toggleBulkSendOpen}
-              color="primary"
-            >
-              <SvgIcon fontSize="small">
-                <PlaneIcon />
-              </SvgIcon>
-            </IconButton>
+            <Button disabled={disabled} onClick={toggleBulkSendOpen} color="primary" variant="outlined">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <SvgIcon fontSize="small">
+                  <PlaneIcon />
+                </SvgIcon>
+                <Typography textTransform="uppercase">Send</Typography>
+              </Stack>
+            </Button>
           </span>
         </Tooltip>
       )}
@@ -189,9 +258,7 @@ export function BulkSend({ small }: { small?: boolean }) {
           <DialogTitle>Bulk send</DialogTitle>
           <DialogContent>
             <Stack spacing={2}>
-              <Alert severity="info">
-                Sending {selected.length} item{selected.length === 1 ? "" : "s"}
-              </Alert>
+              <Alert severity="info">{/* Sending {selected.length} item{selected.length === 1 ? "" : "s"} */}</Alert>
               <AddressSelector wallet={recipient} setWallet={setRecipient} />
             </Stack>
           </DialogContent>
@@ -199,7 +266,11 @@ export function BulkSend({ small }: { small?: boolean }) {
             <Button onClick={cancelSend} color="error">
               Cancel
             </Button>
-            <Button onClick={bulkSend} variant="contained" disabled={!recipient || !selected.length}>
+            <Button
+              onClick={bulkSend}
+              variant="contained"
+              // disabled={!recipient || !selected.length}
+            >
               Send
             </Button>
           </DialogActions>

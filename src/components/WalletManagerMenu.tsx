@@ -4,10 +4,10 @@ import { usePathname } from "next/navigation"
 
 export function WalletManagerMenu() {
   const path = usePathname()
-  const isWallet = path.replace("/", "").split("/").shift() === "bags"
+  const isWallet = path.replace("/", "").split("/").pop() === "wallet"
   return (
-    <Button LinkComponent={Link} href="/bags" sx={{ color: isWallet ? "primary.main" : "white" }}>
-      Bag
+    <Button LinkComponent={Link} href="/wallet" sx={{ color: isWallet ? "primary.main" : "white" }}>
+      Wallet
     </Button>
   )
 }

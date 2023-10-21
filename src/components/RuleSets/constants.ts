@@ -63,4 +63,6 @@ export const PROGRAMS = [
   { label: "CoralCubeAMM", value: "mmm3XBJg5gk8XJxEKBvdgptZz6SgK4tXvn36sodowMc", type: "AMM" },
   { label: "Candy Machine v2", value: "cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ", type: "Misc" },
   { label: "Candy Guard", value: "Guard1JwRhJkVH6XZhzoYxeBVQe872VH6QggF4BWmS9g", type: "Misc" },
+  { label: "Token Metadata", value: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", type: "Misc" },
+  { label: "Token Auth Rules", value: "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg", type: "Misc" },
 ]

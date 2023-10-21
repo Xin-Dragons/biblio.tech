@@ -9,6 +9,7 @@ import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-ad
 import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 import { mplTokenAuthRules } from "@metaplex-foundation/mpl-token-auth-rules"
+import { mplBubblegum } from "@metaplex-foundation/mpl-bubblegum"
 
 type UmiContext = {
   umi: Umi | null
@@ -28,6 +29,7 @@ export const UmiProvider = ({ children, endpoint }: { children: ReactNode; endpo
     .use(mplToolbox())
     .use(bundlrUploader())
     .use(mplTokenAuthRules())
+    .use(mplBubblegum())
 
   return <UmiContext.Provider value={{ umi }}>{children}</UmiContext.Provider>
 }

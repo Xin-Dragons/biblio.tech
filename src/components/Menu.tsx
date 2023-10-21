@@ -1,13 +1,12 @@
 "use client"
 import { Close } from "@mui/icons-material"
-import { Dialog, Card, Container, Stack, IconButton, SvgIcon, Typography, AppBar } from "@mui/material"
-import { Collage } from "./Collage"
+import { Dialog, Card, Container, Stack, IconButton, SvgIcon, Typography, AppBar, Box } from "@mui/material"
+// import { Collage } from "./Collage"
 import { Footer } from "./Footer"
 import { LightDarkMode } from "./LightDarkMode"
 import { ShowInfo } from "./ShowInfo"
-import { SideMenu } from "./SideMenu"
+// import { SideMenu } from "./SideMenu"
 import { UserMenu } from "./UserMenu"
-import { ViewMenu } from "./ViewMenu"
 import { WalletSearch } from "./WalletSearch"
 import { useState } from "react"
 import Logo from "./AppBar/logo.svg"
@@ -25,9 +24,7 @@ export function Menu() {
         <AppBar elevation={0} position="sticky" sx={{ height: "75px" }} color="default">
           <Container sx={{ height: "100%" }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" height="100%">
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <ViewMenu />
-              </Stack>
+              <Box />
               <Stack direction="row" alignItems="center" spacing={1}>
                 <UserMenu />
                 <IconButton onClick={toggleMenu}>
@@ -43,7 +40,7 @@ export function Menu() {
               <LightDarkMode />
               <ShowInfo />
             </Stack>
-            <Collage />
+            {/* <Collage /> */}
           </Stack>
           <Stack spacing={2}>
             <SvgIcon
@@ -62,7 +59,7 @@ export function Menu() {
               Wallet search
             </Typography>
             <WalletSearch large />
-            <SideMenu noAccordions large />
+            {/* <SideMenu noAccordions large /> */}
           </Stack>
         </Container>
       </Card>

@@ -35,6 +35,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (err: any) {
+    return new NextResponse("Error getting ME buy tx", {
+      status: 500,
+    })
     // console.log(err)
     // return res.status(500).send(err?.response.data || err.message || "Something went wrong")
   }
