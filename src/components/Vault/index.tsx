@@ -191,32 +191,32 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                         owner: createNoopSigner(publicKey(nft.owner)),
                       })
                     )
-                    .add(
-                      delegateUtilityV1(umi, {
-                        mint: digitalAsset.mint.publicKey,
-                        tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                          ? digitalAsset.metadata.tokenStandard.value
-                          : 0,
-                        delegate: publicKey(nft.delegate),
-                        authorizationRules: isSome(digitalAsset.metadata.programmableConfig)
-                          ? isSome(digitalAsset.metadata.programmableConfig.value.ruleSet)
-                            ? digitalAsset.metadata.programmableConfig.value.ruleSet.value
-                            : undefined
-                          : undefined,
-                        authority: createNoopSigner(publicKey(transferTo!)),
-                        tokenOwner: publicKey(transferTo!),
-                        payer: umi.identity,
-                      })
-                    )
-                    .add(
-                      lockV1(umi, {
-                        mint: digitalAsset.mint.publicKey,
-                        tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
-                        authority: createNoopSigner(publicKey(nft.delegate)),
-                        tokenOwner: publicKey(transferTo!),
-                        payer: umi.identity,
-                      })
-                    )
+                  // .add(
+                  //   delegateUtilityV1(umi, {
+                  //     mint: digitalAsset.mint.publicKey,
+                  //     tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
+                  //       ? digitalAsset.metadata.tokenStandard.value
+                  //       : 0,
+                  //     delegate: publicKey(nft.delegate),
+                  //     authorizationRules: isSome(digitalAsset.metadata.programmableConfig)
+                  //       ? isSome(digitalAsset.metadata.programmableConfig.value.ruleSet)
+                  //         ? digitalAsset.metadata.programmableConfig.value.ruleSet.value
+                  //         : undefined
+                  //       : undefined,
+                  //     authority: createNoopSigner(publicKey(transferTo!)),
+                  //     tokenOwner: publicKey(transferTo!),
+                  //     payer: umi.identity,
+                  //   })
+                  // )
+                  // .add(
+                  //   lockV1(umi, {
+                  //     mint: digitalAsset.mint.publicKey,
+                  //     tokenStandard: unwrapSome(digitalAsset.metadata.tokenStandard) || 0,
+                  //     authority: createNoopSigner(publicKey(nft.delegate)),
+                  //     tokenOwner: publicKey(transferTo!),
+                  //     payer: umi.identity,
+                  //   })
+                  // )
                 }
               } else {
                 const delegate =
