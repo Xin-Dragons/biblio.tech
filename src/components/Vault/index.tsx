@@ -273,27 +273,27 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                         owner: createNoopSigner(publicKey(nft.owner)),
                       })
                     )
-                    .add(
-                      metaplex
-                        .tokens()
-                        .builders()
-                        .approveDelegateAuthority({
-                          mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
-                          delegateAuthority: new PublicKey(nft.delegate),
-                          owner: new PublicKey(transferTo!),
-                        })
-                        .getInstructions()
-                        .map((instruction) => {
-                          return transactionBuilder().add({
-                            instruction: fromWeb3JsInstruction(instruction),
-                            bytesCreatedOnChain: 0,
-                            signers: [
-                              createNoopSigner(publicKey(nft.delegate)),
-                              createNoopSigner(publicKey(transferTo!)),
-                            ],
-                          })
-                        })
-                    )
+                  // .add(
+                  //   metaplex
+                  //     .tokens()
+                  //     .builders()
+                  //     .approveDelegateAuthority({
+                  //       mintAddress: toWeb3JsPublicKey(digitalAsset.mint.publicKey),
+                  //       delegateAuthority: new PublicKey(nft.delegate),
+                  //       owner: new PublicKey(transferTo!),
+                  //     })
+                  //     .getInstructions()
+                  //     .map((instruction) => {
+                  //       return transactionBuilder().add({
+                  //         instruction: fromWeb3JsInstruction(instruction),
+                  //         bytesCreatedOnChain: 0,
+                  //         signers: [
+                  //           createNoopSigner(publicKey(nft.delegate)),
+                  //           createNoopSigner(publicKey(transferTo!)),
+                  //         ],
+                  //       })
+                  //     })
+                  // )
 
                   // const identity = Metaplex.make(connection)
                   //   .use(guestIdentity(new PublicKey(nft.delegate)))
