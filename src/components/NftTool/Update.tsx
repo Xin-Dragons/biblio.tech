@@ -270,8 +270,6 @@ export function UpdateNft() {
       updateAuthority !== nft.metadata.updateAuthority ||
       ruleSet !== unwrapOptionRecursively(nft.metadata.programmableConfig)?.ruleSet)
 
-  console.log(ruleSet, unwrapOptionRecursively(nft?.metadata?.programmableConfig)?.ruleSet)
-
   function addAttribute() {
     setAttributes((prevState) => {
       return [
@@ -520,6 +518,15 @@ export function UpdateNft() {
 
     const [withToken] = await fetchAllDigitalAssetWithTokenByMint(umi, nft.publicKey)
 
+    if (!collection && isSome(nft.metadata.collection)) {
+      const coll = unwrapOption(nft.metadata.collection)!
+      tx = tx.add(
+        unverifyCollectionV1(umi, {
+          collectionMint: coll.key,
+          metadata: nft.metadata.publicKey,
+        })
+      )
+    }
     tx = tx.add(
       updateV1(umi, {
         mint: nft.publicKey,
@@ -537,8 +544,8 @@ export function UpdateNft() {
         newUpdateAuthority:
           updateAuthority !== nft.metadata.updateAuthority ? umiPublicKey(updateAuthority) : undefined,
         isMutable: isMutable !== nft.metadata.isMutable && !isCollection ? isMutable : undefined,
-        collection:
-          collection && collection !== unwrapOption(nft.metadata.collection)?.key
+        collection: collection
+          ? collection !== unwrapOption(nft.metadata.collection)?.key
             ? {
                 __kind: "Set",
                 fields: [
@@ -548,7 +555,10 @@ export function UpdateNft() {
                   },
                 ],
               }
-            : undefined,
+            : undefined
+          : {
+              __kind: "Clear",
+            },
       })
     )
 
@@ -575,7 +585,7 @@ export function UpdateNft() {
       )
     }
 
-    await tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
+    await tx.sendAndConfirm(umi)
   }
 
   async function updateNft() {

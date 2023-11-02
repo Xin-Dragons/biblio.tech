@@ -996,10 +996,18 @@ export const BatchUpdateNfts = () => {
           createAndMint(anonUmi, {
             uri: da.metadata.uri,
             name: da.metadata.name,
-            sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints),
+            sellerFeeBasisPoints: percentAmount(da.metadata.sellerFeeBasisPoints / 100),
             mint,
             symbol: da.metadata.symbol,
-            creators: da.metadata.creators,
+            creators: unwrapOption(da.metadata.creators)?.map((c) => {
+              if (c.address === umi.identity.publicKey) {
+                return c
+              }
+              return {
+                ...c,
+                verified: false,
+              }
+            }),
             primarySaleHappened: da.metadata.primarySaleHappened,
             tokenStandard: tokenStandard || unwrapOption(da.metadata.tokenStandard) || 0,
           })
@@ -1015,6 +1023,8 @@ export const BatchUpdateNfts = () => {
             })
           )
         }
+
+        return tx
       }
 
       await sendUpdates(getInstruction)
