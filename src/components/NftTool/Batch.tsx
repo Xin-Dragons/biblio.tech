@@ -611,6 +611,7 @@ export const BatchUpdateNfts = () => {
           updateV1(anonUmi, {
             mint: da.publicKey,
             authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
+            edition: da.edition?.publicKey,
             data: {
               name: da.metadata.name,
               symbol: da.metadata.symbol,
@@ -929,6 +930,7 @@ export const BatchUpdateNfts = () => {
             mint: da.publicKey,
             newUpdateAuthority: updateAuthority ? publicKey(updateAuthority) : undefined,
             authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
+            edition: da.edition?.publicKey,
             data: {
               name: da.metadata.name,
               symbol: da.metadata.symbol,
