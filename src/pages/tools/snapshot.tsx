@@ -33,6 +33,7 @@ import axios from "axios"
 import { HashlistProvider, useHashlist } from "../../context/hashlist"
 import { takeSnapshot } from "../../helpers/snapshot"
 import { Layout } from "../../components/Layout"
+import { getMintlist } from "../../helpers/helius"
 
 const MARKETPLACES = ["4zdNGgAtFsW1cQgHqkiWyRsxaAgxrSRRynnuunxzjxue", "1BWutmTvYPwDtmw9abTkS4Ssr8no61spGAvW1X6NDix"]
 
@@ -364,27 +365,21 @@ const Home = () => {
         filters: activeFilters,
       }
 
-      const getHashlistPromise = axios.post("/api/get-mintlist", data)
+      const getHashlistPromise = getMintlist(data)
+
       toast.promise(getHashlistPromise, {
         loading: "Fetching hashlist",
         success: (res) => {
-          if (!res.data.mints.length) {
-            throw new Error(
-              "No mints found, please double check the details you are entering.\n\nIf you are sure they are correct and you are seeing this message it could be the hashlist hasn't been indexed yet.\n\nRunning this command will trigger an index, so please try again soon"
-            )
+          if (!res.length) {
+            throw new Error("No mints found, please double check the details you are entering.")
           }
-          return `Found ${res.data.mints.length} mints!`
+          return `Found ${res.length} mints!`
         },
         error: (err) => err.message || "Error getting mints, please try again",
       })
 
-      let {
-        data: { mints, message },
-      } = await getHashlistPromise
+      let mints = await getHashlistPromise
       setHashlist(JSON.stringify(mints, null, 2))
-      if (message) {
-        toast(message)
-      }
     } catch (err: any) {
       console.error(err)
       toast.error(err.message)

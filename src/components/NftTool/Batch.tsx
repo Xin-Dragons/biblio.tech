@@ -73,13 +73,14 @@ import { findAssociatedTokenPda, mplToolbox, transferSol } from "@metaplex-found
 import { getAnonUmi } from "./helpers/umi"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { takeSnapshot } from "../../helpers/snapshot"
+import { getMintlist } from "../../helpers/helius"
 
 export const BatchUpdateNfts = () => {
   const { dandies, collections, loading: nftsLoading } = useNfts()
   const [secretKey, setSecretKey] = useState("")
   const [secretKeyError, setSecretKeyError] = useState<string | null>(null)
   const [keypair, setKeypair] = useState<Keypair | null>(null)
-  const [lookupType, setLookupType] = useState("collection")
+  const [lookupType, setLookupType] = useState("collections")
   const [hashlist, setHashlist] = useState("")
   const [hashlistError, setHashlistError] = useState<string | null>(null)
   const [parsed, setParsed] = useState([])
@@ -474,31 +475,24 @@ export const BatchUpdateNfts = () => {
       }
 
       const data = {
-        [lookupType]: trimmed,
-        raw: true,
+        [lookupType]: [trimmed],
       }
 
-      const getHashlistPromise = axios.post("/api/lookup-mintlist", data)
+      const getHashlistPromise = getMintlist(data)
+
       toast.promise(getHashlistPromise, {
         loading: "Fetching hashlist",
         success: (res) => {
-          if (!res.data.mints.length) {
-            throw new Error(
-              "No mints found, please double check the details you are entering.\n\nIf you are sure they are correct and you are seeing this message it could be the hashlist hasn't been indexed yet.\n\nRunning this command will trigger an index, so please try again soon"
-            )
+          if (!res.length) {
+            throw new Error("No mints found, please double check the details you are entering.")
           }
-          return `Found ${res.data.mints.length} mints!`
+          return `Found ${res.length} mints!`
         },
         error: (err) => err.message || "Error getting mints, please try again",
       })
 
-      let {
-        data: { mints, message },
-      } = await getHashlistPromise
+      let mints = await getHashlistPromise
       setHashlist(JSON.stringify(mints, null, 2))
-      if (message) {
-        toast(message)
-      }
     } catch (err: any) {
       console.error(err)
       toast.error(err.response?.data?.message || err.message)
@@ -1061,15 +1055,15 @@ export const BatchUpdateNfts = () => {
                             value={lookupType}
                             onChange={(e) => setLookupType(e.target.value)}
                           >
-                            <FormControlLabel value="collection" control={<Radio />} label="Certified collection" />
-                            <FormControlLabel value="creator" control={<Radio />} label="First verified creator" />
+                            <FormControlLabel value="collections" control={<Radio />} label="Certified collection" />
+                            <FormControlLabel value="creators" control={<Radio />} label="First verified creator" />
                             <FormControlLabel value="hashlist" control={<Radio />} label="Hashlist" />
                           </RadioGroup>
                         </FormControl>
                         {lookupType !== "hashlist" ? (
                           <Stack direction="row" spacing={2}>
                             <TextField
-                              label={lookupType === "collection" ? "Certified collection" : "First verified creator"}
+                              label={lookupType === "collections" ? "Certified collection" : "First verified creator"}
                               value={address}
                               onChange={(e) => setAddress(e.target.value)}
                               fullWidth
