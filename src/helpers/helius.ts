@@ -1,6 +1,6 @@
 import { Connection } from "@solana/web3.js"
 import * as helius from "helius-sdk"
-import { flatten, isEqual } from "lodash"
+import { chunk, flatten, groupBy, isEqual, mapValues } from "lodash"
 
 const client = new helius.RpcClient(
   new Connection(process.env.NEXT_PUBLIC_RPC_HOST!),
@@ -78,4 +78,17 @@ export async function getMintlist(data: any) {
   }
 
   return nfts.map((n) => n.id)
+}
+
+export async function getNfts(mints: string[]) {
+  const nfts = flatten(await Promise.all(chunk(mints, 1_000).map(async (ids) => client.getAssetBatch({ ids }))))
+
+  const grouped = groupBy(nfts, (nft) => nft.ownership.owner)
+
+  return mapValues(grouped, (value) => {
+    return {
+      amount: value.length,
+      mints: value.map((v) => v.id),
+    }
+  })
 }

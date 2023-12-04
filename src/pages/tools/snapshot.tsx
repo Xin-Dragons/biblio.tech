@@ -31,9 +31,8 @@ import RemoveCircleRoundedIcon from "@mui/icons-material/RemoveCircleRounded"
 import { compact, omit } from "lodash"
 import axios from "axios"
 import { HashlistProvider, useHashlist } from "../../context/hashlist"
-import { takeSnapshot } from "../../helpers/snapshot"
 import { Layout } from "../../components/Layout"
-import { getMintlist } from "../../helpers/helius"
+import { getMintlist, getNfts } from "../../helpers/helius"
 
 const MARKETPLACES = ["4zdNGgAtFsW1cQgHqkiWyRsxaAgxrSRRynnuunxzjxue", "1BWutmTvYPwDtmw9abTkS4Ssr8no61spGAvW1X6NDix"]
 
@@ -177,7 +176,9 @@ const Controls = ({ loading, address }: { loading: boolean; address: string }) =
   }
 
   async function doSnap() {
-    let holders = await takeSnapshot(parsed, 30, updateProgress)
+    let holders = await getNfts(parsed)
+    console.log(holders)
+
     if (omitMarketplaces) {
       holders = omit(holders, MARKETPLACES)
     }
