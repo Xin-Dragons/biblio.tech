@@ -54,6 +54,7 @@ import {
   IconButton,
   ListItemText,
   Alert,
+  Switch,
 } from "@mui/material"
 import { useWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
@@ -109,6 +110,7 @@ export const BatchUpdateNfts = () => {
   const [collectionError, setCollectionError] = useState(null)
   const [collectionModalOpen, setCollectionModalOpen] = useState(false)
   const [tokenStandard, setTokenStandard] = useState(TokenStandard.NonFungible)
+  const [negateFilter, setNegateFilter] = useState(false)
   const [findReplaceCreators, setFindReplaceCreators] = useState([
     {
       find: "",
@@ -247,13 +249,17 @@ export const BatchUpdateNfts = () => {
     if (updateAuthorityFilter) {
       filtered = filtered.filter((n) => n.metadata.updateAuthority === updateAuthorityFilter)
     }
+    if (negateFilter) {
+      const keys = filtered.map((f) => f.publicKey)
+      filtered = [...nfts].filter((n) => !keys.includes(n.publicKey))
+    }
     setFiltered(filtered)
     if (!filtered.length) {
       setExpanded("lookup")
       setCreatorFilter("")
       setRoyaltiesFilter("")
     }
-  }, [nfts, creatorFilter, royaltiesFilter, updateAuthorityFilter])
+  }, [nfts, creatorFilter, royaltiesFilter, updateAuthorityFilter, negateFilter])
 
   async function checkReminted() {
     const ownedNfts = await fetchAllDigitalAssetByOwner(umi, umi.identity.publicKey)
@@ -1093,7 +1099,15 @@ export const BatchUpdateNfts = () => {
                         )}
                         {nfts.length > 1 && (
                           <Stack spacing={2}>
-                            <Typography variant="h6">Filters</Typography>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                              <Typography variant="h6">Filters</Typography>
+                              <FormControlLabel
+                                label="Negate"
+                                control={
+                                  <Switch checked={negateFilter} onChange={(e) => setNegateFilter(e.target.checked)} />
+                                }
+                              />
+                            </Stack>
                             <Typography>
                               Use these filters to target the correct mints in a partially updated collection, or if you
                               need to update creators and minted with multiple CMs
