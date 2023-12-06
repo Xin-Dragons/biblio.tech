@@ -3,7 +3,7 @@ import { createContext, useContext } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { ReactNode } from "react"
-import { bundlrUploader } from "@metaplex-foundation/umi-uploader-bundlr"
+import { irysUploader } from "@metaplex-foundation/umi-uploader-irys"
 import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
@@ -25,7 +25,7 @@ export const UmiProvider = ({ children, endpoint }: { children: ReactNode; endpo
     .use(walletAdapterIdentity(wallet))
     .use(mplTokenMetadata())
     .use(mplToolbox())
-    .use(bundlrUploader())
+    .use(irysUploader())
     .use(mplTokenAuthRules())
 
   return <UmiContext.Provider value={{ umi }}>{children}</UmiContext.Provider>

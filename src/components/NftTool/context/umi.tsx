@@ -3,7 +3,7 @@ import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 import { Umi } from "@metaplex-foundation/umi"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters"
-import { bundlrUploader } from "@metaplex-foundation/umi-uploader-bundlr"
+import { irysUploader } from "@metaplex-foundation/umi-uploader-irys"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { ReactNode, createContext, useContext, useMemo, useState } from "react"
 import { useCluster } from "../../../context/cluster"
@@ -19,7 +19,7 @@ export function UmiProvider({ children }: { children: ReactNode }) {
       createUmi(rpcHost, { commitment: "processed" })
         .use(mplTokenMetadata())
         .use(mplToolbox())
-        .use(bundlrUploader())
+        .use(irysUploader())
         .use(walletAdapterIdentity(wallet)),
     [rpcHost, wallet.publicKey]
   )

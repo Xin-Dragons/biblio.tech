@@ -53,7 +53,7 @@
         "@metaplex-foundation/umi-downloader-http": "^0.7.7",
         "@metaplex-foundation/umi-signer-wallet-adapters": "^0.8.4",
         "@metaplex-foundation/umi-storage-mock": "^0.7.7",
-        "@metaplex-foundation/umi-uploader-bundlr": "^0.8.7",
+        "@metaplex-foundation/umi-uploader-irys": "^0.8.11",
         "@metaplex-foundation/umi-web3js-adapters": "^0.8.4",
         "@mui/icons-material": "^5.11.11",
         "@mui/lab": "^5.0.0-alpha.127",
