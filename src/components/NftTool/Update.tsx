@@ -24,7 +24,7 @@ import { isEqual } from "lodash"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { FEES_WALLET, METAPLEX_COMPATIBILITY_RULE_SET, METAPLEX_RULE_SET, SYSTEM_PROGRAM_PK } from "./constants"
-import { DigitalAssetWithJson, useNfts } from "./context/nft"
+import { DigitalAssetWithJson, DigitalAssetWithJsonAndToken, useNfts } from "./context/nft"
 import { MultimediaCategory, getFee, getMultimediaType, shorten } from "./helpers/utils"
 import { NftSelector } from "./NftSelector"
 import { PreviewNft } from "./PreviewNft"
@@ -46,8 +46,11 @@ import {
   DigitalAsset,
   RuleSetToggle,
   TokenStandard,
+  TokenState,
   fetchAllDigitalAssetWithTokenByMint,
   fetchDigitalAsset,
+  fetchDigitalAssetWithAssociatedToken,
+  fetchDigitalAssetWithTokenByMint,
   fetchJsonMetadata,
   findMetadataPda,
   setCollectionSize,
@@ -61,7 +64,7 @@ export function UpdateNft() {
   const { loading: nftsLoading, dandies, createdNfts, collections } = useNfts()
   const [loading, setLoading] = useState(false)
   const [publicKey, setPublicKey] = useState("")
-  const [nft, setNft] = useState<DigitalAssetWithJson | null>(null)
+  const [nft, setNft] = useState<DigitalAssetWithJsonAndToken | null>(null)
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const [isCollection, setIsCollection] = useState(false)
   const [name, setName] = useState("")
@@ -127,7 +130,7 @@ export function UpdateNft() {
     }
     if (publicKey) {
       try {
-        const nft = await fetchDigitalAsset(umi, umiPublicKey(publicKey))
+        const nft = await fetchDigitalAssetWithTokenByMint(umi, umiPublicKey(publicKey))
 
         if (
           isSome(nft.metadata.tokenStandard) &&
@@ -505,7 +508,8 @@ export function UpdateNft() {
     }
 
     const rs =
-      unwrapOption(nft.metadata.tokenStandard) === TokenStandard.ProgrammableNonFungible
+      unwrapOption(nft.metadata.tokenStandard) === TokenStandard.ProgrammableNonFungible &&
+      ruleSet !== unwrapOptionRecursively(nft.metadata.programmableConfig)?.ruleSet
         ? ruleSet
           ? {
               __kind: "Set",
@@ -733,6 +737,7 @@ export function UpdateNft() {
   }
 
   const isValid = !publicKeyError && !royaltiesError && !collectionError && !updateAuthorityError && !ruleSetError
+  const isLocked = nft?.tokenRecord?.state === TokenState.Locked
 
   return (
     <Grid container spacing={2}>
@@ -989,10 +994,20 @@ export function UpdateNft() {
                             value={programmableConfigType}
                             onChange={(e) => setProgrammableConfigType(e.target.value)}
                           >
-                            <FormControlLabel value="metaplex" control={<Radio />} label="Metaplex" />
-                            <FormControlLabel value="compatibility" control={<Radio />} label="Compatibility" />
-                            <FormControlLabel value="none" control={<Radio />} label="None" />
-                            <FormControlLabel value="custom" control={<Radio />} label="Custom" />
+                            <FormControlLabel
+                              value="metaplex"
+                              control={<Radio />}
+                              label="Metaplex"
+                              disabled={isLocked}
+                            />
+                            <FormControlLabel
+                              value="compatibility"
+                              control={<Radio />}
+                              label="Compatibility"
+                              disabled={isLocked}
+                            />
+                            <FormControlLabel value="none" control={<Radio />} label="None" disabled={isLocked} />
+                            <FormControlLabel value="custom" control={<Radio />} label="Custom" disabled={isLocked} />
                           </RadioGroup>
                           {programmableConfigType === "custom" && (
                             <TextField
@@ -1005,6 +1020,7 @@ export function UpdateNft() {
                               }
                             />
                           )}
+                          {isLocked && <FormHelperText>Cannot update the ruleset of a locked pNFT</FormHelperText>}
                         </FormControl>
                       </>
                     )}

@@ -2,6 +2,7 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { ReactNode, createContext, useContext, useEffect, useState } from "react"
 import {
   DigitalAsset,
+  DigitalAssetWithToken,
   JsonMetadata,
   fetchAllDigitalAssetByOwner,
   fetchJsonMetadata,
@@ -31,6 +32,10 @@ const NftsContext = createContext<{
 })
 
 export type DigitalAssetWithJson = DigitalAsset & {
+  json: JsonMetadata
+}
+
+export type DigitalAssetWithJsonAndToken = DigitalAssetWithToken & {
   json: JsonMetadata
 }
 
