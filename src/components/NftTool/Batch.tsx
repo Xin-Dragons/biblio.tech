@@ -208,7 +208,9 @@ export const BatchUpdateNfts = () => {
   // }, [done])
 
   useEffect(() => {
-    setUniqueCreators(uniqBy(flatten(nfts.map((n: DigitalAsset) => unwrapOption(n.metadata.creators))), "address"))
+    setUniqueCreators(
+      uniqBy(flatten(nfts.map((n: DigitalAsset) => unwrapOption(n.metadata.creators))), "address").filter(Boolean)
+    )
     setUniqueRoyalties(uniq(nfts.map((n: DigitalAsset) => n.metadata.sellerFeeBasisPoints)))
     setUniqueUpdateAuthorities(uniq(nfts.map((n: DigitalAsset) => n.metadata.updateAuthority)))
     const uniqueCollections = uniq(nfts.map((nft) => unwrapOption(nft.metadata.collection)?.key))
