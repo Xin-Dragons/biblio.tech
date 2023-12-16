@@ -17,6 +17,7 @@ import {
   FormLabel,
   Radio,
   RadioGroup,
+  Link,
 } from "@mui/material"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import axios from "axios"
@@ -59,6 +60,7 @@ import {
   verifyCollectionV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
+import { getMintlist } from "../../helpers/helius"
 
 export function UpdateNft() {
   const { loading: nftsLoading, dandies, createdNfts, collections } = useNfts()
@@ -661,14 +663,14 @@ export function UpdateNft() {
     e.preventDefault()
     setLoading(true)
     const size = await getCollectionSize()
-    setNewCollectionSize(size)
+    setNewCollectionSize(size || 0)
     setLoading(false)
   }
 
   async function getCollectionSize() {
     try {
-      const { data } = await axios.post("/api/get-mintlist", { collection: publicKey, raw: true })
-      return data.mints.length
+      const mints = await getMintlist({ collections: [publicKey] })
+      return mints.length
     } catch (err) {
       toast.error("Error getting collection size")
     }
@@ -719,17 +721,18 @@ export function UpdateNft() {
         )
       }
 
-      const promise = tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
+      const promise = tx.sendAndConfirm(umi)
 
       toast.promise(promise, {
         loading: "Migrating to sized collection",
         success: "Migration complete",
-        error: "Error migrating collection",
+        error: (err) => err.message || "Error migrating collection",
       })
 
       await promise
       await checkToken()
     } catch (err: any) {
+      console.error(err)
       toast.error(err.message)
     } finally {
       setLoading(false)
@@ -1047,9 +1050,9 @@ export function UpdateNft() {
                                 type="number"
                                 helperText={
                                   <Typography>
-                                    <a href="#" onClick={updateCollectionSizeFromChain}>
+                                    <Link href="#" onClick={updateCollectionSizeFromChain}>
                                       Pull from onchain data
-                                    </a>{" "}
+                                    </Link>{" "}
                                     - WARNING this function relies on a third party service and may not be accurate.
                                     Make sure to check this value.
                                   </Typography>
