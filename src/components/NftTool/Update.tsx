@@ -550,6 +550,7 @@ export function UpdateNft() {
         newUpdateAuthority:
           updateAuthority !== nft.metadata.updateAuthority ? umiPublicKey(updateAuthority) : undefined,
         isMutable: isMutable !== nft.metadata.isMutable && !isCollection ? isMutable : undefined,
+        edition: nft.edition?.publicKey,
         collection: collection
           ? collection !== unwrapOption(nft.metadata.collection)?.key
             ? {
