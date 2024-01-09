@@ -547,7 +547,7 @@ export function UpdateNft() {
           symbol,
           sellerFeeBasisPoints: sellerFeeBasisPoints || 0,
           uri,
-          creators: parsedCreators,
+          creators: parsedCreators.length ? parsedCreators : null,
         },
         token: withToken.token.publicKey,
         newUpdateAuthority:
