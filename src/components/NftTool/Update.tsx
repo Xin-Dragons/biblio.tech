@@ -145,7 +145,10 @@ export function UpdateNft() {
           )
           return
         } else {
-          const json = await fetchJsonMetadata(umi, nft.metadata.uri)
+          let json = await fetchJsonMetadata(umi, nft.metadata.uri)
+          if (typeof json === "string") {
+            json = JSON.parse(json)
+          }
           setNft({ ...nft, json })
         }
 
