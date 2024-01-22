@@ -55,6 +55,7 @@ import {
   ListItemText,
   Alert,
   Switch,
+  Checkbox,
 } from "@mui/material"
 import { useWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
@@ -77,6 +78,7 @@ import { takeSnapshot } from "../../helpers/snapshot"
 import { getMintlist } from "../../helpers/helius"
 
 export const BatchUpdateNfts = () => {
+  const [immutableChecked, setImmutableChecked] = useState(false)
   const { dandies, collections, loading: nftsLoading } = useNfts()
   const [secretKey, setSecretKey] = useState("")
   const [secretKeyError, setSecretKeyError] = useState<string | null>(null)
@@ -320,6 +322,12 @@ export const BatchUpdateNfts = () => {
       setToUpdate(
         filtered.filter((n) => {
           return unwrapOptionRecursively(n.metadata.programmableConfig)?.ruleSet !== ruleSet
+        })
+      )
+    } else if (expanded === "make-immutable") {
+      setToUpdate(
+        filtered.filter((n) => {
+          return n.metadata.isMutable
         })
       )
     } else if (!expanded) {
@@ -1039,6 +1047,41 @@ export const BatchUpdateNfts = () => {
     }
   }
 
+  async function makeImmutable() {
+    try {
+      setLoading(true)
+      const getInstruction = async (da: DigitalAsset) => {
+        const anonUmi = getAnonUmi(umi.identity.publicKey)
+        let tx = transactionBuilder().add(
+          updateV1(anonUmi, {
+            mint: da.publicKey,
+            isMutable: false,
+            authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
+          })
+        )
+
+        const fee = getFee("batch", dandies.length)
+
+        if (fee) {
+          tx = tx.add(
+            transferSol(anonUmi, {
+              destination: FEES_WALLET,
+              amount: sol(fee),
+            })
+          )
+        }
+
+        return tx
+      }
+
+      await sendUpdates(getInstruction)
+    } catch (err: any) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Grid container spacing={2}>
       <Grid item xs={12} sm={7}>
@@ -1296,8 +1339,42 @@ export const BatchUpdateNfts = () => {
                     </AccordionDetails>
                   </Accordion>
                   <Accordion
-                    expanded={expanded === "find-and-replace"}
-                    onChange={handleChange("find-and-replace")}
+                    expanded={expanded === "make-immutable"}
+                    onChange={handleChange("make-immutable")}
+                    disabled={!filtered.length || !isUpdateAuthority}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Typography variant="h5">Make immutable</Typography>
+                        {nft && !isUpdateAuthority && <Typography color="error">Connect with UA wallet</Typography>}
+                      </Stack>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={2}>
+                        <Typography>Make the selected NFTs immutable</Typography>
+                        <Alert severity="error">
+                          There is no going back from this! Make sure you know what you are doing.
+                        </Alert>
+                        <FormControlLabel
+                          label="I know what I'm doing, once immutable, these NFTs can never be changed"
+                          control={
+                            <Checkbox
+                              checked={immutableChecked}
+                              onChange={(e) => setImmutableChecked(e.target.checked)}
+                            />
+                          }
+                        />
+                        {immutableChecked && (
+                          <Button onClick={makeImmutable} color="error" variant="contained">
+                            Make NFTs immutable
+                          </Button>
+                        )}
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+                  <Accordion
+                    expanded={expanded === "find-replace"}
+                    onChange={handleChange("find-replace")}
                     disabled={!filtered.length || !isUpdateAuthority}
                   >
                     <AccordionSummary expandIcon={<ExpandMore />}>
