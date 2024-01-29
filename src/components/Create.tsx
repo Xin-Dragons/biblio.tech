@@ -28,10 +28,13 @@ import toast from "react-hot-toast"
 import { useUmi } from "../context/umi"
 import { FEES_WALLET, MAX_TOKENS } from "../constants"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
+import { getFee } from "./NftTool/helpers/utils"
+import { useAccess } from "../context/access"
 
-export const Create = ({ isAdmin }: { isAdmin: boolean }) => {
+export const Create = () => {
   const wallet = useWallet()
   const umi = useUmi()
+  const user = useAccess()
   const [keypair, setKeypair] = useState(generateSigner(umi))
   const [keypairError, setKeypairError] = useState<string | null>(null)
   const [decimals, setDecimals] = useState(9)
@@ -165,11 +168,13 @@ export const Create = ({ isAdmin }: { isAdmin: boolean }) => {
         )
       }
 
-      if (!isAdmin) {
+      const fee = getFee("createSpl", user.dandies.length)
+
+      if (fee) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.5),
+            amount: sol(fee),
           })
         )
       }

@@ -43,8 +43,6 @@ import { toast } from "react-hot-toast"
 import { useWallet } from "@solana/wallet-adapter-react"
 import axios, { AxiosError } from "axios"
 import base58 from "bs58"
-import { Selector } from "../Selector"
-import { getCsrfToken, signOut, useSession } from "next-auth/react"
 import { useDatabase } from "../../context/database"
 import { User } from "../../types/nextauth"
 import { useWallets } from "../../context/wallets"
@@ -79,7 +77,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
   const [publicKey, setPublicKey] = useState<string>("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const wallet = useWallet()
-  const { data: session, update } = useSession()
+  const { user } = useAccess()
   const umi = useUmi()
   const { setBypassWallet } = useWalletBypass()
 
@@ -99,7 +97,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
             const result = await axios.post("/api/add-wallet", {
               publicKey,
               rawTransaction: base58.encode(umi.transactions.serialize(signed)),
-              basePublicKey: session?.publicKey,
+              basePublicKey: user.publicKey,
               isLedger,
             })
           } catch (err: any) {
@@ -120,8 +118,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
             throw err
           }
         } else {
-          const csrf = await getCsrfToken()
-          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+          if (!wallet.publicKey || !wallet.signMessage) return
 
           const message = new SigninMessage({
             domain: window.location.host,
@@ -139,7 +136,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
             signature: serializedSignature,
             // @ts-ignore
             publicKey: window.solana?.publicKey?.toBase58(),
-            basePublicKey: session?.publicKey,
+            basePublicKey: user.publicKey,
           })
         }
       }
@@ -153,7 +150,6 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
       })
 
       await linkWalletPromise
-      await update()
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error linking wallet")
@@ -238,7 +234,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
 const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
   const { chain } = useNetwork()
   const { signMessageAsync } = useSignMessage()
-  const { data: session, update } = useSession()
+  const { user } = useAccess()
 
   const { address, connector, isConnected } = useAccount()
   const { data: ensName } = useEnsName({ address })
@@ -267,7 +263,7 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
         const { data } = await axios.post("/api/connect-eth-wallet", {
           message,
           signature,
-          basePublicKey: session?.publicKey,
+          basePublicKey: user.publicKey,
         })
 
         if (!data.ok) {
@@ -283,7 +279,6 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
 
       await addingPromise
 
-      await update()
       onClose()
     } catch (err: any) {
       toast.error(err.response?.data || err.message || "Error adding wallet")
@@ -342,9 +337,7 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
 }
 
 export const Profile: FC<ProfileProps> = ({ onClose }) => {
-  const { update, data: session } = useSession()
   const [loading, setLoading] = useState(false)
-  const { stakeNft, unstakeNft } = useDatabase()
   const [activeTab, setActiveTab] = useState<string | null>("access")
   const wallet = useWallet()
 
@@ -353,9 +346,6 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
   }
 
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
-
-  const user = session?.user
-  const publicKey = session?.publicKey
 
   async function unlinkNft(mint: string) {
     try {
@@ -386,47 +376,6 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
       })
 
       await unlinkPromise
-      await unstakeNft(mint)
-      await update()
-    } catch (err: any) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function linkNft(mint: string) {
-    try {
-      setLoading(true)
-
-      async function link() {
-        const params = {
-          publicKey: wallet.publicKey?.toBase58(),
-          mint,
-        }
-        const { data } = await axios.post("/api/lock-nft", params)
-        if (data.resolved) {
-          return
-        }
-        const txn = Transaction.from(base58.decode(data.txn))
-        const signed = await wallet?.signTransaction?.(txn)
-        await axios.post("/api/send-lock-nft", {
-          ...params,
-          rawTransaction: base58.encode(signed?.serialize()!),
-        })
-      }
-
-      const linkPromise = link()
-
-      toast.promise(linkPromise, {
-        loading: "Linking NFT to Biblio...",
-        success: "NFT linked",
-        error: "Error linking NFT, please try again",
-      })
-
-      await linkPromise
-      await stakeNft(mint)
-      await update()
     } catch (err: any) {
       console.error(err)
     } finally {
@@ -460,22 +409,6 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
         </Stack>
         {isXs ? (
           <Stack width="100%">
-            <Accordion expanded={activeTab === "access"} onChange={onAccordionChange("access")} sx={{ width: "100%" }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography variant="h6" color="primary">
-                  Access
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Selector
-                  linkedNfts={user?.nfts || null}
-                  onSubmit={linkNft}
-                  unlinkNft={unlinkNft}
-                  loading={loading}
-                  submitLabel="Link NFT"
-                />
-              </AccordionDetails>
-            </Accordion>
             <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
               <AccordionSummary expandIcon={<ExpandMore />}>
                 <Typography variant="h6" color="primary">
@@ -521,23 +454,11 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
           <CardContent>
             <Stack justifyContent="center" alignItems="center" spacing={2}>
               <Tabs value={activeTab} onChange={onTabChange}>
-                <Tab value="access" label="Access" />
                 <Tab value="wallets" label="Linked Wallets" />
                 <Tab value="address-book" label="Address book" />
                 <Tab value="data" label="Data" />
                 <Tab value="settings" label="Settings" />
               </Tabs>
-              {activeTab === "access" && (
-                <>
-                  <Selector
-                    linkedNfts={user?.nfts || null}
-                    onSubmit={linkNft}
-                    unlinkNft={unlinkNft}
-                    loading={loading}
-                    submitLabel="Link NFT"
-                  />
-                </>
-              )}
 
               {activeTab === "settings" && <Settings />}
 
@@ -611,8 +532,7 @@ const Settings: FC = () => {
 }
 
 function LinkedWallets() {
-  const { data: session, update } = useSession()
-  const { publicKeys, availableWallets } = useAccess()
+  const { user } = useAccess()
   const { wallets, isLedger } = useWallets()
   const [loading, setLoading] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -620,13 +540,9 @@ function LinkedWallets() {
   const umi = useUmi()
   const wallet = useWallet()
 
-  const linkedWallets = publicKeys
-
   function toggleAdding() {
     setAdding(!adding)
   }
-
-  const isMain = session?.user?.wallets?.find((w) => w.public_key === wallet.publicKey?.toBase58())?.main
 
   async function unlink(publicKey: string) {
     try {
@@ -699,12 +615,6 @@ function LinkedWallets() {
       })
 
       await signMessagePromise
-
-      await update()
-      // @ts-ignore
-      if (wallet.publicKey?.toBase58() === publicKey) {
-        await signOut()
-      }
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error unlinking")
@@ -720,23 +630,6 @@ function LinkedWallets() {
 
   return (
     <Stack spacing={2} width="100%">
-      {linkedWallets.length < availableWallets ? (
-        <>
-          <Alert severity="info">
-            You have <strong>{linkedWallets.length}</strong> linked wallet{linkedWallets.length === 1 ? "" : "s"}. You
-            can link up to <strong>{availableWallets}</strong>.
-          </Alert>
-          <Typography>
-            Connect to a new wallet while signed in to your main account and sign a message in order to link. You can
-            unlink additional wallets at any time.
-          </Typography>
-        </>
-      ) : (
-        <Alert severity="info">
-          You have linked your maximum wallets. Link more Dandies or Biblio Passes to link additional wallets.
-        </Alert>
-      )}
-
       <Table stickyHeader>
         {!isXs && (
           <TableHead>
@@ -751,7 +644,7 @@ function LinkedWallets() {
         )}
 
         <TableBody>
-          {sortBy(session?.user?.wallets, (w) => w.main).map((wallet) => {
+          {sortBy(user?.wallets, (w) => w.main).map((wallet) => {
             const nickname = wallets.find((w) => w.publicKey === wallet.public_key)?.nickname || "-"
             return (
               <TableRow
@@ -799,7 +692,7 @@ function LinkedWallets() {
         <TableFooter sx={{ position: "sticky", bottom: 0, backgroundColor: "background.default", zIndex: 10 }}>
           <TableRow>
             <TableCell colSpan={5} sx={{ textAlign: "center" }}>
-              <Button variant="contained" onClick={toggleAdding} disabled={publicKeys.length >= availableWallets}>
+              <Button variant="contained" onClick={toggleAdding}>
                 <Stack direction="row" spacing={0.5}>
                   <AddCircle />
                   <Typography>Add new</Typography>
@@ -834,7 +727,7 @@ function LinkedWallets() {
 function Data() {
   const [storage, setStorage] = useState<number>(0)
   const { db } = useDatabase()
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const [importFile, setImportFile] = useState(null)
   const [blob, setBlob] = useState<Blob | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -865,7 +758,7 @@ function Data() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(json))
     const dlAnchorElem = document.createElement("a")
     dlAnchorElem.setAttribute("href", dataStr)
-    dlAnchorElem.setAttribute("download", `${session?.user?.id}.biblio`)
+    dlAnchorElem.setAttribute("download", `${user?.id}.biblio`)
     dlAnchorElem.click()
 
     // await axios.post("/api/sync", { json, publicKey: session.publicKey })
@@ -960,7 +853,7 @@ function Data() {
     }
   }
 
-  const mainWallet = session?.user?.wallets.find((w) => w.main)?.public_key
+  const mainWallet = user?.wallets.find((w: any) => w.main)?.public_key
 
   function toggleDeleteAllShowing() {
     setDeleteAllShowing(!deleteAllShowing)
@@ -979,9 +872,6 @@ function Data() {
   async function deleteAccount() {
     try {
       setDeleting(true)
-      if (session?.user?.nfts?.length) {
-        throw new Error("Cannot delete account as there are still linked NFTs. Unlink these first")
-      }
 
       async function signMessage() {
         if (isLedger) {
@@ -1241,7 +1131,7 @@ function Data() {
 }
 
 export const AddressBook = () => {
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const { wallets, addWallet } = useWallets()
   const [adding, setAdding] = useState(false)
   const [publicKey, setPublicKey] = useState("")
@@ -1272,7 +1162,7 @@ export const AddressBook = () => {
     }
   }, [publicKey])
 
-  const linkedWallets = session?.user?.wallets.map((wallet) => wallet.public_key)
+  const linkedWallets = user?.wallets.map((wallet: any) => wallet.public_key)
 
   function handleClose() {
     setPublicKey("")

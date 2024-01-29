@@ -33,7 +33,6 @@ export default function TokenTool() {
     setTab(tab)
   }
 
-  const isAdmin = !!session?.user?.id
   return (
     <Layout
       nfts={[]}
@@ -61,8 +60,8 @@ export default function TokenTool() {
       }
     >
       <Box p={4} pl={2}>
-        {tab === "admin" && <Update isAdmin={isAdmin} pk={mint} />}
-        {tab === "create" && <Create isAdmin={isAdmin} />}
+        {tab === "admin" && <Update pk={mint} />}
+        {tab === "create" && <Create />}
       </Box>
     </Layout>
   )

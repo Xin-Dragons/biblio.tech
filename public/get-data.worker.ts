@@ -23,6 +23,7 @@ import { TokenState as NftTokenState } from "@metaplex-foundation/mpl-toolbox"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { isSome, publicKey, some, Option, unwrapOption } from "@metaplex-foundation/umi"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
+import { getAllByOwner } from "../src/helpers/helius"
 
 const MOB_TRAITS = publicKey("5j3KnVdZPgPRFcMgAn9cL68xNXtXSHFUbvSjcn9JUPQy")
 
@@ -33,12 +34,15 @@ const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processe
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string)
 
 async function getListings(owner: string) {
+  console.log("getting listings")
   const result = await client.send(
     new NftListingStatusRequest({
       seller: owner,
       isListed: true,
     })
   )
+
+  console.log("got listings")
 
   return result.data
 }
@@ -71,6 +75,7 @@ async function getTokenPrices(mints: string[]) {
 }
 
 async function getOutstandingLoans(publicKey: string, paginationToken?: string): Promise<any> {
+  console.log("GETTING OUTSTANDING LOANS")
   const { data } = await axios.post(
     `https://rest-api.hellomoon.io/v0/nft/loans`,
     {
@@ -85,6 +90,7 @@ async function getOutstandingLoans(publicKey: string, paginationToken?: string):
       },
     }
   )
+  console.log("GOT OUTSTANDING LOANS")
 
   if (data.paginationToken) {
     return [...data.data, ...(await getOutstandingLoans(publicKey, data.paginationToken))]
@@ -94,6 +100,7 @@ async function getOutstandingLoans(publicKey: string, paginationToken?: string):
 }
 
 async function getIncomingLoans(publicKey: string, paginationToken?: string): Promise<any> {
+  console.log("GETTING INCOMNG LOANS")
   const { data } = await axios.post(
     `https://rest-api.hellomoon.io/v0/nft/loans`,
     {
@@ -108,6 +115,8 @@ async function getIncomingLoans(publicKey: string, paginationToken?: string): Pr
       },
     }
   )
+
+  console.log("GOT INCOMING LOAND")
 
   if (data.paginationToken) {
     return [...data.data, ...(await getIncomingLoans(publicKey, data.paginationToken))]
@@ -191,22 +200,6 @@ function getStatus(items: DigitalAssetWithToken[], publicKeys: string[]) {
   })
 }
 
-async function getOwnedHelloMoonNfts(ownerAccount: string, paginationToken?: string): Promise<NftMintsByOwner[]> {
-  const result = await client.send(
-    new NftMintsByOwnerRequest({
-      ownerAccount,
-      limit: 1000,
-      paginationToken,
-    })
-  )
-
-  if (result.paginationToken) {
-    return [...result.data, ...(await getOwnedHelloMoonNfts(ownerAccount, result.paginationToken))]
-  }
-
-  return result.data
-}
-
 async function getCollections(collectionIds: string[]) {
   const collections = await client.send(
     new LeaderboardStatsRequest({
@@ -222,52 +215,53 @@ self.addEventListener("message", async (event) => {
   try {
     let { publicKey: owner, force, mints, publicKeys } = event.data
 
-    let [umiTokens, helloMoonNfts, loanStats, incomingLoans, listings] = await Promise.all([
-      fetchAllDigitalAssetWithTokenByOwner(umi, owner, { tokenStrategy: "getProgramAccounts" }),
-      getOwnedHelloMoonNfts(owner),
-      getOutstandingLoans(owner),
-      getIncomingLoans(owner),
+    let [digitalAssets, listings] = await Promise.all([
+      getAllByOwner(owner),
+      // getOutstandingLoans(owner),
+      // getIncomingLoans(owner),
       getListings(owner),
     ])
 
-    umiTokens = getStatus(umiTokens as DigitalAssetWithToken[], publicKeys)
+    console.log(digitalAssets)
 
-    const mintsInWallet = umiTokens.map((token) => token.mint.publicKey)
+    // umiTokens = getStatus(umiTokens as DigitalAssetWithToken[], publicKeys)
 
-    const loanedOut = loanStats
-      .map((l: Loan) => l.collateralMint as string)
-      .filter((mint: string) => !mintsInWallet.includes(publicKey(mint)))
-      .map(publicKey)
+    // const mintsInWallet = umiTokens.map((token) => token.mint.publicKey)
 
-    if (loanedOut.length) {
-      const loanedNfts = (await fetchAllDigitalAsset(umi, loanedOut)).map((item) => {
-        return {
-          ...item,
-          status: "loan-taken",
-        } as DigitalAssetWithStatus
-      })
-      umiTokens = uniqBy([...umiTokens, ...loanedNfts], (item) => item.mint.publicKey)
-    }
+    // const loanedOut = loanStats
+    //   .map((l: Loan) => l.collateralMint as string)
+    //   .filter((mint: string) => !mintsInWallet.includes(publicKey(mint)))
+    //   .map(publicKey)
 
-    const lentOn = incomingLoans
-      .map((l: Loan) => l.collateralMint as string)
-      .filter(Boolean)
-      .filter((mint: string) => !mintsInWallet.includes(publicKey(mint)))
+    // if (loanedOut.length) {
+    //   const loanedNfts = (await fetchAllDigitalAsset(umi, loanedOut)).map((item) => {
+    //     return {
+    //       ...item,
+    //       status: "loan-taken",
+    //     } as DigitalAssetWithStatus
+    //   })
+    //   umiTokens = uniqBy([...umiTokens, ...loanedNfts], (item) => item.mint.publicKey)
+    // }
 
-    if (lentOn.length) {
-      const lentOnDigitalAssets = await fetchAllDigitalAsset(
-        umi,
-        lentOn.map((l: string) => publicKey(l))
-      )
-      const lentOnNfts = lentOnDigitalAssets.map((item) => {
-        return {
-          ...item,
-          status: "loan-given",
-          owner: incomingLoans.find((i: Loan) => i.collateralMint === item.publicKey).borrower,
-        } as DigitalAssetWithStatusAndOwner
-      })
-      umiTokens = uniqBy([...umiTokens, ...lentOnNfts], (item) => item.mint.publicKey)
-    }
+    // const lentOn = incomingLoans
+    //   .map((l: Loan) => l.collateralMint as string)
+    //   .filter(Boolean)
+    //   .filter((mint: string) => !mintsInWallet.includes(publicKey(mint)))
+
+    // if (lentOn.length) {
+    //   const lentOnDigitalAssets = await fetchAllDigitalAsset(
+    //     umi,
+    //     lentOn.map((l: string) => publicKey(l))
+    //   )
+    //   const lentOnNfts = lentOnDigitalAssets.map((item) => {
+    //     return {
+    //       ...item,
+    //       status: "loan-given",
+    //       owner: incomingLoans.find((i: Loan) => i.collateralMint === item.publicKey).borrower,
+    //     } as DigitalAssetWithStatusAndOwner
+    //   })
+    //   umiTokens = uniqBy([...umiTokens, ...lentOnNfts], (item) => item.mint.publicKey)
+    // }
 
     if (listings.length) {
       const listedNfts = (
@@ -350,15 +344,15 @@ self.addEventListener("message", async (event) => {
 
     const nfts = nonFungibles
       .map((item) => {
-        const loanTaken = loanStats.find((l: Loan) => l.collateralMint === item.nftMint)
-        const loanGiven = incomingLoans.find((l: Loan) => l.collateralMint === item.nftMint)
+        // const loanTaken = loanStats.find((l: Loan) => l.collateralMint === item.nftMint)
+        // const loanGiven = incomingLoans.find((l: Loan) => l.collateralMint === item.nftMint)
         const listing = listings.find((l: any) => l.nftMint === item.nftMint)
-        if (loanTaken) {
-          loanTaken.defaults = loanTaken.acceptBlocktime + loanTaken.loanDurationSeconds
-        }
-        if (loanGiven) {
-          loanGiven.defaults = loanGiven.acceptBlocktime + loanGiven.loanDurationSeconds
-        }
+        // if (loanTaken) {
+        //   loanTaken.defaults = loanTaken.acceptBlocktime + loanTaken.loanDurationSeconds
+        // }
+        // if (loanGiven) {
+        //   loanGiven.defaults = loanGiven.acceptBlocktime + loanGiven.loanDurationSeconds
+        // }
         const helloMoonNft = helloMoonNfts.find((hm) => hm.nftMint === item.nftMint)
         const collection = unwrapOption(item.metadata.collection)
         const creators = unwrapOption(item.metadata.creators)
@@ -383,8 +377,9 @@ self.addEventListener("message", async (event) => {
           ...helloMoonNft,
           collectionId: (collection && collection.verified && collection.key) || linkedCollection || null,
           firstVerifiedCreator: firstVerifiedCreator ? firstVerifiedCreator.address : null,
-          loan: loanTaken || loanGiven,
-          status: (loanTaken ? "loan-taken" : loanGiven ? "loan-given" : listing ? "listed" : null) || item.status,
+          // loan: loanTaken || loanGiven,
+          // status: (loanTaken ? "loan-taken" : loanGiven ? "loan-given" : listing ? "listed" : null) || item.status,
+          status: listing ? "listed" : item.status,
           delegate,
           listing,
         }

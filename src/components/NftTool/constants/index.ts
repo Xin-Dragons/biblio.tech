@@ -9,19 +9,30 @@ export const METAPLEX_COMPATIBILITY_RULE_SET = "AdH2Utn6Fus15ZhtenW4hZBQnvtLgM1Y
 export const FEES_WALLET = publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!)
 
 export const FEES = {
-  create: {
-    basic: 0.01,
-    advanced: 0.005,
-    pro: 0.0025,
+  tokenTool: {
+    createSpl: {
+      basic: 0.5,
+      advanced: 0.25,
+      pro: 0.125,
+    },
+    update: {},
+    mint: {},
   },
-  update: {
-    basic: 0.001,
-    advanced: 0.0005,
-    pro: 0.00025,
-  },
-  batch: {
-    basic: 0.002, // 20 sol for 10k
-    advanced: 0.001, // 10 sol for 10k
-    pro: 0.0005, // 5 sol for 10k
+  nftSuite: {
+    create: {
+      basic: 0.01,
+      advanced: 0.005,
+      pro: 0.0025,
+    },
+    update: {
+      basic: 0.001,
+      advanced: 0.0005,
+      pro: 0.00025,
+    },
+    batch: {
+      basic: 0.002, // 20 sol for 10k
+      advanced: 0.001, // 10 sol for 10k
+      pro: 0.0005, // 5 sol for 10k
+    },
   },
 }

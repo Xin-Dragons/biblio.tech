@@ -37,7 +37,7 @@ type NftsProviderProps = {
 
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
-  const { publicKey, userId, publicKeys, isAdmin } = useAccess()
+  const { publicKey, publicKeys } = useAccess()
   const { sort, showAllWallets, loanType } = useUiSettings()
   const { showStarred, showLoans, showUntagged, search, selectedTags } = useFilters()
   const {} = useFilters()
@@ -53,6 +53,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     [router.query.tag],
     []
   )
+
+  console.log({ publicKey, publicKeys })
 
   const allTaggedNfts = useLiveQuery(() => db.taggedNfts.filter((item) => item.tagId !== "starred").toArray(), [], [])
 
@@ -76,15 +78,14 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   const nftsFromDb = useLiveQuery(
     () => {
-      const query =
-        showAllWallets && isAdmin ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
+      const query = showAllWallets ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
       if (router.query.filter === "loans") {
         if (loanType === "borrowed") {
           return query
             .filter((item) => Boolean(item.loan && item.loan.status === "active" && item.status === "loan-taken"))
             .toArray()
         } else {
-          const pks = showAllWallets && isAdmin ? publicKeys : [publicKey]
+          const pks = showAllWallets ? publicKeys : [publicKey]
           return db.nfts.filter((item) => pks.includes(item.loan?.lender!)).toArray()
         }
       }
@@ -313,7 +314,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       filtered,
       (item) => {
         const balance =
-          (isAdmin && showAllWallets
+          (showAllWallets
             ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
             : item.balance?.[publicKey as keyof object]) || 0
 
@@ -332,7 +333,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   if (sort === "balance") {
     filtered = sortBy(filtered, (item) => {
       const balance =
-        (isAdmin && showAllWallets
+        (showAllWallets
           ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
           : item.balance?.[publicKey as keyof object]) || 0
       return balance

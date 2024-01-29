@@ -43,7 +43,6 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const provider = new AnchorProvider(connection, wallet as any, {
     commitment: "confirmed",
   })
-  const { isAdmin } = useAccess()
   const { nfts } = useNfts()
   const swapSdk = new TensorSwapSDK({ provider })
   const wlSdk = new TensorWhitelistSDK({ provider })

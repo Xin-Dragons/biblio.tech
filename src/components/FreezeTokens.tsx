@@ -16,7 +16,6 @@ import {
 import { useUmi } from "../context/umi"
 import { FEES_WALLET } from "../constants"
 import { noop } from "lodash"
-import { useSession } from "next-auth/react"
 
 export const FreezeTokens = ({
   mint,

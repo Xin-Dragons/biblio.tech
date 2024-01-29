@@ -8,7 +8,6 @@ import { createGenericFileFromBrowserFile, percentAmount, sol, transactionBuilde
 import { TokenStandard, createV1, updateV1 } from "@metaplex-foundation/mpl-token-metadata"
 import { Mint, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
-import { useSession } from "next-auth/react"
 
 export const CreateMetadata = ({ mint, isAdmin }: { mint: Mint; isAdmin: boolean }) => {
   const [name, setName] = useState("")

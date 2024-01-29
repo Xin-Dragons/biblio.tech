@@ -54,7 +54,6 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
     commitment: "processed",
     preflightCommitment: "processed",
   })
-  const { isAdmin } = useAccess()
   const program = new Program(IDL, CIRTUS_PROGRAM_ID, provider)
   const { db } = useDatabase()
   const sdk = new CitrusSdk(wallet as any, connection)
@@ -134,14 +133,14 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
       bytesCreatedOnChain: 0,
     })
 
-    if (!isAdmin) {
-      txn = txn.add(
-        transferSol(umi, {
-          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-          amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
-        })
-      )
-    }
+    // if (!isAdmin) {
+    //   txn = txn.add(
+    //     transferSol(umi, {
+    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+    //       amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
+    //     })
+    //   )
+    // }
 
     await txn.sendAndConfirm(umi)
   }
@@ -169,14 +168,14 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
     const txns = [fromWeb3JsLegacyTransaction(tx)]
 
-    if (!isAdmin) {
-      txns.push(
-        await transferSol(umi, {
-          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-          amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
-        }).buildWithLatestBlockhash(umi)
-      )
-    }
+    // if (!isAdmin) {
+    //   txns.push(
+    //     await transferSol(umi, {
+    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+    //       amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
+    //     }).buildWithLatestBlockhash(umi)
+    //   )
+    // }
 
     const signed = await umi.identity.signAllTransactions(txns)
 
@@ -213,14 +212,14 @@ export const CitrusProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
     const txns = [fromWeb3JsLegacyTransaction(tx)]
 
-    if (!isAdmin) {
-      txns.push(
-        await transferSol(umi, {
-          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-          amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
-        }).buildWithLatestBlockhash(umi)
-      )
-    }
+    // if (!isAdmin) {
+    //   txns.push(
+    //     await transferSol(umi, {
+    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+    //       amount: sol((loan.terms.principal / LAMPORTS_PER_SOL) * 0.005),
+    //     }).buildWithLatestBlockhash(umi)
+    //   )
+    // }
 
     const signed = await umi.identity.signAllTransactions(txns)
     await Promise.all(

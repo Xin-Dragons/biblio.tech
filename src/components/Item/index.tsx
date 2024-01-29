@@ -152,7 +152,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
 const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, isTouchDevice, item }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
-  const { isInScope, isAdmin } = useAccess()
+  const { isInScope, dandies } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const [extendShowing, setExtendShowing] = useState(false)
@@ -274,7 +274,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
       : citrusBestLoan?.terms.principal || 0)
   const canExtend = loan.market === "Sharky" ? bestLoan : citrusBestLoan
 
-  const serviceFee = isAdmin
+  const serviceFee = dandies.length
     ? 0
     : loan.market === "Sharky"
     ? (bestLoan?.data.principalLamports ? Number(bestLoan?.data.principalLamports) : 0) * 0.005
@@ -707,14 +707,14 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
   const [sharkyFetching, setSharkyFetching] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { isInScope } = useAccess()
   const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
   const { takeLoan, getBestLoan, getOrderBook } = useSharky()
   const [bestCitrusLoan, setBestCitrusLoan] = useState<CitrusLoan | null>(null)
   const [citrusFetching, setCitrusFetching] = useState(false)
-  const { isAdmin, isBasic } = useAccess()
 
-  const isDisabled = !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   async function fetchCitrus() {
     try {
@@ -1033,7 +1033,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const [asset, setAsset] = useState<Asset | null>(null)
   const { db } = useDatabase()
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
-  const { isInScope, isAdmin, isBasic } = useAccess()
+  const { isInScope } = useAccess()
   const [revoking, setRevoking] = useState(false)
   const router = useRouter()
   const { collections } = useDatabase()
@@ -1047,7 +1047,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
     setMetadataShowing(!metadataShowing)
   }
 
-  const isDisabled = !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   const selectedTags =
     useLiveQuery(() => db && db.taggedNfts.where({ nftId: item.nftMint }).toArray(), [item, db], []) || []
@@ -1527,7 +1527,7 @@ export const Item: FC<ItemProps> = ({
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
   const metaplex = useMetaplex()
-  const { isInScope, isOffline, publicKey, publicKeys, isBasic, isAdmin } = useAccess()
+  const { publicKey, publicKeys, isInScope } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
   const [isTouchDevice, setIsTouchDevice] = useState(false)
 
@@ -1541,12 +1541,9 @@ export const Item: FC<ItemProps> = ({
   const { transactions } = useTransactionStatus()
   const transaction = transactions.find((t) => t.nftMint === item.nftMint)
 
-  const isDisabled = isInScope && !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   async function loadNft() {
-    if (isOffline) {
-      return
-    }
     try {
       const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
       await updateItem({

@@ -18,8 +18,9 @@ import { FreezeTokens } from "./FreezeTokens"
 import { UpdateAuths } from "./UpdateAuths"
 import { shorten } from "../helpers/utils"
 import { toast } from "react-hot-toast"
+import { useAccess } from "../context/access"
 
-export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null }) => {
+export const Update = ({ pk }: { pk: PublicKey | null }) => {
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const [digitalAsset, setDigitalAsset] = useState<DigitalAsset | null>(null)
   const [jsonMetadata, setJsonMetadata] = useState<JsonMetadata | null>(null)
@@ -93,14 +94,14 @@ export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null
       <Grid item xs={12} sm={6}>
         <Card>
           <CardContent>
-            <MintTokens mint={mint} isAdmin={isAdmin} />
+            <MintTokens mint={mint} />
           </CardContent>
         </Card>
       </Grid>
       <Grid item xs={12} sm={6}>
         <Card>
           <CardContent>
-            <FreezeTokens mint={mint} onComplete={checkToken} isAdmin={isAdmin} />
+            <FreezeTokens mint={mint} onComplete={checkToken} />
           </CardContent>
         </Card>
       </Grid>
@@ -108,9 +109,9 @@ export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null
         <Card>
           <CardContent>
             {mint && !digitalAsset ? (
-              <CreateMetadata mint={mint} isAdmin={isAdmin} />
+              <CreateMetadata mint={mint} />
             ) : (
-              <UpdateMetadata digitalAsset={digitalAsset} jsonMetadata={jsonMetadata} isAdmin={isAdmin} />
+              <UpdateMetadata digitalAsset={digitalAsset} jsonMetadata={jsonMetadata} />
             )}
           </CardContent>
         </Card>
@@ -118,7 +119,7 @@ export const Update = ({ isAdmin, pk }: { isAdmin: boolean; pk: PublicKey | null
       <Grid item xs={12} sm={6}>
         <Card>
           <CardContent>
-            <UpdateAuths mint={mint} metadata={digitalAsset?.metadata} isAdmin={isAdmin} refresh={checkToken} />
+            <UpdateAuths mint={mint} metadata={digitalAsset?.metadata} refresh={checkToken} />
           </CardContent>
         </Card>
       </Grid>

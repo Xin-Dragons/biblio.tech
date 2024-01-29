@@ -58,7 +58,6 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
   const provider = createProvider(connection, wallet as any)
   const sharkyClient = createSharkyClient(provider, SHARKY_PROGRAM_ID, "mainnet")
   const { nfts } = useNfts()
-  const { isAdmin } = useAccess()
   const { setTransactionInProgress, setTransactionComplete, setTransactionErrors, clearTransactions } =
     useTransactionStatus()
   const umi = useUmi()
@@ -240,15 +239,15 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
 
     const transactions = []
 
-    if (!isAdmin) {
-      const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
-      transactions.push(
-        await transferSol(umi, {
-          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-          amount,
-        }).buildWithLatestBlockhash(umi)
-      )
-    }
+    // if (!isAdmin) {
+    //   const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+    //   transactions.push(
+    //     await transferSol(umi, {
+    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+    //       amount,
+    //     }).buildWithLatestBlockhash(umi)
+    //   )
+    // }
 
     transactions.unshift(fromWeb3JsLegacyTransaction(transaction))
 
@@ -304,16 +303,16 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
         }))
       )
 
-      if (!isAdmin) {
-        // 0.5%
-        const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
-        tx = tx.add(
-          transferSol(umi, {
-            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-            amount: amount,
-          })
-        )
-      }
+      // if (!isAdmin) {
+      //   // 0.5%
+      //   const amount = sol(Number(BigInt(loan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+      //   tx = tx.add(
+      //     transferSol(umi, {
+      //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+      //       amount: amount,
+      //     })
+      //   )
+      // }
 
       const conf = await tx.sendAndConfirm(umi)
 
@@ -374,16 +373,16 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       }))
     )
 
-    if (!isAdmin) {
-      // 0.5%
-      const amount = sol(Number(BigInt(newLoan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
-      tx = tx.add(
-        transferSol(umi, {
-          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-          amount: amount,
-        })
-      )
-    }
+    // if (!isAdmin) {
+    //   // 0.5%
+    //   const amount = sol(Number(BigInt(newLoan.data.principalLamports.toString()) / BigInt(LAMPORTS_PER_SOL)) * 0.005)
+    //   tx = tx.add(
+    //     transferSol(umi, {
+    //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+    //       amount: amount,
+    //     })
+    //   )
+    // }
 
     const conf = await tx.sendAndConfirm(umi)
 

@@ -11,7 +11,6 @@ import {
   DragOverlay,
   KeyboardSensor,
   MouseSensor,
-  PointerSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -40,7 +39,6 @@ import { CollectionItem } from "../../pages/collections"
 import { Router, useRouter } from "next/router"
 import { useFilters } from "../../context/filters"
 import { useAccess } from "../../context/access"
-import { useSession } from "next-auth/react"
 import { useDialog } from "../../context/dialog"
 import { Profile } from "../Profile"
 
@@ -236,18 +234,13 @@ export const Items: FC<ItemsProps> = ({
   const width = useWidth()
   const basePath = useBasePath()
   const { filtersActive, clearFilters, setSearch } = useFilters()
-  const { isActive } = useAccess()
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const router = useRouter()
 
   const sizes = {
     small: 1,
     medium: 1.5,
     large: 2,
-  }
-
-  function isTouchDevice() {
-    return "ontouchstart" in window || navigator.maxTouchPoints > 0
   }
 
   const sensors = useSensors(
@@ -337,8 +330,6 @@ export const Items: FC<ItemsProps> = ({
       </Box>
     )
   }
-
-  const noAccess = session?.publicKey && !isActive && !router.query.publicKey
 
   function clearAllFilters() {
     clearFilters()

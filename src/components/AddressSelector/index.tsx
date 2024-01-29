@@ -18,12 +18,10 @@ import { useWallets } from "../../context/wallets"
 import { PublicKey } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
 import { getAddressType, isValidPublicKey, shorten } from "../../helpers/utils"
-import { isPublicKey, publicKey } from "@metaplex-foundation/umi"
-import { isAddress } from "viem"
-import { useSession } from "next-auth/react"
 import { orderBy, uniqBy } from "lodash"
 import { Close } from "@mui/icons-material"
 import { Wallet } from "../../db"
+import { useAccess } from "../../context/access"
 
 type AddressSelectorProps = {
   wallet: Wallet | null
@@ -48,7 +46,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
     addWallet,
     deleteWallet,
   }: { wallets: Wallet[]; addWallet: Function; deleteWallet: Function } = useWallets()
-  const { data: session } = useSession()
+  const { user } = useAccess()
 
   const [open, toggleOpen] = useState(false)
   const [dialogValue, setDialogValue] = useState({
@@ -57,7 +55,7 @@ export const AddressSelector: FC<AddressSelectorProps> = ({
   })
 
   const linkedWallets =
-    session?.user?.wallets?.map((w) => {
+    user?.wallets?.map((w: any) => {
       const addressBookWallet = addressBookWallets.find((a) => a.publicKey === w.public_key)
       return {
         publicKey: w.public_key,

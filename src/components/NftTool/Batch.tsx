@@ -632,7 +632,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -742,7 +742,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -808,7 +808,7 @@ export const BatchUpdateNfts = () => {
           )
         }
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -898,7 +898,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -951,7 +951,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -1025,7 +1025,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.create", dandies.length)
 
         if (fee) {
           tx = tx.add(
@@ -1060,7 +1060,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nftSuite.batch", dandies.length)
 
         if (fee) {
           tx = tx.add(

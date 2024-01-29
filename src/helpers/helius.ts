@@ -43,6 +43,34 @@ async function getAllByCreator(creator: string) {
   return nfts
 }
 
+async function getByOwner(ownerAddress: string, page: number) {
+  return await client.getAssetsByOwner({
+    ownerAddress,
+    page,
+    displayOptions: {
+      showGrandTotal: true,
+      showUnverifiedCollections: true,
+      showCollectionMetadata: true,
+      showFungible: true,
+      showNativeBalance: true,
+    },
+  } as any)
+}
+
+export async function getAllByOwner(owner: string) {
+  const nfts = []
+  let total = 1001
+  let page = 1
+  while (nfts.length < total) {
+    const result = await getByOwner(owner, page)
+    total = result.grand_total as any as number
+    nfts.push(...result.items)
+    page++
+  }
+
+  return nfts
+}
+
 async function getAllByCollection(collection: string) {
   const nfts = []
   let total = 1001

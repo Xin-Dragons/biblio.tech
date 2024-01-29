@@ -40,7 +40,6 @@ export default function TokenTool() {
     setTab(tab)
   }
 
-  const isAdmin = !!session?.user?.id
   return (
     <UmiProvider>
       <NftsProvider>

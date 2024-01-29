@@ -91,7 +91,6 @@ const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title, open })
 export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) => {
   const basePath = useBasePath()
   const router = useRouter()
-  const { isAdmin } = useAccess()
 
   const [_, section, page] = router.asPath.split("/")
 
@@ -182,7 +181,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
         </MenuSection>
       )}
 
-      {!router.query.publicKey && isAdmin && (
+      {!router.query.publicKey && (
         <MenuSection accordion={!noAccordions} title="Tags">
           <Tags large={large} />
         </MenuSection>

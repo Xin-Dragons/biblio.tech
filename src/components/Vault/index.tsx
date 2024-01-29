@@ -47,7 +47,6 @@ import { useTransactionStatus } from "../../context/transactions"
 import { useDatabase } from "../../context/database"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
-import { useSession } from "next-auth/react"
 import { shorten, sleep, waitForWalletChange } from "../../helpers/utils"
 import { PublicKey } from "@solana/web3.js"
 import { Metaplex, guestIdentity } from "@metaplex-foundation/js"
@@ -61,7 +60,6 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [transferTo, setTransferTo] = useState<string | null>(null)
-  const { isAdmin } = useAccess()
   const { setBypassWallet } = useWalletBypass()
   const [type, setType] = useState("secure")
   const { selected } = useSelection()
@@ -70,7 +68,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const umi = useUmi()
   const wallet = useWallet()
   const { connection } = useConnection()
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const { sendSignedTransactions } = useTransactionStatus()
   const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
   const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
@@ -433,14 +431,14 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   )
               }
 
-              if (!isAdmin) {
-                txn = txn.add(
-                  transferSol(umi, {
-                    destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                    amount: type === "secure" ? sol(0.02) : sol(0.01),
-                  })
-                )
-              }
+              // if (!isAdmin) {
+              //   txn = txn.add(
+              //     transferSol(umi, {
+              //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+              //       amount: type === "secure" ? sol(0.02) : sol(0.01),
+              //     })
+              //   )
+              // }
 
               return {
                 instructions: txn,
@@ -492,9 +490,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
     }
   }
 
-  const wallets = session?.user?.wallets
-
-  const canSecureLock = (session?.user?.wallets?.length || 0) > 1
+  const canSecureLock = (user?.wallets?.length || 0) > 1
   const authorities = uniq([
     ...selectedItems.map((item) => item.delegate),
     ...selectedItems.map((item) => item.owner),
@@ -556,16 +552,12 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   fullWidth
                   onClick={() => setType("secure")}
                   sx={{ fontSize: "1.25em" }}
-                  disabled={!isAdmin}
+                  disabled={user.wallets.length <= 1}
                 >
                   <Stack>
                     <Typography variant="body1">Secure freeze</Typography>
-                    <Typography
-                      textTransform="none"
-                      variant="body2"
-                      sx={{ color: !isAdmin ? "#faaf00 !important" : "unset" }}
-                    >
-                      {!isAdmin ? "PREMIUM" : "(recommended)"}
+                    <Typography textTransform="none" variant="body2" sx={{ color: "#faaf00 !important" }}>
+                      (recommended)
                     </Typography>
                   </Stack>
                 </Button>
@@ -579,11 +571,11 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       label={"Select wallet for secure freeze"}
                       onChange={(e) => setLockingWallet(e.target.value)}
                     >
-                      {wallets
-                        ?.filter((w) => {
+                      {user.wallets
+                        ?.filter((w: any) => {
                           return !owners.includes(w.public_key)
                         })
-                        .map((w, index) => (
+                        .map((w: any, index: number) => (
                           <MenuItem key={index} value={w.public_key}>
                             {shorten(w.public_key)}
                           </MenuItem>
@@ -643,7 +635,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   label={"Select a secure wallet"}
                   onChange={(e) => setTransferTo(e.target.value)}
                 >
-                  {wallets?.map((w, index) => (
+                  {user.wallets?.map((w: any, index: number) => (
                     <MenuItem key={index} value={w.public_key}>
                       {shorten(w.public_key)}
                     </MenuItem>

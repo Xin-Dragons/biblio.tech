@@ -126,7 +126,7 @@ export const Actions: FC = () => {
   const [listOpen, setListOpen] = useState(false)
   const { delist } = useTensor()
   const { filtered } = useNfts()
-  const { isInScope, isAdmin, isBasic } = useAccess()
+  const { isInScope, dandies } = useAccess()
   const { selected, setSelected } = useSelection()
   const { loanType, setLoanType } = useUiSettings()
   const [delistOpen, setDelistOpen] = useState(false)
@@ -270,7 +270,7 @@ export const Actions: FC = () => {
           }
           let txn = transactionBuilder()
 
-          if (!isAdmin) {
+          if (!dandies.length) {
             txn = txn.add(
               transferSol(umi, {
                 destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
@@ -466,7 +466,7 @@ export const Actions: FC = () => {
                   : undefined,
             })
 
-            if (!isAdmin) {
+            if (!dandies.length) {
               burnInstruction = burnInstruction.add(
                 transferSol(umi, {
                   destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
@@ -537,7 +537,7 @@ export const Actions: FC = () => {
     setSelected(filtered.slice(0, value).map((item) => item.nftMint))
   }
 
-  const isDisabled = isInScope && !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   return (
     <Stack spacing={2}>

@@ -43,7 +43,7 @@ export const Tags: FC<TagsProps> = ({ large }) => {
   const router = useRouter()
   const { addTag, tags } = useTags()
   const [open, setOpen] = useState(false)
-  const { isAdmin } = useAccess()
+  const { isInScope } = useAccess()
 
   async function createTag(id: string, name: string, color: string) {
     await addTag(name, color)
@@ -72,7 +72,7 @@ export const Tags: FC<TagsProps> = ({ large }) => {
       ) : (
         <Button disabled>No tags added yet</Button>
       )}
-      {isAdmin && (
+      {isInScope && (
         <>
           <Button startIcon={<AddCircleOutlineIcon />} onClick={() => setOpen(true)} size={large ? "large" : "medium"}>
             New Tag
