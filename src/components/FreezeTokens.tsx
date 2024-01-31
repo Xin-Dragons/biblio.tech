@@ -16,21 +16,16 @@ import {
 import { useUmi } from "../context/umi"
 import { FEES_WALLET } from "../constants"
 import { noop } from "lodash"
+import { getFee } from "./NftTool/helpers/utils"
+import { useAccess } from "../context/access"
 
-export const FreezeTokens = ({
-  mint,
-  onComplete = noop,
-  isAdmin,
-}: {
-  mint: Mint | null
-  onComplete: Function
-  isAdmin: boolean
-}) => {
+export const FreezeTokens = ({ mint, onComplete = noop }: { mint: Mint | null; onComplete: Function }) => {
   const [type, setType] = useState("freeze")
   const [owner, setOwner] = useState("")
   const [ownerError, setOwnerError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const umi = useUmi()
+  const { account } = useAccess()
 
   const wallet = useWallet()
 
@@ -111,11 +106,13 @@ export const FreezeTokens = ({
         )
       }
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.2),
+            amount: sol(fee),
           })
         )
       }

@@ -102,7 +102,7 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       {title}
       {publicKey && (
         <Typography color="primary" variant="body2" textTransform="none">
-          Now viewing: {showAllWallets && isInScope ? "all wallets" : shorten(publicKey!)}
+          Now viewing: {showAllWallets ? "all linked wallets" : shorten(publicKey!)}
         </Typography>
       )}
       <Dialog open={showVaultInfo} onClose={toggleVaultInfo} fullWidth maxWidth="md">

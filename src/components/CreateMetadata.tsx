@@ -8,8 +8,11 @@ import { createGenericFileFromBrowserFile, percentAmount, sol, transactionBuilde
 import { TokenStandard, createV1, updateV1 } from "@metaplex-foundation/mpl-token-metadata"
 import { Mint, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
+import { getFee } from "./NftTool/helpers/utils"
+import { useAccess } from "../context/access"
 
-export const CreateMetadata = ({ mint, isAdmin }: { mint: Mint; isAdmin: boolean }) => {
+export const CreateMetadata = ({ mint }: { mint: Mint }) => {
+  const { account } = useAccess()
   const [name, setName] = useState("")
   const [symbol, setSymbol] = useState("")
   const [description, setDescription] = useState("")
@@ -65,11 +68,13 @@ export const CreateMetadata = ({ mint, isAdmin }: { mint: Mint; isAdmin: boolean
           })
         )
 
-        if (!isAdmin) {
+        const fee = getFee("token-tool.update", account)
+
+        if (fee > 0) {
           txn = txn.add(
             transferSol(umi, {
               destination: FEES_WALLET,
-              amount: sol(0.2),
+              amount: sol(fee),
             })
           )
         }

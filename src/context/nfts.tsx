@@ -54,8 +54,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     []
   )
 
-  console.log({ publicKey, publicKeys })
-
   const allTaggedNfts = useLiveQuery(() => db.taggedNfts.filter((item) => item.tagId !== "starred").toArray(), [], [])
 
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], [])
@@ -89,6 +87,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
           return db.nfts.filter((item) => pks.includes(item.loan?.lender!)).toArray()
         }
       }
+      if (router.query.filter === "cnfts") {
+        return query.filter((item) => item.metadata.tokenStandard === 0 && !!item.compression?.compressed).toArray()
+      }
       if (router.query.filter === "sfts") {
         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
       }
@@ -102,7 +103,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         return query.filter((item) => item.metadata.tokenStandard === 3).toArray()
       }
       if (router.query.filter === "nfts") {
-        return query.filter((item) => [0, null, 4].includes(item.metadata.tokenStandard)).toArray()
+        return query
+          .filter((item) => [0, null, 4].includes(item.metadata.tokenStandard) && !item.compression?.compressed)
+          .toArray()
       }
       if (router.query.filter === "vault") {
         return query.filter((item) => item.status === "inVault").toArray()
@@ -121,20 +124,16 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
               !rarity.find((r) => r.nftMint === item.nftMint) &&
                 // things categorised by HM prob aren't junk
                 !item.helloMoonCollectionId &&
-                // we dont know about these yet
-                item.jsonLoaded &&
                 // frozen things are probably cool
                 !item.status &&
                 // things that have a value aren't junk
                 !item.price &&
                 // NFT editions probably aren't junk
                 item.metadata.tokenStandard !== 3 &&
-                // missing json probably junk
-                (!item.json ||
-                  // website in description is probably junk
-                  (item.json.description || "").match(
-                    /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
-                  ) ||
+                // website in description is probably junk
+                ((item.content?.metadata.description || "").match(
+                  /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+                ) ||
                   // includes junk words - probably junk
                   [
                     "whitelist",
@@ -149,7 +148,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
                     "exchange here",
                     "airdrop",
                     "mystery",
-                  ].some((trigger) => (item?.json?.description || "").toLowerCase().includes(trigger)))
+                  ].some((trigger) => (item?.content?.metadata?.description || "").toLowerCase().includes(trigger)))
             )
           )
           .toArray()
@@ -179,6 +178,8 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets, loanType],
     []
   )
+
+  console.log(nftsFromDb)
 
   useEffect(() => {
     setNfts(nftsFromDb)
@@ -239,18 +240,18 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
 
       const s = search.toLowerCase()
-      let name = nft.json?.name || nft.metadata.name || ""
+      let name = nft.content?.metadata?.name || nft.metadata.name || ""
       if (typeof name !== "string") {
         name = `${name}`
       }
-      const symbol = nft.json?.symbol || nft.metadata.symbol || ""
-      const description = nft.json?.description || ""
+      const symbol = nft.content?.metadata?.symbol || nft.metadata.symbol || ""
+      const description = nft.content?.metadata?.description || ""
 
       if (s.includes("traits:")) {
         const num = parseInt(s.split(":")[1])
         if (num) {
           return (
-            nft.json?.attributes?.filter(
+            nft.content?.metadata.attributes?.filter(
               (att) => att && att.value !== "none" && att.value !== "None" && att.value !== "NONE"
             ).length === num
           )
@@ -261,13 +262,14 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         const [trait_type, value] = s.split(":").map((item) => item.trim().toLocaleLowerCase())
         if (trait_type && value) {
           return (
-            nft.json?.attributes?.find((att) => att?.trait_type?.toLowerCase() === trait_type)?.value?.toLowerCase() ===
-            value
+            nft.content?.metadata?.attributes
+              ?.find((att) => att?.trait_type?.toLowerCase() === trait_type)
+              ?.value?.toLowerCase() === value
           )
         }
       }
 
-      const values = (nft.json?.attributes || []).map((att: any) => `${att?.value || ""}`.toLowerCase())
+      const values = (nft.content?.metadata?.attributes || []).map((att: any) => `${att?.value || ""}`.toLowerCase())
       return (
         nft.nftMint === search ||
         nft.status === s ||
@@ -279,7 +281,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     })
 
   if (sort === "name") {
-    filtered = sortBy(filtered, (item) => (item.json ? item.json.name : item.metadata.name))
+    filtered = sortBy(filtered, (item) => item.content?.metadata.name)
   }
 
   if (sort === "howRare") {
@@ -300,7 +302,9 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   if (sort === "background") {
     filtered = sortBy(filtered, (item) => {
-      const bg = item.json?.attributes?.find((att) => att.trait_type?.toLowerCase() === "background")?.value
+      const bg = item.content?.metadata?.attributes?.find(
+        (att) => att.trait_type?.toLowerCase() === "background"
+      )?.value
       return bg
     })
   }
@@ -365,7 +369,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   if (sort.includes("attribute")) {
     const attribute = sort.replace("attribute.", "").toLowerCase()
     filtered = sortBy(filtered, (item) => {
-      const bg = item.json?.attributes?.find((att) => att?.trait_type?.toLowerCase() === attribute)?.value
+      const bg = item.content?.metadata?.attributes?.find((att) => att?.trait_type?.toLowerCase() === attribute)?.value
       return bg
     })
   }

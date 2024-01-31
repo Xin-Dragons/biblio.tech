@@ -7,6 +7,9 @@ import { useWalletBypass } from "./wallet-bypass"
 import { getWallets } from "../helpers/wallets"
 import { DAS } from "helius-sdk"
 import axios from "axios"
+import { getDandies } from "../helpers/helius"
+
+type AccountType = "basic" | "advanced" | "pro" | "unlimited"
 
 type AccessContextProps = {
   publicKey: string | null
@@ -14,6 +17,11 @@ type AccessContextProps = {
   dandies: DAS.GetAssetResponse[]
   publicKeys: string[]
   isInScope: boolean
+  isAdmin: boolean
+  nonce: string
+  refresh: Function
+  account: AccountType
+  userWallets: string[]
 }
 
 const initial = {
@@ -22,18 +30,26 @@ const initial = {
   dandies: [],
   publicKeys: [],
   isInScope: false,
+  isAdmin: false,
+  nonce: "",
+  refresh: noop,
+  account: "basic" as AccountType,
+  userWallets: [],
 }
 
 export const AccessContext = createContext<AccessContextProps>(initial)
 
 type AccessProviderProps = {
   children: ReactNode
+  nonce: string
 }
 
-export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
+export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: originalNonce }) => {
+  const [nonce, setNonce] = useState(originalNonce)
   const { bypassWallet } = useWalletBypass()
   const [user, setUser] = useState<any | null>(null)
   const [publicKeys, setPublicKeys] = useState<string[]>([])
+  const [userWallets, setUserWallets] = useState<string[]>([])
   const [dandies, setDandies] = useState<DAS.GetAssetResponse[]>([])
   const [isActive, setIsActive] = useState(false)
   const [publicKey, setPublicKey] = useState("")
@@ -42,14 +58,37 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   const router = useRouter()
 
   useEffect(() => {
-    if (bypassWallet || !wallet.publicKey || !user || !user?.wallets?.length) {
+    if (originalNonce) {
+      setNonce(originalNonce)
+    }
+  }, [originalNonce])
+
+  async function refresh() {
+    const { data } = await axios.post(`/api/get-user/`, { publicKey: wallet?.publicKey?.toBase58() })
+    setUser(data)
+  }
+
+  useEffect(() => {
+    if (bypassWallet || !wallet.publicKey) {
+      return
+    }
+    refresh()
+  }, [wallet.publicKey])
+
+  useEffect(() => {
+    if (!publicKey) {
+      setPublicKeys([])
       return
     }
     ;(async () => {
-      const { data } = await axios.get(`/api/get-user/${wallet.publicKey!.toBase58()}`)
-      console.log(data)
+      const { data } = await axios.post(`/api/get-user/`, { publicKey })
+      if (!data.id) {
+        setPublicKeys([publicKey])
+      } else {
+        setPublicKeys(data.wallets.map((d: any) => d.public_key))
+      }
     })()
-  }, [wallet.publicKey])
+  }, [publicKey])
 
   useEffect(() => {
     if (bypassWallet) {
@@ -65,14 +104,29 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
   }, [router.query.publicKey, wallet.publicKey, isActive, bypassWallet])
 
   useEffect(() => {
-    if (!user) {
+    if (!user?.id) {
       setDandies([])
       return
     }
     ;(async () => {
-      // const dandies = await getDandies(user.wallets.map((w: any) => w.publicKey))
+      setUserWallets(user.wallets.map((w: any) => w.public_key))
+      const dandies = await getDandies(
+        user.wallets.filter((w: any) => w.chain === "solana").map((w: any) => w.public_key)
+      )
+      console.log({ dandies })
+      setDandies(dandies)
     })()
   }, [user])
+
+  let account: AccountType = "basic"
+
+  if (dandies.length >= 10) {
+    account = "unlimited"
+  } else if (dandies.length >= 5) {
+    account = "pro"
+  } else if (dandies.length) {
+    account = "advanced"
+  }
 
   return (
     <AccessContext.Provider
@@ -81,7 +135,12 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children }) => {
         dandies,
         publicKey,
         publicKeys,
-        isInScope: publicKeys.includes(publicKey),
+        isInScope: publicKey === wallet.publicKey?.toBase58(),
+        nonce,
+        isAdmin: publicKey.includes(wallet.publicKey?.toBase58() || ""),
+        refresh,
+        account,
+        userWallets,
       }}
     >
       {children}

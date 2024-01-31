@@ -3,10 +3,10 @@ import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
 import base58 from "bs58"
 import { NextRequest, NextResponse } from "next/server"
 import { SigninMessage } from "../../utils/SigninMessge"
-import { getCsrfToken } from "next-auth/react"
 import { NextApiRequest, NextApiResponse } from "next"
 import { Connection } from "@solana/web3.js"
 import axios, { AxiosError } from "axios"
+import { deleteAccount } from "../../helpers/supabase"
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
@@ -33,10 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return null
       }
 
-      const key = process.env.NODE_ENV === "development" ? "next-auth.csrf-token" : "__Host-next-auth.csrf-token"
+      console.log(signinMessage.nonce !== req.cookies.nonce, signinMessage.nonce, req.cookies.nonce)
 
-      const csrfToken = req.cookies[key]?.split("|")[0]
-      if (signinMessage.nonce !== csrfToken) {
+      if (signinMessage.nonce !== req.cookies.nonce) {
         return null
       }
 
@@ -50,11 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const valid = await validate()
+    console.log({ valid })
     if (valid) {
-      const headers = {
-        authorization: `Bearer ${process.env.API_SECRET_KEY}`,
-      }
-      const { data } = await axios.delete(`${process.env.API_URL}/biblio/${publicKey}`, { headers })
+      await deleteAccount(publicKey)
       res.status(200).json({ ok: true })
     } else {
       throw new Error("Invalid")

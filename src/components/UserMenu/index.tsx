@@ -45,7 +45,7 @@ type UserMenuProps = {
 export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allowDevnet }) => {
   const { setVisible, visible } = useWalletModal()
   const [signUpShowing, setSignUpShowing] = useState(false)
-  const { user } = useAccess()
+  const { user, account } = useAccess()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const { profileModalShowing, setProfileModalShowing, showAllWallets, setShowAllWallets } = useUiSettings()
   const open = Boolean(anchorEl)
@@ -93,7 +93,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
           <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
           {wallet.connected && user && (
             <Typography fontStyle="italic" variant="body2" fontWeight="bold" sx={{ fontSize: "10px" }}>
-              {user?.id ? "PREMIUM" : "BASIC"}
+              {account.toUpperCase()}
             </Typography>
           )}
         </Stack>
@@ -140,12 +140,9 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
                   ) : (
                     <MenuItem onClick={() => setSignUpShowing(true)}>
                       <ListItemIcon sx={{ width: "50px" }}>
-                        <Star
-                          // @ts-ignore
-                          color="gold"
-                        />
+                        <PermIdentityIcon />
                       </ListItemIcon>
-                      <ListItemText sx={{ color: "gold.default" }}>PREMIUM</ListItemText>
+                      <ListItemText sx={{ color: "gold.default" }}>Create account</ListItemText>
                     </MenuItem>
                   )}
                 </>
@@ -163,19 +160,17 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
                 </ListItemIcon>
                 <ListItemText>Transfer SOL</ListItemText>
               </MenuItem>
-              {user?.wallets.length > 1 && (
-                <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <Switch
-                      checked={showAllWallets}
-                      onChange={(e) => setShowAllWallets(e.target.checked)}
-                      inputProps={{ "aria-label": "controlled" }}
-                      size="small"
-                    />
-                  </ListItemIcon>
-                  <ListItemText>Show all wallets</ListItemText>
-                </MenuItem>
-              )}
+              <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Switch
+                    checked={showAllWallets}
+                    onChange={(e) => setShowAllWallets(e.target.checked)}
+                    inputProps={{ "aria-label": "controlled" }}
+                    size="small"
+                  />
+                </ListItemIcon>
+                <ListItemText>View all wallets</ListItemText>
+              </MenuItem>
               <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
@@ -209,7 +204,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
         maxWidth="md"
         fullScreen={isXs}
       >
-        <SignUp />
+        <SignUp onClose={() => setSignUpShowing(false)} />
       </Dialog>
     </Box>
   )

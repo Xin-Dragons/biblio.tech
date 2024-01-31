@@ -3,11 +3,11 @@ import { NextApiRequest, NextApiResponse } from "next"
 import { getUser } from "../../helpers/supabase"
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { publicKey } = req.query
+  const { publicKey } = req.body
 
   try {
     const user = await getUser(publicKey as string)
-    console.log(user)
+
     res.status(200).send(user)
   } catch (err: any) {
     console.log(err)

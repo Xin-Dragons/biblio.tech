@@ -116,6 +116,11 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
           </Button>
         </Link>
         {!isEthWallet && [
+          <Link href={relative("/cnfts")} passHref>
+            <Button variant={route === "/cnfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+              cNFTs
+            </Button>
+          </Link>,
           <Link href={relative("/editions")} passHref key={0}>
             <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
               NFT Editions

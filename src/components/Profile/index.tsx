@@ -37,6 +37,7 @@ import {
   MenuItem,
 } from "@mui/material"
 import { FC, useEffect, useRef, useState } from "react"
+
 import { useMetaplex } from "../../context/metaplex"
 import { PublicKey, Transaction } from "@solana/web3.js"
 import { toast } from "react-hot-toast"
@@ -51,7 +52,7 @@ import { AddCircle, Close, Delete, Edit, ExpandMore, MonetizationOn, TramSharp, 
 import { Wallet } from "../../db"
 import { default as NextLink } from "next/link"
 import { WalletMultiButtonDynamic } from "../ActionBar"
-import { shorten, waitForWalletChange } from "../../helpers/utils"
+import { shorten, sleep, waitForWalletChange } from "../../helpers/utils"
 import { useAccess } from "../../context/access"
 import { useUmi } from "../../context/umi"
 import { addMemo } from "@metaplex-foundation/mpl-toolbox"
@@ -64,6 +65,8 @@ import { recoverMessageAddress } from "viem"
 import { SiweMessage } from "siwe"
 import { CURRENCIES, Currency } from "../../context/brice"
 import { useWalletBypass } from "../../context/wallet-bypass"
+import { NextRequest } from "next/server"
+import { useRouter } from "next/router"
 
 type ProfileProps = {
   user: User
@@ -77,7 +80,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
   const [publicKey, setPublicKey] = useState<string>("")
   const [publicKeyError, setPublicKeyError] = useState<string | null>(null)
   const wallet = useWallet()
-  const { user } = useAccess()
+  const { user, nonce, refresh } = useAccess()
   const umi = useUmi()
   const { setBypassWallet } = useWalletBypass()
 
@@ -124,7 +127,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
             domain: window.location.host,
             publicKey,
             statement: `Sign this message to connect wallet to Biblio.\n\n`,
-            nonce: csrf,
+            nonce,
           })
 
           const data = new TextEncoder().encode(message.prepare())
@@ -136,7 +139,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
             signature: serializedSignature,
             // @ts-ignore
             publicKey: window.solana?.publicKey?.toBase58(),
-            basePublicKey: user.publicKey,
+            id: user.id,
           })
         }
       }
@@ -150,6 +153,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
       })
 
       await linkWalletPromise
+      await refresh()
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error linking wallet")
@@ -177,6 +181,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
 
   async function connectWallet() {
     try {
+      setLoading(true)
       setBypassWallet(true)
       const walletChangePromise = waitForWalletChange(publicKey)
 
@@ -196,7 +201,9 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
     } catch (err: any) {
       toast.error(err.message || "Error connecting wallet")
     } finally {
+      setLoading(false)
       setBypassWallet(false)
+      onClose()
     }
   }
 
@@ -223,7 +230,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
         <Button variant="outlined" onClick={() => onClose()} color="error">
           Close
         </Button>
-        <Button disabled={!publicKey || !!publicKeyError} variant="contained" onClick={connectWallet}>
+        <Button disabled={!publicKey || !!publicKeyError || loading} variant="contained" onClick={connectWallet}>
           Continue
         </Button>
       </Stack>
@@ -234,7 +241,7 @@ const ConnectSol: FC<{ onClose: Function }> = ({ onClose }) => {
 const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
   const { chain } = useNetwork()
   const { signMessageAsync } = useSignMessage()
-  const { user } = useAccess()
+  const { user, nonce } = useAccess()
 
   const { address, connector, isConnected } = useAccount()
   const { data: ensName } = useEnsName({ address })
@@ -244,7 +251,6 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
 
   async function linkWallet() {
     try {
-      const nonce = await getCsrfToken()
       const message = new SiweMessage({
         domain: window.location.host,
         address,
@@ -338,50 +344,26 @@ const ConnectEth: FC<{ onClose: Function }> = ({ onClose }) => {
 
 export const Profile: FC<ProfileProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<string | null>("access")
+  const [activeTab, setActiveTab] = useState<string | null>("wallets")
+  const { user, userWallets } = useAccess()
+  const { bypassWallet } = useWalletBypass()
   const wallet = useWallet()
 
   function onTabChange(e: any, tab: string) {
     setActiveTab(tab)
   }
 
-  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
-
-  async function unlinkNft(mint: string) {
-    try {
-      setLoading(true)
-      async function unlink() {
-        const params = {
-          publicKey: wallet.publicKey?.toBase58(),
-          mint,
-        }
-        const { data } = await axios.post("/api/unlock-nft", params)
-        if (data.resolved) {
-          return
-        }
-        const txn = Transaction.from(base58.decode(data.txn))
-        const signed = await wallet?.signTransaction?.(txn)
-        await axios.post("/api/send-unlock-nft", {
-          ...params,
-          rawTransaction: base58.encode(signed?.serialize()!),
-        })
-      }
-
-      const unlinkPromise = unlink()
-
-      toast.promise(unlinkPromise, {
-        loading: "Unlinking NFT from Biblio...",
-        success: "NFT unlinked",
-        error: "Error unlinking NFT, please try again",
-      })
-
-      await unlinkPromise
-    } catch (err: any) {
-      console.error(err)
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    if (bypassWallet) {
+      return
     }
-  }
+    if (!wallet.publicKey || !user || !userWallets.includes(wallet.publicKey?.toBase58())) {
+      onClose()
+      return
+    }
+  }, [wallet.publicKey, bypassWallet])
+
+  const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   if (!wallet.publicKey) {
     return null
@@ -391,85 +373,87 @@ export const Profile: FC<ProfileProps> = ({ onClose }) => {
 
   return (
     <Card sx={{ overflowY: "auto", minHeight: "80vh" }}>
-      <IconButton
-        size="large"
-        sx={{ position: "fixed", top: "0.25em", right: "0.25em", zIndex: 10000 }}
-        onClick={() => onClose()}
-      >
-        <Close fontSize="large" />
-      </IconButton>
-      <Stack spacing={2} alignItems="center">
-        <Stack mt={5}>
-          <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
-            Profile settings
-          </Typography>
-          <Typography variant="h6" color="primary" textAlign="center">
-            Connected with {shorten(wallet.publicKey?.toBase58())}
-          </Typography>
-        </Stack>
-        {isXs ? (
-          <Stack width="100%">
-            <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography variant="h6" color="primary">
-                  Linked Wallets
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <LinkedWallets />
-              </AccordionDetails>
-            </Accordion>
-            <Accordion expanded={activeTab === "address-book"} onChange={onAccordionChange("address-book")}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography variant="h6" color="primary">
-                  Address Book
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <AddressBook />
-              </AccordionDetails>
-            </Accordion>
-            <Accordion expanded={activeTab === "data"} onChange={onAccordionChange("data")}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography variant="h6" color="primary">
-                  Data
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Data />
-              </AccordionDetails>
-            </Accordion>
-            <Accordion expanded={activeTab === "settings"} onChange={onAccordionChange("settings")}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography variant="h6" color="primary">
-                  Settings
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Settings />
-              </AccordionDetails>
-            </Accordion>
+      <CardContent>
+        <IconButton
+          size="large"
+          sx={{ position: "fixed", top: "0.25em", right: "0.25em", zIndex: 10000 }}
+          onClick={() => onClose()}
+        >
+          <Close fontSize="large" />
+        </IconButton>
+        <Stack spacing={2} alignItems="center">
+          <Stack mt={5}>
+            <Typography variant="h4" fontFamily="Lato" fontWeight="bold" textAlign="center">
+              Profile settings
+            </Typography>
+            <Typography variant="h6" color="primary" textAlign="center">
+              Connected with {shorten(wallet.publicKey?.toBase58())}
+            </Typography>
           </Stack>
-        ) : (
-          <CardContent>
-            <Stack justifyContent="center" alignItems="center" spacing={2}>
-              <Tabs value={activeTab} onChange={onTabChange}>
-                <Tab value="wallets" label="Linked Wallets" />
-                <Tab value="address-book" label="Address book" />
-                <Tab value="data" label="Data" />
-                <Tab value="settings" label="Settings" />
-              </Tabs>
-
-              {activeTab === "settings" && <Settings />}
-
-              {activeTab === "wallets" && <LinkedWallets />}
-
-              {activeTab === "data" && <Data />}
-              {activeTab === "address-book" && <AddressBook />}
+          {isXs ? (
+            <Stack width="100%">
+              <Accordion expanded={activeTab === "wallets"} onChange={onAccordionChange("wallets")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Linked Wallets
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <LinkedWallets />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "address-book"} onChange={onAccordionChange("address-book")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Address Book
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <AddressBook />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "data"} onChange={onAccordionChange("data")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Data
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Data onClose={onClose} />
+                </AccordionDetails>
+              </Accordion>
+              <Accordion expanded={activeTab === "settings"} onChange={onAccordionChange("settings")}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="h6" color="primary">
+                    Settings
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Settings />
+                </AccordionDetails>
+              </Accordion>
             </Stack>
-          </CardContent>
-        )}
-      </Stack>
+          ) : (
+            <CardContent>
+              <Stack justifyContent="center" alignItems="center" spacing={2}>
+                <Tabs value={activeTab} onChange={onTabChange}>
+                  <Tab value="wallets" label="Linked Wallets" />
+                  <Tab value="address-book" label="Address book" />
+                  <Tab value="data" label="Data" />
+                  <Tab value="settings" label="Settings" />
+                </Tabs>
+
+                {activeTab === "settings" && <Settings />}
+
+                {activeTab === "wallets" && <LinkedWallets />}
+
+                {activeTab === "data" && <Data onClose={onClose} />}
+                {activeTab === "address-book" && <AddressBook />}
+              </Stack>
+            </CardContent>
+          )}
+        </Stack>
+      </CardContent>
     </Card>
   )
 }
@@ -532,7 +516,7 @@ const Settings: FC = () => {
 }
 
 function LinkedWallets() {
-  const { user } = useAccess()
+  const { user, nonce, refresh } = useAccess()
   const { wallets, isLedger } = useWallets()
   const [loading, setLoading] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -563,7 +547,7 @@ function LinkedWallets() {
             await axios.post("/api/remove-wallet", {
               publicKey,
               rawTransaction: base58.encode(umi.transactions.serialize(signed)),
-              basePublicKey: wallet.publicKey?.toBase58(),
+              id: user.id,
               usingLedger: isLedger,
             })
           } catch (err: any) {
@@ -584,14 +568,13 @@ function LinkedWallets() {
             throw err
           }
         } else {
-          const csrf = await getCsrfToken()
-          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+          if (!wallet.publicKey || !nonce || !wallet.signMessage) return
 
           const message = new SigninMessage({
             domain: window.location.host,
             publicKey: wallet.publicKey.toBase58(),
             statement: `Sign this message to unlink ${shorten(publicKey)} from Biblio.\n\n`,
-            nonce: csrf,
+            nonce,
           })
 
           const data = new TextEncoder().encode(message.prepare())
@@ -602,7 +585,7 @@ function LinkedWallets() {
             message: JSON.stringify(message),
             signature: serializedSignature,
             publicKey,
-            basePublicKey: wallet.publicKey.toBase58(),
+            id: user.id,
           })
         }
       }
@@ -615,6 +598,7 @@ function LinkedWallets() {
       })
 
       await signMessagePromise
+      refresh()
     } catch (err: any) {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data || "Error unlinking")
@@ -724,10 +708,11 @@ function LinkedWallets() {
   )
 }
 
-function Data() {
+function Data({ onClose }: { onClose: Function }) {
+  const router = useRouter()
   const [storage, setStorage] = useState<number>(0)
   const { db } = useDatabase()
-  const { user } = useAccess()
+  const { user, nonce, refresh } = useAccess()
   const [importFile, setImportFile] = useState(null)
   const [blob, setBlob] = useState<Blob | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -853,7 +838,7 @@ function Data() {
     }
   }
 
-  const mainWallet = user?.wallets.find((w: any) => w.main)?.public_key
+  const mainWallet = user?.wallets?.find((w: any) => w.main)?.public_key
 
   function toggleDeleteAllShowing() {
     setDeleteAllShowing(!deleteAllShowing)
@@ -872,7 +857,11 @@ function Data() {
   async function deleteAccount() {
     try {
       setDeleting(true)
+      const main = user.wallets.find((w: any) => w.main).public_key
 
+      if (main !== wallet.publicKey?.toBase58()) {
+        throw new Error(`Connect with ${shorten(main)} to delete your account`)
+      }
       async function signMessage() {
         if (isLedger) {
           try {
@@ -905,14 +894,13 @@ function Data() {
             throw err
           }
         } else {
-          const csrf = await getCsrfToken()
-          if (!wallet.publicKey || !csrf || !wallet.signMessage) return
+          if (!wallet.publicKey || !nonce || !wallet.signMessage) return
 
           const message = new SigninMessage({
             domain: window.location.host,
             publicKey: wallet.publicKey.toBase58(),
             statement: `Sign this message to delete Biblio account: ${shorten(wallet.publicKey.toBase58())}.\n\n`,
-            nonce: csrf,
+            nonce,
           })
 
           const data = new TextEncoder().encode(message.prepare())
@@ -936,7 +924,8 @@ function Data() {
       })
 
       await deletePromise
-      await signOut()
+      refresh()
+      onClose()
     } catch (err: any) {
       toast.error(err.message || "Error deleting")
     } finally {

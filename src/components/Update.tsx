@@ -6,7 +6,6 @@ import {
 } from "@metaplex-foundation/mpl-token-metadata"
 import { Mint, fetchMint } from "@metaplex-foundation/mpl-toolbox"
 import { PublicKey, publicKey, unwrapOption } from "@metaplex-foundation/umi"
-import { walletAdapterIdentity } from "@metaplex-foundation/umi-signer-wallet-adapters"
 import { Grid, Card, CardContent, Stack, Typography, TextField } from "@mui/material"
 import { useWallet, useConnection } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"

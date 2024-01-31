@@ -8,16 +8,17 @@ import { createGenericFileFromBrowserFile, sol, transactionBuilder } from "@meta
 import { useUmi } from "../context/umi"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
+import { getFee } from "./NftTool/helpers/utils"
+import { useAccess } from "../context/access"
 
 export const UpdateMetadata = ({
   digitalAsset,
   jsonMetadata,
-  isAdmin,
 }: {
   digitalAsset: DigitalAsset | null
   jsonMetadata?: JsonMetadata | null
-  isAdmin: boolean
 }) => {
+  const { account } = useAccess()
   const [name, setName] = useState(jsonMetadata?.name || "")
   const [symbol, setSymbol] = useState(jsonMetadata?.symbol || "")
   const [description, setDescription] = useState(jsonMetadata?.description || "")
@@ -81,11 +82,13 @@ export const UpdateMetadata = ({
         })
       )
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1),
+            amount: sol(fee),
           })
         )
       }

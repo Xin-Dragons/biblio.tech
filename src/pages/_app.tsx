@@ -1,3 +1,4 @@
+import App from "next/app"
 import { CssBaseline } from "@mui/material"
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react"
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
@@ -29,19 +30,26 @@ import { AlchemyProvider } from "../context/alchemy"
 import { SortProvider } from "../context/sort"
 import { CitrusProvider } from "../context/citrus"
 import { ClusterProvider } from "../context/cluster"
+import { NextPageContext } from "next"
+import cookie from "cookie"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
 require("../styles/globals.scss")
 
-interface Props extends AppProps {
+interface Props extends AppProps {}
+
+export default function Biblio({
+  Component,
+  pageProps: { ...pageProps },
+  nonce,
+}: AppProps & {
   pageProps: {
     collectionId?: string
     publicKey?: string
   }
-}
-
-const App: FC<Props> = ({ Component, pageProps: { ...pageProps } }) => {
+  nonce: string
+}) {
   const endpoint = process.env.NEXT_PUBLIC_RPC_HOST as string
 
   const wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()]
@@ -55,7 +63,7 @@ const App: FC<Props> = ({ Component, pageProps: { ...pageProps } }) => {
               <BriceProvider>
                 <WalletBypassProvider>
                   <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
-                    <AccessProvider>
+                    <AccessProvider nonce={nonce}>
                       <BasePathProvider publicKey={pageProps.publicKey}>
                         <DatabaseProvider>
                           <WalletsProvider>
@@ -110,4 +118,20 @@ const App: FC<Props> = ({ Component, pageProps: { ...pageProps } }) => {
   )
 }
 
-export default App
+Biblio.getInitialProps = async (context: any) => {
+  const props = await App.getInitialProps(context)
+  let nonce
+  if (!context.ctx.req) {
+    nonce = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith(`nonce=`))
+      ?.split("=")[1]
+  } else {
+    const cookies = context.ctx.res?.getHeader("set-cookie")[0]
+    nonce = cookies ? cookie.parse(cookies)?.nonce : null
+  }
+  return {
+    ...props,
+    nonce,
+  }
+}

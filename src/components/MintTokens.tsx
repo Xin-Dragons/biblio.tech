@@ -19,7 +19,7 @@ import { useAccess } from "../context/access"
 
 export const MintTokens = ({ mint }: { mint: Mint | null }) => {
   const [loading, setLoading] = useState(false)
-  const { dandies } = useAccess()
+  const { account } = useAccess()
   const [tokensToMint, setTokensToMint] = useState<string | number>("")
   const [mintToAddress, setMintToAddress] = useState<string | null>(null)
   const [mintToAddressError, setMintToAddressError] = useState<string | null>(null)
@@ -96,9 +96,9 @@ export const MintTokens = ({ mint }: { mint: Mint | null }) => {
         })
       )
 
-      const fee = getFee("mintTokens", dandies.length)
+      const fee = getFee("token-tool.update", account)
 
-      if (fee) {
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,

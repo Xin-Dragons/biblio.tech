@@ -1,6 +1,6 @@
 import { TransactionBuilder, Umi, transactionBuilder, Transaction } from "@metaplex-foundation/umi"
 import { chunkBy } from "chunkier"
-import { findKey } from "lodash"
+import { findKey, get } from "lodash"
 import { FEES } from "../constants"
 import { toast } from "react-hot-toast"
 import { getAnonUmi } from "./umi"
@@ -33,12 +33,14 @@ export function getUmiChunks(umi: Umi, transactionBuilders: TransactionBuilder[]
   }, [])
 }
 
-export function getLevel(dandies: number) {
+type AccountType = "basic" | "advanced" | "pro" | "unlimited"
+
+export function getLevel(dandies: number): AccountType {
   if (!dandies) {
     return "basic"
   }
   if (dandies >= 10) {
-    return "free"
+    return "unlimited"
   }
   if (dandies >= 5) {
     return "pro"
@@ -46,15 +48,16 @@ export function getLevel(dandies: number) {
   if (dandies >= 1) {
     return "advanced"
   }
+
+  return "basic"
 }
 
-export function getFee(type: string, dandies: number) {
-  const level = getLevel(dandies)
-  if (level === "free") {
+export function getFee(type: string, level: AccountType) {
+  if (level === "unlimited") {
     return 0
   }
 
-  return FEES[type as keyof typeof FEES][level as keyof object]
+  return get(FEES, type)
 }
 
 export function shorten(address: string) {

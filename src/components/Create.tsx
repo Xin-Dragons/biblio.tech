@@ -34,7 +34,7 @@ import { useAccess } from "../context/access"
 export const Create = () => {
   const wallet = useWallet()
   const umi = useUmi()
-  const user = useAccess()
+  const { user, account } = useAccess()
   const [keypair, setKeypair] = useState(generateSigner(umi))
   const [keypairError, setKeypairError] = useState<string | null>(null)
   const [decimals, setDecimals] = useState(9)
@@ -168,7 +168,7 @@ export const Create = () => {
         )
       }
 
-      const fee = getFee("createSpl", user.dandies.length)
+      const fee = getFee("createSpl", account)
 
       if (fee) {
         txn = txn.add(
