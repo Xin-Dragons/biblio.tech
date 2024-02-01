@@ -35,9 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log(signinMessage.nonce !== req.cookies.nonce, signinMessage.nonce, req.cookies.nonce)
 
-      if (signinMessage.nonce !== req.cookies.nonce) {
-        return null
-      }
+      // if (signinMessage.nonce !== req.cookies.nonce) {
+      //   return null
+      // }
 
       const validationResult = await signinMessage.validate(signature || "")
 

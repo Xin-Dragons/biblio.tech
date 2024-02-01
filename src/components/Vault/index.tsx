@@ -55,6 +55,7 @@ import { toast } from "react-hot-toast"
 import VaultIcon from "./vault.svg"
 import { closeToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { useAccess } from "../../context/access"
+import { getFee } from "../NftTool/helpers/utils"
 
 export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
@@ -68,7 +69,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const umi = useUmi()
   const wallet = useWallet()
   const { connection } = useConnection()
-  const { user } = useAccess()
+  const { user, account } = useAccess()
   const { sendSignedTransactions } = useTransactionStatus()
   const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
   const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
@@ -397,14 +398,16 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   )
               }
 
-              // if (!isAdmin) {
-              //   txn = txn.add(
-              //     transferSol(umi, {
-              //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-              //       amount: type === "secure" ? sol(0.02) : sol(0.01),
-              //     })
-              //   )
-              // }
+              const fee = getFee(`biblio.${type === "secure" ? "secure-lock" : "basic-lock"}`, account)
+
+              if (fee > 0) {
+                txn = txn.add(
+                  transferSol(umi, {
+                    destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                    amount: sol(fee),
+                  })
+                )
+              }
 
               return {
                 instructions: txn,
@@ -521,7 +524,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   fullWidth
                   onClick={() => setType("secure")}
                   sx={{ fontSize: "1.25em" }}
-                  disabled={user.wallets.length <= 1}
+                  disabled={user?.wallets?.length <= 1}
                 >
                   <Stack>
                     <Typography variant="body1">Secure freeze</Typography>

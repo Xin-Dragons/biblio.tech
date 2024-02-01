@@ -59,5 +59,15 @@ export const FEES = {
       advanced: 0.0001,
       pro: 0.00005,
     },
+    "basic-lock": {
+      basic: 0.002,
+      advanced: 0.001,
+      pro: 0.0005,
+    },
+    "secure-lock": {
+      basic: 0.005,
+      advanced: 0.0025,
+      pro: 0.00125,
+    },
   },
 }

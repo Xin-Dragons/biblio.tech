@@ -28,9 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       const signinMessage = new SigninMessage(JSON.parse(message || "{}"))
       const nextAuthUrl = new URL(process.env.NEXTAUTH_URL!)
-      if (signinMessage.domain !== nextAuthUrl.host) {
-        return null
-      }
+      // if (signinMessage.domain !== nextAuthUrl.host) {
+      //   return null
+      // }
 
       const nonce = req.cookies.nonce
 
