@@ -44,12 +44,17 @@ export const FEES = {
       advanced: 0.001,
       pro: 0.0005,
     },
-    burnNonFungible: {
+    "burn-non-fungible": {
       basic: 0.002,
       advanced: 0.001,
       pro: 0.0005,
     },
-    burnFungible: {
+    "burn-fungible": {
+      basic: 0.0002,
+      advanced: 0.0001,
+      pro: 0.00005,
+    },
+    cleanup: {
       basic: 0.0002,
       advanced: 0.0001,
       pro: 0.00005,

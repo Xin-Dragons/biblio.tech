@@ -16,7 +16,7 @@ export interface EditionDetails {
   supply: bigint | "unknown"
 }
 
-export interface Nft extends DAS.GetAssetResponse {
+export type Nft = {
   chain?: "eth" | "solana"
   nftMint: string
   helloMoonCollectionId: string
@@ -40,7 +40,15 @@ export interface Nft extends DAS.GetAssetResponse {
   price?: number
   value?: number
   tokenType?: string
-}
+  token_info: {
+    price_info?: {
+      price_per_token: number
+      total_price: number
+    }
+    decimals: number
+    balance: number
+  }
+} & DAS.GetAssetResponse
 
 export interface Collection {
   id: string

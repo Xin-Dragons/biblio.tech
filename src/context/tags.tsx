@@ -45,17 +45,17 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   const { db } = useDatabase()
   const router = useRouter()
   const [tag, setTag] = useState<Tag | null>(null)
-  const { userId } = useAccess()
+  const { user } = useAccess()
   const wallet = useWallet()
   const tags =
-    useLiveQuery(() => db.tags.filter((t) => t.userId === userId && t.id !== "starred").toArray(), [userId], []) || []
+    useLiveQuery(() => db.tags.filter((t) => t.userId === user.id && t.id !== "starred").toArray(), [user.id], []) || []
 
   const starredNfts = useLiveQuery(() => db.taggedNfts.where({ tagId: "starred" }).toArray(), [], []).map(
     (n) => n.nftId
   )
 
   async function migrate() {
-    if (!userId) {
+    if (!user.id) {
       return
     }
     const toMigrate = tags.filter((t) => !t.userId)
@@ -69,7 +69,7 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
         return {
           key: item.id,
           changes: {
-            userId,
+            userId: user.id,
           },
         }
       })
@@ -78,10 +78,10 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
 
   useEffect(() => {
     migrate()
-  }, [userId])
+  }, [user.id])
 
   async function addTag(name: string, color: string) {
-    const uid = userId || (wallet.publicKey?.toBase58() as string)
+    const uid = user.id || (wallet.publicKey?.toBase58() as string)
     const id = await db.tags.add({
       name,
       color,
@@ -93,7 +93,7 @@ export const TagsProvider: FC<TagsProviderProps> = ({ children }) => {
   }
 
   async function addNftToStarred(mint: string) {
-    const uid = userId || (wallet.publicKey?.toBase58() as string)
+    const uid = user.id || (wallet.publicKey?.toBase58() as string)
     await db.transaction("rw", db.tags, db.taggedNfts, async () => {
       const tag = await db.tags.get("starred")
       if (!tag) {

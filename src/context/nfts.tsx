@@ -10,10 +10,10 @@ import { base58PublicKey } from "@metaplex-foundation/umi"
 import { Nft, Rarity } from "../db"
 
 type NftsContextProps = {
-  nfts: any[]
+  nfts: Nft[]
   tags: any[]
   taggedNfts: any[]
-  filtered: any[]
+  filtered: Nft[]
   loading: boolean
   rarity: Rarity[]
   allNfts: any[]
@@ -178,8 +178,6 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
     [publicKey, showStarred, sort, router.query, taggedNfts, allNFts, publicKeys, showAllWallets, loanType],
     []
   )
-
-  console.log(nftsFromDb)
 
   useEffect(() => {
     setNfts(nftsFromDb)

@@ -41,12 +41,23 @@ async function getAllByCreator(creator: string) {
   return nfts
 }
 
+async function getFungiblesByOwner(ownerAddress: string, page: number) {
+  try {
+    const result = await client.rpc.searchAssets({
+      ownerAddress,
+      page,
+      tokenType: "fungible",
+    } as any)
+    return result
+  } catch (err) {
+    console.log(err)
+  }
+}
+
 async function getByOwner(ownerAddress: string, page: number) {
   try {
-    console.log({ ownerAddress })
     const result = await client.rpc.getAssetsByOwner({
       ownerAddress,
-      // tokenType: "all",
       page,
       displayOptions: {
         showGrandTotal: true,
@@ -64,17 +75,22 @@ async function getByOwner(ownerAddress: string, page: number) {
 
 export async function getAllByOwner(owner: string) {
   const nfts = []
-  let total = 1001
   let page = 1
-  while (nfts.length < total) {
-    const result = await getByOwner(owner, page)
-    console.log(result)
-    total = result.grand_total as any as number
+  let result
+  while ((result = await getByOwner(owner, page++))?.items.length) {
     nfts.push(...result.items)
-    page++
   }
 
-  console.log(nfts)
+  return nfts
+}
+
+export async function getAllFungiblesByOwner(owner: string) {
+  const nfts = []
+  let page = 1
+  let result
+  while ((result = await getFungiblesByOwner(owner, page++))?.items.length) {
+    nfts.push(...result.items)
+  }
 
   return nfts
 }

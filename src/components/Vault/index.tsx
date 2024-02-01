@@ -496,7 +496,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
             <Stack spacing={1} sx={{ marginBottom: "5em !important" }}>
               <Typography variant="body2">Authorities needed to unlock:</Typography>
               {authorities.map((auth, index) => (
-                <TextField key={index} value={shorten(auth)} disabled />
+                <TextField key={index} value={shorten(auth!)} disabled />
               ))}
             </Stack>
           ) : (
@@ -559,7 +559,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
               ) : (
                 <TextField
                   label="Freeze auth retained by"
-                  value={shorten(owners[0])}
+                  value={shorten(owners[0]!)}
                   disabled
                   helperText="The owner wallet will retain freeze authority"
                 />

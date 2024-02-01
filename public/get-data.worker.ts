@@ -23,7 +23,7 @@ import { TokenState as NftTokenState } from "@metaplex-foundation/mpl-toolbox"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { isSome, publicKey, some, Option, unwrapOption } from "@metaplex-foundation/umi"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
-import { getAllByOwner, getDigitalAssets, getNfts } from "../src/helpers/helius"
+import { getAllByOwner, getAllFungiblesByOwner, getDigitalAssets, getNfts } from "../src/helpers/helius"
 import { DAS } from "helius-sdk"
 
 const MOB_TRAITS = publicKey("5j3KnVdZPgPRFcMgAn9cL68xNXtXSHFUbvSjcn9JUPQy")
@@ -128,9 +128,14 @@ function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
 
     const { delegate, delegated, frozen } = item.ownership
 
+    if (delegated && frozen) {
+      console.log("eee", item.id)
+    }
+
     if (frozen && delegated && delegate) {
-      console.log(publicKeys)
+      console.log(publicKeys, delegate, publicKeys.includes(delegate))
       if (publicKeys.includes(delegate)) {
+        console.log("IN VAULT")
         return {
           ...item,
           status: "inVault",
@@ -191,8 +196,9 @@ self.addEventListener("message", async (event) => {
   try {
     let { publicKey: owner, force, mints, publicKeys } = event.data
 
-    let [digitalAssets, helloMoonNfts, listings] = await Promise.all([
+    let [digitalAssets, fungibles, helloMoonNfts, listings] = await Promise.all([
       getAllByOwner(owner),
+      getAllFungiblesByOwner(owner),
       getOwnedHelloMoonNfts(owner),
       // getOutstandingLoans(owner),
       // getIncomingLoans(owner),
@@ -200,6 +206,8 @@ self.addEventListener("message", async (event) => {
     ])
 
     digitalAssets = getStatus(digitalAssets, publicKeys)
+
+    digitalAssets = [...digitalAssets, ...fungibles]
 
     // const mintsInWallet = umiTokens.map((token) => token.mint.publicKey)
 
@@ -250,11 +258,6 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-      console.log(
-        "GOT IT",
-        listedNfts.find((l) => l.id === "CVTquA1A1KPtvAKQFrVoBxEZuga4AXEXMfVAPYTUBRWu")
-      )
-
       digitalAssets = uniqBy([...digitalAssets, ...listedNfts], (item) => item.id)
     }
 
@@ -293,8 +296,6 @@ self.addEventListener("message", async (event) => {
     )
 
     const nonFungibles = [...(types[0] || []), ...(types[4] || [])]
-
-    console.log("getting nfts")
 
     const nfts = nonFungibles
       .map((item) => {
@@ -354,8 +355,6 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    console.log("got nfts")
-
     self.postMessage({
       type: "get-rarity",
       nfts: nfts.map((n) => omit(n, "edition", "mint", "publicKey")),
@@ -386,8 +385,6 @@ self.addEventListener("message", async (event) => {
       }
     }
 
-    console.log("getting collections")
-
     const collections = (
       await Promise.all(
         nftPerCollection.map(async (nft) => {
@@ -398,12 +395,10 @@ self.addEventListener("message", async (event) => {
             helloMoonCollections.find((h) => h.helloMoonCollectionId === helloMoonCollectionId) || ({} as any)
           if (nft.collectionId) {
             try {
-              console.log("getting collection", nft.collectionId)
               const collection = await fetchDigitalAsset(umi, publicKey(nft.collectionId))
               const { data: json } = await axios.get(collection.metadata.uri, {
-                signal: AbortSignal.timeout(1000),
+                signal: (AbortSignal as any).timeout(1000),
               })
-              console.log("got collection")
 
               const name =
                 collection && (collection.metadata.name || json.name) !== "Collection NFT"
@@ -418,11 +413,9 @@ self.addEventListener("message", async (event) => {
               }
             } catch (err) {
               try {
-                console.log("getting nft for collection", nft.id)
                 const { data: json } = await axios.get(nft.content?.json_uri!, {
-                  signal: AbortSignal.timeout(1000),
+                  signal: (AbortSignal as any).timeout(1000),
                 })
-                console.log("got")
                 return {
                   collectionId: nft.collectionId,
                   image: json.image,
@@ -436,7 +429,7 @@ self.addEventListener("message", async (event) => {
           } else if (nft.firstVerifiedCreator) {
             try {
               const { data: json } = await axios.get(nft.content?.json_uri!, {
-                signal: AbortSignal.timeout(1000),
+                signal: (AbortSignal as any).timeout(1000),
               })
               return {
                 firstVerifiedCreator: nft.firstVerifiedCreator,
@@ -455,9 +448,7 @@ self.addEventListener("message", async (event) => {
       )
     ).filter(Boolean)
 
-    console.log("got collections")
-
-    const fungibles = [...(types[1] || []), ...(types[2] || [])]
+    const fungiblesTokens = [...(types[1] || []), ...(types[2] || [])]
 
     // const fungiblesWithBalances = await Promise.all(
     //   fungibles.map(async (item) => {
@@ -491,7 +482,7 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    const nftsToAdd = [...fungibles, ...nfts, ...editionsWithNumbers].map((n) => {
+    const nftsToAdd = [...fungiblesTokens, ...nfts, ...editionsWithNumbers].map((n) => {
       return {
         ...omit(n, "edition", "mint", "publicKey"),
         metadata: {

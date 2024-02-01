@@ -36,6 +36,7 @@ type DatabaseContextProps = {
   setLoaned: Function
   syncProgress: number
   updateCollection: Function
+  revokeDelegate: Function
 }
 
 const initial = {
@@ -61,6 +62,7 @@ const initial = {
   setLoaned: noop,
   syncProgress: 0,
   updateCollection: noop,
+  revokeDelegate: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -146,7 +148,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function addNftsToDb(nfts: Nft[], publicKey: string, remove?: boolean) {
-    console.log("ading nfts to db", nfts, publicKey)
     await db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
 
@@ -452,6 +453,22 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     )
   }
 
+  async function revokeDelegate(mints: Nft[]) {
+    await db.nfts.bulkUpdate(
+      mints.map((mint) => {
+        return {
+          key: mint.nftMint,
+          changes: {
+            ownership: {
+              ...mint.ownership,
+              delegate: undefined,
+            },
+          },
+        }
+      })
+    )
+  }
+
   async function updateOwnerForNfts(mints: Nft[], owner: string) {
     await db.nfts.bulkUpdate(
       mints.map((mint) => {
@@ -731,6 +748,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         setLoaned,
         syncProgress,
         updateCollection,
+        revokeDelegate,
       }}
     >
       {children}

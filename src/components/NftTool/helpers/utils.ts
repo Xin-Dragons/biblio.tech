@@ -57,7 +57,7 @@ export function getFee(type: string, level: AccountType) {
     return 0
   }
 
-  return get(FEES, type)
+  return get(FEES, type)?.[level] || 0
 }
 
 export function shorten(address: string) {

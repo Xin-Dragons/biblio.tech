@@ -64,6 +64,7 @@
     "@project-serum/anchor": "^0.26.0",
     "@rainfi/sdk": "^1.2.63",
     "@sharkyfi/client": "^6.4.0",
+    "@solana/spl-account-compression": "^0.2.0",
     "@solana/spl-token": "^0.3.7",
     "@solana/wallet-adapter-base": "^0.9.22",
     "@solana/wallet-adapter-react": "^0.15.31",

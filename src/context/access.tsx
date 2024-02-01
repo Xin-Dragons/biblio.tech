@@ -47,7 +47,7 @@ type AccessProviderProps = {
 export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: originalNonce }) => {
   const [nonce, setNonce] = useState(originalNonce)
   const { bypassWallet } = useWalletBypass()
-  const [user, setUser] = useState<any | null>(null)
+  const [user, setUser] = useState<any | null>({})
   const [publicKeys, setPublicKeys] = useState<string[]>([])
   const [userWallets, setUserWallets] = useState<string[]>([])
   const [dandies, setDandies] = useState<DAS.GetAssetResponse[]>([])

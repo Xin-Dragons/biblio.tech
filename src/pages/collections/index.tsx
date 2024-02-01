@@ -230,7 +230,7 @@ const Home: NextPage = () => {
     () =>
       db.collections
         .where("id")
-        .anyOf(nfts.filter((i) => i.collectionIdentifier).map((n) => n.collectionIdentifier))
+        .anyOf(nfts.filter((i) => i.collectionIdentifier).map((n) => n.collectionIdentifier) as string[])
         .toArray(),
     [nfts],
     []

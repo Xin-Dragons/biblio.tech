@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from "@mui/material"
+import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "../../context/ui-settings"
 import { Item } from "../Item"
 import { ElementType, FC, useEffect, useState } from "react"
@@ -396,9 +396,9 @@ export const Items: FC<ItemsProps> = ({
             </Typography>
             <>
               {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
-              <Link href={`${basePath}/`} passHref>
-                <Button>View all collections</Button>
-              </Link>
+              <Button LinkComponent={Link} href={`${basePath}/`}>
+                View all collections
+              </Button>
             </>
 
             <Typography textAlign="center">or</Typography>

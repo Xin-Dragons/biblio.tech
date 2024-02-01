@@ -404,7 +404,7 @@ export const SharkyProvider: FC<SharkyProviderProps> = ({ children }) => {
       const nft = nfts.find((n) => n.nftMint === nftMint)
       return {
         mint: nftMint,
-        loanId: nft.loan.loanId,
+        loanId: nft!.loan!.loanId,
       }
     })
 

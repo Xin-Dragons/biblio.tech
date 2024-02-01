@@ -28,7 +28,7 @@ export const Collage: FC = () => {
         mints
           .map((mint) => {
             const nft = nfts.find((n) => n.nftMint === mint)
-            return nft?.thumbnail || nft?.content?.links?.image
+            return (nft as any).thumbnail || nft?.content?.links?.image
           })
           .filter(Boolean)
           .map((item) => item.replace("ipfs://", "https://ipfs.io/ipfs/"))

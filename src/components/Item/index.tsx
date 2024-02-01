@@ -27,6 +27,8 @@ import {
   alpha,
   useMediaQuery,
 } from "@mui/material"
+import { getAssetWithProof, delegate } from "@metaplex-foundation/mpl-bubblegum"
+
 import { default as NextLink } from "next/link"
 import { findKey, isEmpty, uniq } from "lodash"
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
@@ -1036,12 +1038,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const { isInScope } = useAccess()
   const [revoking, setRevoking] = useState(false)
   const router = useRouter()
-  const { collections } = useDatabase()
+  const { collections, revokeDelegate } = useDatabase()
   const basePath = useBasePath()
   const umi = useUmi()
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
   const [da, setDa] = useState<DigitalAssetWithToken | null>(null)
+  const wallet = useWallet()
 
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
@@ -1078,14 +1081,16 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
     getAssets()
   }, [])
 
-  // async function fetchItem() {
-  //   const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
-  //   setDa(da)
-  // }
+  async function fetchItem() {
+    if (!item.compression?.compressed) {
+      const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
+      setDa(da)
+    }
+  }
 
-  // useEffect(() => {
-  //   fetchItem()
-  // }, [])
+  useEffect(() => {
+    fetchItem()
+  }, [])
 
   useEffect(() => {
     const asset = assets[assetIndex]
@@ -1104,36 +1109,49 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
 
   const collection = collections.find((c) => c.id === item.collectionIdentifier)
 
-  let delegate: any
-
-  if (da?.tokenRecord) {
-    delegate = unwrapOption(da.tokenRecord.delegate)
-  } else if (da?.token) {
-    delegate = unwrapOption(da.token.delegate)
-  } else {
-    delegate = item.delegate
-  }
+  let tokenDelegate = item.ownership.delegate
 
   async function revoke() {
     try {
       if (isDisabled) {
         throw new Error("You're not signed in")
       }
-      if (!da) {
+      if (!da && !item.compression?.compressed) {
         throw new Error("still fetching")
       }
-      if (!delegate) {
+      if (!tokenDelegate) {
         throw new Error("Delegate not found")
       }
+      if (umi.identity.publicKey !== item.ownership.owner) {
+        throw new Error(`Connect with ${shorten(item.ownership.owner)} to revoke this delegation`)
+      }
       setRevoking(true)
-      await revokeUtilityV1(umi, {
-        mint: publicKey(item.nftMint),
-        authority: umi.identity,
-        tokenStandard: unwrapOption(da.metadata.tokenStandard) || 0,
-        delegate: publicKey(delegate),
-      }).sendAndConfirm(umi)
+      let promise
+      if (item.compression?.compressed) {
+        const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+        promise = delegate(umi, {
+          ...assetWithProof,
+          leafOwner: umi.identity,
+          previousLeafDelegate: publicKey(item.ownership.delegate!),
+          newLeafDelegate: publicKey(item.ownership.owner),
+        }).sendAndConfirm(umi)
+      } else {
+        promise = revokeUtilityV1(umi, {
+          mint: publicKey(item.nftMint),
+          authority: umi.identity,
+          tokenStandard: unwrapOption(da!.metadata.tokenStandard) || 0,
+          delegate: publicKey(tokenDelegate),
+        }).sendAndConfirm(umi)
+      }
 
-      toast.success("Auth revoked!")
+      toast.promise(promise, {
+        loading: "Revoking auth",
+        success: "Auth revoked",
+        error: "Error revoking auth",
+      })
+
+      await promise
+      await revokeDelegate([item])
     } catch (err: any) {
       console.log(err)
       toast.error(err.message || "Error revoking")
@@ -1232,7 +1250,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain === "solana" && isInScope && (
+            {item.status !== "loaned" && item.chain === "solana" && isInScope && !item.compression?.compressed && (
               <BestLoan item={item} onClose={() => setOpen(false)} />
             )}
           </Stack>
@@ -1263,6 +1281,16 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Owner
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <CopyAddress>{item.owner || item.ownership.owner}</CopyAddress>
+                  </TableCell>
+                </TableRow>
                 {item.loan && (
                   <TableRow>
                     <TableCell>
@@ -1319,7 +1347,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     <TableCell sx={{ textAlign: "right" }}>
                       <Typography>
                         {item.compression?.compressed ? (
-                          "Compressed"
+                          "Compressed NFT"
                         ) : (
                           <>
                             {item.metadata.collectionDetails && "Collection "}
@@ -1382,7 +1410,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-                {delegate && (
+                {tokenDelegate && (
                   <TableRow>
                     <TableCell>
                       <Typography fontWeight="bold" color="primary">
@@ -1391,13 +1419,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
                       <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={2}>
-                        {isInScope && (
+                        {wallet.publicKey?.toBase58() === item.ownership.owner && (
                           <Button variant="outlined" color="error" disabled={revoking} onClick={revoke}>
                             Revoke
                           </Button>
                         )}
                         <Typography>
-                          <CopyAddress>{delegate}</CopyAddress>
+                          <CopyAddress>{tokenDelegate}</CopyAddress>
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -1405,13 +1433,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 )}
               </TableBody>
             </Table>
-            <Typography>{item.json?.description}</Typography>
+            <Typography>{item.content?.metadata?.description}</Typography>
             <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">
               Traits
             </Typography>
-            {item.json?.attributes?.length ? (
+            {item.content?.metadata?.attributes?.length ? (
               <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>
-                {(item.json?.attributes || []).map((att, index) => (
+                {(item.content?.metadata?.attributes || []).map((att, index) => (
                   <Box
                     key={index}
                     sx={{ borderRadius: "5px", border: "1px solid", padding: 1, borderColor: "primary.main" }}

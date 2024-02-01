@@ -49,8 +49,8 @@ export function Pricing({ tab: initialTab = "nftSuite" }: { tab: string }) {
                   </Typography>
                 </Typography>
                 <Tabs value={tab} onChange={(e, tab) => setTab(tab)}>
-                  {Object.keys(FEES).map((type) => (
-                    <Tab value={type} label={toTitleCase(type)} />
+                  {Object.keys(FEES).map((type, index) => (
+                    <Tab value={type} label={toTitleCase(type)} key={index} />
                   ))}
                 </Tabs>
                 <Table>
@@ -80,9 +80,9 @@ export function Pricing({ tab: initialTab = "nftSuite" }: { tab: string }) {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {Object.keys(FEES[tab as keyof typeof FEES]).map((key) => {
+                    {Object.keys(FEES[tab as keyof typeof FEES]).map((key, index) => {
                       return (
-                        <TableRow>
+                        <TableRow key={index}>
                           <TableCell sx={{ textAlign: "right" }}>
                             <Typography color="primary">{toTitleCase(key)}</Typography>
                           </TableCell>

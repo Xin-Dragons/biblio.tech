@@ -62,7 +62,7 @@ export const emptyCreator = {
 
 export const CreateNft = () => {
   const { collections, refresh } = useNfts()
-  const { dandies } = useAccess()
+  const { account } = useAccess()
   const umi = useUmi()
   const wallet = useWallet()
   const [keypair, setKeypair] = useState(generateSigner(umi))
@@ -230,7 +230,7 @@ export const CreateNft = () => {
           }
         }
 
-        const fee = getFee("nftSuite.create", dandies.length)
+        const fee = getFee("nft-suite.create", account)
 
         if (fee) {
           tx = tx.add(
@@ -297,7 +297,7 @@ export const CreateNft = () => {
         }
       }
 
-      const fee = getFee("create", dandies.length)
+      const fee = getFee("nft-suite.create", account)
 
       if (fee) {
         tx = tx.add(
