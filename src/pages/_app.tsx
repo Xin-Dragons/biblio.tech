@@ -127,7 +127,7 @@ Biblio.getInitialProps = async (context: any) => {
       .find((row) => row.startsWith(`nonce=`))
       ?.split("=")[1]
   } else {
-    const cookies = context.ctx.res?.getHeader("set-cookie")[0]
+    const cookies = context.ctx.res?.getHeader("set-cookie")?.[0]
     nonce = cookies ? cookie.parse(cookies)?.nonce : null
   }
   return {
