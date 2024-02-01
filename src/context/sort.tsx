@@ -93,7 +93,6 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [sortOptions, setSortOptions] = useState<Sort[]>([])
   const { sort, setSort } = useUiSettings()
   const router = useRouter()
-  const { isAdmin } = useAccess()
   const { filtered } = useNfts()
 
   useEffect(() => {
@@ -134,7 +133,7 @@ export const SortProvider: FC<{ children: ReactNode }> = ({ children }) => {
     ]
 
     setSortOptions(opts as any)
-  }, [router.query, isAdmin, filtered])
+  }, [router.query, filtered])
 
   useEffect(() => {
     if (!sortOptions.length) return

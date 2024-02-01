@@ -61,9 +61,11 @@ import {
 } from "@metaplex-foundation/mpl-token-metadata"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { getMintlist } from "../../helpers/helius"
+import { useAccess } from "../../context/access"
 
 export function UpdateNft() {
-  const { loading: nftsLoading, dandies, createdNfts, collections } = useNfts()
+  const { account } = useAccess()
+  const { loading: nftsLoading, createdNfts, collections } = useNfts()
   const [loading, setLoading] = useState(false)
   const [publicKey, setPublicKey] = useState("")
   const [nft, setNft] = useState<DigitalAssetWithJsonAndToken | null>(null)
@@ -584,7 +586,7 @@ export function UpdateNft() {
       }
     }
 
-    const fee = getFee("update", dandies.length)
+    const fee = getFee("nft=suite.update", account)
 
     if (fee) {
       tx = tx.add(
@@ -714,7 +716,7 @@ export function UpdateNft() {
         })
       )
 
-      const fee = getFee("update", dandies.length)
+      const fee = getFee("nft-suiteupdate", account)
 
       if (fee) {
         tx = tx.add(

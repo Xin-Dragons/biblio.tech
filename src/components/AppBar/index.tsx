@@ -35,7 +35,7 @@ import Logo from "./logo.svg"
 import Snowflakes from "./snowflakes.svg"
 
 const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
-  const { isAdmin, publicKey } = useAccess()
+  const { isInScope, publicKey } = useAccess()
   const { collections } = useDatabase()
   const { showAllWallets } = useUiSettings()
   const router = useRouter()
@@ -59,7 +59,7 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
           <Typography variant="h5">TAGS - </Typography>
           <Color color={tag.color!} />
           <Typography variant="h5">{tag.name}</Typography>
-          {isAdmin && (
+          {isInScope && (
             <IconButton onClick={() => setOpen?.(true)}>
               <Edit />
             </IconButton>
@@ -102,7 +102,7 @@ const Title: FC<{ setOpen?: Function }> = ({ setOpen }) => {
       {title}
       {publicKey && (
         <Typography color="primary" variant="body2" textTransform="none">
-          Now viewing: {showAllWallets && isAdmin ? "all wallets" : shorten(publicKey!)}
+          Now viewing: {showAllWallets ? "all linked wallets" : shorten(publicKey!)}
         </Typography>
       )}
       <Dialog open={showVaultInfo} onClose={toggleVaultInfo} fullWidth maxWidth="md">

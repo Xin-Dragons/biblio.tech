@@ -8,18 +8,19 @@ import Spinner from "./Spinner"
 import { useUmi } from "../context/umi"
 import { AuthorityType, Mint, setAuthority, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
+import { useAccess } from "../context/access"
+import { getFee } from "./NftTool/helpers/utils"
 
 export const UpdateAuths = ({
   mint,
   metadata,
-  isAdmin,
   refresh,
 }: {
   mint: Mint | null
   metadata?: Metadata
-  isAdmin: boolean
   refresh: Function
 }) => {
+  const { account } = useAccess()
   const [newFreezeAuthority, setNewFreezeAuthority] = useState("")
   const [newMintAuthority, setNewMintAuthority] = useState("")
   const [newUpdateAuthority, setNewUpdateAuthority] = useState("")
@@ -94,11 +95,13 @@ export const UpdateAuths = ({
         )
       }
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1 * [newFreezeAuthority, newUpdateAuthority, newMintAuthority].filter(Boolean).length),
+            amount: sol(fee * [newFreezeAuthority, newUpdateAuthority, newMintAuthority].filter(Boolean).length),
           })
         )
       }
@@ -151,11 +154,13 @@ export const UpdateAuths = ({
         })
       )
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1),
+            amount: sol(fee),
           })
         )
       }
@@ -193,11 +198,13 @@ export const UpdateAuths = ({
         })
       )
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1),
+            amount: sol(fee),
           })
         )
       }
@@ -235,11 +242,13 @@ export const UpdateAuths = ({
         })
       )
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1),
+            amount: sol(fee),
           })
         )
       }

@@ -128,7 +128,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
     const updates = selected
       .map((nftMint) => {
         const nft = nfts.find((n) => n.nftMint === nftMint)
-        const identifier = nft.collectionId || nft.firstVerfiedCreator
+        const identifier = nft!.collectionId || nft!.firstVerifiedCreator
         const fp = floorPrices[identifier as keyof object]
         if (!fp) {
           return
@@ -155,8 +155,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
           const { data } = await axios.post("/api/get-tensor-fp", {
             mints: items.map((item) => {
               return {
-                mint: item.nftMint,
-                collectionId: item.collectionId || item.firstVerifiedCreator,
+                mint: item!.nftMint,
+                collectionId: item!.collectionId || item!.firstVerifiedCreator,
               }
             }),
           })
@@ -167,8 +167,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
           const { data } = await axios.post("/api/get-me-fp", {
             mints: items.map((item) => {
               return {
-                mint: item.nftMint,
-                collectionId: item.collectionId || item.firstVerifiedCreator,
+                mint: item!.nftMint,
+                collectionId: item!.collectionId || item!.firstVerifiedCreator,
               }
             }),
           })
@@ -195,14 +195,14 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
   useEffect(() => {
     const updates = items.map((nft) => {
-      const identifier = nft.collectionId || nft.firstVerifiedCreator
+      const identifier = nft!.collectionId || nft!.firstVerifiedCreator
       const fps = marketplace === "tensor" ? floorPrices : meFloorPrices
       const fp = ((fps[identifier as keyof object] || {}).floorPrice || 0) / LAMPORTS_PER_SOL
-      const item = listingPrice.find((l) => l.nftMint === nft.nftMint)
+      const item = listingPrice.find((l) => l.nftMint === nft!.nftMint)
 
       if (!item || !item.price || Number(item.price) < fp) {
         return {
-          nftMint: nft.nftMint,
+          nftMint: nft!.nftMint,
           price: `${fp}`,
         }
       }
@@ -229,13 +229,13 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   function updateAllListingPrice(percent?: number) {
     const prices = items.map((item) => {
       const fps = marketplace === "tensor" ? floorPrices : meFloorPrices
-      let price = fps[(item.collectionId || item.firstVerifiedCreator) as keyof object].floorPrice
+      let price = fps[(item!.collectionId || item!.firstVerifiedCreator) as keyof object].floorPrice
       if (percent) {
         const adjust = new BN(price).div(new BN(100)).mul(new BN(percent))
         price = new BN(price).add(adjust).toNumber()
       }
       return {
-        nftMint: item.nftMint,
+        nftMint: item!.nftMint,
         price: `${price / LAMPORTS_PER_SOL}`,
       }
     })
@@ -246,8 +246,8 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
     if (!items.length || isActive || loading) {
       return
     }
-    const collections = uniq(items.map((item) => item.collectionId || item.firstVerifiedCreator))
-    if (collections.every((collection) => collection in floorPrices)) {
+    const collections = uniq(items.map((item) => item!.collectionId || item!.firstVerifiedCreator))
+    if (collections.every((collection) => collection! in floorPrices)) {
       return
     }
     getFloorPrices()
@@ -255,7 +255,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
   async function onListClick(mint: string) {
     try {
-      const nft = items.find((n) => n.nftMint === mint) as Nft
+      const nft = items.find((n) => n!.nftMint === mint) as Nft
       const identifier = nft.collectionId || nft.firstVerifiedCreator
       const floorPrice = floorPrices[identifier as keyof object]?.floorPrice ?? 0
       const item = listingPrice.find((p) => p.nftMint === mint)
@@ -307,7 +307,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
       await Promise.all(
         toList.map(async (item) => {
-          const nft = items.find((n) => n.nftMint === item.mint) as Nft
+          const nft = items.find((n) => n!.nftMint === item.mint) as Nft
           const identifier = nft.collectionId || nft.firstVerifiedCreator
           const floorPrice = floorPrices[identifier as keyof object]?.floorPrice ?? 0
           if (!item?.price) {
@@ -337,7 +337,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   async function onSellNowClick(mint: string) {
     try {
       setLoading(true)
-      const item = items.find((item) => item.nftMint === mint) as Nft
+      const item = items.find((item) => item!.nftMint === mint) as Nft
 
       if (!item) {
         throw new Error("Unable to find item")
@@ -374,7 +374,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   async function onSellAllClick() {
     try {
       setLoading(true)
-      const grouped = groupBy(items, (item) => item.collectionId || item.firstVerifiedCreator)
+      const grouped = groupBy(items, (item) => item!.collectionId || item!.firstVerifiedCreator)
 
       const toSell = flatten(
         map(grouped, (items, collectionId) => {
@@ -390,7 +390,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
 
               return {
                 ...pool,
-                mint: item.nftMint,
+                mint: item!.nftMint,
                 price: pool.price,
                 pool: pool.address,
                 royalties: payRoyalties,
@@ -417,15 +417,15 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
     const allRoyalties: any[] = []
 
     const totalSellNow = reduce(
-      groupBy(items, (item) => item.collectionId || item.firstVerifiedCreator),
+      groupBy(items, (item) => item!.collectionId || item!.firstVerifiedCreator),
       (sum, items, collection) => {
         const collectionPools = (pools[collection as keyof object] || {}).pools || []
 
         const total = items.reduce((all, item, index) => {
           const price = new BN((collectionPools[index] || {}).price || 0)
 
-          if (unwrapSome(item.metadata.tokenStandard) === 4 || payRoyalties) {
-            const royaltiesRate = new BN(item.metadata.sellerFeeBasisPoints)
+          if (unwrapSome(item!.metadata.tokenStandard) === 4 || payRoyalties) {
+            const royaltiesRate = new BN(item!.metadata.sellerFeeBasisPoints)
             const royalties = price.div(new BN(10000)).mul(royaltiesRate)
             allRoyalties.push(royalties)
             const net = price.sub(royalties)
@@ -445,7 +445,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
   }, [selected, pools])
 
   const totalListings = items.reduce((sum, item) => {
-    const price = Number((listingPrice.find((l) => l.nftMint === item.nftMint) || {}).price || 0)
+    const price = Number((listingPrice.find((l) => l.nftMint === item!.nftMint) || {}).price || 0)
     return sum.add(new BN(price * LAMPORTS_PER_SOL))
   }, new BN(0))
 
@@ -611,6 +611,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
           </TableRow>
         </TableHead>
         <TableBody sx={isXs ? { display: "flex", flexDirection: "column" } : {}}>
+          {/* @ts-ignore */}
           {items.map((item: Nft) => {
             const isDisabled = loading || transactions.map((t) => t.nftMint).includes(item.nftMint) || !!item.status
             const identifier = item.collectionId || item.firstVerifiedCreator
@@ -768,6 +769,7 @@ export const Listing: FC<ListingProps> = ({ onClose }) => {
                       <FormHelperText>Floor price: {lamportsToSol(floorPrice)} SOL</FormHelperText>
                     ) : (
                       <Tooltip title="Set to floor price">
+                        {/* @ts-ignore */}
                         <Link
                           onClick={(e) => updateListingPrice(item.nftMint, `${Number(floorPrice) / LAMPORTS_PER_SOL}`)}
                           component="button"

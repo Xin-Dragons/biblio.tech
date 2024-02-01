@@ -2,6 +2,7 @@ import { DigitalAsset, JsonMetadata } from "@metaplex-foundation/mpl-token-metad
 import Dexie, { Table } from "dexie"
 import { Currency } from "./context/brice"
 import { LoanType } from "./context/ui-settings"
+import { DAS } from "helius-sdk"
 
 export interface NftMetadata {
   name?: string
@@ -15,7 +16,7 @@ export interface EditionDetails {
   supply: bigint | "unknown"
 }
 
-export interface Nft {
+export type Nft = {
   chain?: "eth" | "solana"
   nftMint: string
   helloMoonCollectionId: string
@@ -30,7 +31,6 @@ export interface Nft {
   metadata: any
   mint: any
   edition: any
-  supply?: number
   balance?: {
     [key: string]: number
   }
@@ -40,7 +40,15 @@ export interface Nft {
   price?: number
   value?: number
   tokenType?: string
-}
+  token_info: {
+    price_info?: {
+      price_per_token: number
+      total_price: number
+    }
+    decimals: number
+    balance: number
+  }
+} & DAS.GetAssetResponse
 
 export interface Collection {
   id: string

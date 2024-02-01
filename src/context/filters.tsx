@@ -54,7 +54,6 @@ type FiltersProviderProps = {
 
 export const FiltersProvider: FC<FiltersProviderProps> = ({ children }) => {
   const [selectedFilters, setSelectedFilters] = useState({})
-  const { isAdmin } = useAccess()
   const [search, setSearch] = useState("")
 
   const [showLoans, setShowLoans] = useState<boolean>(false)

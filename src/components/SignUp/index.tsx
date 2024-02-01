@@ -1,108 +1,120 @@
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  FormControlLabel,
-  Link,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  Theme,
-  Typography,
-  useMediaQuery,
-} from "@mui/material"
+import { Alert, Button, Card, CardContent, Link, Stack, Theme, Typography, useMediaQuery } from "@mui/material"
 import { useWallet } from "@solana/wallet-adapter-react"
-import axios, { Axios, AxiosError } from "axios"
-import { FC, useEffect, useState } from "react"
+import axios from "axios"
+import { FC, useState } from "react"
 import { toast } from "react-hot-toast"
 import { Transaction } from "@solana/web3.js"
 import base58 from "bs58"
-import { getCsrfToken, useSession } from "next-auth/react"
-import { Selector } from "../Selector"
-import { useDatabase } from "../../context/database"
-import { SigninMessage } from "../../utils/SigninMessge"
-import { addMemo } from "@metaplex-foundation/mpl-toolbox"
 import { useUmi } from "../../context/umi"
 import { shorten } from "../../helpers/utils"
 import { useWallets } from "../../context/wallets"
 import { useAccess } from "../../context/access"
+import { addMemo } from "@metaplex-foundation/mpl-toolbox"
+import { SigninMessage } from "../../utils/SigninMessge"
+import { useRouter } from "next/router"
 
-export const SignUp: FC = () => {
-  const { stakeNft } = useDatabase()
-  const { data: session, status, update } = useSession()
-  const [adding, setAdding] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
+export function SignUp({ onClose }: { onClose: Function }) {
+  const router = useRouter()
+  const { user, nonce, refresh } = useAccess()
   const [loading, setLoading] = useState(false)
   const wallet = useWallet()
   const { isLedger, setIsLedger } = useWallets()
   const umi = useUmi()
   const fullScreen = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
-  const { signOut, signIn } = useAccess()
 
-  useEffect(() => {
-    const wallets = (session?.user?.wallets || []).map((wallet) => wallet.public_key) || []
-    if (
-      wallet.publicKey &&
-      status === "authenticated" &&
-      !wallets.includes(wallet.publicKey.toBase58()) &&
-      !session.user?.offline
-    ) {
-      setIsOpen(true)
+  async function linkWallet() {
+    if (isLedger) {
     } else {
-      setIsOpen(false)
     }
-  }, [session, wallet.publicKey, status])
+  }
 
-  async function createAccount(mint: string) {
-    try {
-      if (!wallet.connected) {
-        throw new Error("Wallet disconnected")
-      }
-      if (!mint) {
-        throw new Error("No NFT selected")
-      }
-      setLoading(true)
+  async function createAccount() {
+    if (isLedger) {
+      try {
+        setLoading(true)
+        const txn = await addMemo(umi, {
+          memo: "Sign up to Biblio",
+        }).buildWithLatestBlockhash(umi)
 
-      const createPromise = Promise.resolve().then(async () => {
+        const signed = await umi.identity.signTransaction(txn)
+
         const params = {
           publicKey: wallet.publicKey?.toBase58(),
-          mint,
-        }
-        const { data } = await axios.post("/api/create-user", params)
-        if (data.resolved) {
-          toast.success("Account created")
-          return
+          rawTransaction: base58.encode(umi.transactions.serialize(signed)),
+          isLedger,
         }
 
-        const txn = Transaction.from(base58.decode(data.txn))
-        const signed = (await wallet.signTransaction?.(txn)) as Transaction
+        const createPromise = axios.post("/api/create-user", params)
 
-        await axios.post("/api/send-create-user", {
-          ...params,
-          rawTransaction: base58.encode(signed.serialize()),
+        toast.promise(createPromise, {
+          loading: "Creating Biblio account...",
+          success: "Biblio account created",
+          error: "Error creating account",
         })
-        await stakeNft(mint)
-        await update()
-      })
 
-      toast.promise(createPromise, {
-        loading: "Creating Biblio account...",
-        success: "Biblio account created",
-        error: "Error creating account",
-      })
+        await createPromise
+      } catch (err: any) {
+        console.error(err)
 
-      await createPromise
-    } catch (err: any) {
-      console.log(err)
-      toast.error(err.response?.data?.message || err.message || "Error creating account")
-    } finally {
-      setLoading(false)
+        if (err.message.includes("Something went wrong")) {
+          throw new Error(
+            "Looks like the Solana app on your Ledger is out of date. Please update using the Ledger Live application and try again."
+          )
+        }
+
+        if (err.message.includes("Cannot destructure property 'signature' of 'r' as it is undefined")) {
+          throw new Error(
+            'Unable to connect to Ledger, please make sure the device is unlocked with the Solana app open, and "Blind Signing" enabled'
+          )
+        }
+
+        throw err
+      } finally {
+        setLoading(false)
+        refresh()
+        router.push("/")
+      }
+    } else {
+      try {
+        if (!wallet.connected) {
+          throw new Error("Wallet disconnected")
+        }
+        setLoading(true)
+
+        if (!wallet.publicKey || !wallet.signMessage) return
+
+        const message = new SigninMessage({
+          domain: window.location.host,
+          publicKey: wallet.publicKey.toBase58(),
+          statement: `Sign this message to create new Biblio account.\n\n`,
+          nonce,
+        })
+
+        const data = new TextEncoder().encode(message.prepare())
+        const signature = await wallet.signMessage(data)
+        const serializedSignature = base58.encode(signature)
+
+        const createPromise = axios.post("/api/create-user", {
+          message: JSON.stringify(message),
+          signature: serializedSignature,
+          publicKey: wallet.publicKey.toBase58(),
+        })
+
+        toast.promise(createPromise, {
+          loading: "Creating Biblio account...",
+          success: "Biblio account created",
+          error: "Error creating account",
+        })
+
+        await createPromise
+      } catch (err: any) {
+        console.log(err)
+        toast.error(err.response?.data?.message || err.message || "Error creating account")
+      } finally {
+        setLoading(false)
+        refresh()
+        onClose()
+      }
     }
   }
 
@@ -110,45 +122,29 @@ export const SignUp: FC = () => {
     return null
   }
 
-  async function signOutAndDisconnect() {
-    await signOut({ redirect: false })
-    wallet.disconnect()
-    toast.success("Signed out")
-  }
-
-  const maxWallets =
-    (session?.user?.nfts || [])
-      .filter((item) => {
-        if (!item || !item.active) {
-          return false
-        }
-        if (!item.hours_active) {
-          return true
-        }
-
-        const stakedHours = item.time_staked * 3600
-
-        return stakedHours < item.hours_active
-      })
-      .reduce((sum, item) => sum + item.number_wallets, 0) || 0
-
-  const linkedWallets = session?.user?.wallets?.length || 0
-
-  const canLink = linkedWallets < maxWallets
-
   return (
     <Card sx={{ overflowY: "auto", height: fullScreen ? "100vh" : "auto" }}>
       <CardContent>
         <Stack spacing={2} justifyContent="center" alignItems="center">
           <Typography variant="h4" fontFamily="lato" fontWeight="bold">
-            Biblio Premium
+            Create account
           </Typography>
           <Typography variant="h4" color="primary" fontFamily="lato" display="inline">
             {shorten(wallet.publicKey?.toBase58())}
           </Typography>
-          <Selector onSubmit={createAccount} onCancel={() => wallet.disconnect()} loading={loading} />
+          <Typography textAlign="center">
+            By creating an account you will be able to link multiple wallets and access features such as secure
+            (mutli-wallet) locking, as well as tx fee discounts if you hold Dandies.
+          </Typography>
+          <Alert severity="info">
+            We do not store any information about you or your holdings, the only data we store is the association of
+            linked wallets. You can delete your account and these associations at any time.
+          </Alert>
+          <Button variant="contained" size="large" onClick={createAccount} disabled={loading || user.id}>
+            Create account
+          </Button>
           <Stack>
-            <Typography variant="body2">
+            <Typography variant="body2" textAlign="center">
               If you are trying to link an additional wallet to an existing account, please{" "}
               <Button
                 component={Link}
@@ -161,8 +157,7 @@ export const SignUp: FC = () => {
               </Button>{" "}
               and reconnect with your main wallet.
               <br />
-              You will be able to link additional wallets in your profile menu if your account type permits multiple
-              wallets
+              You will be able to link additional wallets in your profile menu.
             </Typography>
           </Stack>
         </Stack>

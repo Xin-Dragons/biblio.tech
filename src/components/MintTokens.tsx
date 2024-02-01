@@ -14,9 +14,12 @@ import {
   transferSol,
 } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
+import { getFee } from "./NftTool/helpers/utils"
+import { useAccess } from "../context/access"
 
-export const MintTokens = ({ mint, isAdmin }: { mint: Mint | null; isAdmin: boolean }) => {
+export const MintTokens = ({ mint }: { mint: Mint | null }) => {
   const [loading, setLoading] = useState(false)
+  const { account } = useAccess()
   const [tokensToMint, setTokensToMint] = useState<string | number>("")
   const [mintToAddress, setMintToAddress] = useState<string | null>(null)
   const [mintToAddressError, setMintToAddressError] = useState<string | null>(null)
@@ -93,11 +96,13 @@ export const MintTokens = ({ mint, isAdmin }: { mint: Mint | null; isAdmin: bool
         })
       )
 
-      if (!isAdmin) {
+      const fee = getFee("token-tool.update", account)
+
+      if (fee > 0) {
         txn = txn.add(
           transferSol(umi, {
             destination: FEES_WALLET,
-            amount: sol(0.1),
+            amount: sol(fee),
           })
         )
       }

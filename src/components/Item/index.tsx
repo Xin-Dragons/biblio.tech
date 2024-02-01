@@ -27,6 +27,8 @@ import {
   alpha,
   useMediaQuery,
 } from "@mui/material"
+import { getAssetWithProof, delegate } from "@metaplex-foundation/mpl-bubblegum"
+
 import { default as NextLink } from "next/link"
 import { findKey, isEmpty, uniq } from "lodash"
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
@@ -152,7 +154,7 @@ interface OfferedLoanWithApy extends OfferedLoan {
 const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, isTouchDevice, item }) => {
   const { repayLoan, extendLoan, getBestLoan, getOrderBook } = useSharky()
   const { repayCitrusLoan, extendCitrusLoan, getBestCitrusLoanFromLoan } = useCitrus()
-  const { isInScope, isAdmin } = useAccess()
+  const { isInScope, dandies } = useAccess()
   const [timeRemaining, setTimeRemaining] = useState("")
   const [urgent, setUrgent] = useState(false)
   const [extendShowing, setExtendShowing] = useState(false)
@@ -274,7 +276,7 @@ const Loan: FC<{ loan: Loan; isTouchDevice?: Boolean; item: Nft }> = ({ loan, is
       : citrusBestLoan?.terms.principal || 0)
   const canExtend = loan.market === "Sharky" ? bestLoan : citrusBestLoan
 
-  const serviceFee = isAdmin
+  const serviceFee = dandies.length
     ? 0
     : loan.market === "Sharky"
     ? (bestLoan?.data.principalLamports ? Number(bestLoan?.data.principalLamports) : 0) * 0.005
@@ -707,14 +709,14 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
   const [fetchingBestLoan, setFetchingBestLoan] = useState(false)
   const [sharkyFetching, setSharkyFetching] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { isInScope } = useAccess()
   const [bestLoan, setBestLoan] = useState<OfferedLoanWithApy | null>(null)
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
   const { takeLoan, getBestLoan, getOrderBook } = useSharky()
   const [bestCitrusLoan, setBestCitrusLoan] = useState<CitrusLoan | null>(null)
   const [citrusFetching, setCitrusFetching] = useState(false)
-  const { isAdmin, isBasic } = useAccess()
 
-  const isDisabled = !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   async function fetchCitrus() {
     try {
@@ -1033,21 +1035,22 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const [asset, setAsset] = useState<Asset | null>(null)
   const { db } = useDatabase()
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
-  const { isInScope, isAdmin, isBasic } = useAccess()
+  const { isInScope } = useAccess()
   const [revoking, setRevoking] = useState(false)
   const router = useRouter()
-  const { collections } = useDatabase()
+  const { collections, revokeDelegate } = useDatabase()
   const basePath = useBasePath()
   const umi = useUmi()
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
   const [da, setDa] = useState<DigitalAssetWithToken | null>(null)
+  const wallet = useWallet()
 
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
   }
 
-  const isDisabled = !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   const selectedTags =
     useLiveQuery(() => db && db.taggedNfts.where({ nftId: item.nftMint }).toArray(), [item, db], []) || []
@@ -1064,13 +1067,10 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
     const assets = (
       await Promise.all(
         uniq([
-          ...(item.json?.animation_url ? [item.json.animation_url] : []),
-          ...(item.json?.image ? [item.json.image] : []),
-          ...(item.json?.properties?.files ? item.json?.properties.files.map((f) => f.uri) : []),
-          ...(item.json?.properties?.dna
-            ? (item.json.properties.dna as any).map((child: any) => child.metadata.image)
-            : []),
-        ]).map(getType)
+          ...(item.content?.links?.animation_url ? [item.content?.links.animation_url] : []),
+          ...(item.content?.links?.image ? [item.content?.links.image] : []),
+          ...(item.content?.files ? item.content.files.map((f) => f.uri) : []),
+        ]).map((item) => getType(item!))
       )
     ).filter((item) => item && item.type)
 
@@ -1082,8 +1082,10 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   }, [])
 
   async function fetchItem() {
-    const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
-    setDa(da)
+    if (!item.compression?.compressed) {
+      const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
+      setDa(da)
+    }
   }
 
   useEffect(() => {
@@ -1107,37 +1109,49 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
 
   const collection = collections.find((c) => c.id === item.collectionIdentifier)
 
-  let delegate: any
-
-  if (da?.tokenRecord) {
-    delegate = unwrapOption(da.tokenRecord.delegate)
-  } else if (da?.token) {
-    delegate = unwrapOption(da.token.delegate)
-  } else {
-    delegate = item.delegate
-  }
+  let tokenDelegate = item.ownership.delegate
 
   async function revoke() {
     try {
       if (isDisabled) {
         throw new Error("You're not signed in")
       }
-      if (!da) {
+      if (!da && !item.compression?.compressed) {
         throw new Error("still fetching")
       }
-      if (!delegate) {
+      if (!tokenDelegate) {
         throw new Error("Delegate not found")
       }
+      if (umi.identity.publicKey !== item.ownership.owner) {
+        throw new Error(`Connect with ${shorten(item.ownership.owner)} to revoke this delegation`)
+      }
       setRevoking(true)
-      await revokeUtilityV1(umi, {
-        mint: publicKey(item.nftMint),
-        authority: umi.identity,
-        tokenStandard: unwrapOption(da.metadata.tokenStandard) || 0,
-        delegate: publicKey(delegate),
-      }).sendAndConfirm(umi)
+      let promise
+      if (item.compression?.compressed) {
+        const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+        promise = delegate(umi, {
+          ...assetWithProof,
+          leafOwner: umi.identity,
+          previousLeafDelegate: publicKey(item.ownership.delegate!),
+          newLeafDelegate: publicKey(item.ownership.owner),
+        }).sendAndConfirm(umi)
+      } else {
+        promise = revokeUtilityV1(umi, {
+          mint: publicKey(item.nftMint),
+          authority: umi.identity,
+          tokenStandard: unwrapOption(da!.metadata.tokenStandard) || 0,
+          delegate: publicKey(tokenDelegate),
+        }).sendAndConfirm(umi)
+      }
 
-      toast.success("Auth revoked!")
-      await fetchItem()
+      toast.promise(promise, {
+        loading: "Revoking auth",
+        success: "Auth revoked",
+        error: "Error revoking auth",
+      })
+
+      await promise
+      await revokeDelegate([item])
     } catch (err: any) {
       console.log(err)
       toast.error(err.message || "Error revoking")
@@ -1236,7 +1250,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain === "solana" && isInScope && (
+            {item.status !== "loaned" && item.chain === "solana" && isInScope && !item.compression?.compressed && (
               <BestLoan item={item} onClose={() => setOpen(false)} />
             )}
           </Stack>
@@ -1267,6 +1281,16 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
+                <TableRow>
+                  <TableCell>
+                    <Typography fontWeight="bold" color="primary">
+                      Owner
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "right" }}>
+                    <CopyAddress>{item.owner || item.ownership.owner}</CopyAddress>
+                  </TableCell>
+                </TableRow>
                 {item.loan && (
                   <TableRow>
                     <TableCell>
@@ -1322,8 +1346,14 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
                       <Typography>
-                        {item.metadata.collectionDetails && "Collection "}
-                        {tokenStandards[item.metadata.tokenStandard as keyof object] || "Unknown"}
+                        {item.compression?.compressed ? (
+                          "Compressed NFT"
+                        ) : (
+                          <>
+                            {item.metadata.collectionDetails && "Collection "}
+                            {tokenStandards[item.metadata.tokenStandard as keyof object] || "Unknown"}
+                          </>
+                        )}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -1380,7 +1410,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
-                {delegate && (
+                {tokenDelegate && (
                   <TableRow>
                     <TableCell>
                       <Typography fontWeight="bold" color="primary">
@@ -1389,13 +1419,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
                       <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={2}>
-                        {isInScope && (
+                        {wallet.publicKey?.toBase58() === item.ownership.owner && (
                           <Button variant="outlined" color="error" disabled={revoking} onClick={revoke}>
                             Revoke
                           </Button>
                         )}
                         <Typography>
-                          <CopyAddress>{delegate}</CopyAddress>
+                          <CopyAddress>{tokenDelegate}</CopyAddress>
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -1403,13 +1433,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 )}
               </TableBody>
             </Table>
-            <Typography>{item.json?.description}</Typography>
+            <Typography>{item.content?.metadata?.description}</Typography>
             <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">
               Traits
             </Typography>
-            {item.json?.attributes?.length ? (
+            {item.content?.metadata?.attributes?.length ? (
               <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>
-                {(item.json?.attributes || []).map((att, index) => (
+                {(item.content?.metadata?.attributes || []).map((att, index) => (
                   <Box
                     key={index}
                     sx={{ borderRadius: "5px", border: "1px solid", padding: 1, borderColor: "primary.main" }}
@@ -1526,8 +1556,7 @@ export const Item: FC<ItemProps> = ({
   const { layoutSize: settingsLayoutSize, showInfo: settingsShowInfo, showAllWallets, lightMode } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
-  const metaplex = useMetaplex()
-  const { isInScope, isOffline, publicKey, publicKeys, isBasic, isAdmin } = useAccess()
+  const { publicKey, publicKeys, isInScope } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
   const [isTouchDevice, setIsTouchDevice] = useState(false)
 
@@ -1541,32 +1570,11 @@ export const Item: FC<ItemProps> = ({
   const { transactions } = useTransactionStatus()
   const transaction = transactions.find((t) => t.nftMint === item.nftMint)
 
-  const isDisabled = isInScope && !isAdmin && !isBasic
-
-  async function loadNft() {
-    if (isOffline) {
-      return
-    }
-    try {
-      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(item.nftMint) })
-      await updateItem({
-        ...item,
-        json: nft.json,
-        jsonLoaded: true,
-      })
-    } catch (err) {
-      console.log(err)
-    }
-  }
+  const isDisabled = !isInScope
 
   function onItemClick(e: any) {
     renderItem(ItemDetails, { item })
   }
-
-  useEffect(() => {
-    if (item.json) return
-    loadNft()
-  }, [item])
 
   const starred = starredNfts.includes(item.nftMint)
 
@@ -1670,8 +1678,8 @@ export const Item: FC<ItemProps> = ({
   let image
   if (item.nftMint === USDC) {
     image = "/usdc.png"
-  } else if (item.json?.image) {
-    image = item.json.image.replace("ipfs://", "https://ipfs.io/ipfs/")
+  } else if (item.content?.links?.image) {
+    image = item.content?.links?.image.replace("ipfs://", "https://ipfs.io/ipfs/")
     image =
       layoutSize === "collage" || enlarged
         ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
@@ -1796,84 +1804,83 @@ export const Item: FC<ItemProps> = ({
           </Stack>
         )}
 
-        {item.jsonLoaded ? (
-          <Box
-            sx={{
-              width: "100%",
-              aspectRatio: layoutSize === "collage" ? "auto" : "1 / 1",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              position: "relative",
-              backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
-              backgroundSize: "100%",
-              borderRadius: "4px",
+        <Box
+          sx={{
+            width: "100%",
+            aspectRatio: layoutSize === "collage" ? "auto" : "1 / 1",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            position: "relative",
+            backgroundImage: lightMode ? "url(/books-lightest.svg)" : "url(/books-lighter.svg)",
+            backgroundSize: "100%",
+            borderRadius: "4px",
+          }}
+        >
+          <img
+            src={image}
+            onError={(e: any) => {
+              e.target.src = item.json?.image
+              e.target.onerror = (er: any) => {
+                er.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
+              }
             }}
-          >
-            <img
-              src={image}
-              onError={(e: any) => {
-                e.target.src = item.json?.image
-                e.target.onerror = (er: any) => {
-                  er.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
-                }
-              }}
-              width="100%"
-              style={{
-                display: "block",
-                backgroundColor: alpha(theme.palette.background.default, 0.8),
-                borderRadius: infoShowing ? 0 : "4px",
-                aspectRatio: layoutSize === "collage" || enlarged ? "unset" : "1 / 1",
-                objectFit: layoutSize === "collage" || enlarged ? "unset" : "cover",
-              }}
-            />
+            width="100%"
+            style={{
+              display: "block",
+              backgroundColor: alpha(theme.palette.background.default, 0.8),
+              borderRadius: infoShowing ? 0 : "4px",
+              aspectRatio: layoutSize === "collage" || enlarged ? "unset" : "1 / 1",
+              objectFit: layoutSize === "collage" || enlarged ? "unset" : "cover",
+            }}
+          />
 
-            {[1, 2].includes(item.metadata.tokenStandard) && (
-              <Stack>
-                {value ? (
-                  <>
-                    <Chip
-                      avatar={<Avatar src="/birdeye.png" />}
-                      label={`$${value.toLocaleString()}`}
-                      component="a"
-                      href={`https://birdeye.so/token/${item.nftMint}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e: any) => {
-                        e.stopPropagation()
-                      }}
-                      sx={{
-                        position: "absolute",
-                        backgroundColor: alpha(theme.palette.background.default, 0.8),
-                        right: "0.5em",
-                        top: "0.5em",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                        "&:hover": {
-                          backgroundColor: alpha(theme.palette.background.default, 0.5),
-                        },
-                      }}
-                    />
-                  </>
-                ) : null}
-                <Chip
-                  label={balance.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })}
-                  sx={{
-                    position: "absolute",
-                    backgroundColor: alpha(theme.palette.background.default, 0.8),
-                    right: "0.5em",
-                    bottom: "0.5em",
-                    fontWeight: "bold",
-                  }}
-                />
-              </Stack>
-            )}
-            {isInScope && DragHandle && isTouchDevice && !showInfo && (
-              <Box sx={{ position: "absolute", zIndex: 10, top: 0 }}>{DragHandle}</Box>
-            )}
-            {/* {item.status && ["frozen", "staked", "inVault"].includes(item.status) && (
+          {[1, 2].includes(item.metadata.tokenStandard) && (
+            <Stack>
+              {value ? (
+                <>
+                  <Chip
+                    avatar={<Avatar src="/birdeye.png" />}
+                    label={`$${value.toLocaleString()}`}
+                    component="a"
+                    href={`https://birdeye.so/token/${item.nftMint}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e: any) => {
+                      e.stopPropagation()
+                    }}
+                    sx={{
+                      position: "absolute",
+                      backgroundColor: alpha(theme.palette.background.default, 0.8),
+                      right: "0.5em",
+                      top: "0.5em",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      "&:hover": {
+                        backgroundColor: alpha(theme.palette.background.default, 0.5),
+                      },
+                    }}
+                  />
+                </>
+              ) : null}
+              <Chip
+                label={balance.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
+                sx={{
+                  position: "absolute",
+                  backgroundColor: alpha(theme.palette.background.default, 0.8),
+                  right: "0.5em",
+                  bottom: "0.5em",
+                  fontWeight: "bold",
+                }}
+              />
+            </Stack>
+          )}
+          {isInScope && DragHandle && isTouchDevice && !showInfo && (
+            <Box sx={{ position: "absolute", zIndex: 10, top: 0 }}>{DragHandle}</Box>
+          )}
+          {/* {item.status && ["frozen", "staked", "inVault"].includes(item.status) && (
               <Box
                 sx={{
                   position: "absolute",
@@ -1900,90 +1907,75 @@ export const Item: FC<ItemProps> = ({
                 </Tooltip>
               </Box>
             )} */}
-            {(item.status || item.delegate) && showInfo && (
-              <CornerRibbon
-                style={{
-                  textTransform: "uppercase",
-                  fontSize: { small: "10px", medium: "12px", large: "14px", collage: "16px" }[layoutSize],
-                }}
-                backgroundColor={
-                  item.delegate && !item.status ? theme.palette.error.dark : statusColors[item.status as keyof object]
-                }
-              >
-                {item.delegate && !item.status ? "DELEGATED" : statusTitles[item.status as keyof object]}
-              </CornerRibbon>
-            )}
-            {showInfo &&
-              item.status === "listed" &&
-              ["MEv2", "TensorSwap", "ExchangeArt"].includes(item.listing?.marketplace!) && (
-                <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      position: "absolute",
-                      top: "0.25em",
-                      left: "0.25em",
-                      width: "40px",
-                      height: "40px",
-                      padding: "7px",
-                      borderRadius: "100%",
-                      backgroundColor: alpha(theme.palette.background.default, 0.8),
-                    }}
-                  >
-                    {item.listing?.marketplace === "MEv2" && (
-                      <Link
-                        href={`https://magiceden.io/item-details/${item.nftMint}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <img src="/me.png" width="100%" style={{ display: "block" }} />
-                      </Link>
-                    )}
-                    {item.listing?.marketplace === "TensorSwap" && (
-                      <SvgIcon sx={{ color: "text.primary" }}>
-                        <Tensor />
+          {(item.status || item.delegate) && showInfo && (
+            <CornerRibbon
+              style={{
+                textTransform: "uppercase",
+                fontSize: { small: "10px", medium: "12px", large: "14px", collage: "16px" }[layoutSize],
+              }}
+              backgroundColor={
+                item.delegate && !item.status ? theme.palette.error.dark : statusColors[item.status as keyof object]
+              }
+            >
+              {item.delegate && !item.status ? "DELEGATED" : statusTitles[item.status as keyof object]}
+            </CornerRibbon>
+          )}
+          {showInfo &&
+            item.status === "listed" &&
+            ["MEv2", "TensorSwap", "ExchangeArt"].includes(item.listing?.marketplace!) && (
+              <Tooltip title={`${lamportsToSol(item.listing?.price!)} SOL`}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    position: "absolute",
+                    top: "0.25em",
+                    left: "0.25em",
+                    width: "40px",
+                    height: "40px",
+                    padding: "7px",
+                    borderRadius: "100%",
+                    backgroundColor: alpha(theme.palette.background.default, 0.8),
+                  }}
+                >
+                  {item.listing?.marketplace === "MEv2" && (
+                    <Link
+                      href={`https://magiceden.io/item-details/${item.nftMint}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <img src="/me.png" width="100%" style={{ display: "block" }} />
+                    </Link>
+                  )}
+                  {item.listing?.marketplace === "TensorSwap" && (
+                    <SvgIcon sx={{ color: "text.primary" }}>
+                      <Tensor />
+                    </SvgIcon>
+                  )}
+                  {item.listing?.marketplace === "ExchangeArt" && (
+                    <Link
+                      href={`https://exchange.art/single/${item.nftMint}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ display: "block", height: "100%" }}
+                    >
+                      <SvgIcon sx={{ color: "text.primary", padding: "4px", height: "100%" }}>
+                        <ExchangeArt />
                       </SvgIcon>
-                    )}
-                    {item.listing?.marketplace === "ExchangeArt" && (
-                      <Link
-                        href={`https://exchange.art/single/${item.nftMint}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{ display: "block", height: "100%" }}
-                      >
-                        <SvgIcon sx={{ color: "text.primary", padding: "4px", height: "100%" }}>
-                          <ExchangeArt />
-                        </SvgIcon>
-                      </Link>
-                    )}
-                  </Box>
-                </Tooltip>
-              )}
-            {item.loan && <Loan loan={item.loan} isTouchDevice={isTouchDevice} item={item} />}
-          </Box>
-        ) : (
-          <Box
-            sx={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              position: "relative",
-            }}
-          >
-            <img src="/loading-slow.gif" width="100%" />
-            {item.loan && <Loan loan={item.loan} item={item} />}
-          </Box>
-        )}
+                    </Link>
+                  )}
+                </Box>
+              </Tooltip>
+            )}
+          {item.loan && <Loan loan={item.loan} isTouchDevice={isTouchDevice} item={item} />}
+        </Box>
 
         {infoShowing && (
           <CardContent sx={{ position: "relative", paddingBottom: "1em !important" }}>
-            <Tooltip title={item.json?.name || item.metadata?.name || "Unknown"}>
+            <Tooltip title={item.content?.metadata.name || "Unknown"}>
               <Typography
                 sx={{
                   fontSize: nameFontSizes[layoutSize],
@@ -1994,7 +1986,7 @@ export const Item: FC<ItemProps> = ({
                   lineHeight: "2em",
                 }}
               >
-                {item.json?.name || item.metadata?.name || "Unknown"}
+                {item.content?.metadata.name || "Unknown"}
                 {item.metadata.tokenStandard === 2 && (
                   <Typography display="inline" variant="body2" color="primary" fontWeight="bold">
                     {" "}

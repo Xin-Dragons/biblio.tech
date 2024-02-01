@@ -37,10 +37,11 @@ type StaticFiltersProps = {
 
 const StaticFilters: FC<StaticFiltersProps> = ({ fullSize }) => {
   const router = useRouter()
-  const { isAdmin } = useAccess()
+  const { isInScope } = useAccess()
   const { showUntagged, setShowUntagged, showLoans, setShowLoans, showStarred, setShowStarred } = useFilters()
 
-  const includeUnlabeledIcon = router.query.tag !== "untagged" && isAdmin
+  const includeUnlabeledIcon = router.query.tag !== "untagged" && isInScope
+
   const includeLoansIcon = router.query.filter !== "loans"
   const includeStarredControl = router.query.filter !== "starred"
 
@@ -49,7 +50,7 @@ const StaticFilters: FC<StaticFiltersProps> = ({ fullSize }) => {
   }
 
   return (
-    <Stack direction={{ sm: "row", xs: "column" }} alignItems="center">
+    <Stack direction={{ sm: "row", xs: "column" }} alignItems="center" spacing={2}>
       {includeUnlabeledIcon &&
         (fullSize ? (
           <Button
@@ -128,7 +129,7 @@ const StaticFilters: FC<StaticFiltersProps> = ({ fullSize }) => {
 
 export const Filters: FC<FiltersProps> = ({ showTags, setShowTags }) => {
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const { isAdmin } = useAccess()
+  const { isInScope } = useAccess()
 
   function toggleShowTags() {
     setShowTags(!showTags)
@@ -144,7 +145,7 @@ export const Filters: FC<FiltersProps> = ({ showTags, setShowTags }) => {
     <Stack spacing={2} direction="row" justifyContent="flex-end" alignItems="center" sx={{ flexGrow: 1 }}>
       {!collapseFilters && (
         <Stack spacing={2} direction="row">
-          {isAdmin && <StaticFilters />}
+          {isInScope && <StaticFilters />}
           <Search />
           <Sort />
         </Stack>
@@ -156,7 +157,7 @@ export const Filters: FC<FiltersProps> = ({ showTags, setShowTags }) => {
           </Button>
         </Tooltip>
       ) : (
-        isAdmin && (
+        isInScope && (
           <Tooltip title="Show/hide tag filters">
             <IconButton onClick={toggleShowTags}>
               <Label color={showTags ? "primary" : "inherit"} />
@@ -177,7 +178,7 @@ export const Filters: FC<FiltersProps> = ({ showTags, setShowTags }) => {
                 <Search large />
                 <Sort large />
               </Stack>
-              {isAdmin && (
+              {isInScope && (
                 <>
                   <Typography variant="h6" textTransform="uppercase">
                     Filters
@@ -186,7 +187,7 @@ export const Filters: FC<FiltersProps> = ({ showTags, setShowTags }) => {
                 </>
               )}
 
-              {isAdmin && (
+              {isInScope && (
                 <>
                   <Typography variant="h6" textTransform="uppercase">
                     Tags

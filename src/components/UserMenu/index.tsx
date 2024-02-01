@@ -1,4 +1,3 @@
-import { useSession } from "next-auth/react"
 import { AccountBalanceWallet, MonetizationOn, PersonAdd, Star } from "@mui/icons-material"
 import {
   Box,
@@ -44,39 +43,15 @@ type UserMenuProps = {
 }
 
 export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allowDevnet }) => {
-  const { cluster, setCluster } = useCluster()
   const { setVisible, visible } = useWalletModal()
-  const { multiWallet, signOut, signIn, isSigningIn, isAdmin } = useAccess()
   const [signUpShowing, setSignUpShowing] = useState(false)
-  const { data: session, status } = useSession()
+  const { user, account } = useAccess()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const { profileModalShowing, setProfileModalShowing, showAllWallets, setShowAllWallets } = useUiSettings()
   const open = Boolean(anchorEl)
   const wallet = useWallet()
   const { isLedger, setIsLedger } = useWallets()
   const theme = useTheme()
-  const umi = useUmi()
-  const router = useRouter()
-
-  async function signOutIn() {
-    await signOut()
-    await signIn()
-  }
-
-  // useEffect(() => {
-  //   if (status !== "authenticated") {
-  //     return
-  //   }
-  //   if (!session?.user?.active && wallet.publicKey && wallet.publicKey?.toBase58() !== session?.publicKey) {
-  //     signOutIn()
-  //   }
-  // }, [wallet.publicKey, session])
-
-  // useEffect(() => {
-  //   if (wallet.connected && status === "unauthenticated" && document.hasFocus()) {
-  //     signIn()
-  //   }
-  // }, [wallet.publicKey])
 
   const toggleVisible = () => {
     handleClose()
@@ -111,14 +86,14 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
         sx={{
-          color: wallet.connected ? (session?.user?.id ? "gold.main" : session?.user ? "primary" : "#999") : "unset",
+          color: wallet.connected ? (user?.id ? "gold.main" : user ? "primary" : "#999") : "unset",
         }}
       >
         <Stack alignItems="center">
           <AccountBalanceWallet fontSize={large ? "large" : "inherit"} />
-          {wallet.connected && session?.user && (
+          {wallet.connected && user && (
             <Typography fontStyle="italic" variant="body2" fontWeight="bold" sx={{ fontSize: "10px" }}>
-              {session?.user?.id ? "PREMIUM" : "BASIC"}
+              {account.toUpperCase()}
             </Typography>
           )}
         </Stack>
@@ -141,7 +116,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
             width: "220px",
           }}
         >
-          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }} disabled={isSigningIn}>
+          <MenuItem onClick={toggleVisible} sx={{ marginBottom: wallet.connected ? 2 : 0 }}>
             <ListItemIcon>
               <AccountBalanceWalletOutlinedIcon color={wallet.connected ? "primary" : "inherit"} />
             </ListItemIcon>
@@ -153,45 +128,27 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
           </MenuItem>
           {wallet.connected && (
             <div>
-              {session?.user && (
+              {user && (
                 <>
-                  {session.user.id ? (
-                    <MenuItem onClick={openProfile} disabled={isSigningIn}>
+                  {user.id ? (
+                    <MenuItem onClick={openProfile}>
                       <ListItemIcon sx={{ width: "50px" }}>
                         <PermIdentityIcon />
                       </ListItemIcon>
                       <ListItemText>Profile</ListItemText>
                     </MenuItem>
                   ) : (
-                    <MenuItem onClick={() => setSignUpShowing(true)} disabled={isSigningIn}>
+                    <MenuItem onClick={() => setSignUpShowing(true)}>
                       <ListItemIcon sx={{ width: "50px" }}>
-                        <Star
-                          // @ts-ignore
-                          color="gold"
-                        />
+                        <PermIdentityIcon />
                       </ListItemIcon>
-                      <ListItemText sx={{ color: "gold.default" }}>PREMIUM</ListItemText>
+                      <ListItemText sx={{ color: "gold.default" }}>Create account</ListItemText>
                     </MenuItem>
                   )}
                 </>
               )}
 
-              {session?.user ? (
-                <MenuItem onClick={() => signOut()} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign out</ListItemText>
-                </MenuItem>
-              ) : (
-                <MenuItem onClick={() => signIn()} disabled={isSigningIn}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <LoginIcon />
-                  </ListItemIcon>
-                  <ListItemText>Sign in</ListItemText>
-                </MenuItem>
-              )}
-              <MenuItem onClick={wallet.disconnect} disabled={isSigningIn}>
+              <MenuItem onClick={wallet.disconnect}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <LinkOffIcon />
                 </ListItemIcon>
@@ -203,49 +160,33 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
                 </ListItemIcon>
                 <ListItemText>Transfer SOL</ListItemText>
               </MenuItem>
-              {multiWallet && isAdmin && (
-                <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
-                  <ListItemIcon sx={{ width: "50px" }}>
-                    <Switch
-                      checked={showAllWallets}
-                      onChange={(e) => setShowAllWallets(e.target.checked)}
-                      inputProps={{ "aria-label": "controlled" }}
-                      disabled={isSigningIn}
-                      size="small"
-                    />
-                  </ListItemIcon>
-                  <ListItemText>Show all wallets</ListItemText>
-                </MenuItem>
-              )}
-              <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())} disabled={isSigningIn}>
+              <MenuItem onClick={() => setShowAllWallets(!showAllWallets)}>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Switch
+                    checked={showAllWallets}
+                    onChange={(e) => setShowAllWallets(e.target.checked)}
+                    inputProps={{ "aria-label": "controlled" }}
+                    size="small"
+                  />
+                </ListItemIcon>
+                <ListItemText>View all wallets</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => setIsLedger(!isLedger, wallet.publicKey?.toBase58())}>
                 <ListItemIcon sx={{ width: "50px" }}>
                   <Switch
                     checked={isLedger}
                     onChange={(e) => setIsLedger(e.target.checked, wallet.publicKey?.toBase58())}
                     inputProps={{ "aria-label": "controlled" }}
-                    disabled={isSigningIn}
                     size="small"
                   />
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
               </MenuItem>
-              {/* <MenuItem onClick={() => setCluster(cluster === "devnet" ? "mainnet" : "devnet")} disabled={isSigningIn}>
-                <ListItemIcon sx={{ width: "50px" }}>
-                  <Switch
-                    checked={cluster === "devnet"}
-                    onChange={(e) => setCluster(cluster === "devnet" ? "mainnet" : "devnet")}
-                    inputProps={{ "aria-label": "controlled" }}
-                    disabled={isSigningIn}
-                    size="small"
-                  />
-                </ListItemIcon>
-                <ListItemText>Devnet</ListItemText>
-              </MenuItem> */}
             </div>
           )}
         </MenuList>
       </Menu>
-      {session?.user?.id && (
+      {user && (
         <Dialog
           open={profileModalShowing}
           onClose={toggleProfileModal}
@@ -253,7 +194,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
           maxWidth="md"
           fullScreen={isXs}
         >
-          <Profile user={session.user} publicKey={session.publicKey} onClose={toggleProfileModal} />
+          <Profile user={user} publicKey={user.publicKey} onClose={toggleProfileModal} />
         </Dialog>
       )}
       <Dialog
@@ -263,7 +204,7 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
         maxWidth="md"
         fullScreen={isXs}
       >
-        <SignUp />
+        <SignUp onClose={() => setSignUpShowing(false)} />
       </Dialog>
     </Box>
   )

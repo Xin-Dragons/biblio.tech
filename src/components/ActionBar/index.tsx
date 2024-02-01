@@ -22,7 +22,7 @@ type ActionBarProps = {
 
 export const ActionBar: FC<ActionBarProps> = ({ actions }) => {
   const [showTags, setShowTags] = useState<boolean>(false)
-  const { isAdmin } = useAccess()
+  const { isInScope } = useAccess()
   const { selected, setSelected } = useSelection()
   const { filtered } = useNfts()
   const router = useRouter()
@@ -56,7 +56,7 @@ export const ActionBar: FC<ActionBarProps> = ({ actions }) => {
             <Actions />
             <Filters showTags={showTags} setShowTags={setShowTags} />
           </Stack>
-          {isAdmin && (
+          {isInScope && (
             <Stack direction="row" justifyContent="space-between" alignItems="center" pl={1} pr={1}>
               <Box width="30%">
                 {!collectionPage && !showMinMenu && (

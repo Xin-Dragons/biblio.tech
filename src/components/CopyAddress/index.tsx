@@ -15,6 +15,7 @@ type CopyAddressProps = {
 }
 
 export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", wallet }) => {
+  console.log(wallet)
   const [copied, setCopied] = useState(false)
   const { lightMode } = useUiSettings()
 

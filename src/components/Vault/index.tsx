@@ -15,7 +15,7 @@ import {
   Typography,
 } from "@mui/material"
 import { FC, useEffect, useState } from "react"
-import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
+import { buildTransactions, getUmiChunks, notifyStatus, signAllTransactions } from "../../helpers/transactions"
 import { flatten, partition, uniq } from "lodash"
 import { fromWeb3JsInstruction, toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
 import {
@@ -47,7 +47,6 @@ import { useTransactionStatus } from "../../context/transactions"
 import { useDatabase } from "../../context/database"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
-import { useSession } from "next-auth/react"
 import { shorten, sleep, waitForWalletChange } from "../../helpers/utils"
 import { PublicKey } from "@solana/web3.js"
 import { Metaplex, guestIdentity } from "@metaplex-foundation/js"
@@ -61,7 +60,6 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const [lockingWallet, setLockingWallet] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [transferTo, setTransferTo] = useState<string | null>(null)
-  const { isAdmin } = useAccess()
   const { setBypassWallet } = useWalletBypass()
   const [type, setType] = useState("secure")
   const { selected } = useSelection()
@@ -70,47 +68,13 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const umi = useUmi()
   const wallet = useWallet()
   const { connection } = useConnection()
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const { sendSignedTransactions } = useTransactionStatus()
   const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
   const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
 
   const onlyFrozenSelected = selectedItems.every((item) => item.status === "inVault")
   const onlyThawedSelected = selectedItems.every((item) => !item.status)
-
-  async function signAllTransactions(txns: Transaction[], signers: string[]) {
-    return signers.reduce(async (promise, signer, index) => {
-      return promise.then(async (transactions) => {
-        if (wallet.publicKey?.toBase58() === signer) {
-          const signedPromise = umi.identity.signAllTransactions(transactions)
-          toast.promise(signedPromise, {
-            loading: `Sign transaction, wallet ${index + 1} of ${signers.length}`,
-            success: "Signed",
-            error: "Error signing",
-          })
-          const signed = await signedPromise
-          return signed
-        } else {
-          const walletChangePromise = waitForWalletChange(signer)
-          toast.promise(walletChangePromise, {
-            loading: `Waiting for wallet change: ${shorten(signer)}`,
-            success: "Wallet changed",
-            error: "Error waiting for wallet change",
-          })
-          await walletChangePromise
-          const signedPromise = umi.identity.signAllTransactions(transactions)
-          toast.promise(signedPromise, {
-            loading: `Sign transaction, wallet ${index + 1} of ${signers.length}`,
-            success: "Signed",
-            error: "Error signing",
-          })
-          const signed = await signedPromise
-
-          return signed
-        }
-      })
-    }, Promise.resolve(txns))
-  }
 
   async function lockUnlock(all: boolean = false, transfer: boolean = false) {
     try {
@@ -433,14 +397,14 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   )
               }
 
-              if (!isAdmin) {
-                txn = txn.add(
-                  transferSol(umi, {
-                    destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                    amount: type === "secure" ? sol(0.02) : sol(0.01),
-                  })
-                )
-              }
+              // if (!isAdmin) {
+              //   txn = txn.add(
+              //     transferSol(umi, {
+              //       destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+              //       amount: type === "secure" ? sol(0.02) : sol(0.01),
+              //     })
+              //   )
+              // }
 
               return {
                 instructions: txn,
@@ -453,11 +417,14 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
       const txns = await buildTransactions(umi, chunks)
 
       setBypassWallet(true)
-      const signers = txns[0].signers
-        .map((signer) => base58PublicKey(signer.publicKey))
-        .sort((item: string) => (item === wallet.publicKey?.toBase58() ? -1 : 1))
+
+      const signers = uniq(flatten(txns.map((t) => t.signers.map((s) => s.publicKey)))).sort((item: string) =>
+        item === wallet.publicKey?.toBase58() ? -1 : 1
+      )
 
       const signedTransactions = await signAllTransactions(
+        wallet,
+        umi,
         txns.map((t) => t.txn),
         signers
       )
@@ -492,9 +459,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
     }
   }
 
-  const wallets = session?.user?.wallets
-
-  const canSecureLock = (session?.user?.wallets?.length || 0) > 1
+  const canSecureLock = (user?.wallets?.length || 0) > 1
   const authorities = uniq([
     ...selectedItems.map((item) => item.delegate),
     ...selectedItems.map((item) => item.owner),
@@ -531,7 +496,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
             <Stack spacing={1} sx={{ marginBottom: "5em !important" }}>
               <Typography variant="body2">Authorities needed to unlock:</Typography>
               {authorities.map((auth, index) => (
-                <TextField key={index} value={shorten(auth)} disabled />
+                <TextField key={index} value={shorten(auth!)} disabled />
               ))}
             </Stack>
           ) : (
@@ -556,16 +521,12 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   fullWidth
                   onClick={() => setType("secure")}
                   sx={{ fontSize: "1.25em" }}
-                  disabled={!isAdmin}
+                  disabled={user.wallets.length <= 1}
                 >
                   <Stack>
                     <Typography variant="body1">Secure freeze</Typography>
-                    <Typography
-                      textTransform="none"
-                      variant="body2"
-                      sx={{ color: !isAdmin ? "#faaf00 !important" : "unset" }}
-                    >
-                      {!isAdmin ? "PREMIUM" : "(recommended)"}
+                    <Typography textTransform="none" variant="body2" sx={{ color: "#faaf00 !important" }}>
+                      (recommended)
                     </Typography>
                   </Stack>
                 </Button>
@@ -579,11 +540,12 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                       label={"Select wallet for secure freeze"}
                       onChange={(e) => setLockingWallet(e.target.value)}
                     >
-                      {wallets
-                        ?.filter((w) => {
+                      {user.wallets
+                        ?.filter((w: any) => {
                           return !owners.includes(w.public_key)
                         })
-                        .map((w, index) => (
+                        .filter((w: any) => w.chain === "solana")
+                        .map((w: any, index: number) => (
                           <MenuItem key={index} value={w.public_key}>
                             {shorten(w.public_key)}
                           </MenuItem>
@@ -597,7 +559,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
               ) : (
                 <TextField
                   label="Freeze auth retained by"
-                  value={shorten(owners[0])}
+                  value={shorten(owners[0]!)}
                   disabled
                   helperText="The owner wallet will retain freeze authority"
                 />
@@ -643,7 +605,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
                   label={"Select a secure wallet"}
                   onChange={(e) => setTransferTo(e.target.value)}
                 >
-                  {wallets?.map((w, index) => (
+                  {user.wallets?.map((w: any, index: number) => (
                     <MenuItem key={index} value={w.public_key}>
                       {shorten(w.public_key)}
                     </MenuItem>

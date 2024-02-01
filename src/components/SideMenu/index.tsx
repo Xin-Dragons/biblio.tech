@@ -91,7 +91,6 @@ const MenuSection: FC<MenuSectionProps> = ({ accordion, children, title, open })
 export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) => {
   const basePath = useBasePath()
   const router = useRouter()
-  const { isAdmin } = useAccess()
 
   const [_, section, page] = router.asPath.split("/")
 
@@ -117,17 +116,22 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
           </Button>
         </Link>
         {!isEthWallet && [
-          <Link href={relative("/editions")} passHref key={0}>
+          <Link href={relative("/cnfts")} passHref key={0}>
+            <Button variant={route === "/cnfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+              cNFTs
+            </Button>
+          </Link>,
+          <Link href={relative("/editions")} passHref key={1}>
             <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
               NFT Editions
             </Button>
           </Link>,
-          <Link href={relative("/sfts")} passHref key={1}>
+          <Link href={relative("/sfts")} passHref key={2}>
             <Button variant={route === "/sfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
               SFTs
             </Button>
           </Link>,
-          <Link href={relative("/spl")} passHref key={2}>
+          <Link href={relative("/spl")} passHref key={3}>
             <Button variant={route === "/spl" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
               SPL Tokens
             </Button>
@@ -182,7 +186,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
         </MenuSection>
       )}
 
-      {!router.query.publicKey && isAdmin && (
+      {!router.query.publicKey && (
         <MenuSection accordion={!noAccordions} title="Tags">
           <Tags large={large} />
         </MenuSection>

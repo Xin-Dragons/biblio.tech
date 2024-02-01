@@ -71,7 +71,6 @@ export const Layout: FC<LayoutProps> = ({ children, title, filtered = [], nfts =
   }
 
   const wallet = useWallet()
-  const { isAdmin } = useAccess()
   const basePath = useBasePath()
 
   const showMenu = useMediaQuery((theme: Theme) => theme.breakpoints.up("md"))

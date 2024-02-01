@@ -48,6 +48,7 @@ import { chunk, isEqual } from "lodash"
 import { getAnonUmi } from "./helpers/umi"
 import { FEES_WALLET, METAPLEX_RULE_SET } from "./constants"
 import Link from "next/link"
+import { useAccess } from "../../context/access"
 
 export const emptyAttribute = {
   trait_type: "",
@@ -60,7 +61,8 @@ export const emptyCreator = {
 }
 
 export const CreateNft = () => {
-  const { collections, loading: nftsLoading, dandies, refresh } = useNfts()
+  const { collections, refresh } = useNfts()
+  const { account } = useAccess()
   const umi = useUmi()
   const wallet = useWallet()
   const [keypair, setKeypair] = useState(generateSigner(umi))
@@ -228,7 +230,7 @@ export const CreateNft = () => {
           }
         }
 
-        const fee = getFee("create", dandies.length)
+        const fee = getFee("nft-suite.create", account)
 
         if (fee) {
           tx = tx.add(
@@ -295,7 +297,7 @@ export const CreateNft = () => {
         }
       }
 
-      const fee = getFee("create", dandies.length)
+      const fee = getFee("nft-suite.create", account)
 
       if (fee) {
         tx = tx.add(

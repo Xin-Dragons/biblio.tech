@@ -36,6 +36,7 @@ type DatabaseContextProps = {
   setLoaned: Function
   syncProgress: number
   updateCollection: Function
+  revokeDelegate: Function
 }
 
 const initial = {
@@ -61,6 +62,7 @@ const initial = {
   setLoaned: noop,
   syncProgress: 0,
   updateCollection: noop,
+  revokeDelegate: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -70,7 +72,7 @@ type DatabaseProviderProps = {
 }
 
 export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
-  const { publicKey, publicKeys, isAdmin, isActive, isOffline } = useAccess()
+  const { publicKey, publicKeys } = useAccess()
   const { showAllWallets } = useUiSettings()
   const [syncing, setSyncing] = useState(false)
   const [totalMints, setTotalMints] = useState(0)
@@ -80,11 +82,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   const wallet = useWallet()
   const router = useRouter()
   const nfts = useLiveQuery(
-    () =>
-      (showAllWallets && isAdmin
-        ? db.nfts.where("owner").anyOf(publicKeys)
-        : db.nfts.where({ owner: publicKey })
-      ).toArray(),
+    () => (showAllWallets ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })).toArray(),
     [publicKey, publicKeys],
     []
   )
@@ -106,52 +104,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     const progress = (loadedMints / totalMints) * 100
     setSyncProgress(progress)
   }, [totalMints, loadedMints])
-
-  // useEffect(() => {
-  //   if (!isAdmin) return
-  //   saveChanges()
-  // }, [tags, taggedNfts, order, isAdmin])
-
-  // async function saveChanges() {
-  //   if (!session?.user?.active || !isAdmin) {
-  //     return
-  //   }
-  //   const { exportDB } = require("dexie-export-import")
-  //   const blob = await exportDB(db, {
-  //     filter: (table) => table === "tags" || table === "taggedNfts" || table === "order",
-  //   })
-  //   const json = JSON.parse(await blob.text())
-  //   console.log(json)
-  //   await axios.post("/api/sync", { json, publicKey: session.publicKey })
-  //   toast.success("synced")
-  // }
-
-  // async function importDB() {
-  //   const { importInto, peakImportFile } = require("dexie-export-import")
-
-  //   const str = JSON.stringify(user.data)
-  //   console.log(str)
-  //   const bytes = new TextEncoder().encode(str)
-  //   const blob = new Blob([bytes], {
-  //     type: "application/json;charset=utf-8",
-  //   })
-
-  //   const peeked = await peakImportFile(blob)
-  //   console.log(peeked)
-
-  //   await importInto(db, blob, {
-  //     filter: (table) => table === "tags" || table === "taggedNfts" || table === "order",
-  //     overwriteValues: true,
-  //   })
-  //   toast.success("imported")
-  // }
-
-  // useEffect(() => {
-  //   if (!isAdmin) return
-  //   if (user?.data) {
-  //     importDB()
-  //   }
-  // }, [user])
 
   async function addCollectionsToDb(collections: any[]) {
     await db.transaction("rw", db.collections, async () => {
@@ -196,7 +148,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function addNftsToDb(nfts: Nft[], publicKey: string, remove?: boolean) {
-    console.log("ading nfts to db")
     await db.transaction("rw", db.nfts, async () => {
       const fromDb = await db.nfts.toArray()
 
@@ -298,9 +249,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
 
   useEffect(() => {
     let unsubscribe: Function | undefined = undefined
-    if (isOffline) {
-      return
-    }
     // const client = new StreamClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY!)
     // try {
     //   client
@@ -328,7 +276,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     //   unsubscribe && unsubscribe()
     //   client.disconnect()
     // }
-  }, [publicKey, isOffline])
+  }, [publicKey])
 
   async function updateSharkyOrderBooks(orderBooks: SharkyOrderBooks[]) {
     if (orderBooks && orderBooks.length) {
@@ -352,7 +300,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       }
       return
     }
-    if (isAdmin && publicKeys.length) {
+    if (publicKeys.length) {
       publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk)))
     } else {
       if (isAddress(publicKey)) {
@@ -362,12 +310,9 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       }
     }
     getSharkyOrderBooksWorker()
-  }, [publicKey])
+  }, [publicKey, publicKeys])
 
   function getSharkyOrderBooksWorker() {
-    if (isOffline) {
-      return
-    }
     const worker = new Worker(new URL("../../public/get-sharky-order-books.worker.ts", import.meta.url))
     Object.defineProperty(worker, "type", {
       value: "sharky",
@@ -392,66 +337,12 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     worker.postMessage({ start: true })
   }
 
-  async function updateMetadata(metadata: any) {
-    await db.nfts.bulkUpdate(
-      metadata.map((item: any) => {
-        return {
-          key: item.nftMint,
-          changes: {
-            json: item.json,
-            jsonLoaded: item.jsonLoaded,
-          },
-        }
-      })
-    )
-  }
-
-  async function syncMetadataWorker(items: Nft[], force?: boolean) {
-    if (isOffline) {
-      return
-    }
-    const worker = new Worker(new URL("../../public/get-metadata.worker.ts", import.meta.url))
-    Object.defineProperty(worker, "type", {
-      value: "metadata",
-      writable: false,
-    })
-    setWorkers((prevState) => {
-      return [...prevState, worker]
-    })
-    worker.onmessage = async (event) => {
-      await updateMetadata(event.data.metadata)
-      worker.terminate()
-      setWorkers((prevState) => prevState.filter((w) => w !== worker))
-    }
-
-    worker.onerror = () => {
-      worker.terminate()
-      setWorkers((prevState) => prevState.filter((w) => w !== worker))
-    }
-
-    const nfts = await db.nfts.where({ owner: publicKey }).toArray()
-
-    const mints = items
-      .filter((n) => {
-        if (force) {
-          return true
-        }
-        const item = nfts.find((nft) => nft.nftMint === n.nftMint)
-        return !item || !item.json
-      })
-      .map((m) => m.nftMint)
-
-    worker.postMessage({ mints })
-  }
-
   useEffect(() => {
     console.log("Active workers: ", workers)
   }, [workers])
 
   function syncDataWorker(publicKey: string, mints?: string[], force?: boolean) {
-    if (isOffline) {
-      return
-    }
+    console.log({ publicKey })
     const worker = new Worker(new URL("../../public/get-data.worker.ts", import.meta.url))
     Object.defineProperty(worker, "type", {
       value: "sync-data",
@@ -466,7 +357,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       const { type } = event.data
       if (type === "get-rarity") {
         syncRarityWorker(event.data.nfts, event.data.force)
-        syncMetadataWorker(event.data.nfts, event.data.force)
       } else if (type === "done") {
         await Promise.all([
           addNftsToDb(event.data.nftsToAdd, publicKey!, !mints),
@@ -482,13 +372,12 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       setWorkers((prevState) => prevState.filter((w) => w !== worker))
     }
 
+    console.log({ publicKeys })
+
     worker.postMessage({ publicKey, force, mints, publicKeys: publicKeys.length ? publicKeys : [publicKey] })
   }
 
   async function syncRarityWorker(nfts: Nft[], force?: boolean) {
-    if (isOffline) {
-      return
-    }
     const rarity = await db.rarity.toArray()
     const toUpdate = nfts.filter((n) => {
       const r = rarity.find((r) => r.nftMint === n.nftMint)
@@ -559,6 +448,22 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         return {
           key: nftMint,
           changes,
+        }
+      })
+    )
+  }
+
+  async function revokeDelegate(mints: Nft[]) {
+    await db.nfts.bulkUpdate(
+      mints.map((mint) => {
+        return {
+          key: mint.nftMint,
+          changes: {
+            ownership: {
+              ...mint.ownership,
+              delegate: undefined,
+            },
+          },
         }
       })
     )
@@ -647,9 +552,6 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
   }
 
   async function getEthNftsWorker(publicKey: string) {
-    if (isOffline) {
-      return
-    }
     const worker = new Worker(new URL("../../public/get-eth-nfts.worker.ts", import.meta.url))
     Object.defineProperty(worker, "type", {
       value: "get-eth-nfts",
@@ -699,7 +601,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
       return
     }
 
-    if (isAdmin && publicKeys.length > 1) {
+    if (publicKeys.length > 1) {
       publicKeys.map((pk) => (isAddress(pk) ? getEthNftsWorker(pk) : syncDataWorker(pk, undefined, true)))
     } else {
       if (isAddress(publicKey)) {
@@ -846,6 +748,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         setLoaned,
         syncProgress,
         updateCollection,
+        revokeDelegate,
       }}
     >
       {children}

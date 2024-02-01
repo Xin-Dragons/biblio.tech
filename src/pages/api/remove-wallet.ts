@@ -5,13 +5,14 @@ import { SigninMessage } from "../../utils/SigninMessge"
 import { NextApiRequest, NextApiResponse } from "next"
 import { Connection } from "@solana/web3.js"
 import axios, { AxiosError } from "axios"
+import { removeWalletFromUser } from "../../helpers/supabase"
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { basePublicKey, publicKey, signature, message, usingLedger, statement, nonce, rawTransaction } = req.body
+  const { id, publicKey, signature, message, usingLedger, statement, nonce, rawTransaction } = req.body
 
   async function validate() {
     if (usingLedger) {
@@ -27,15 +28,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       const signinMessage = new SigninMessage(JSON.parse(message || "{}"))
       const nextAuthUrl = new URL(process.env.NEXTAUTH_URL!)
-      console.log(signinMessage.domain, nextAuthUrl.host)
       if (signinMessage.domain !== nextAuthUrl.host) {
         return null
       }
 
-      const key = process.env.NODE_ENV === "development" ? "next-auth.csrf-token" : "__Host-next-auth.csrf-token"
+      const nonce = req.cookies.nonce
 
-      const csrfToken = req.cookies[key]?.split("|")[0]
-      if (signinMessage.nonce !== csrfToken) {
+      if (signinMessage.nonce !== nonce) {
         return null
       }
 
@@ -50,14 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const valid = await validate()
     if (valid) {
-      const headers = {
-        authorization: `Bearer ${process.env.API_SECRET_KEY}`,
-      }
-      const { data } = await axios.post(
-        `${process.env.API_URL}/biblio/${basePublicKey}/remove-wallet/${publicKey}`,
-        { publicKey },
-        { headers }
-      )
+      await removeWalletFromUser(id, publicKey)
       res.status(200).json({ ok: true })
     } else {
       throw new Error("Invalid")

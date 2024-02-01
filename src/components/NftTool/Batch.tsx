@@ -76,10 +76,12 @@ import { getAnonUmi } from "./helpers/umi"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { takeSnapshot } from "../../helpers/snapshot"
 import { getMintlist } from "../../helpers/helius"
+import { useAccess } from "../../context/access"
 
 export const BatchUpdateNfts = () => {
   const [immutableChecked, setImmutableChecked] = useState(false)
-  const { dandies, collections, loading: nftsLoading } = useNfts()
+  const { collections, loading: nftsLoading } = useNfts()
+  const { account } = useAccess()
   const [secretKey, setSecretKey] = useState("")
   const [secretKeyError, setSecretKeyError] = useState<string | null>(null)
   const [keypair, setKeypair] = useState<Keypair | null>(null)
@@ -632,7 +634,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(
@@ -742,7 +744,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(
@@ -808,7 +810,7 @@ export const BatchUpdateNfts = () => {
           )
         }
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(
@@ -898,7 +900,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(
@@ -951,7 +953,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(
@@ -1025,7 +1027,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.create", account)
 
         if (fee) {
           tx = tx.add(
@@ -1060,7 +1062,7 @@ export const BatchUpdateNfts = () => {
           })
         )
 
-        const fee = getFee("batch", dandies.length)
+        const fee = getFee("nft-suite.batch", account)
 
         if (fee) {
           tx = tx.add(

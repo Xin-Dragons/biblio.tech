@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from "@mui/material"
+import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material"
 import { useUiSettings } from "../../context/ui-settings"
 import { Item } from "../Item"
 import { ElementType, FC, useEffect, useState } from "react"
@@ -11,7 +11,6 @@ import {
   DragOverlay,
   KeyboardSensor,
   MouseSensor,
-  PointerSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -40,7 +39,6 @@ import { CollectionItem } from "../../pages/collections"
 import { Router, useRouter } from "next/router"
 import { useFilters } from "../../context/filters"
 import { useAccess } from "../../context/access"
-import { useSession } from "next-auth/react"
 import { useDialog } from "../../context/dialog"
 import { Profile } from "../Profile"
 
@@ -236,18 +234,13 @@ export const Items: FC<ItemsProps> = ({
   const width = useWidth()
   const basePath = useBasePath()
   const { filtersActive, clearFilters, setSearch } = useFilters()
-  const { isActive } = useAccess()
-  const { data: session } = useSession()
+  const { user } = useAccess()
   const router = useRouter()
 
   const sizes = {
     small: 1,
     medium: 1.5,
     large: 2,
-  }
-
-  function isTouchDevice() {
-    return "ontouchstart" in window || navigator.maxTouchPoints > 0
   }
 
   const sensors = useSensors(
@@ -338,8 +331,6 @@ export const Items: FC<ItemsProps> = ({
     )
   }
 
-  const noAccess = session?.publicKey && !isActive && !router.query.publicKey
-
   function clearAllFilters() {
     clearFilters()
     setSearch("")
@@ -405,9 +396,9 @@ export const Items: FC<ItemsProps> = ({
             </Typography>
             <>
               {filtersActive && <Button onClick={() => clearAllFilters()}>Clear filters</Button>}
-              <Link href={`${basePath}/`} passHref>
-                <Button>View all collections</Button>
-              </Link>
+              <Button LinkComponent={Link} href={`${basePath}/`}>
+                View all collections
+              </Button>
             </>
 
             <Typography textAlign="center">or</Typography>

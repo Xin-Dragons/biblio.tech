@@ -10,6 +10,7 @@ import {
   isNone,
   sol,
   unwrapOption,
+  createNoopSigner,
 } from "@metaplex-foundation/umi"
 import {
   Stack,
@@ -43,12 +44,12 @@ import { TagList } from "../TagList"
 
 import VaultIcon from "./vault.svg"
 import PlaneIcon from "./plane.svg"
-import { Close, Image, Label, LocalFireDepartment, Sell } from "@mui/icons-material"
+import { Close, CoPresentOutlined, Image, Label, LocalFireDepartment, Sell } from "@mui/icons-material"
 import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
 import { PublicKey, Transaction as Web3Transaction } from "@solana/web3.js"
-import { flatten, uniq } from "lodash"
+import { compact, flatten, uniq } from "lodash"
 import { toast } from "react-hot-toast"
 import { chunkBy } from "chunkier"
 import { useMetaplex } from "../../context/metaplex"
@@ -57,6 +58,7 @@ import { useUmi } from "../../context/umi"
 import { useDatabase } from "../../context/database"
 import { useTransactionStatus } from "../../context/transactions"
 import { Metadata, toBigNumber } from "@metaplex-foundation/js"
+import { ConcurrentMerkleTreeAccount } from "@solana/spl-account-compression"
 import {
   DigitalAssetWithToken,
   TokenStandard,
@@ -64,6 +66,7 @@ import {
   delegateUtilityV1,
   fetchDigitalAsset,
   fetchDigitalAssetWithTokenByMint,
+  findMasterEditionPda,
   findMetadataPda,
   lockV1,
   revokeUtilityV1,
@@ -76,8 +79,14 @@ import { Nft } from "../../db"
 import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { useSharky } from "../../context/sharky"
-import { closeToken, findAssociatedTokenPda, transferSol } from "@metaplex-foundation/mpl-toolbox"
-import { buildTransactions, getUmiChunks, notifyStatus } from "../../helpers/transactions"
+import {
+  closeToken,
+  createLutForTransactionBuilder,
+  fetchToken,
+  findAssociatedTokenPda,
+  transferSol,
+} from "@metaplex-foundation/mpl-toolbox"
+import { buildTransactions, getUmiChunks, notifyStatus, signAllTransactions } from "../../helpers/transactions"
 import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
 import { getAddressType, shorten } from "../../helpers/utils"
@@ -86,8 +95,14 @@ import { Vault } from "../Vault"
 import { useEnsName } from "wagmi"
 import { useUiSettings } from "../../context/ui-settings"
 import { SecureDelist } from "../SecureDelist"
+import { getDigitalAssets } from "../../helpers/helius"
+import { useWalletBypass } from "../../context/wallet-bypass"
+import { burn, getAssetWithProof, transfer } from "@metaplex-foundation/mpl-bubblegum"
+import base58 from "bs58"
+import { getFee } from "../NftTool/helpers/utils"
 
-const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address, returnToWallet }) => {
+const WalletPeek: FC<{ address: string }> = ({ address }) => {
+  const router = useRouter()
   // const { data: ensName } = useEnsName({ address })
   // const [displayName, setDisplayName] = useState(ensName || shorten(address))
   // const type = getAddressType(address)
@@ -112,7 +127,7 @@ const WalletPeek: FC<{ address: string; returnToWallet: Function }> = ({ address
         }}
       >{`Peeking in ${shorten(address)}`}</Typography>
       <Tooltip title="Return home">
-        <IconButton onClick={() => returnToWallet()}>
+        <IconButton onClick={() => router.push("/")}>
           <Close />
         </IconButton>
       </Tooltip>
@@ -124,9 +139,10 @@ export const Actions: FC = () => {
   const { nfts } = useNfts()
   const [recipient, setRecipient] = useState<any>(null)
   const [listOpen, setListOpen] = useState(false)
+  const { setBypassWallet } = useWalletBypass()
   const { delist } = useTensor()
   const { filtered } = useNfts()
-  const { isInScope, isAdmin, isBasic } = useAccess()
+  const { isInScope, account } = useAccess()
   const { selected, setSelected } = useSelection()
   const { loanType, setLoanType } = useUiSettings()
   const [delistOpen, setDelistOpen] = useState(false)
@@ -150,36 +166,35 @@ export const Actions: FC = () => {
 
   const showMinMenu = useMediaQuery("(max-width:1050px)")
 
-  const { deleteNfts, updateOwnerForNfts, addNftsToVault, removeNftsFromVault } = useDatabase()
+  const { deleteNfts, updateOwnerForNfts } = useDatabase()
   const { sendSignedTransactions } = useTransactionStatus()
 
-  const selectedItems = selected
-    .map((nftMint) => (filtered as any).find((f: any) => f.nftMint === nftMint))
-    .filter(Boolean)
+  const selectedItems = selected.map((nftMint) => filtered.find((f) => f.nftMint === nftMint)).filter(Boolean) as Nft[]
 
-  const onlyNftsSelected = selectedItems.every((item: any) => {
-    return [0, 3, 4].includes(item.metadata.tokenStandard)
+  const onlyNftsSelected = selectedItems.every((item) => {
+    return [0, 3, 4].includes(item?.metadata.tokenStandard)
   })
 
-  const frozenSelected = selectedItems.some((item: any) => ["frozen", "inVault", "staked"].includes(item.status))
-  const statusesSelected = selectedItems.some((item) => item.status)
-  const nonInVaultStatusesSelected = selectedItems.some((item) => item.status && item.status !== "inVault")
-  const nonListedStatusSelected = selectedItems.some((item) => item.status && item.status !== "listed")
-  const allInVault = selectedItems.every((item: any) => item.status === "inVault")
-  const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item.status))
+  const frozenSelected = selectedItems.some(
+    (item) => item?.status && ["frozen", "inVault", "staked"].includes(item?.status)
+  )
+  const statusesSelected = selectedItems.some((item) => item?.status)
+  const nonInVaultStatusesSelected = selectedItems.some((item) => item?.status && item?.status !== "inVault")
+  const compressedSelected = selectedItems.some((item) => item?.compression?.compressed)
+  const nonListedStatusSelected = selectedItems.some((item) => item?.status && item?.status !== "listed")
+  const allInVault = selectedItems.every((item: any) => item?.status === "inVault")
+  const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item?.status))
   const nonOwnedSelected = selectedItems.some((item) => {
-    return item.owner !== wallet.publicKey?.toBase58() && item.delegate !== wallet.publicKey?.toBase58()
+    return item?.owner !== wallet.publicKey?.toBase58() && item?.delegate !== wallet.publicKey?.toBase58()
   })
 
   const [vaultShowing, setVaultShowing] = useState(false)
 
   const canFreezeThaw = allInVault || noneInVault
 
-  const hasFreezeAuth = selectedItems.every((item) => item.mint.freezeAuthority)
-
-  const allListed = selectedItems.every((item) => item.status === "listed")
-  const allDelisted = selectedItems.every((item) => !item.status)
-  const listedSelected = selectedItems.some((item) => item.status === "listed")
+  const allListed = selectedItems.every((item) => item?.status === "listed")
+  const allDelisted = selectedItems.every((item) => !item?.status)
+  const listedSelected = selectedItems.some((item) => item?.status === "listed")
 
   const canList = allListed || allDelisted
 
@@ -242,9 +257,6 @@ export const Actions: FC = () => {
   async function bulkSend() {
     try {
       setSending(true)
-      if (nonOwnedSelected) {
-        throw new Error("Some selected items are owned by a linked wallet")
-      }
       if (!recipient) {
         throw new Error("No recipient selected")
       }
@@ -252,58 +264,108 @@ export const Actions: FC = () => {
         throw new Error("Frozen NFTs in selection")
       }
 
-      const toSend = (await metaplex
-        .nfts()
-        .findAllByMintList({ mints: selected.map((s) => new PublicKey(s)) })) as Metadata[]
+      const toSend = nfts.filter((n) => selected.includes(n.id))
 
       const instructionSets = await Promise.all(
-        toSend.map(async (item: Metadata) => {
-          let amount = BigInt(1)
-          if ([1, 2].includes(item.tokenStandard || 0)) {
-            const ata = metaplex
-              .tokens()
-              .pdas()
-              .associatedTokenAccount({ mint: item.mintAddress, owner: metaplex.identity().publicKey })
-
-            const balance = await connection.getTokenAccountBalance(ata)
-            amount = BigInt(balance.value.amount)
+        toSend.map(async (item: Nft) => {
+          if (
+            ![
+              TokenStandard.NonFungible,
+              TokenStandard.NonFungibleEdition,
+              TokenStandard.ProgrammableNonFungible,
+              TokenStandard.ProgrammableNonFungibleEdition,
+            ].includes(item.metadata.tokenStandard)
+          ) {
+            throw new Error("Cannot bulk send fungibles")
           }
+          // let amount = BigInt(1)
+          // if ([1, 2].includes(item.tokenStandard || 0)) {
+          //   const token = await fetchToken()
+          //   const ata = metaplex
+          //     .tokens()
+          //     .pdas()
+          //     .associatedTokenAccount({ mint: item.mintAddress, owner: metaplex.identity().publicKey })
+
+          //   const balance = await connection.getTokenAccountBalance(ata)
+          //   amount = BigInt(balance.value.amount)
+          // }
           let txn = transactionBuilder()
 
-          if (!isAdmin) {
+          if (item.compression?.compressed) {
+            const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+            let sliceIndex = assetWithProof.proof.length
+
+            const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
+              connection,
+              new PublicKey(item.compression.tree)
+            )
+
+            const canopyDepth = treeAccount.getCanopyDepth()
+
+            if (canopyDepth) {
+              sliceIndex = assetWithProof.proof.length - canopyDepth
+            }
+
+            sliceIndex = Math.min(sliceIndex, 22)
+
+            const proof = assetWithProof.proof.slice(0, sliceIndex)
             txn = txn.add(
-              transferSol(umi, {
-                destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                amount: sol(0.002),
+              transfer(umi, {
+                ...assetWithProof,
+                proof,
+                leafOwner: publicKey(assetWithProof.leafOwner),
+                newLeafOwner: publicKey(recipient),
               })
             )
+          } else {
+            const mint = publicKey(item.id)
+            const destinationOwner = publicKey(recipient.publicKey)
+            const owner = publicKey(item.ownership.owner)
+
+            const token = findAssociatedTokenPda(umi, {
+              mint,
+              owner,
+            })
+
+            txn = txn.add(
+              transferV1(umi, {
+                destinationToken: findAssociatedTokenPda(umi, {
+                  mint,
+                  owner: destinationOwner,
+                }),
+                destinationOwner,
+                mint,
+                tokenStandard: item.metadata.tokenStandard,
+                token,
+                tokenOwner: owner,
+                amount: 1,
+                authority: createNoopSigner(owner),
+              })
+            )
+
+            txn = txn.add(
+              closeToken(umi, {
+                account: token,
+                destination: umi.identity.publicKey,
+                owner: createNoopSigner(owner),
+              })
+            )
+
+            const fee = getFee("biblio.send", account)
+
+            if (fee > 0) {
+              txn = txn.add(
+                transferSol(umi, {
+                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                  amount: sol(fee),
+                })
+              )
+            }
           }
-
-          txn = txn.add(
-            transferV1(umi, {
-              destinationOwner: publicKey(recipient.publicKey),
-              mint: publicKey(item.mintAddress.toBase58()),
-              tokenStandard: item.tokenStandard!,
-              amount,
-            })
-          )
-
-          const ata = findAssociatedTokenPda(umi, {
-            mint: publicKey(item.mintAddress.toBase58()),
-            owner: umi.identity.publicKey,
-          })
-
-          txn = txn.add(
-            closeToken(umi, {
-              account: ata[0],
-              destination: umi.identity.publicKey,
-              owner: umi.identity,
-            })
-          )
 
           return {
             instructions: txn,
-            mint: item.mintAddress.toBase58(),
+            mint: item.id,
           }
         })
       )
@@ -311,7 +373,18 @@ export const Actions: FC = () => {
       const chunks = getUmiChunks(umi, instructionSets)
       const txns = await buildTransactions(umi, chunks)
 
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
+      setBypassWallet(true)
+
+      const signers = uniq(flatten(txns.map((t) => t.signers.map((s) => s.publicKey)))).sort((item: string) =>
+        item === wallet.publicKey?.toBase58() ? -1 : 1
+      )
+
+      const signedTransactions = await signAllTransactions(
+        wallet,
+        umi,
+        txns.map((t) => t.txn),
+        signers
+      )
 
       setBulkSendOpen(false)
 
@@ -328,6 +401,7 @@ export const Actions: FC = () => {
       console.error(err.stack)
       toast.error(err.message)
     } finally {
+      setBypassWallet(false)
       setRecipient("")
       setSending(false)
       setBulkSendOpen(false)
@@ -373,7 +447,7 @@ export const Actions: FC = () => {
   //   }
   // }
 
-  async function burn() {
+  async function burnNfts() {
     try {
       toggleBurnOpen()
       if (frozenSelected) {
@@ -384,112 +458,145 @@ export const Actions: FC = () => {
       }
       const toBurn = await Promise.all(
         filtered
-          .filter((n: any) => selected.includes(n.nftMint))
+          .filter((n: Nft) => selected.includes(n.nftMint))
+          // .filter((n: Nft) => !n.compression?.compressed)
           .map(async (item: Nft) => {
-            const digitalAsset = await fetchDigitalAsset(umi, publicKey(item.nftMint))
-            const tokenStandard = unwrapOption(digitalAsset.metadata.tokenStandard)
-            let masterEditionMint: UmiPublicKey | undefined = undefined
-            let masterEditionToken
-            const isEdition =
-              isSome(digitalAsset.metadata.tokenStandard) &&
-              digitalAsset.metadata.tokenStandard.value === TokenStandard.NonFungibleEdition &&
-              !digitalAsset.edition?.isOriginal
-            if (isEdition) {
-              const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "processed" })
-              const sigs = await connection.getSignaturesForAddress(
-                toWeb3JsPublicKey(
-                  !digitalAsset.edition?.isOriginal ? digitalAsset.edition?.parent! : digitalAsset.edition.publicKey
-                )
+            if (item.compression?.compressed) {
+              const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+              let sliceIndex = assetWithProof.proof.length
+
+              const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
+                connection,
+                new PublicKey(item.compression.tree)
               )
-              const sig = sigs[sigs.length - 1]
-              const txn = await connection.getTransaction(sig.signature)
-              const key = txn?.transaction.message.accountKeys[1]!
 
-              const masterEditionDigitalAsset = await fetchDigitalAssetWithTokenByMint(umi, fromWeb3JsPublicKey(key))
-              masterEditionMint = masterEditionDigitalAsset.mint.publicKey
-              masterEditionToken = masterEditionDigitalAsset.token.publicKey
-            }
+              const canopyDepth = treeAccount.getCanopyDepth()
 
-            let amount = BigInt(1)
+              if (canopyDepth) {
+                sliceIndex = assetWithProof.proof.length - canopyDepth
+              }
 
-            if ([TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard || 0)) {
-              const ata = findAssociatedTokenPda(umi, {
-                mint: digitalAsset.mint.publicKey,
-                owner: umi.identity.publicKey,
+              sliceIndex = Math.min(sliceIndex, 22)
+
+              const proof = assetWithProof.proof.slice(0, sliceIndex)
+
+              const burnTx = burn(umi, {
+                ...assetWithProof,
+                proof,
+                leafOwner: publicKey(item.ownership.owner),
               })
 
-              const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata[0]))
-              amount = BigInt(balance.value.amount)
-            }
-
-            let digitalAssetWithToken: DigitalAssetWithToken | undefined = undefined
-            const isNonFungible = [0, 3, 4, 5].includes(unwrapSome(digitalAsset.metadata.tokenStandard) || 0)
-            if (isNonFungible) {
-              digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
-            }
-
-            let burnInstruction = burnV1(umi, {
-              mint: digitalAsset.mint.publicKey,
-              authority: umi.identity,
-              tokenOwner: umi.identity.publicKey,
-              tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                ? digitalAsset.metadata.tokenStandard.value
-                : 0,
-              metadata: digitalAsset.metadata.publicKey,
-              collectionMetadata: isSome(digitalAsset.metadata.collection)
-                ? findMetadataPda(umi, { mint: digitalAsset.metadata.collection.value.key })
-                : undefined,
-              edition: isEdition ? digitalAsset.edition?.publicKey : undefined,
-              token: isNonFungible ? digitalAssetWithToken?.token?.publicKey : undefined,
-              tokenRecord: isNonFungible ? digitalAssetWithToken?.tokenRecord?.publicKey : undefined,
-              masterEdition: isEdition
-                ? digitalAsset.edition?.isOriginal
-                  ? digitalAsset.edition.publicKey
-                  : digitalAsset.edition?.parent
-                : undefined,
-              masterEditionMint,
-              masterEditionToken,
-              amount,
-              editionMarker:
-                isEdition && masterEditionMint
-                  ? fromWeb3JsPublicKey(
-                      metaplex
-                        .nfts()
-                        .pdas()
-                        .editionMarker({
-                          mint: toWeb3JsPublicKey(masterEditionMint!),
-                          edition: !digitalAsset.edition?.isOriginal
-                            ? toBigNumber(digitalAsset.edition?.edition.toString()!)
-                            : toBigNumber(0),
-                        })
-                    )
-                  : undefined,
-            })
-
-            if (!isAdmin) {
-              burnInstruction = burnInstruction.add(
-                transferSol(umi, {
-                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                  amount: [
-                    TokenStandard.NonFungible,
-                    TokenStandard.NonFungibleEdition,
-                    TokenStandard.ProgrammableNonFungible,
-                  ].includes(tokenStandard || 0)
-                    ? sol(0.002)
-                    : sol(0.0002),
+              return {
+                instructions: burnTx,
+                mint: item.id,
+              }
+            } else {
+              const digitalAsset = await fetchDigitalAsset(umi, publicKey(item.nftMint))
+              const tokenStandard = unwrapOption(digitalAsset.metadata.tokenStandard)
+              let masterEditionMint: UmiPublicKey | undefined = undefined
+              let masterEditionToken
+              const isEdition =
+                isSome(digitalAsset.metadata.tokenStandard) &&
+                digitalAsset.metadata.tokenStandard.value === TokenStandard.NonFungibleEdition &&
+                !digitalAsset.edition?.isOriginal
+              if (isEdition) {
+                const masterEditionPda = findMasterEditionPda(umi, {
+                  mint: digitalAsset.publicKey,
                 })
-              )
-            }
+                // const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "confirmed" })
+                // const sigs = await connection.getSignaturesForAddress(
+                //   toWeb3JsPublicKey(
+                //     !digitalAsset.edition?.isOriginal ? digitalAsset.edition?.parent! : digitalAsset.edition.publicKey
+                //   )
+                // )
+                // const sig = sigs[sigs.length - 1]
+                // const txn = await connection.getTransaction(sig.signature)
+                // const key = txn?.transaction.message.accountKeys[1]!
 
-            return {
-              instructions: burnInstruction,
-              mint: item.nftMint,
+                // console.log("Hi")
+
+                const masterEditionDigitalAsset = await fetchDigitalAssetWithTokenByMint(umi, masterEditionPda[0])
+                console.log("bye")
+                masterEditionMint = masterEditionDigitalAsset.mint.publicKey
+                masterEditionToken = masterEditionDigitalAsset.token.publicKey
+              }
+              let amount = BigInt(1)
+
+              if ([TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard || 0)) {
+                const ata = findAssociatedTokenPda(umi, {
+                  mint: digitalAsset.mint.publicKey,
+                  owner: umi.identity.publicKey,
+                })
+
+                const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata[0]))
+                amount = BigInt(balance.value.amount)
+              }
+
+              let digitalAssetWithToken: DigitalAssetWithToken | undefined = undefined
+              const isNonFungible = [0, 3, 4, 5].includes(unwrapSome(digitalAsset.metadata.tokenStandard) || 0)
+              if (isNonFungible) {
+                digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
+              }
+              let burnInstruction = burnV1(umi, {
+                mint: digitalAsset.mint.publicKey,
+                authority: umi.identity,
+                tokenOwner: umi.identity.publicKey,
+                tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
+                  ? digitalAsset.metadata.tokenStandard.value
+                  : 0,
+                metadata: digitalAsset.metadata.publicKey,
+                collectionMetadata: isSome(digitalAsset.metadata.collection)
+                  ? findMetadataPda(umi, { mint: digitalAsset.metadata.collection.value.key })
+                  : undefined,
+                edition: isEdition ? digitalAsset.edition?.publicKey : undefined,
+                token: isNonFungible ? digitalAssetWithToken?.token?.publicKey : undefined,
+                tokenRecord: isNonFungible ? digitalAssetWithToken?.tokenRecord?.publicKey : undefined,
+                masterEdition: isEdition
+                  ? digitalAsset.edition?.isOriginal
+                    ? digitalAsset.edition.publicKey
+                    : digitalAsset.edition?.parent
+                  : undefined,
+                masterEditionMint,
+                masterEditionToken,
+                amount,
+                editionMarker:
+                  isEdition && masterEditionMint
+                    ? fromWeb3JsPublicKey(
+                        metaplex
+                          .nfts()
+                          .pdas()
+                          .editionMarker({
+                            mint: toWeb3JsPublicKey(masterEditionMint!),
+                            edition: !digitalAsset.edition?.isOriginal
+                              ? toBigNumber(digitalAsset.edition?.edition.toString()!)
+                              : toBigNumber(0),
+                          })
+                      )
+                    : undefined,
+              })
+
+              const fee = getFee(`biblio.${isNonFungible ? "burn-non-fungible" : "burn-fungible"}`, account)
+
+              if (fee > 0) {
+                burnInstruction = burnInstruction.add(
+                  transferSol(umi, {
+                    destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                    amount: sol(fee),
+                  })
+                )
+              }
+
+              return {
+                instructions: burnInstruction,
+                mint: item.nftMint,
+              }
             }
           })
       )
       setBurnOpen(false)
 
       const chunks = getUmiChunks(umi, toBurn as any)
+
       const txns = await buildTransactions(umi, chunks)
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
 
@@ -525,26 +632,18 @@ export const Actions: FC = () => {
   function toggleActionDrawer() {
     setActionDrawerShowing(!actionDrawerShowing)
   }
-
-  function returnToWallet() {
-    const target = router.asPath.replace(`/wallet/${router.query.publicKey}`, "")
-    router.push(target)
-  }
-
   const isXs = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"))
 
   function handleSelectionChange(value: number) {
     setSelected(filtered.slice(0, value).map((item) => item.nftMint))
   }
 
-  const isDisabled = isInScope && !isAdmin && !isBasic
+  const isDisabled = !isInScope
 
   return (
     <Stack spacing={2}>
       <Stack spacing={1} direction="row" alignItems="center" sx={{ maxWidth: "100%", overflow: "hidden" }}>
-        {router.query.publicKey && (
-          <WalletPeek address={router.query.publicKey as string} returnToWallet={returnToWallet} />
-        )}
+        {router.query.publicKey && <WalletPeek address={router.query.publicKey as string} />}
         {router.query.filter === "loans" && (
           <Tabs value={loanType} onChange={(e, value) => setLoanType(value)}>
             <Tab label="Borrowed" value="borrowed" />
@@ -554,10 +653,10 @@ export const Actions: FC = () => {
         {!isInScope && !router.query.publicKey && router.query.filter === "vault" && (
           <Tooltip
             title={
-              nonOwnedSelected
+              compressedSelected
+                ? "Compressed items cannot be vaulted"
+                : nonOwnedSelected
                 ? "Some selected items are owned by or delegated to linked wallet"
-                : !hasFreezeAuth
-                ? "Some items cannot be frozen"
                 : nonInVaultStatusesSelected
                 ? "Selection contains items that cannot be frozen/thawed"
                 : onlyNftsSelected
@@ -571,7 +670,7 @@ export const Actions: FC = () => {
           >
             <span>
               <IconButton
-                disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault")) || hasFreezeAuth}
+                disabled={!nfts.length || Boolean(nfts.some((n: Nft) => n.status !== "inVault")) || compressedSelected}
                 sx={{
                   color: "#a6e3e0",
                 }}
@@ -608,16 +707,12 @@ export const Actions: FC = () => {
                   <>
                     <Tooltip
                       title={
-                        nonOwnedSelected
-                          ? "Some selected items are owned by a linked wallet"
-                          : statusesSelected
-                          ? "Selection contains items that cannot be sent"
-                          : "Bulk send selected items"
+                        statusesSelected ? "Selection contains items that cannot be sent" : "Bulk send selected items"
                       }
                     >
                       <span>
                         <IconButton
-                          disabled={!selected.length || statusesSelected || nonOwnedSelected || isDisabled}
+                          disabled={!selected.length || statusesSelected || isDisabled}
                           onClick={toggleBulkSendOpen}
                           color="primary"
                         >
@@ -668,6 +763,7 @@ export const Actions: FC = () => {
                             !selected.length ||
                             nonListedStatusSelected ||
                             !canList ||
+                            compressedSelected ||
                             !onlyNftsSelected ||
                             nonOwnedSelected ||
                             isDisabled
@@ -682,10 +778,10 @@ export const Actions: FC = () => {
 
                     <Tooltip
                       title={
-                        nonInVaultStatusesSelected
+                        compressedSelected
+                          ? "Compressed NFTs cannot be vaulted"
+                          : nonInVaultStatusesSelected
                           ? "Selection contains items that cannot be frozen/thawed"
-                          : !hasFreezeAuth
-                          ? "Some items cannot be frozen"
                           : onlyNftsSelected
                           ? canFreezeThaw
                             ? frozenSelected
@@ -702,7 +798,7 @@ export const Actions: FC = () => {
                             !canFreezeThaw ||
                             !onlyNftsSelected ||
                             nonInVaultStatusesSelected ||
-                            !hasFreezeAuth ||
+                            compressedSelected ||
                             isDisabled
                           }
                           sx={{
@@ -792,7 +888,7 @@ export const Actions: FC = () => {
               <Button onClick={cancelBurn} color="error">
                 Cancel
               </Button>
-              <Button onClick={burn} variant="contained" disabled={!selected.length}>
+              <Button onClick={burnNfts} variant="contained" disabled={!selected.length}>
                 Burn
               </Button>
             </DialogActions>
@@ -885,7 +981,7 @@ export const Actions: FC = () => {
                     </Stack>
                   </Button>
                   <Button
-                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected}
+                    disabled={!selected.length || !canFreezeThaw || !onlyNftsSelected || compressedSelected}
                     onClick={() => toggleVaultShowing()}
                     fullWidth
                     variant="contained"
@@ -905,6 +1001,7 @@ export const Actions: FC = () => {
                       !canList ||
                       !onlyNftsSelected ||
                       nonOwnedSelected ||
+                      compressedSelected ||
                       selected.length > 20
                     }
                     onClick={listedSelected ? toggleDelist : list}

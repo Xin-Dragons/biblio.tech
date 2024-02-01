@@ -9,7 +9,7 @@ import axios from "axios"
 
 export const Collage: FC = () => {
   const { nfts, filtered } = useNfts()
-  const { isActive } = useAccess()
+  const { dandies } = useAccess()
   const [image, setImage] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(0)
@@ -28,7 +28,7 @@ export const Collage: FC = () => {
         mints
           .map((mint) => {
             const nft = nfts.find((n) => n.nftMint === mint)
-            return nft?.thumbnail || nft?.json?.image
+            return (nft as any).thumbnail || nft?.content?.links?.image
           })
           .filter(Boolean)
           .map((item) => item.replace("ipfs://", "https://ipfs.io/ipfs/"))
@@ -118,7 +118,7 @@ export const Collage: FC = () => {
         return compositeRow
       }, canvas)
 
-      if (!isActive) {
+      if (dandies.length < 1) {
         const logo = await Jimp.read("/biblio-logo.png")
 
         logo.resize(image.bitmap.width / 10, Jimp.AUTO)

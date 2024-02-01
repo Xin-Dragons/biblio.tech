@@ -3,17 +3,17 @@ import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
 import base58 from "bs58"
 import { NextRequest, NextResponse } from "next/server"
 import { SigninMessage } from "../../utils/SigninMessge"
-import { getCsrfToken } from "next-auth/react"
 import { NextApiRequest, NextApiResponse } from "next"
 import { Connection } from "@solana/web3.js"
 import axios, { AxiosError } from "axios"
+import { addWalletToUser } from "../../helpers/supabase"
 
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { basePublicKey, publicKey, signature, message, usingLedger, statement, nonce, rawTransaction } = req.body
+  const { id, publicKey, signature, message, usingLedger, statement, nonce, rawTransaction } = req.body
 
   console.log(req.body)
 
@@ -35,10 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return null
       }
 
-      const key = process.env.NODE_ENV === "development" ? "next-auth.csrf-token" : "__Host-next-auth.csrf-token"
-
-      const csrfToken = req.cookies[key]?.split("|")[0]
-      if (signinMessage.nonce !== csrfToken) {
+      const nonce = req.cookies.nonce
+      if (signinMessage.nonce !== nonce) {
         return null
       }
 
@@ -53,14 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const valid = await validate()
     if (valid) {
-      const headers = {
-        authorization: `Bearer ${process.env.API_SECRET_KEY}`,
-      }
-      const { data } = await axios.post(
-        `${process.env.API_URL}/biblio/${basePublicKey}/add-wallet/${publicKey}`,
-        { publicKey },
-        { headers }
-      )
+      await addWalletToUser(id, publicKey, "solana")
       res.status(200).json({ ok: true })
     } else {
       throw new Error("Unauthorised")

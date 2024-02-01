@@ -54,3 +54,9 @@ export async function waitForWalletChange(signer: string): Promise<void> {
   await sleep(1000)
   return waitForWalletChange(signer)
 }
+
+export function toTitleCase(str: string) {
+  return str.replace("-", " ").replace(/\w\S*/g, function (txt) {
+    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  })
+}

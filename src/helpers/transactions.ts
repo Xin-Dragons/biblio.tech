@@ -1,7 +1,9 @@
-import { TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
+import { Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
 import { chunkBy } from "chunkier"
 import { flatten } from "lodash"
 import { toast } from "react-hot-toast"
+import { shorten, waitForWalletChange } from "./utils"
+import { WalletContextState } from "@solana/wallet-adapter-react"
 
 export type InstructionSet = {
   instructions: TransactionBuilder
@@ -49,4 +51,43 @@ export function notifyStatus(errs: string[], successes: string[], type: string, 
   } else if (successes.length && !errs.length) {
     toast.success(`${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully`)
   }
+}
+
+export async function signAllTransactions(
+  wallet: WalletContextState,
+  umi: Umi,
+  txns: Transaction[],
+  signers: string[]
+) {
+  return signers.reduce(async (promise, signer, index) => {
+    return promise.then(async (transactions) => {
+      if (wallet.publicKey?.toBase58() === signer) {
+        const signedPromise = umi.identity.signAllTransactions(transactions)
+        toast.promise(signedPromise, {
+          loading: `Sign transaction, wallet ${index + 1} of ${signers.length}`,
+          success: "Signed",
+          error: "Error signing",
+        })
+        const signed = await signedPromise
+        return signed
+      } else {
+        const walletChangePromise = waitForWalletChange(signer)
+        toast.promise(walletChangePromise, {
+          loading: `Waiting for wallet change: ${shorten(signer)}`,
+          success: "Wallet changed",
+          error: "Error waiting for wallet change",
+        })
+        await walletChangePromise
+        const signedPromise = umi.identity.signAllTransactions(transactions)
+        toast.promise(signedPromise, {
+          loading: `Sign transaction, wallet ${index + 1} of ${signers.length}`,
+          success: "Signed",
+          error: "Error signing",
+        })
+        const signed = await signedPromise
+
+        return signed
+      }
+    })
+  }, Promise.resolve(txns))
 }
