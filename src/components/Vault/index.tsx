@@ -105,7 +105,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
               const digitalAsset = await fetchDigitalAssetWithAssociatedToken(
                 umi,
                 publicKey(nft.nftMint),
-                umi.identity.publicKey
+                publicKey(nft.ownership.owner)
               )
               let txn = transactionBuilder()
               if (unwrapOption(digitalAsset.metadata.tokenStandard) === 4) {
