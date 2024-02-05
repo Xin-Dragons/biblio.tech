@@ -15,6 +15,7 @@ import {
   TokenState,
   fetchAllDigitalAsset,
   fetchAllDigitalAssetWithTokenByOwner,
+  fetchAllDigitalAssetWithTokenByOwnerAndMint,
   fetchDigitalAsset,
   fetchMasterEdition,
   mplTokenMetadata,
@@ -121,7 +122,9 @@ async function getIncomingLoans(publicKey: string, paginationToken?: string): Pr
 function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
   return items.map((item) => {
     if (
-      !["NonFungible", "ProgrammableNonFungible", undefined].includes((item.content?.metadata as any).token_standard)
+      !["NonFungible", "ProgrammableNonFungible", "NonFungibleEdition", undefined].includes(
+        (item.content?.metadata as any).token_standard
+      )
     ) {
       return item
     }
@@ -133,21 +136,13 @@ function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
     }
 
     if (frozen && delegated && delegate) {
-      console.log(publicKeys, delegate, publicKeys.includes(delegate))
       if (publicKeys.includes(delegate)) {
-        console.log("IN VAULT")
         return {
           ...item,
           status: "inVault",
         }
       }
 
-      if (delegate === process.env.NEXT_PUBLIC_BIBLIO_LOCKING_WALLET) {
-        return {
-          ...item,
-          status: "linked",
-        }
-      }
       if (delegate === process.env.NEXT_PUBLIC_XLABS_LOCKING_WALLET) {
         return {
           ...item,
@@ -190,6 +185,14 @@ async function getCollections(collectionIds: string[]) {
     })
   )
   return uniqBy(collections.data, (item) => item.helloMoonCollectionId)
+}
+
+interface DigitalAssetWithStatus extends DAS.GetAssetResponse {
+  status?: string
+}
+
+interface DigitalAssetWithStatusAndOwner extends DigitalAssetWithStatus {
+  owner?: string
 }
 
 self.addEventListener("message", async (event) => {
@@ -269,14 +272,6 @@ self.addEventListener("message", async (event) => {
       "ProgrammableNonFungible",
       "ProgrammableNonFungibleEdition",
     ]
-
-    interface DigitalAssetWithStatus extends DAS.GetAssetResponse {
-      status?: string
-    }
-
-    interface DigitalAssetWithStatusAndOwner extends DigitalAssetWithStatus {
-      owner?: string
-    }
 
     const types = groupBy(
       digitalAssets.map((item: DigitalAssetWithStatus) => {
