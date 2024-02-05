@@ -131,10 +131,6 @@ function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
 
     const { delegate, delegated, frozen } = item.ownership
 
-    if (delegated && frozen) {
-      console.log("eee", item.id)
-    }
-
     if (frozen && delegated && delegate) {
       if (publicKeys.includes(delegate)) {
         return {
