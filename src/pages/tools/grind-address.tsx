@@ -147,7 +147,7 @@ const Grind = ({ keypair, setKeypair, reset }: { keypair: Keypair | null; setKey
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
           disabled={working}
-          helperText={error || warning}
+          helperText={error || warning || "Regex prefix accepted"}
           className="prefix"
         />
         <Box className="case">
