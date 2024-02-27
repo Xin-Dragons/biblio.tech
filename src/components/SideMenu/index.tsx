@@ -7,6 +7,7 @@ import {
   SvgIcon,
   Switch,
   Typography,
+  Link as MuiLink,
 } from "@mui/material"
 import { Box, Stack } from "@mui/system"
 import Link from "next/link"
@@ -33,6 +34,7 @@ import Tokens from "./tokens.svg"
 import Nfts from "./nfts.svg"
 import Address from "./address.svg"
 import Snap from "./snap.svg"
+import Crow from "./crow.svg"
 
 type SideMenuProps = {
   fullWidth?: boolean
@@ -106,33 +108,57 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
     <Stack>
       <MenuSection accordion={!noAccordions} title="Wallet">
         <Link href={relative("/")} passHref>
-          <Button variant={["/", ""].includes(route) ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+          <Button
+            sx={{ width: "100%" }}
+            variant={["/", ""].includes(route) ? "contained" : "outlined"}
+            size={large ? "large" : "medium"}
+          >
             Collections
           </Button>
         </Link>
         <Link href={relative("/nfts")} passHref>
-          <Button variant={route === "/nfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+          <Button
+            sx={{ width: "100%" }}
+            variant={route === "/nfts" ? "contained" : "outlined"}
+            size={large ? "large" : "medium"}
+          >
             NFTs
           </Button>
         </Link>
         {!isEthWallet && [
           <Link href={relative("/cnfts")} passHref key={0}>
-            <Button variant={route === "/cnfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            <Button
+              sx={{ width: "100%" }}
+              variant={route === "/cnfts" ? "contained" : "outlined"}
+              size={large ? "large" : "medium"}
+            >
               cNFTs
             </Button>
           </Link>,
           <Link href={relative("/editions")} passHref key={1}>
-            <Button variant={route === "/editions" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            <Button
+              sx={{ width: "100%" }}
+              variant={route === "/editions" ? "contained" : "outlined"}
+              size={large ? "large" : "medium"}
+            >
               NFT Editions
             </Button>
           </Link>,
           <Link href={relative("/sfts")} passHref key={2}>
-            <Button variant={route === "/sfts" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            <Button
+              sx={{ width: "100%" }}
+              variant={route === "/sfts" ? "contained" : "outlined"}
+              size={large ? "large" : "medium"}
+            >
               SFTs
             </Button>
           </Link>,
           <Link href={relative("/spl")} passHref key={3}>
-            <Button variant={route === "/spl" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+            <Button
+              sx={{ width: "100%" }}
+              variant={route === "/spl" ? "contained" : "outlined"}
+              size={large ? "large" : "medium"}
+            >
               SPL Tokens
             </Button>
           </Link>,
@@ -143,6 +169,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
           <Stack spacing={2}>
             <Link href={relative("/vault")} passHref>
               <Button
+                sx={{ width: "100%" }}
                 variant={route === "/vault" ? "contained" : "outlined"}
                 startIcon={
                   <SvgIcon fontSize="large">
@@ -157,6 +184,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
 
             <Link href={relative("/loans")} passHref>
               <Button
+                sx={{ width: "100%" }}
                 variant={route === "/loans" ? "contained" : "outlined"}
                 startIcon={<MonetizationOnIcon />}
                 size={large ? "large" : "medium"}
@@ -166,6 +194,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             </Link>
             <Link href={relative("/listings")} passHref>
               <Button
+                sx={{ width: "100%" }}
                 variant={route === "/listings" ? "contained" : "outlined"}
                 startIcon={<Sell />}
                 size={large ? "large" : "medium"}
@@ -175,6 +204,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             </Link>
             <Link href={relative("/junk")} passHref>
               <Button
+                sx={{ width: "100%" }}
                 variant={route === "/junk" ? "contained" : "outlined"}
                 startIcon={<DeleteIcon />}
                 size={large ? "large" : "medium"}
@@ -194,6 +224,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
       <MenuSection title="Creator tools" accordion={!noAccordions} open={section === "tools"}>
         <Link href={"/tools/token-tool"} passHref>
           <Button
+            sx={{ width: "100%" }}
             variant={page === "token-tool" ? "contained" : "outlined"}
             startIcon={
               <SvgIcon fontSize="large">
@@ -207,6 +238,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
         </Link>
         <Link href={"/tools/nft-suite"} passHref>
           <Button
+            sx={{ width: "100%" }}
             variant={page === "nft-suite" ? "contained" : "outlined"}
             startIcon={
               <SvgIcon fontSize="large">
@@ -220,6 +252,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
         </Link>
         <Link href={"/tools/grind-address"} passHref>
           <Button
+            sx={{ width: "100%" }}
             variant={page === "grind-address" ? "contained" : "outlined"}
             startIcon={
               <SvgIcon fontSize="large">
@@ -233,6 +266,7 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
         </Link>
         <Link href={"/tools/snapshot"} passHref>
           <Button
+            sx={{ width: "100%" }}
             variant={page === "snapshot" ? "contained" : "outlined"}
             startIcon={
               <SvgIcon fontSize="large">
@@ -244,6 +278,20 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             Snapshot
           </Button>
         </Link>
+        <MuiLink href={"https://crow.so"} target="_blank" rel="noreferrer">
+          <Button
+            sx={{ width: "100%" }}
+            variant="outlined"
+            startIcon={
+              <SvgIcon fontSize="large">
+                <Crow />
+              </SvgIcon>
+            }
+            size={large ? "large" : "medium"}
+          >
+            Crow.so
+          </Button>
+        </MuiLink>
       </MenuSection>
       {/* {filters && (
           <Accordion

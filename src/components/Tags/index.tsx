@@ -12,7 +12,7 @@ import { Tag as TagType } from "../../db"
 export const Tag: FC<{ tag: TagType; selected?: boolean; large?: boolean }> = ({ tag, selected, large }) => {
   return (
     <Link href={`/tags/${tag.id}`} passHref key={tag.id}>
-      <Button variant={selected ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+      <Button variant={selected ? "contained" : "outlined"} size={large ? "large" : "medium"} sx={{ width: "100%" }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Color color={tag.color as string} />
           <Typography>{tag.name}</Typography>
@@ -54,7 +54,11 @@ export const Tags: FC<TagsProps> = ({ large }) => {
   return (
     <Stack spacing={1}>
       <Link href={`/tags/untagged`} passHref>
-        <Button variant={tagId === "untagged" ? "contained" : "outlined"} size={large ? "large" : "medium"}>
+        <Button
+          variant={tagId === "untagged" ? "contained" : "outlined"}
+          size={large ? "large" : "medium"}
+          sx={{ width: "100%" }}
+        >
           Untagged
         </Button>
       </Link>
@@ -63,6 +67,7 @@ export const Tags: FC<TagsProps> = ({ large }) => {
           variant={router.asPath === "/starred" ? "contained" : "outlined"}
           startIcon={<Star sx={{ color: "#faaf00" }} />}
           size={large ? "large" : "medium"}
+          sx={{ width: "100%" }}
         >
           Starred
         </Button>
