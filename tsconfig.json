@@ -4,6 +4,7 @@
     "src/types/next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.json",
     "src/pages/api/auth/[...nextauth].ts",
     "node_modules/jimp*",
     ".next/types/**/*.ts"
@@ -11,11 +12,7 @@
   "compilerOptions": {
     "outDir": "lib",
     "target": "es6",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -35,7 +32,5 @@
       }
     ]
   },
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

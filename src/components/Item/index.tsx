@@ -33,30 +33,18 @@ import { default as NextLink } from "next/link"
 import { findKey, isEmpty, uniq } from "lodash"
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
 import { FC, MouseEvent, ReactElement, ReactNode, SyntheticEvent, useEffect, useRef, useState } from "react"
-import Frozen from "@mui/icons-material/AcUnit"
 import LockIcon from "@mui/icons-material/Lock"
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked"
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked"
-import { MS_PER_DAY, useDatabase } from "../../context/database"
+import { useDatabase } from "../../context/database"
 import axios from "axios"
-import {
-  ArrowBackIosNew,
-  ArrowForwardIos,
-  Close,
-  LightMode,
-  LocalFireDepartment,
-  Paid,
-  Sync,
-} from "@mui/icons-material"
+import { ArrowBackIosNew, ArrowForwardIos, Close, LocalFireDepartment, Paid, Sync } from "@mui/icons-material"
 import { useDialog } from "../../context/dialog"
 import { useTags } from "../../context/tags"
 import AddCircleIcon from "@mui/icons-material/AddCircle"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useRouter } from "next/router"
 import { toast } from "react-hot-toast"
-import useOnScreen from "../../hooks/use-on-screen"
-import { useMetaplex } from "../../context/metaplex"
-import { PublicKey } from "@metaplex-foundation/js"
 import HowRare from "./howrare.svg"
 import CornerRibbon from "react-corner-ribbon"
 import { Loan as CitrusLoan } from "@famousfoxfederation/citrus-sdk"
@@ -84,7 +72,7 @@ import { useSharky } from "../../context/sharky"
 import { useTheme } from "../../context/theme"
 import { useTensor } from "../../context/tensor"
 import SellIcon from "@mui/icons-material/Sell"
-import { lamportsToSol, shorten } from "../../helpers/utils"
+import { isFungible, isNonFungible, lamportsToSol, shorten } from "../../helpers/utils"
 import ExchangeArt from "./exchange-art.svg"
 import Tensor from "./tensor.svg"
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart"
@@ -93,6 +81,10 @@ import { useSelection } from "../../context/selection"
 import { OfferedLoan, OrderBook } from "@sharkyfi/client"
 import { useCitrus } from "../../context/citrus"
 import { publicKey, unwrapOption } from "@metaplex-foundation/umi"
+import { useCrow } from "../../apps/crow"
+import { Crow, CrowWithAssets, CrowWithPublicKeyAndAssets } from "../../apps/crow/types/types"
+import { findCrowPda } from "../../apps/crow/pdas"
+import { toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 const SECONDS_PER_DAY = 86_400
@@ -1044,7 +1036,38 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
   const [da, setDa] = useState<DigitalAssetWithToken | null>(null)
+  const [crow, setCrow] = useState<CrowWithPublicKeyAndAssets | null>(null)
+  const crowProgram = useCrow()
   const wallet = useWallet()
+
+  useEffect(() => {
+    if (!crowProgram || !item || isFungible(item.metadata.tokenStandard)) {
+      setCrow(null)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const crowPda = findCrowPda(publicKey(item.id))
+        const crowAcc = await crowProgram?.account.crow.fetch(crowPda)
+        const assets = await crowProgram?.account.asset.all([
+          {
+            memcmp: {
+              bytes: crowPda,
+              offset: 8,
+            },
+          },
+        ])
+        setCrow({
+          account: crowAcc,
+          publicKey: toWeb3JsPublicKey(crowPda),
+          assets,
+        })
+      } catch {
+        setCrow(null)
+      }
+    })()
+  }, [crowProgram, item])
 
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
@@ -1291,6 +1314,21 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     <CopyAddress>{item.owner || item.ownership.owner}</CopyAddress>
                   </TableCell>
                 </TableRow>
+                {crow && (
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" color="primary">
+                        Crow account
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "right" }}>
+                      <CopyAddress crow={item.id}>{crow.publicKey.toBase58()}</CopyAddress>
+                      <Typography>
+                        {crow.assets?.length} asset{crow.assets?.length === 1 ? "" : "s"}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
                 {item.loan && (
                   <TableRow>
                     <TableCell>
@@ -1410,6 +1448,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                   </TableRow>
                 )}
+
                 {tokenDelegate && (
                   <TableRow>
                     <TableCell>
@@ -1556,9 +1595,27 @@ export const Item: FC<ItemProps> = ({
   const { layoutSize: settingsLayoutSize, showInfo: settingsShowInfo, showAllWallets, lightMode } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
-  const { publicKey, publicKeys, isInScope } = useAccess()
+  const { publicKey: actualPublicKey, publicKeys, isInScope } = useAccess()
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
   const [isTouchDevice, setIsTouchDevice] = useState(false)
+  const [crow, setCrow] = useState<Crow | null>(null)
+  const crowProgram = useCrow()
+
+  useEffect(() => {
+    if (isFungible(item.metadata.tokenStandard)) {
+      setCrow(null)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const crow = await crowProgram.account.crow.fetch(findCrowPda(publicKey(item.id)))
+        setCrow(crow || null)
+      } catch {
+        setCrow(null)
+      }
+    })()
+  }, [])
 
   const isSelected = selected.includes(item.nftMint)
 
@@ -1656,7 +1713,7 @@ export const Item: FC<ItemProps> = ({
   const balance =
     (isInScope && showAllWallets
       ? publicKeys.reduce((sum, pk) => sum + (item.balance?.[pk as keyof object] || 0), 0)
-      : item.balance?.[publicKey as keyof object]) || 0
+      : item.balance?.[actualPublicKey as keyof object]) || 0
 
   const price = item.price || 0
   const value = price * balance
@@ -1835,7 +1892,7 @@ export const Item: FC<ItemProps> = ({
             }}
           />
 
-          {[1, 2].includes(item.metadata.tokenStandard) && (
+          {isFungible(item.metadata.tokenStandard) ? (
             <Stack>
               {value ? (
                 <>
@@ -1876,6 +1933,29 @@ export const Item: FC<ItemProps> = ({
                 }}
               />
             </Stack>
+          ) : (
+            crow && (
+              <Link href={`https://crow.so/crow/${item.id}`} target="_blank" rel="noreferrer">
+                <img
+                  src="/crow.png"
+                  width={
+                    {
+                      small: "20px",
+                      medium: "30px",
+                      large: "40px",
+                      collage: "40px",
+                    }[layoutSize]
+                  }
+                  style={{
+                    position: "absolute",
+                    left: "0.5em",
+                    top: "0.5em",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                />
+              </Link>
+            )
           )}
           {isInScope && DragHandle && isTouchDevice && !showInfo && (
             <Box sx={{ position: "absolute", zIndex: 10, top: 0 }}>{DragHandle}</Box>

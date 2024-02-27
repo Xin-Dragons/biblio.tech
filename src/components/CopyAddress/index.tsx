@@ -12,10 +12,10 @@ type CopyAddressProps = {
   children: any
   chain?: string
   wallet?: Boolean
+  crow?: string
 }
 
-export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", wallet }) => {
-  console.log(wallet)
+export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", wallet, crow }) => {
   const [copied, setCopied] = useState(false)
   const { lightMode } = useUiSettings()
 
@@ -65,6 +65,13 @@ export const CopyAddress: FC<CopyAddressProps> = ({ children, chain = "solana", 
           <img src={target.image} width="15px" style={{ display: "block" }} />
         </Link>
       </Tooltip>
+      {crow && (
+        <Tooltip title={`View contents on Crow.so`}>
+          <Link href={`https://crow.so/crow/${crow}`} target="_blank">
+            <img src={"/crow.png"} width="15px" style={{ display: "block" }} />
+          </Link>
+        </Tooltip>
+      )}
       {wallet ? (
         <NextLink href={`${basePath}/wallet/${children}`} passHref>
           <Link underline="hover">{shorten(children)}</Link>

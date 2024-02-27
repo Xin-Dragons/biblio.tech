@@ -32,6 +32,7 @@ import { CitrusProvider } from "../context/citrus"
 import { ClusterProvider } from "../context/cluster"
 import { NextPageContext } from "next"
 import cookie from "cookie"
+import { CrowProvider } from "../apps/crow"
 
 // Use require instead of import since order matters
 require("@solana/wallet-adapter-react-ui/styles.css")
@@ -79,18 +80,20 @@ export default function Biblio({
                                               <SharkyProvider>
                                                 <CitrusProvider>
                                                   <TensorProvider>
-                                                    <Script
-                                                      async
-                                                      strategy="afterInteractive"
-                                                      type="module"
-                                                      src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
-                                                    />
-                                                    <CssBaseline />
-                                                    <SelectionProvider>
-                                                      <DialogProvider>
-                                                        <Component {...pageProps} />
-                                                      </DialogProvider>
-                                                    </SelectionProvider>
+                                                    <CrowProvider>
+                                                      <Script
+                                                        async
+                                                        strategy="afterInteractive"
+                                                        type="module"
+                                                        src="https://unpkg.com/@google/model-viewer@^3.0.1/dist/model-viewer.min.js"
+                                                      />
+                                                      <CssBaseline />
+                                                      <SelectionProvider>
+                                                        <DialogProvider>
+                                                          <Component {...pageProps} />
+                                                        </DialogProvider>
+                                                      </SelectionProvider>
+                                                    </CrowProvider>
                                                   </TensorProvider>
                                                 </CitrusProvider>
                                               </SharkyProvider>

@@ -1,5 +1,5 @@
 import { PublicKey } from "@metaplex-foundation/js"
-import { isPda, publicKey } from "@metaplex-foundation/umi"
+import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
 import { WalletContextState } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import BN from "bn.js"
@@ -59,4 +59,17 @@ export function toTitleCase(str: string) {
   return str.replace("-", " ").replace(/\w\S*/g, function (txt) {
     return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   })
+}
+
+export function isNonFungible(tokenStandard: TokenStandard): Boolean {
+  return [
+    TokenStandard.NonFungible,
+    TokenStandard.NonFungibleEdition,
+    TokenStandard.ProgrammableNonFungible,
+    TokenStandard.ProgrammableNonFungibleEdition,
+  ].includes(tokenStandard)
+}
+
+export function isFungible(tokenStandard: TokenStandard): Boolean {
+  return [TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard)
 }
