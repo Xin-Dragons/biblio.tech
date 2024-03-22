@@ -1,1 +1,1 @@
-declare module 'react-corner-ribbon';
+declare module "react-corner-ribbon"

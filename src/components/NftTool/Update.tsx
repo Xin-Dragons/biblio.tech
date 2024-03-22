@@ -62,6 +62,7 @@ import {
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { getMintlist } from "../../helpers/helius"
 import { useAccess } from "../../context/access"
+import { hasProfanity } from "../../helpers/has-profanity"
 
 export function UpdateNft() {
   const { account } = useAccess()
@@ -640,6 +641,12 @@ export function UpdateNft() {
 
       if (updateAuthorityError) {
         throw new Error("Invalid update authority")
+      }
+
+      const content = `${name} ${symbol} ${description} ${website}`
+
+      if (hasProfanity(content)) {
+        throw new Error("Profanity detected")
       }
 
       const total = creators.reduce((sum, item) => sum + (item.share || 0), 0)

@@ -10,6 +10,7 @@ import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
+import { hasProfanity } from "../helpers/has-profanity"
 
 export const UpdateMetadata = ({
   digitalAsset,
@@ -64,6 +65,12 @@ export const UpdateMetadata = ({
       meta.name = name
       meta.symbol = symbol
       meta.description = description
+
+      const content = `${name} ${symbol} ${description}`
+
+      if (hasProfanity(content)) {
+        throw new Error("Profanity detected")
+      }
 
       if (!isEqual(meta, jsonMetadata)) {
         uri = await umi.uploader.uploadJson(meta)

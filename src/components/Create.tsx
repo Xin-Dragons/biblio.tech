@@ -31,6 +31,9 @@ import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
 
+import { en } from "@dsojevic/profanity-list"
+import { hasProfanity } from "../helpers/has-profanity"
+
 export const Create = () => {
   const wallet = useWallet()
   const umi = useUmi()
@@ -138,6 +141,12 @@ export const Create = () => {
 
       if (!name || !symbol) {
         throw new Error("Missing params")
+      }
+
+      const content = `${name} ${symbol} ${description}`
+
+      if (hasProfanity(content)) {
+        throw new Error("Profanity detected")
       }
 
       const uri = await uploadFiles()

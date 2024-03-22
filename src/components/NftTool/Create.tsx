@@ -49,6 +49,7 @@ import { getAnonUmi } from "./helpers/umi"
 import { FEES_WALLET, METAPLEX_RULE_SET } from "./constants"
 import Link from "next/link"
 import { useAccess } from "../../context/access"
+import { hasProfanity } from "../../helpers/has-profanity"
 
 export const emptyAttribute = {
   trait_type: "",
@@ -352,6 +353,12 @@ export const CreateNft = () => {
 
       if (!description) {
         throw new Error("Description is a required field")
+      }
+
+      const content = `${name} ${symbol} ${description} ${website}`
+
+      if (hasProfanity(content)) {
+        throw new Error("Profanity detected")
       }
 
       const total = creators.reduce((sum, item) => sum + (item.share || 0), 0)

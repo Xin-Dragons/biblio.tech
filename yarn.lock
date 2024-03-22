@@ -1618,6 +1618,11 @@
   dependencies:
     tslib "^2.0.0"
 
+"@dsojevic/profanity-list@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@dsojevic/profanity-list/-/profanity-list-1.0.0.tgz#3393559c0cd0d03db0e39ea4abaaa21b1f2c76cf"
+  integrity sha512-3HxqpC2mCss1/t+PohaZBs4sZ444HY7DTQzg+R11Oep9a6zAMgcxHYFrC/RNB2ROgmgFeiO0Jbeyq+L57RTnNw==
+
 "@emotion/babel-plugin@^11.11.0":
   version "11.11.0"
   resolved "https://registry.yarnpkg.com/@emotion/babel-plugin/-/babel-plugin-11.11.0.tgz#c2d872b6a7767a9d176d007f5b31f7d504bb5d6c"
@@ -7841,6 +7846,11 @@ cbor-sync@^1.0.4:
   version "1.0.4"
   resolved "https://registry.yarnpkg.com/cbor-sync/-/cbor-sync-1.0.4.tgz#5a11a1ab75c2a14d1af1b237fd84aa8c1593662f"
   integrity sha512-GWlXN4wiz0vdWWXBU71Dvc1q3aBo0HytqwAZnXF1wOwjqNnDWA1vZ1gDMFLlqohak31VQzmhiYfiCX5QSSfagA==
+
+censor-sensor@^1.0.6:
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/censor-sensor/-/censor-sensor-1.0.6.tgz#b3cc24f3abe1bb9efa98dfa979d475aecadf578a"
+  integrity sha512-+2p0pCVWIkcp9JWVmDgnfQlzpDQsefXIra8KSqVSNrnEkSOcYT/tkDu/umDmTZ39c1JH9+ItijasUJIkRlb8dQ==
 
 chai-as-promised@^7.1.1:
   version "7.1.1"
