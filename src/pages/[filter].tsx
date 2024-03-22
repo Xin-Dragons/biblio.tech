@@ -270,23 +270,26 @@ function SplRow({ item }: { item: Nft }) {
                   Burn tokens
                 </Typography>
 
-                <Stack alignItems="flex-end">
-                  <Button onClick={setMax}>Max</Button>
-                  <TextField
-                    label="Amount to burn"
-                    value={Number((amount * BigInt(1000)) / factor) / 1000}
-                    onChange={(e) => setAmount(BigInt(e.target.value) * factor)}
-                    type="number"
-                    inputProps={{
-                      min: 0,
-                      max: BigInt(item.token_info.balance) / factor,
-                    }}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">{item.content?.metadata.symbol}</InputAdornment>,
-                    }}
-                    fullWidth
-                  />
-                </Stack>
+                {item.token_info.balance && (
+                  <Stack alignItems="flex-end">
+                    <Button onClick={setMax}>Max</Button>
+                    <TextField
+                      label="Amount to burn"
+                      value={Number((amount * BigInt(1000)) / factor) / 1000}
+                      onChange={(e) => setAmount(BigInt(e.target.value) * factor)}
+                      type="number"
+                      inputProps={{
+                        min: 0,
+                        max: BigInt(item.token_info.balance) / factor,
+                      }}
+                      InputProps={{
+                        endAdornment: <InputAdornment position="end">{item.content?.metadata.symbol}</InputAdornment>,
+                      }}
+                      fullWidth
+                    />
+                  </Stack>
+                )}
+
                 <Alert severity="error">
                   <Stack spacing={2}>
                     <Typography variant="h5">Are you sure?</Typography>
