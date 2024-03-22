@@ -484,10 +484,11 @@ export function UpdateNft() {
       name !== meta.name ||
       description !== meta.description ||
       symbol !== meta.symbol ||
-      website !== meta.external_url ||
+      (website && website !== meta.external_url) ||
+      (meta.external_url && website !== meta.external_url) ||
       !isEqual(
         attributes.filter((att) => att.trait_type),
-        nft?.json.attributes
+        nft?.json.attributes || []
       )
 
     const parsedCreators = creators.map((c) => ({
@@ -586,7 +587,7 @@ export function UpdateNft() {
       }
     }
 
-    const fee = getFee("nft=suite.update", account)
+    const fee = getFee("nft-suite.update", account)
 
     if (fee) {
       tx = tx.add(
