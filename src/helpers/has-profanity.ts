@@ -1,27 +1,25 @@
 import { en } from "@dsojevic/profanity-list"
+import { compact } from "lodash"
+import { minimatch } from "minimatch"
 
 export function hasProfanity(content: string) {
   return !!en
     .filter((item: any) => item.severity > 2)
     .filter((item: any) => {
-      const matches = [...content.matchAll(item.match)]
+      const matches = compact(content.split(/\s+/).map((word) => (minimatch(word, item.match) ? word : null)))
       if (!matches.length) {
         return
       }
 
-      let str = content
-      const actualMatches = matches.filter((m) => {
-        const term = m[0]
-        const exceptions = (item.exceptions || []).map((ex: any) => ex.replace("*", term))
+      const actualMatches = matches.filter((word) => {
+        const exceptions = (item.exceptions || []).map((ex: any) => ex.replace("*", word))
         if (!exceptions.length) {
           return true
         }
-        const matches = str.match(exceptions.join("|"))
+        const matches = minimatch(word, exceptions.join("|"))
         if (matches) {
-          str = str.slice(matches[0].length)
           return false
         }
-        str = str.slice(term.length)
         return true
       })
 
