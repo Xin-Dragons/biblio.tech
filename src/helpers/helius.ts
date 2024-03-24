@@ -1,6 +1,8 @@
 import { Connection } from "@solana/web3.js"
 import { DAS, Helius } from "helius-sdk"
 import { chunk, flatten, groupBy, isEqual, mapValues } from "lodash"
+import { PriorityFees } from "../constants"
+import axios from "axios"
 
 const client = new Helius(process.env.NEXT_PUBLIC_HELIUS_API_KEY!)
 
@@ -52,6 +54,24 @@ async function getFungiblesByOwner(ownerAddress: string, page: number) {
   } catch (err) {
     console.log(err)
   }
+}
+
+const url = "https://perfect-cordy-fast-mainnet.helius-rpc.com/"
+
+export async function getPriorityFeesForTx(tx: string, feeLevel: PriorityFees) {
+  const { data } = await axios.post(url, {
+    jsonrpc: "2.0",
+    id: "1",
+    method: "getPriorityFeeEstimate",
+    params: [
+      {
+        transaction: tx,
+        options: { priorityLevel: feeLevel },
+      },
+    ],
+  })
+
+  return data?.result?.priorityFeeEstimate || 0
 }
 
 async function getByOwner(ownerAddress: string, page: number) {

@@ -100,6 +100,7 @@ import { useWalletBypass } from "../../context/wallet-bypass"
 import { burn, getAssetWithProof, transfer } from "@metaplex-foundation/mpl-bubblegum"
 import base58 from "bs58"
 import { getFee } from "../NftTool/helpers/utils"
+import { usePriorityFees } from "../../context/priority-fees"
 
 const WalletPeek: FC<{ address: string }> = ({ address }) => {
   const router = useRouter()
@@ -136,6 +137,7 @@ const WalletPeek: FC<{ address: string }> = ({ address }) => {
 }
 
 export const Actions: FC = () => {
+  const { feeLevel } = usePriorityFees()
   const { nfts } = useNfts()
   const [recipient, setRecipient] = useState<any>(null)
   const [listOpen, setListOpen] = useState(false)

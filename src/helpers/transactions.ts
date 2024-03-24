@@ -2,8 +2,13 @@ import { Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metap
 import { chunkBy } from "chunkier"
 import { flatten } from "lodash"
 import { toast } from "react-hot-toast"
-import { shorten, waitForWalletChange } from "./utils"
+import { shorten, sleep, waitForWalletChange } from "./utils"
 import { WalletContextState } from "@solana/wallet-adapter-react"
+import { Connection } from "@solana/web3.js"
+import { MAX_TX_SIZE, PRIORITY_AND_COMPUTE_IXS_SIZE, PRIORITY_FEE_IX_SIZE, PriorityFees } from "../constants"
+import { base58 } from "@metaplex-foundation/umi/serializers"
+import { getPriorityFeesForTx } from "./helius"
+import { setComputeUnitLimit, setComputeUnitPrice } from "@metaplex-foundation/mpl-toolbox"
 
 export type InstructionSet = {
   instructions: TransactionBuilder
@@ -90,4 +95,106 @@ export async function signAllTransactions(
       }
     })
   }, Promise.resolve(txns))
+}
+
+export function unsafeSplitByTransactionSizeWithPriorityFees(
+  umi: Umi,
+  tx: TransactionBuilder,
+  computeUnits: boolean
+): TransactionBuilder[] {
+  return tx.items.reduce(
+    (builders, item) => {
+      const lastBuilder = builders.pop() as TransactionBuilder
+      const lastBuilderWithItem = lastBuilder.add(item)
+      if (
+        lastBuilderWithItem.getTransactionSize(umi) <=
+        MAX_TX_SIZE - (computeUnits ? PRIORITY_AND_COMPUTE_IXS_SIZE : PRIORITY_FEE_IX_SIZE)
+      ) {
+        builders.push(lastBuilderWithItem)
+      } else {
+        builders.push(lastBuilder)
+        builders.push(lastBuilder.empty().add(item))
+      }
+      return builders
+    },
+    [tx.empty()]
+  )
+}
+
+export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: PriorityFees, computeUnits?: number) {
+  let chunks = unsafeSplitByTransactionSizeWithPriorityFees(umi, tx, !!computeUnits)
+
+  const [encoded] = base58.deserialize(umi.transactions.serialize(await chunks[0].buildWithLatestBlockhash(umi)))
+  const txFee = feeLevel && (await getPriorityFeesForTx(encoded, feeLevel))
+
+  if (computeUnits) {
+    chunks = chunks.map((ch) => ch.prepend(setComputeUnitLimit(umi, { units: computeUnits })))
+  }
+
+  if (txFee) {
+    chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee })))
+  }
+  return { chunks, txFee }
+}
+
+export function displayErrorFromLog(err: any, fallback: string = "Unable to perform action") {
+  const errMessage = err.logs?.find((l: string) => l.includes("Error Message:"))?.split("Error Message: ")?.[1]
+  return errMessage || err.message || fallback
+}
+
+export async function sendAllTxsWithRetries(
+  umi: Umi,
+  connection: Connection,
+  signed: Transaction[],
+  preIxs = 0,
+  delay = 500
+) {
+  let successes = 0
+  let errors = 0
+
+  const lastValidBlockHeight = (await umi.rpc.getLatestBlockhash()).lastValidBlockHeight
+  let blockheight = await connection.getBlockHeight("confirmed")
+  let blockhash = await umi.rpc.getLatestBlockhash()
+
+  await Promise.all(
+    signed.map(async (tx) => {
+      const sig = await umi.rpc.sendTransaction(tx)
+      let resolved = false
+      const confPromise = umi.rpc.confirmTransaction(sig, {
+        strategy: {
+          type: "blockhash",
+          ...blockhash,
+        },
+        commitment: "confirmed",
+      })
+
+      while (blockheight < lastValidBlockHeight && !resolved) {
+        try {
+          console.log("Sending tx")
+          await umi.rpc.sendTransaction(tx)
+          await sleep(delay)
+        } catch (err: any) {
+          if (err.message.includes("This transaction has already been processed")) {
+            resolved = true
+          } else {
+            console.error(displayErrorFromLog(err, err.message || "Error sending tx"))
+          }
+        }
+        blockheight = await connection.getBlockHeight()
+      }
+
+      const conf = await confPromise
+
+      if (conf.value.err) {
+        errors += tx.message.instructions.length - preIxs
+      } else {
+        successes += tx.message.instructions.length - preIxs
+      }
+    })
+  )
+
+  return {
+    successes,
+    errors,
+  }
 }

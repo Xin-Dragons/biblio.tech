@@ -63,8 +63,12 @@ import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { getMintlist } from "../../helpers/helius"
 import { useAccess } from "../../context/access"
 import { hasProfanity } from "../../helpers/has-profanity"
+import { usePriorityFees } from "../../context/priority-fees"
+import { packTx, sendAllTxsWithRetries } from "../../helpers/transactions"
 
 export function UpdateNft() {
+  const { connection } = useConnection()
+  const { feeLevel } = usePriorityFees()
   const { account } = useAccess()
   const { loading: nftsLoading, createdNfts, collections } = useNfts()
   const [loading, setLoading] = useState(false)
@@ -599,7 +603,9 @@ export function UpdateNft() {
       )
     }
 
-    await tx.sendAndConfirm(umi)
+    const { chunks, txFee } = await packTx(umi, tx, feeLevel)
+    const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+    await sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
   }
 
   async function updateNft() {

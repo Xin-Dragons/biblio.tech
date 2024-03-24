@@ -1,7 +1,7 @@
 import { Metadata, updateV1 } from "@metaplex-foundation/mpl-token-metadata"
 import { publicKey, sol, transactionBuilder, unwrapOption } from "@metaplex-foundation/umi"
 import { Stack, Typography, TextField, Button, CardContent, Card, Dialog, Alert } from "@mui/material"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import Spinner from "./Spinner"
@@ -10,6 +10,8 @@ import { AuthorityType, Mint, setAuthority, transferSol } from "@metaplex-founda
 import { FEES_WALLET } from "../constants"
 import { useAccess } from "../context/access"
 import { getFee } from "./NftTool/helpers/utils"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
+import { usePriorityFees } from "../context/priority-fees"
 
 export const UpdateAuths = ({
   mint,
@@ -20,6 +22,8 @@ export const UpdateAuths = ({
   metadata?: Metadata
   refresh: Function
 }) => {
+  const { feeLevel } = usePriorityFees()
+  const { connection } = useConnection()
   const { account } = useAccess()
   const [newFreezeAuthority, setNewFreezeAuthority] = useState("")
   const [newMintAuthority, setNewMintAuthority] = useState("")
@@ -106,7 +110,9 @@ export const UpdateAuths = ({
         )
       }
 
-      const updatePromise = txn.sendAndConfirm(umi)
+      const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const updatePromise = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(updatePromise, {
         loading: "Updating auths",

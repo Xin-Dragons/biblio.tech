@@ -32,6 +32,9 @@
     "start": "next start",
     "lint": "prettier --check 'src/{*,**/*}.{ts,tsx,js,jsx,json}' && eslint && next lint"
   },
+  "overrides": {
+    "@irys/sdk": "npm:@xindragons/irys-sdk@0.2.7"
+  },
   "dependencies": {
     "@air/react-drag-to-select": "^5.0.5",
     "@apollo/client": "^3.7.15",
@@ -50,7 +53,7 @@
     "@metaplex-foundation/mpl-bubblegum": "^3.1.0",
     "@metaplex-foundation/mpl-token-auth-rules": "^3.0.0-alpha.11",
     "@metaplex-foundation/mpl-token-metadata": "^3.1.2",
-    "@metaplex-foundation/mpl-toolbox": "^0.8.0",
+    "@metaplex-foundation/mpl-toolbox": "^0.9.4",
     "@metaplex-foundation/umi": "^0.9.0",
     "@metaplex-foundation/umi-bundle-defaults": "^0.9.0",
     "@metaplex-foundation/umi-downloader-http": "^0.7.7",
@@ -58,6 +61,7 @@
     "@metaplex-foundation/umi-storage-mock": "^0.7.7",
     "@metaplex-foundation/umi-uploader-irys": "^0.8.11",
     "@metaplex-foundation/umi-web3js-adapters": "^0.8.4",
+    "@xindragons/irys-sdk": "0.2.7",
     "@mui/icons-material": "^5.11.11",
     "@mui/lab": "^5.0.0-alpha.127",
     "@mui/material": "^5.15.6",

@@ -35,6 +35,7 @@ import { shorten } from "../../helpers/utils"
 import { useTheme } from "../../context/theme"
 import { SignUp } from "../SignUp"
 import { useCluster } from "../../context/cluster"
+import { PriorityFeesSelector } from "../PriorityFeesSelector"
 
 type UserMenuProps = {
   large?: boolean
@@ -181,6 +182,9 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
                   />
                 </ListItemIcon>
                 <ListItemText>Using Ledger?</ListItemText>
+              </MenuItem>
+              <MenuItem>
+                <PriorityFeesSelector />
               </MenuItem>
             </div>
           )}

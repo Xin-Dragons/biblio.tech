@@ -11,6 +11,9 @@ import { FEES_WALLET } from "../constants"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
 import { hasProfanity } from "../helpers/has-profanity"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
+import { usePriorityFees } from "../context/priority-fees"
+import { useConnection } from "@solana/wallet-adapter-react"
 
 export const UpdateMetadata = ({
   digitalAsset,
@@ -19,6 +22,8 @@ export const UpdateMetadata = ({
   digitalAsset: DigitalAsset | null
   jsonMetadata?: JsonMetadata | null
 }) => {
+  const { feeLevel } = usePriorityFees()
+  const { connection } = useConnection()
   const { account } = useAccess()
   const [name, setName] = useState(jsonMetadata?.name || "")
   const [symbol, setSymbol] = useState(jsonMetadata?.symbol || "")
@@ -100,7 +105,9 @@ export const UpdateMetadata = ({
         )
       }
 
-      const updateTxn = txn.sendAndConfirm(umi)
+      const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const updateTxn = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(updateTxn, {
         loading: "Updating token metadata",

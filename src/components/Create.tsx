@@ -33,8 +33,11 @@ import { useAccess } from "../context/access"
 
 import { en } from "@dsojevic/profanity-list"
 import { hasProfanity } from "../helpers/has-profanity"
+import { usePriorityFees } from "../context/priority-fees"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
 
 export const Create = () => {
+  const { feeLevel } = usePriorityFees()
   const wallet = useWallet()
   const umi = useUmi()
   const { user, account } = useAccess()
@@ -188,7 +191,9 @@ export const Create = () => {
         )
       }
 
-      const createPromise = txn.sendAndConfirm(umi)
+      const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const createPromise = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(createPromise, {
         loading: "Creating Token...",

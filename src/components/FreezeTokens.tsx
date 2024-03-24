@@ -1,5 +1,5 @@
 import { Stack, Typography, TextField, RadioGroup, FormControlLabel, Radio, Button, Alert } from "@mui/material"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import Spinner from "./Spinner"
@@ -18,8 +18,12 @@ import { FEES_WALLET } from "../constants"
 import { noop } from "lodash"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
+import { usePriorityFees } from "../context/priority-fees"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
 
 export const FreezeTokens = ({ mint, onComplete = noop }: { mint: Mint | null; onComplete: Function }) => {
+  const { feeLevel } = usePriorityFees()
+  const { connection } = useConnection()
   const [type, setType] = useState("freeze")
   const [owner, setOwner] = useState("")
   const [ownerError, setOwnerError] = useState<string | null>(null)
@@ -117,7 +121,9 @@ export const FreezeTokens = ({ mint, onComplete = noop }: { mint: Mint | null; o
         )
       }
 
-      const freezeTxn = txn.sendAndConfirm(umi)
+      const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const freezeTxn = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(freezeTxn, {
         loading: `${type === "freeze" ? "Freezing" : "Thawing"} token account`,

@@ -34,7 +34,7 @@ import {
   DialogContentText,
   DialogActions,
 } from "@mui/material"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { useNfts } from "./context/nft"
@@ -50,6 +50,8 @@ import { FEES_WALLET, METAPLEX_RULE_SET } from "./constants"
 import Link from "next/link"
 import { useAccess } from "../../context/access"
 import { hasProfanity } from "../../helpers/has-profanity"
+import { packTx, sendAllTxsWithRetries } from "../../helpers/transactions"
+import { usePriorityFees } from "../../context/priority-fees"
 
 export const emptyAttribute = {
   trait_type: "",
@@ -62,6 +64,7 @@ export const emptyCreator = {
 }
 
 export const CreateNft = () => {
+  const { feeLevel } = usePriorityFees()
   const { collections, refresh } = useNfts()
   const { account } = useAccess()
   const umi = useUmi()
@@ -95,6 +98,7 @@ export const CreateNft = () => {
   const [pNft, setPNft] = useState(true)
   const [ruleSet, setRuleSet] = useState(METAPLEX_RULE_SET)
   const [creators, setCreators] = useState([emptyCreator])
+  const { connection } = useConnection()
 
   useEffect(() => {
     if (!wallet.publicKey) {
@@ -309,7 +313,9 @@ export const CreateNft = () => {
         )
       }
 
-      const mintingPromise = tx.sendAndConfirm(umi, { send: { skipPreflight: true } })
+      const { chunks, txFee } = await packTx(umi, tx, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const mintingPromise = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(mintingPromise, {
         loading: "Minting NFT...",

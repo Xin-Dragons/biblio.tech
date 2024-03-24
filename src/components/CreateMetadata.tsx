@@ -10,8 +10,12 @@ import { Mint, transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { FEES_WALLET } from "../constants"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
+import { usePriorityFees } from "../context/priority-fees"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
 
 export const CreateMetadata = ({ mint }: { mint: Mint }) => {
+  const { feeLevel } = usePriorityFees()
+  const { connection } = useConnection()
   const { account } = useAccess()
   const [name, setName] = useState("")
   const [symbol, setSymbol] = useState("")
@@ -22,7 +26,6 @@ export const CreateMetadata = ({ mint }: { mint: Mint }) => {
   const umi = useUmi()
 
   const wallet = useWallet()
-  const { connection } = useConnection()
 
   function cancel() {
     setName("")
@@ -79,7 +82,9 @@ export const CreateMetadata = ({ mint }: { mint: Mint }) => {
           )
         }
 
-        await txn.sendAndConfirm(umi)
+        const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+        const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+        await sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
       })
 
       toast.promise(creatingPromise, {

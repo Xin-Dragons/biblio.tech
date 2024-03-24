@@ -1,4 +1,4 @@
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useEffect, useState } from "react"
 import { useUmi } from "../context/umi"
 import { mintV1, TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
@@ -16,8 +16,12 @@ import {
 import { FEES_WALLET } from "../constants"
 import { getFee } from "./NftTool/helpers/utils"
 import { useAccess } from "../context/access"
+import { packTx, sendAllTxsWithRetries } from "../helpers/transactions"
+import { usePriorityFees } from "../context/priority-fees"
 
 export const MintTokens = ({ mint }: { mint: Mint | null }) => {
+  const { feeLevel } = usePriorityFees()
+  const { connection } = useConnection()
   const [loading, setLoading] = useState(false)
   const { account } = useAccess()
   const [tokensToMint, setTokensToMint] = useState<string | number>("")
@@ -107,7 +111,9 @@ export const MintTokens = ({ mint }: { mint: Mint | null }) => {
         )
       }
 
-      const mintingPromise = txn.sendAndConfirm(umi)
+      const { chunks, txFee } = await packTx(umi, txn, feeLevel)
+      const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+      const mintingPromise = sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
 
       toast.promise(mintingPromise, {
         loading: "Minting tokens",
