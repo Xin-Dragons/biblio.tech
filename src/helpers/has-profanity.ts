@@ -2,7 +2,7 @@ import { en } from "@dsojevic/profanity-list"
 
 export function hasProfanity(content: string) {
   return !!en
-    .filter((item: any) => item.severity > 1)
+    .filter((item: any) => item.severity > 2)
     .filter((item: any) => {
       const matches = [...content.matchAll(item.match)]
       if (!matches.length) {
