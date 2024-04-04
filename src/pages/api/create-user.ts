@@ -34,9 +34,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nonce = req.cookies.nonce
 
       console.log(signinMessage.nonce, nonce)
-      if (signinMessage.nonce !== nonce) {
-        return null
-      }
 
       const validationResult = await signinMessage.validate(signature || "")
 
@@ -48,6 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const valid = await validate()
+    console.log({ valid })
     if (valid) {
       const user = await createUser(publicKey)
       res.status(200).send(user)

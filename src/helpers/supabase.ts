@@ -63,6 +63,7 @@ async function getBiblioWallet(publicKey: string, user_id?: string) {
 
 export async function addWalletToUser(id: string, publicKey: string, chain: string = "solana") {
   const wallet = await getBiblioWallet(publicKey)
+  console.log({ wallet })
   if (wallet) {
     throw new Error("Wallet already linked to a Biblio account.")
   }
