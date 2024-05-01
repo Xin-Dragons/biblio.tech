@@ -9,6 +9,7 @@ import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 import { mplTokenAuthRules } from "@metaplex-foundation/mpl-token-auth-rules"
 import { dasApi } from "@metaplex-foundation/digital-asset-standard-api"
+import { useCluster } from "./cluster"
 
 type UmiContext = {
   umi: Umi | null
@@ -20,9 +21,10 @@ const DEFAULT_CONTEXT: UmiContext = {
 
 export const UmiContext = createContext<UmiContext>(DEFAULT_CONTEXT)
 
-export const UmiProvider = ({ children, endpoint }: { children: ReactNode; endpoint: string }) => {
+export const UmiProvider = ({ children }: { children: ReactNode }) => {
+  const { rpcHost } = useCluster()
   const wallet = useWallet()
-  const umi = createUmi(endpoint, { commitment: "processed" })
+  const umi = createUmi(rpcHost, { commitment: "processed" })
     .use(walletAdapterIdentity(wallet))
     .use(mplTokenMetadata())
     .use(mplToolbox())

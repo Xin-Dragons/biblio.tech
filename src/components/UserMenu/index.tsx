@@ -1,4 +1,4 @@
-import { AccountBalanceWallet, MonetizationOn, PersonAdd, Star } from "@mui/icons-material"
+import { AccountBalanceWallet, Info, Lan, MonetizationOn, PersonAdd, Star } from "@mui/icons-material"
 import {
   Box,
   Chip,
@@ -13,6 +13,7 @@ import {
   Stack,
   Switch,
   Theme,
+  Tooltip,
   Typography,
   darken,
   useMediaQuery,
@@ -36,6 +37,7 @@ import { useTheme } from "../../context/theme"
 import { SignUp } from "../SignUp"
 import { useCluster } from "../../context/cluster"
 import { PriorityFeesSelector } from "../PriorityFeesSelector"
+import { NetworkSelector } from "../NetworkSelector"
 
 type UserMenuProps = {
   large?: boolean
@@ -184,6 +186,21 @@ export const UserMenu: FC<UserMenuProps> = ({ large, toggleSolTransferOpen, allo
                 <ListItemText>Using Ledger?</ListItemText>
               </MenuItem>
               <MenuItem>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Lan />
+                </ListItemIcon>
+                <ListItemText>
+                  <NetworkSelector />
+                </ListItemText>
+              </MenuItem>
+              <MenuItem>
+                <ListItemIcon sx={{ width: "50px" }}>
+                  <Tooltip
+                    title={`Increase this to prioritise your transactions in times of network congestion. We recommend always using at-least "MEDIUM" priority to ensure your transactions are processed.`}
+                  >
+                    <Info sx={{ cursor: "help" }} />
+                  </Tooltip>
+                </ListItemIcon>
                 <PriorityFeesSelector />
               </MenuItem>
             </div>

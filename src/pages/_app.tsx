@@ -64,7 +64,7 @@ export default function Biblio({
             <WagmiConfig config={wagmiConfig}>
               <BriceProvider>
                 <WalletBypassProvider>
-                  <UmiProvider endpoint={process.env.NEXT_PUBLIC_RPC_HOST!}>
+                  <UmiProvider>
                     <AccessProvider nonce={nonce}>
                       <BasePathProvider publicKey={pageProps.publicKey}>
                         <DatabaseProvider>

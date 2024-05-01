@@ -1,6 +1,9 @@
 import { Dispatch, ReactNode, SetStateAction, createContext, useContext, useState } from "react"
 
-type Cluster = "mainnet" | "devnet"
+export enum Cluster {
+  MAINNET = "mainnet",
+  DEVNET = "devnet",
+}
 
 const Context = createContext<
   { cluster: Cluster; setCluster: Dispatch<SetStateAction<Cluster>>; rpcHost: string } | undefined
@@ -12,7 +15,7 @@ const clusters = {
 }
 
 export function ClusterProvider({ children }: { children: ReactNode }) {
-  const [cluster, setCluster] = useState<Cluster>("mainnet")
+  const [cluster, setCluster] = useState<Cluster>(Cluster.MAINNET)
 
   return (
     <Context.Provider value={{ cluster, setCluster, rpcHost: clusters[cluster] || (clusters.mainnet as string) }}>
