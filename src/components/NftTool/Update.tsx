@@ -140,6 +140,7 @@ export function UpdateNft() {
     if (publicKey) {
       try {
         const nft = await fetchDigitalAssetWithTokenByMint(umi, umiPublicKey(publicKey))
+        console.log({ nft })
 
         if (
           isSome(nft.metadata.tokenStandard) &&
@@ -152,7 +153,9 @@ export function UpdateNft() {
           )
           return
         } else {
+          console.log("getting json")
           let json = await fetchJsonMetadata(umi, nft.metadata.uri)
+          console.log("got json", json)
           if (typeof json === "string") {
             json = JSON.parse(json)
           }
