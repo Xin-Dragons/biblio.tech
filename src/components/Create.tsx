@@ -180,7 +180,7 @@ export const Create = () => {
         )
       }
 
-      const fee = getFee("createSpl", account)
+      const fee = getFee("token-tool.create", account)
 
       if (fee) {
         txn = txn.add(
