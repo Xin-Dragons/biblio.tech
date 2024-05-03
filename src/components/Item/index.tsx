@@ -56,7 +56,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { CopyAddress } from "../CopyAddress"
 import LockOpenIcon from "@mui/icons-material/LockOpen"
-import { Listing, Listing as ListingType, Loan, Nft, RarityTier, Tag } from "../../db"
+import { type Listing, type Loan, type Nft, type RarityTier, type Tag } from "../../db"
 import {
   DigitalAssetWithToken,
   TokenDelegateRole,

@@ -8,7 +8,7 @@ import { toast } from "react-hot-toast"
 import { UpdateTag } from "../UpdateTag"
 import { FC, useState } from "react"
 import { useTheme } from "../../context/theme"
-import { Collection, Nft, Tag, Tag as TagType } from "../../db"
+import { type Tag } from "../../db"
 import { ChipPropsColorOverrides } from "@mui/material/Chip"
 import { CollectionItem } from "../../pages/collections"
 import { noop } from "lodash"
@@ -19,7 +19,7 @@ import { useNfts } from "../../context/nfts"
 
 type TagProps = {
   isSelected: boolean
-  tag: TagType & { numNfts?: number }
+  tag: Tag & { numNfts?: number }
   addToTag: Function
   removeFromTag: Function
   clip?: boolean
@@ -101,7 +101,7 @@ export const TagList: FC<TagListProps> = ({ edit, clip, clearAll = true }) => {
     }
   }
 
-  async function removeFromTag(tag: TagType) {
+  async function removeFromTag(tag: Tag) {
     try {
       if (!tag) {
         throw new Error("Missing tag")
@@ -181,7 +181,7 @@ export const TagList: FC<TagListProps> = ({ edit, clip, clearAll = true }) => {
             }
             return b.name.localeCompare(a.name)
           })
-          .map((tag: TagType) => {
+          .map((tag: Tag) => {
             const selectedNfts = taggedNfts.filter((n) => n.tagId === tag.id).map((n) => n.nftId)
             return (
               <Tag
