@@ -63,6 +63,7 @@ import {
   TokenStandard,
   fetchDigitalAssetWithToken,
   fetchDigitalAssetWithTokenByMint,
+  fetchJsonMetadata,
   revokeUtilityV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../../context/umi"
@@ -80,11 +81,36 @@ import Crown from "../Listing/crown.svg"
 import { useSelection } from "../../context/selection"
 import { OfferedLoan, OrderBook } from "@sharkyfi/client"
 import { useCitrus } from "../../context/citrus"
-import { publicKey, unwrapOption } from "@metaplex-foundation/umi"
+import { publicKey, transactionBuilder, unwrapOption } from "@metaplex-foundation/umi"
 import { useCrow } from "../../apps/crow"
 import { Crow, CrowWithAssets, CrowWithPublicKeyAndAssets } from "../../apps/crow/types/types"
 import { findCrowPda } from "../../apps/crow/pdas"
 import { toWeb3JsPublicKey } from "@metaplex-foundation/umi-web3js-adapters"
+import { SPL_TOKEN_PROGRAM_ID } from "@metaplex-foundation/mpl-toolbox"
+import {
+  ASSET_PROGRAM_ID,
+  Asset,
+  ExtensionType,
+  State,
+  delegateInput,
+  fetchAsset,
+  getExtension,
+  revoke as revokeNifty,
+} from "@nifty-oss/asset"
+import {
+  AssetV1,
+  CollectionV1,
+  MPL_CORE_PROGRAM_ID,
+  PluginType,
+  fetchAssetV1,
+  fetchCollectionV1,
+  removePluginV1,
+} from "@metaplex-foundation/mpl-core"
+import { packTx, sendAllTxsWithRetries } from "../../helpers/transactions"
+import { usePriorityFees } from "../../context/priority-fees"
+import { base64 } from "@metaplex-foundation/umi/serializers"
+import { useStake } from "../../apps/stake"
+import { StakeRecord, StakeRecordWithPublicKey, Staker, StakerWithPublicKey } from "../../apps/stake/types/types"
 
 type Category = "image" | "video" | "audio" | "vr" | "web"
 const SECONDS_PER_DAY = 86_400
@@ -106,6 +132,8 @@ const tokenStandards = {
   3: "NFT Edition",
   4: "pNFT",
   5: "OCP NFT",
+  6: "Nifty OSS",
+  7: "Core",
 }
 
 interface CircularProgressWithLabelProps extends CircularProgressProps {
@@ -482,12 +510,13 @@ export interface ItemProps {
   layoutSize?: LayoutSize
 }
 
-type Asset = {
-  type: string
+type Media = {
+  type?: string
   uri: string
+  contentType: string
 }
 
-export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
+export const Media: FC<{ asset?: Media | null }> = ({ asset }) => {
   const { lightMode } = useUiSettings()
   if (!asset) {
     return (
@@ -498,7 +527,7 @@ export const Asset: FC<{ asset?: Asset | null }> = ({ asset }) => {
       />
     )
   }
-  const multimediaType = getMultimediaType(asset.type.split("/")[1].split(";")[0]) || "image"
+  const multimediaType = getMultimediaType(asset.contentType.split("/")[1].split(";")[0]) || "image"
 
   if (multimediaType === "image") {
     return (
@@ -571,12 +600,9 @@ async function getType(uri: string) {
   uri = uri.replace("ipfs://", "https://ipfs.io/ipfs/")
   try {
     const { headers } = await axios.get(uri)
-    const type = headers["content-type"]
+    const contentType = headers["content-type"]
 
-    return {
-      uri,
-      type,
-    }
+    return contentType
   } catch (err) {
     console.error(err)
     return
@@ -1023,8 +1049,8 @@ const BestLoan: FC<{ item: Nft; onClose: Function }> = ({ item, onClose }) => {
 export const ItemDetails = ({ item }: { item: Nft }) => {
   const { setOpen } = useDialog()
   const [assetIndex, setAssetIndex] = useState(0)
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [asset, setAsset] = useState<Asset | null>(null)
+  const [assets, setAssets] = useState<Media[]>([])
+  const [asset, setAsset] = useState<Media | null>(null)
   const { db } = useDatabase()
   const { tags, removeNftsFromTag, addNftsToTag } = useTags()
   const { isInScope } = useAccess()
@@ -1035,10 +1061,41 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   const umi = useUmi()
   const { lightMode, payRoyalties } = useUiSettings()
   const [metadataShowing, setMetadataShowing] = useState(false)
-  const [da, setDa] = useState<DigitalAssetWithToken | null>(null)
+  const [da, setDa] = useState<DigitalAssetWithToken | Asset | AssetV1 | null>(null)
+  const [collectionAsset, setCollectionAsset] = useState<Asset | CollectionV1 | null>(null)
   const [crow, setCrow] = useState<CrowWithPublicKeyAndAssets | null>(null)
   const crowProgram = useCrow()
+  const [stakeRecord, setStakeRecord] = useState<StakeRecordWithPublicKey | null>(null)
+  const [staker, setStaker] = useState<Staker | null>(null)
+  const stakeProgram = useStake()
+  const { connection } = useConnection()
+  const { feeLevel } = usePriorityFees()
+  const [json, setJson] = useState(item.json)
   const wallet = useWallet()
+
+  useEffect(() => {
+    if (!da) {
+      setCollectionAsset(null)
+      return
+    }
+    ;(async () => {
+      if ("extensions" in da) {
+        if (da.group) {
+          const collectionAsset = await fetchAsset(umi, da.group)
+          setCollectionAsset(collectionAsset)
+        } else {
+          setCollectionAsset(null)
+        }
+      } else if ("uri" in da) {
+        if (da.updateAuthority.type === "Collection" && da.updateAuthority.address) {
+          const collectionAsset = await fetchCollectionV1(umi, da.updateAuthority.address)
+          setCollectionAsset(collectionAsset)
+        } else {
+          setCollectionAsset(null)
+        }
+      }
+    })()
+  }, [da])
 
   useEffect(() => {
     if (!crowProgram || !item || isFungible(item.metadata.tokenStandard)) {
@@ -1069,6 +1126,35 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
     })()
   }, [crowProgram, item])
 
+  useEffect(() => {
+    if (!stakeProgram || !item || isFungible(item.metadata.tokenStandard)) {
+      setStaker(null)
+      setStakeRecord(null)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const stakeRecord = (
+          await stakeProgram.account.stakeRecord.all([
+            {
+              memcmp: {
+                bytes: item.nftMint,
+                offset: 72,
+              },
+            },
+          ])
+        )[0]
+
+        setStakeRecord(stakeRecord)
+        const staker = await stakeProgram.account.staker.fetch(stakeRecord.account.staker)
+        setStaker(staker)
+      } catch {
+        setStakeRecord(null)
+      }
+    })()
+  }, [stakeProgram, item])
+
   function toggleMetadataShowing() {
     setMetadataShowing(!metadataShowing)
   }
@@ -1087,27 +1173,97 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
   }
 
   async function getAssets() {
-    const assets = (
-      await Promise.all(
-        uniq([
-          ...(item.content?.links?.animation_url ? [item.content?.links.animation_url] : []),
-          ...(item.content?.links?.image ? [item.content?.links.image] : []),
-          ...(item.content?.files ? item.content.files.map((f) => f.uri) : []),
-        ]).map((item) => getType(item!))
-      )
-    ).filter((item) => item && item.type)
+    const assets: Media[] = []
+    if (da && "extensions" in da) {
+      const blob = getExtension(da, ExtensionType.Blob)
+      if (blob) {
+        const [base64Image] = base64.deserialize(new Uint8Array(blob.data))
+        const uri = `data:${blob.contentType};base64, ${base64Image}`
+        assets.push({
+          type: "blob",
+          uri,
+          contentType: blob.contentType,
+        })
+      }
+    }
 
-    setAssets(assets as Asset[])
+    if (json?.animation_url) {
+      assets.push({
+        uri: json.animation_url,
+        contentType: await getType(json.animation_url),
+      })
+    }
+
+    if (json?.image) {
+      assets.push({
+        uri: json.image,
+        contentType: await getType(json.image),
+      })
+    }
+
+    if (json?.properties?.files?.length) {
+      await Promise.all(
+        json.properties.files
+          .filter((f) => f.uri)
+          .map(async (file) => {
+            if (!assets.find((a) => a.uri === file.uri)) {
+              assets.push({
+                uri: file.uri!,
+                contentType: await getType(file.uri!),
+              })
+            }
+          })
+      )
+    }
+
+    setAssets(assets)
   }
 
   useEffect(() => {
     getAssets()
-  }, [])
+  }, [da, json])
+
+  useEffect(() => {
+    getJson()
+  }, [da])
+
+  async function getJson() {
+    if (!da) {
+      return
+    }
+
+    let uri
+
+    if ("metadata" in da) {
+      uri = da.metadata.uri
+    } else if ("extensions" in da) {
+      uri = getExtension(da, ExtensionType.Metadata)?.uri
+    } else if ("uri" in da) {
+      uri = da.uri
+    }
+
+    if (uri) {
+      try {
+        const json = await fetchJsonMetadata(umi, uri)
+        setJson(json)
+      } catch (err) {}
+    }
+  }
 
   async function fetchItem() {
     if (!item.compression?.compressed) {
-      const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
-      setDa(da)
+      const pk = publicKey(item.nftMint)
+      const acc = await umi.rpc.getAccount(pk)
+      if (acc.exists && acc.owner === SPL_TOKEN_PROGRAM_ID) {
+        const da = await fetchDigitalAssetWithTokenByMint(umi, publicKey(item.nftMint))
+        setDa(da)
+      } else if (acc.exists && acc.owner === ASSET_PROGRAM_ID) {
+        const asset = await fetchAsset(umi, pk)
+        setDa(asset)
+      } else if (acc.exists && acc.owner === MPL_CORE_PROGRAM_ID) {
+        const asset = await fetchAssetV1(umi, pk)
+        setDa(asset)
+      }
     }
   }
 
@@ -1149,37 +1305,124 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
         throw new Error(`Connect with ${shorten(item.ownership.owner)} to revoke this delegation`)
       }
       setRevoking(true)
-      let promise
-      if (item.compression?.compressed) {
-        const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
-        promise = delegate(umi, {
-          ...assetWithProof,
-          leafOwner: umi.identity,
-          previousLeafDelegate: publicKey(item.ownership.delegate!),
-          newLeafDelegate: publicKey(item.ownership.owner),
-        }).sendAndConfirm(umi)
-      } else {
-        promise = revokeUtilityV1(umi, {
-          mint: publicKey(item.nftMint),
-          authority: umi.identity,
-          tokenStandard: unwrapOption(da!.metadata.tokenStandard) || 0,
-          delegate: publicKey(tokenDelegate),
-        }).sendAndConfirm(umi)
-      }
+      const promise = Promise.resolve().then(async () => {
+        let tx = transactionBuilder()
+        if (item.compression?.compressed) {
+          const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+          tx = tx.add(
+            delegate(umi, {
+              ...assetWithProof,
+              leafOwner: umi.identity,
+              previousLeafDelegate: publicKey(item.ownership.delegate!),
+              newLeafDelegate: publicKey(item.ownership.owner),
+            })
+          )
+        } else if (da && "metadata" in da && tokenDelegate) {
+          tx = tx.add(
+            revokeUtilityV1(umi, {
+              mint: publicKey(item.nftMint),
+              authority: umi.identity,
+              tokenStandard: unwrapOption(da!.metadata.tokenStandard) || 0,
+              delegate: publicKey(tokenDelegate),
+            })
+          )
+        } else if (da && "extensions" in da) {
+          if (da.state === State.Locked) {
+            throw new Error("Asset is locked")
+          }
+          tx = tx.add(
+            revokeNifty(umi, {
+              asset: publicKey(item.nftMint),
+              delegateInput: delegateInput("All"),
+            })
+          )
+        } else if (da && "uri" in da) {
+          if (da.freezeDelegate?.frozen || da.permanentFreezeDelegate?.frozen) {
+            throw new Error("Asset is frozen, cannot remove delegate")
+          }
+          if (!da.freezeDelegate && !da.transferDelegate) {
+            throw new Error("No delegate to remove")
+          }
+          if (da.freezeDelegate) {
+            tx = tx.add(
+              removePluginV1(umi, {
+                asset: publicKey(item.nftMint),
+                pluginType: PluginType.FreezeDelegate,
+              })
+            )
+          }
 
-      toast.promise(promise, {
-        loading: "Revoking auth",
-        success: "Auth revoked",
-        error: "Error revoking auth",
+          if (da.transferDelegate) {
+            tx = tx.add(
+              removePluginV1(umi, {
+                asset: publicKey(item.nftMint),
+                pluginType: PluginType.TransferDelegate,
+              })
+            )
+          }
+        }
+
+        const { chunks, txFee } = await packTx(umi, tx, feeLevel)
+        const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
+        await sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
       })
 
+      toast.promise(promise, { loading: "Revoking authority", success: "Revoked", error: "Error revoking authority" })
+
       await promise
+
       await revokeDelegate([item])
     } catch (err: any) {
       console.log(err)
       toast.error(err.message || "Error revoking")
     } finally {
       setRevoking(false)
+    }
+  }
+
+  const isLegacy = da && "metadata" in da
+  const isNifty = da && "extensions" in da
+  const isCore = da && "uri" in da
+
+  let royalties = item.metadata.sellerFeeBasisPoints
+
+  if (royalties === undefined || royalties === null) {
+    if (collectionAsset) {
+      if ("extensions" in collectionAsset) {
+        const royaltiesExtension = getExtension(collectionAsset, ExtensionType.Royalties)
+        if (royaltiesExtension) {
+          royalties = Number(royaltiesExtension.basisPoints)
+        }
+      } else if ("uri" in collectionAsset) {
+        if (collectionAsset.royalties) {
+          royalties = Number(collectionAsset.royalties.basisPoints)
+        }
+      }
+    }
+  }
+
+  type Trait = { trait_type: string; value: any }
+
+  let traits: Array<Trait> = (json?.attributes as Trait[]) || []
+
+  if (isNifty) {
+    const ext = getExtension(da, ExtensionType.Attributes)
+    if (ext) {
+      traits = ext.values.map((v) => {
+        return {
+          trait_type: v.name,
+          value: v.value,
+        }
+      })
+    }
+  } else if (isCore) {
+    if (da.attributes) {
+      traits = da.attributes.attributeList.map((t) => {
+        return {
+          trait_type: t.key,
+          value: t.value,
+        }
+      })
     }
   }
 
@@ -1201,7 +1444,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 },
               }}
             >
-              {item.nftMint === USDC ? <img src="/usdc.png" width="100%" /> : <Asset asset={asset} />}
+              {item.nftMint === USDC ? <img src="/usdc.png" width="100%" /> : <Media asset={asset} />}
 
               {assets.length > 1 && (
                 <Stack
@@ -1273,17 +1516,19 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                 royaltiesEnforced={[4, 5].includes(item.metadata.tokenStandard || 0)}
               />
             )}
-            {item.status !== "loaned" && item.chain === "solana" && isInScope && !item.compression?.compressed && (
-              <BestLoan item={item} onClose={() => setOpen(false)} />
-            )}
+            {item.status !== "loaned" &&
+              item.chain === "solana" &&
+              isInScope &&
+              !item.compression?.compressed &&
+              isLegacy && <BestLoan item={item} onClose={() => setOpen(false)} />}
           </Stack>
         </Box>
         <CardContent sx={{ width: "100%" }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Typography variant="h4" fontFamily="Lato" fontWeight="bold">
-              {item.json?.name || item.metadata.name}
+              {json?.name || item.metadata.name}
             </Typography>
-            <Typography color="primary">{item.json?.symbol || item.metadata.symbol}</Typography>
+            <Typography color="primary">{json?.symbol || item.metadata.symbol}</Typography>
           </Stack>
           <hr />
           <Stack spacing={2}>
@@ -1296,7 +1541,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                   <TableRow>
                     <TableCell>
                       <Typography fontWeight="bold" color="primary">
-                        Mint address
+                        Address
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
@@ -1430,7 +1675,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
-                      <Typography>{item.metadata.sellerFeeBasisPoints / 100}%</Typography>
+                      <Typography>{royalties || 0 / 100}%</Typography>
                     </TableCell>
                   </TableRow>
                 )}
@@ -1442,9 +1687,13 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
-                      <Typography>
-                        {item.status === "linked" ? "Linked to Biblio" : statusTitles[item.status as keyof object]}
-                      </Typography>
+                      {staker ? (
+                        <Link href={`https://stake.xinlabs.io/${staker.slug}`}>STAKED</Link>
+                      ) : (
+                        <Typography>
+                          {item.status === "linked" ? "Linked to Biblio" : statusTitles[item.status as keyof object]}
+                        </Typography>
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
@@ -1458,7 +1707,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
                     </TableCell>
                     <TableCell sx={{ textAlign: "right" }}>
                       <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={2}>
-                        {wallet.publicKey?.toBase58() === item.ownership.owner && (
+                        {wallet.publicKey?.toBase58() === item.ownership.owner && !item.status && (
                           <Button variant="outlined" color="error" disabled={revoking} onClick={revoke}>
                             Revoke
                           </Button>
@@ -1476,9 +1725,9 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             <Typography variant="h5" fontWeight="bold" fontFamily="Lato" color="primary">
               Traits
             </Typography>
-            {item.content?.metadata?.attributes?.length ? (
+            {traits.length ? (
               <Stack direction="row" spacing={0} sx={{ flexWrap: "wrap", gap: 1 }}>
-                {(item.content?.metadata?.attributes || []).map((att, index) => (
+                {(traits || []).map((att, index) => (
                   <Box
                     key={index}
                     sx={{ borderRadius: "5px", border: "1px solid", padding: 1, borderColor: "primary.main" }}
@@ -1493,6 +1742,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
             ) : (
               <Typography variant="h6">None</Typography>
             )}
+
             {isInScope && !router.query.publicKey && (
               <>
                 <Typography variant="h5" fontFamily="Lato" color="primary" fontWeight="bold">
@@ -1536,7 +1786,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
           }}
         >
           <CardContent>
-            <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(item.json, null, 2)}</pre>
+            <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(json, null, 2)}</pre>
           </CardContent>
         </Card>
       </Dialog>
@@ -1591,7 +1841,7 @@ export const Item: FC<ItemProps> = ({
 }) => {
   const { selected, select } = useSelection()
   const theme = useTheme()
-  const { updateItem } = useDatabase()
+  const { setImage } = useDatabase()
   const { layoutSize: settingsLayoutSize, showInfo: settingsShowInfo, showAllWallets, lightMode } = useUiSettings()
   const { rarity } = useNfts()
   const { renderItem } = useDialog()
@@ -1599,7 +1849,44 @@ export const Item: FC<ItemProps> = ({
   const { addNftToStarred, removeNftFromStarred, starredNfts } = useTags()
   const [isTouchDevice, setIsTouchDevice] = useState(false)
   const [crow, setCrow] = useState<Crow | null>(null)
+  const [stakeRecord, setStakeRecord] = useState<StakeRecordWithPublicKey | null>(null)
+  const [image, setImageState] = useState(item.content?.links?.image)
   const crowProgram = useCrow()
+  const stakeProgram = useStake()
+  const umi = useUmi()
+
+  useEffect(() => {
+    if (image) {
+      return
+    }
+
+    ;(async () => {
+      let image
+      if (item.nftMint === USDC) {
+        image = "/usdc.png"
+      } else if (item.content?.links?.image) {
+        image = item.content?.links?.image.replace("ipfs://", "https://ipfs.io/ipfs/")
+      } else if (item.content?.json_uri) {
+        try {
+          const json = await fetchJsonMetadata(umi, item.content.json_uri)
+          await setImage(item, json.image)
+          image = json.image
+        } catch {
+          console.log(item.content.json_uri)
+        }
+      }
+
+      if (image) {
+        setImageState(
+          layoutSize === "collage" || enlarged
+            ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
+            : `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image}`
+        )
+      } else {
+        setImageState(lightMode ? "/books-lightest.svg" : "/books-lighter.svg")
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     if (isFungible(item.metadata.tokenStandard)) {
@@ -1613,6 +1900,32 @@ export const Item: FC<ItemProps> = ({
         setCrow(crow || null)
       } catch {
         setCrow(null)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (isFungible(item.metadata.tokenStandard)) {
+      setStakeRecord(null)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const stakeRecord = (
+          await stakeProgram.account.stakeRecord.all([
+            {
+              memcmp: {
+                bytes: item.nftMint,
+                offset: 72,
+              },
+            },
+          ])
+        )[0]
+
+        setStakeRecord(stakeRecord)
+      } catch {
+        setStakeRecord(null)
       }
     })()
   }, [])
@@ -1732,18 +2045,7 @@ export const Item: FC<ItemProps> = ({
     setIsTouchDevice(isTouchDevice)
   }, [])
 
-  let image
-  if (item.nftMint === USDC) {
-    image = "/usdc.png"
-  } else if (item.content?.links?.image) {
-    image = item.content?.links?.image.replace("ipfs://", "https://ipfs.io/ipfs/")
-    image =
-      layoutSize === "collage" || enlarged
-        ? `https://img-cdn.magiceden.dev/rs:fill:600/plain/${image}`
-        : `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image}`
-  } else {
-    image = lightMode ? "/books-lightest.svg" : "/books-lighter.svg"
-  }
+  const isNextGen = [6, 7].includes(item.metadata.tokenStandard)
 
   return (
     <Card
@@ -1935,25 +2237,19 @@ export const Item: FC<ItemProps> = ({
             </Stack>
           ) : (
             crow && (
-              <Link href={`https://crow.so/crow/${item.id}`} target="_blank" rel="noreferrer">
-                <img
-                  src="/crow.png"
-                  width={
-                    {
-                      small: "20px",
-                      medium: "30px",
-                      large: "40px",
-                      collage: "40px",
-                    }[layoutSize]
-                  }
-                  style={{
+              <Link href={`https://crow.so/crow/${item.id}`} target="_blank">
+                <Box
+                  sx={{
                     position: "absolute",
-                    left: "0.5em",
-                    top: "0.5em",
-                    fontWeight: "bold",
+                    top: "3%",
+                    left: "3%",
+                    width: "15%",
+                    height: "15%",
                     cursor: "pointer",
                   }}
-                />
+                >
+                  <img width={"100%"} src="/crow.png" style={{ display: "block" }} />
+                </Box>
               </Link>
             )
           )}
@@ -1994,11 +2290,34 @@ export const Item: FC<ItemProps> = ({
                 fontSize: { small: "10px", medium: "12px", large: "14px", collage: "16px" }[layoutSize],
               }}
               backgroundColor={
-                item.delegate && !item.status ? theme.palette.error.dark : statusColors[item.status as keyof object]
+                item.delegate && !item.status
+                  ? theme.palette.error.dark
+                  : statusColors[(stakeRecord ? "staked" : item.status) as keyof object]
               }
             >
-              {item.delegate && !item.status ? "DELEGATED" : statusTitles[item.status as keyof object]}
+              {stakeRecord
+                ? "STAKED"
+                : item.delegate && !item.status
+                ? "DELEGATED"
+                : statusTitles[item.status as keyof object]}
             </CornerRibbon>
+          )}
+          {isNextGen && showInfo && (
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: "3%",
+                left: "3%",
+                width: "15%",
+                height: "15%",
+              }}
+            >
+              <img
+                src={item.metadata.tokenStandard === 6 ? "/nifty-dark.png" : "/metaplex.png"}
+                style={{ display: "block" }}
+                width="100%"
+              />
+            </Box>
           )}
           {showInfo &&
             item.status === "listed" &&

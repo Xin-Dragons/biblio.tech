@@ -44,7 +44,7 @@ import { TagList } from "../TagList"
 
 import VaultIcon from "./vault.svg"
 import PlaneIcon from "./plane.svg"
-import { Close, CoPresentOutlined, Image, Label, LocalFireDepartment, Sell } from "@mui/icons-material"
+import { Close, CoPresentOutlined, Image, Label, LocalFireDepartment, Receipt, Sell } from "@mui/icons-material"
 import { useAccess } from "../../context/access"
 import { useSelection } from "../../context/selection"
 import { useNfts } from "../../context/nfts"
@@ -59,6 +59,13 @@ import { useDatabase } from "../../context/database"
 import { useTransactionStatus } from "../../context/transactions"
 import { Metadata, toBigNumber } from "@metaplex-foundation/js"
 import { ConcurrentMerkleTreeAccount } from "@solana/spl-account-compression"
+import { burn as burnNifty, fetchAsset, transfer as transferNifty } from "@nifty-oss/asset"
+import {
+  MPL_CORE_PROGRAM_ID,
+  burnV1 as burnCore,
+  fetchAssetV1,
+  transferV1 as transferCore,
+} from "@metaplex-foundation/mpl-core"
 import {
   DigitalAssetWithToken,
   TokenStandard,
@@ -80,13 +87,14 @@ import { Connection } from "@solana/web3.js"
 import { useRouter } from "next/router"
 import { useSharky } from "../../context/sharky"
 import {
+  SPL_TOKEN_PROGRAM_ID,
   closeToken,
   createLutForTransactionBuilder,
   fetchToken,
   findAssociatedTokenPda,
   transferSol,
 } from "@metaplex-foundation/mpl-toolbox"
-import { buildTransactions, getUmiChunks, notifyStatus, signAllTransactions } from "../../helpers/transactions"
+import { buildTransactions, getUmiChunks, notifyStatus, packTx, signAllTransactions } from "../../helpers/transactions"
 import { Listing } from "../Listing"
 import { useTensor } from "../../context/tensor"
 import { getAddressType, shorten } from "../../helpers/utils"
@@ -101,6 +109,7 @@ import { burn, getAssetWithProof, transfer } from "@metaplex-foundation/mpl-bubb
 import base58 from "bs58"
 import { getFee } from "../NftTool/helpers/utils"
 import { usePriorityFees } from "../../context/priority-fees"
+import { ASSET_PROGRAM_ID } from "@nifty-oss/asset"
 
 const WalletPeek: FC<{ address: string }> = ({ address }) => {
   const router = useRouter()
@@ -169,23 +178,26 @@ export const Actions: FC = () => {
   const showMinMenu = useMediaQuery("(max-width:1050px)")
 
   const { deleteNfts, updateOwnerForNfts } = useDatabase()
-  const { sendSignedTransactions } = useTransactionStatus()
+  const { sendSignedTransactionsWithRetries } = useTransactionStatus()
 
   const selectedItems = selected.map((nftMint) => filtered.find((f) => f.nftMint === nftMint)).filter(Boolean) as Nft[]
 
   const onlyNftsSelected = selectedItems.every((item) => {
-    return [0, 3, 4].includes(item?.metadata.tokenStandard)
+    return [0, 3, 4, 6, 7].includes(item?.metadata.tokenStandard)
   })
 
   const frozenSelected = selectedItems.some(
-    (item) => item?.status && ["frozen", "inVault", "staked"].includes(item?.status)
+    (item) => item?.status && ["frozen", "inVault", "staked", "listed"].includes(item?.status)
   )
   const statusesSelected = selectedItems.some((item) => item?.status)
   const nonInVaultStatusesSelected = selectedItems.some((item) => item?.status && item?.status !== "inVault")
   const compressedSelected = selectedItems.some((item) => item?.compression?.compressed)
   const nonListedStatusSelected = selectedItems.some((item) => item?.status && item?.status !== "listed")
+  const nextGenSelected = selectedItems.some((item) => [6, 7].includes(item.metadata.tokenStandard))
   const allInVault = selectedItems.every((item: any) => item?.status === "inVault")
-  const noneInVault = selectedItems.every((item: any) => !["frozen", "inVault", "staked"].includes(item?.status))
+  const noneInVault = selectedItems.every(
+    (item: any) => !["frozen", "inVault", "staked", "listed"].includes(item?.status)
+  )
   const nonOwnedSelected = selectedItems.some((item) => {
     return item?.owner !== wallet.publicKey?.toBase58() && item?.delegate !== wallet.publicKey?.toBase58()
   })
@@ -247,15 +259,6 @@ export const Actions: FC = () => {
     toggleBurnOpen()
   }
 
-  function isPublicKey(input: string) {
-    try {
-      new PublicKey(input)
-      return true
-    } catch {
-      return false
-    }
-  }
-
   async function bulkSend() {
     try {
       setSending(true)
@@ -266,139 +269,146 @@ export const Actions: FC = () => {
         throw new Error("Frozen NFTs in selection")
       }
 
-      const toSend = nfts.filter((n) => selected.includes(n.id))
+      const toSend = nfts.filter((n) => selected.includes(n.nftMint))
 
-      const instructionSets = await Promise.all(
-        toSend.map(async (item: Nft) => {
-          if (
-            ![
-              TokenStandard.NonFungible,
-              TokenStandard.NonFungibleEdition,
-              TokenStandard.ProgrammableNonFungible,
-              TokenStandard.ProgrammableNonFungibleEdition,
-            ].includes(item.metadata.tokenStandard)
-          ) {
-            throw new Error("Cannot bulk send fungibles")
-          }
-          // let amount = BigInt(1)
-          // if ([1, 2].includes(item.tokenStandard || 0)) {
-          //   const token = await fetchToken()
-          //   const ata = metaplex
-          //     .tokens()
-          //     .pdas()
-          //     .associatedTokenAccount({ mint: item.mintAddress, owner: metaplex.identity().publicKey })
+      const promise = Promise.resolve().then(async () => {
+        let tx = transactionBuilder().add(
+          await Promise.all(
+            toSend.map(async (item: Nft) => {
+              const pk = publicKey(item.nftMint)
+              const acc = await umi.rpc.getAccount(pk)
+              const fee = getFee("biblio.send", account)
+              if (acc.exists && acc.owner === SPL_TOKEN_PROGRAM_ID) {
+                if (
+                  ![
+                    TokenStandard.NonFungible,
+                    TokenStandard.NonFungibleEdition,
+                    TokenStandard.ProgrammableNonFungible,
+                    TokenStandard.ProgrammableNonFungibleEdition,
+                  ].includes(item.metadata.tokenStandard)
+                ) {
+                  throw new Error("Cannot bulk send fungibles")
+                }
 
-          //   const balance = await connection.getTokenAccountBalance(ata)
-          //   amount = BigInt(balance.value.amount)
-          // }
-          let txn = transactionBuilder()
+                if (item.compression?.compressed) {
+                  const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+                  let sliceIndex = assetWithProof.proof.length
 
-          if (item.compression?.compressed) {
-            const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
-            let sliceIndex = assetWithProof.proof.length
+                  const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
+                    connection,
+                    new PublicKey(item.compression.tree)
+                  )
 
-            const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
-              connection,
-              new PublicKey(item.compression.tree)
-            )
+                  const canopyDepth = treeAccount.getCanopyDepth()
 
-            const canopyDepth = treeAccount.getCanopyDepth()
+                  if (canopyDepth) {
+                    sliceIndex = assetWithProof.proof.length - canopyDepth
+                  }
+                  sliceIndex = Math.min(sliceIndex, 22)
 
-            if (canopyDepth) {
-              sliceIndex = assetWithProof.proof.length - canopyDepth
-            }
+                  const proof = assetWithProof.proof.slice(0, sliceIndex)
+                  return transfer(umi, {
+                    ...assetWithProof,
+                    proof,
+                    leafOwner: publicKey(assetWithProof.leafOwner),
+                    newLeafOwner: publicKey(recipient),
+                  })
+                } else {
+                  const mint = publicKey(item.id)
+                  const destinationOwner = publicKey(recipient.publicKey)
+                  const owner = publicKey(item.ownership.owner)
 
-            sliceIndex = Math.min(sliceIndex, 22)
+                  const token = findAssociatedTokenPda(umi, {
+                    mint,
+                    owner,
+                  })
 
-            const proof = assetWithProof.proof.slice(0, sliceIndex)
-            txn = txn.add(
-              transfer(umi, {
-                ...assetWithProof,
-                proof,
-                leafOwner: publicKey(assetWithProof.leafOwner),
-                newLeafOwner: publicKey(recipient),
-              })
-            )
-          } else {
-            const mint = publicKey(item.id)
-            const destinationOwner = publicKey(recipient.publicKey)
-            const owner = publicKey(item.ownership.owner)
-
-            const token = findAssociatedTokenPda(umi, {
-              mint,
-              owner,
+                  return transferV1(umi, {
+                    destinationToken: findAssociatedTokenPda(umi, {
+                      mint,
+                      owner: destinationOwner,
+                    }),
+                    destinationOwner,
+                    mint,
+                    tokenStandard: item.metadata.tokenStandard,
+                    token,
+                    tokenOwner: owner,
+                    amount: 1,
+                    authority: createNoopSigner(owner),
+                  })
+                    .add(
+                      closeToken(umi, {
+                        account: token,
+                        destination: umi.identity.publicKey,
+                        owner: createNoopSigner(owner),
+                      })
+                    )
+                    .add(
+                      fee > 0
+                        ? transferSol(umi, {
+                            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                            amount: sol(fee),
+                          })
+                        : transactionBuilder()
+                    )
+                }
+              } else if (acc.exists && acc.owner === ASSET_PROGRAM_ID) {
+                const asset = await fetchAsset(umi, pk)
+                return transferNifty(umi, {
+                  asset: pk,
+                  recipient: publicKey(recipient),
+                  group: asset.group || undefined,
+                }).add(
+                  fee > 0
+                    ? transferSol(umi, {
+                        destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                        amount: sol(fee),
+                      })
+                    : transactionBuilder()
+                )
+              } else if (acc.exists && acc.owner === MPL_CORE_PROGRAM_ID) {
+                const asset = await fetchAssetV1(umi, pk)
+                return transferCore(umi, {
+                  asset: asset.publicKey,
+                  newOwner: publicKey(recipient),
+                  collection: asset.updateAuthority.type === "Collection" ? asset.updateAuthority.address : undefined,
+                }).add(
+                  fee > 0
+                    ? transferSol(umi, {
+                        destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                        amount: sol(fee),
+                      })
+                    : transactionBuilder()
+                )
+              } else {
+                return transactionBuilder()
+              }
             })
+          )
+        )
 
-            txn = txn.add(
-              transferV1(umi, {
-                destinationToken: findAssociatedTokenPda(umi, {
-                  mint,
-                  owner: destinationOwner,
-                }),
-                destinationOwner,
-                mint,
-                tokenStandard: item.metadata.tokenStandard,
-                token,
-                tokenOwner: owner,
-                amount: 1,
-                authority: createNoopSigner(owner),
-              })
-            )
+        const { chunks, txFee } = await packTx(umi, tx, feeLevel)
+        const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
 
-            txn = txn.add(
-              closeToken(umi, {
-                account: token,
-                destination: umi.identity.publicKey,
-                owner: createNoopSigner(owner),
-              })
-            )
+        const { errs, successes } = await sendSignedTransactionsWithRetries(
+          signed,
+          "send",
+          updateOwnerForNfts,
+          recipient.publicKey
+        )
 
-            const fee = getFee("biblio.send", account)
-
-            if (fee > 0) {
-              txn = txn.add(
-                transferSol(umi, {
-                  destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                  amount: sol(fee),
-                })
-              )
-            }
-          }
-
-          return {
-            instructions: txn,
-            mint: item.id,
-          }
-        })
-      )
-
-      const chunks = getUmiChunks(umi, instructionSets)
-      const txns = await buildTransactions(umi, chunks)
-
-      setBypassWallet(true)
-
-      const signers = uniq(flatten(txns.map((t) => t.signers.map((s) => s.publicKey)))).sort((item: string) =>
-        item === wallet.publicKey?.toBase58() ? -1 : 1
-      )
-
-      const signedTransactions = await signAllTransactions(
-        wallet,
-        umi,
-        txns.map((t) => t.txn),
-        signers
-      )
+        // return await sendAllTxsWithRetries(umi, program.provider.connection, signed, txFee ? 1 : 0)
+      })
 
       setBulkSendOpen(false)
 
-      const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
-        txns.map((t) => t.mints),
-        "send",
-        updateOwnerForNfts,
-        recipient.publicKey
-      )
+      toast.promise(promise, {
+        loading: "Transferring assets",
+        success: "Assets transferred successfully",
+        error: "Error transferring assets",
+      })
 
-      notifyStatus(errs, successes, "send", "sent")
+      await promise
     } catch (err: any) {
       console.error(err.stack)
       toast.error(err.message)
@@ -458,158 +468,189 @@ export const Actions: FC = () => {
       if (nonOwnedSelected) {
         throw new Error("Some selected items are owned by a linked wallet")
       }
-      const toBurn = await Promise.all(
-        filtered
-          .filter((n: Nft) => selected.includes(n.nftMint))
-          // .filter((n: Nft) => !n.compression?.compressed)
-          .map(async (item: Nft) => {
-            if (item.compression?.compressed) {
-              const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
-              let sliceIndex = assetWithProof.proof.length
+      const promise = Promise.resolve().then(async () => {
+        const fee = getFee(`biblio.burn-non-fungible`, account)
+        let tx = transactionBuilder().add(
+          await Promise.all(
+            filtered
+              .filter((n: Nft) => selected.includes(n.nftMint))
+              // .filter((n: Nft) => !n.compression?.compressed)
+              .map(async (item: Nft) => {
+                if (item.compression?.compressed) {
+                  const assetWithProof = await getAssetWithProof(umi, publicKey(item.id))
+                  let sliceIndex = assetWithProof.proof.length
 
-              const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
-                connection,
-                new PublicKey(item.compression.tree)
-              )
+                  const treeAccount = await ConcurrentMerkleTreeAccount.fromAccountAddress(
+                    connection,
+                    new PublicKey(item.compression.tree)
+                  )
 
-              const canopyDepth = treeAccount.getCanopyDepth()
+                  const canopyDepth = treeAccount.getCanopyDepth()
 
-              if (canopyDepth) {
-                sliceIndex = assetWithProof.proof.length - canopyDepth
-              }
+                  if (canopyDepth) {
+                    sliceIndex = assetWithProof.proof.length - canopyDepth
+                  }
 
-              sliceIndex = Math.min(sliceIndex, 22)
+                  sliceIndex = Math.min(sliceIndex, 22)
 
-              const proof = assetWithProof.proof.slice(0, sliceIndex)
+                  const proof = assetWithProof.proof.slice(0, sliceIndex)
 
-              const burnTx = burn(umi, {
-                ...assetWithProof,
-                proof,
-                leafOwner: publicKey(item.ownership.owner),
-              })
+                  return burn(umi, {
+                    ...assetWithProof,
+                    proof,
+                    leafOwner: publicKey(item.ownership.owner),
+                  }).add(
+                    fee > 0
+                      ? transferSol(umi, {
+                          destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                          amount: sol(fee),
+                        })
+                      : transactionBuilder()
+                  )
+                } else {
+                  const pk = publicKey(item.nftMint)
+                  const acc = await umi.rpc.getAccount(pk)
+                  if (acc.exists && acc.owner === SPL_TOKEN_PROGRAM_ID) {
+                    const digitalAsset = await fetchDigitalAsset(umi, pk)
+                    const tokenStandard = unwrapOption(digitalAsset.metadata.tokenStandard)
+                    let masterEditionMint: UmiPublicKey | undefined = undefined
+                    let masterEditionToken
+                    const isEdition =
+                      isSome(digitalAsset.metadata.tokenStandard) &&
+                      digitalAsset.metadata.tokenStandard.value === TokenStandard.NonFungibleEdition &&
+                      !digitalAsset.edition?.isOriginal
+                    if (isEdition) {
+                      const masterEditionPda = findMasterEditionPda(umi, {
+                        mint: digitalAsset.publicKey,
+                      })
+                      // const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "confirmed" })
+                      // const sigs = await connection.getSignaturesForAddress(
+                      //   toWeb3JsPublicKey(
+                      //     !digitalAsset.edition?.isOriginal ? digitalAsset.edition?.parent! : digitalAsset.edition.publicKey
+                      //   )
+                      // )
+                      // const sig = sigs[sigs.length - 1]
+                      // const txn = await connection.getTransaction(sig.signature)
+                      // const key = txn?.transaction.message.accountKeys[1]!
 
-              return {
-                instructions: burnTx,
-                mint: item.id,
-              }
-            } else {
-              const digitalAsset = await fetchDigitalAsset(umi, publicKey(item.nftMint))
-              const tokenStandard = unwrapOption(digitalAsset.metadata.tokenStandard)
-              let masterEditionMint: UmiPublicKey | undefined = undefined
-              let masterEditionToken
-              const isEdition =
-                isSome(digitalAsset.metadata.tokenStandard) &&
-                digitalAsset.metadata.tokenStandard.value === TokenStandard.NonFungibleEdition &&
-                !digitalAsset.edition?.isOriginal
-              if (isEdition) {
-                const masterEditionPda = findMasterEditionPda(umi, {
-                  mint: digitalAsset.publicKey,
-                })
-                // const connection = new Connection(process.env.NEXT_PUBLIC_TXN_RPC_HOST!, { commitment: "confirmed" })
-                // const sigs = await connection.getSignaturesForAddress(
-                //   toWeb3JsPublicKey(
-                //     !digitalAsset.edition?.isOriginal ? digitalAsset.edition?.parent! : digitalAsset.edition.publicKey
-                //   )
-                // )
-                // const sig = sigs[sigs.length - 1]
-                // const txn = await connection.getTransaction(sig.signature)
-                // const key = txn?.transaction.message.accountKeys[1]!
+                      // console.log("Hi")
 
-                // console.log("Hi")
+                      const masterEditionDigitalAsset = await fetchDigitalAssetWithTokenByMint(umi, masterEditionPda[0])
+                      masterEditionMint = masterEditionDigitalAsset.mint.publicKey
+                      masterEditionToken = masterEditionDigitalAsset.token.publicKey
+                    }
+                    let amount = BigInt(1)
 
-                const masterEditionDigitalAsset = await fetchDigitalAssetWithTokenByMint(umi, masterEditionPda[0])
-                console.log("bye")
-                masterEditionMint = masterEditionDigitalAsset.mint.publicKey
-                masterEditionToken = masterEditionDigitalAsset.token.publicKey
-              }
-              let amount = BigInt(1)
+                    if ([TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard || 0)) {
+                      const ata = findAssociatedTokenPda(umi, {
+                        mint: digitalAsset.mint.publicKey,
+                        owner: umi.identity.publicKey,
+                      })
 
-              if ([TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard || 0)) {
-                const ata = findAssociatedTokenPda(umi, {
-                  mint: digitalAsset.mint.publicKey,
-                  owner: umi.identity.publicKey,
-                })
+                      const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata[0]))
+                      amount = BigInt(balance.value.amount)
+                    }
 
-                const balance = await connection.getTokenAccountBalance(toWeb3JsPublicKey(ata[0]))
-                amount = BigInt(balance.value.amount)
-              }
-
-              let digitalAssetWithToken: DigitalAssetWithToken | undefined = undefined
-              const isNonFungible = [0, 3, 4, 5].includes(unwrapSome(digitalAsset.metadata.tokenStandard) || 0)
-              if (isNonFungible) {
-                digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
-              }
-              let burnInstruction = burnV1(umi, {
-                mint: digitalAsset.mint.publicKey,
-                authority: umi.identity,
-                tokenOwner: umi.identity.publicKey,
-                tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
-                  ? digitalAsset.metadata.tokenStandard.value
-                  : 0,
-                metadata: digitalAsset.metadata.publicKey,
-                collectionMetadata: isSome(digitalAsset.metadata.collection)
-                  ? findMetadataPda(umi, { mint: digitalAsset.metadata.collection.value.key })
-                  : undefined,
-                edition: isEdition ? digitalAsset.edition?.publicKey : undefined,
-                token: isNonFungible ? digitalAssetWithToken?.token?.publicKey : undefined,
-                tokenRecord: isNonFungible ? digitalAssetWithToken?.tokenRecord?.publicKey : undefined,
-                masterEdition: isEdition
-                  ? digitalAsset.edition?.isOriginal
-                    ? digitalAsset.edition.publicKey
-                    : digitalAsset.edition?.parent
-                  : undefined,
-                masterEditionMint,
-                masterEditionToken,
-                amount,
-                editionMarker:
-                  isEdition && masterEditionMint
-                    ? fromWeb3JsPublicKey(
-                        metaplex
-                          .nfts()
-                          .pdas()
-                          .editionMarker({
-                            mint: toWeb3JsPublicKey(masterEditionMint!),
-                            edition: !digitalAsset.edition?.isOriginal
-                              ? toBigNumber(digitalAsset.edition?.edition.toString()!)
-                              : toBigNumber(0),
+                    let digitalAssetWithToken: DigitalAssetWithToken | undefined = undefined
+                    const isNonFungible = [0, 3, 4, 5].includes(unwrapSome(digitalAsset.metadata.tokenStandard) || 0)
+                    if (isNonFungible) {
+                      digitalAssetWithToken = await fetchDigitalAssetWithTokenByMint(umi, digitalAsset.mint.publicKey)
+                    }
+                    return burnV1(umi, {
+                      mint: digitalAsset.mint.publicKey,
+                      authority: umi.identity,
+                      tokenOwner: umi.identity.publicKey,
+                      tokenStandard: isSome(digitalAsset.metadata.tokenStandard)
+                        ? digitalAsset.metadata.tokenStandard.value
+                        : 0,
+                      metadata: digitalAsset.metadata.publicKey,
+                      collectionMetadata: isSome(digitalAsset.metadata.collection)
+                        ? findMetadataPda(umi, { mint: digitalAsset.metadata.collection.value.key })
+                        : undefined,
+                      edition: isEdition ? digitalAsset.edition?.publicKey : undefined,
+                      token: isNonFungible ? digitalAssetWithToken?.token?.publicKey : undefined,
+                      tokenRecord: isNonFungible ? digitalAssetWithToken?.tokenRecord?.publicKey : undefined,
+                      masterEdition: isEdition
+                        ? digitalAsset.edition?.isOriginal
+                          ? digitalAsset.edition.publicKey
+                          : digitalAsset.edition?.parent
+                        : undefined,
+                      masterEditionMint,
+                      masterEditionToken,
+                      amount,
+                      editionMarker:
+                        isEdition && masterEditionMint
+                          ? fromWeb3JsPublicKey(
+                              metaplex
+                                .nfts()
+                                .pdas()
+                                .editionMarker({
+                                  mint: toWeb3JsPublicKey(masterEditionMint!),
+                                  edition: !digitalAsset.edition?.isOriginal
+                                    ? toBigNumber(digitalAsset.edition?.edition.toString()!)
+                                    : toBigNumber(0),
+                                })
+                            )
+                          : undefined,
+                    }).add(
+                      fee > 0
+                        ? transferSol(umi, {
+                            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                            amount: sol(fee),
                           })
-                      )
-                    : undefined,
+                        : transactionBuilder()
+                    )
+                  } else if (acc.exists && acc.owner === ASSET_PROGRAM_ID) {
+                    const asset = await fetchAsset(umi, pk)
+                    return burnNifty(umi, {
+                      asset: pk,
+                      signer: umi.identity,
+                      group: asset.group || undefined,
+                    }).add(
+                      fee > 0
+                        ? transferSol(umi, {
+                            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                            amount: sol(fee),
+                          })
+                        : transactionBuilder()
+                    )
+                  } else if (acc.exists && acc.owner === MPL_CORE_PROGRAM_ID) {
+                    const asset = await fetchAssetV1(umi, pk)
+                    return burnCore(umi, {
+                      asset: pk,
+                      collection:
+                        asset.updateAuthority.type === "Collection" ? asset.updateAuthority.address : undefined,
+                    }).add(
+                      fee > 0
+                        ? transferSol(umi, {
+                            destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
+                            amount: sol(fee),
+                          })
+                        : transactionBuilder()
+                    )
+                  } else {
+                    return transactionBuilder()
+                  }
+                }
               })
+          )
+        )
 
-              const fee = getFee(`biblio.${isNonFungible ? "burn-non-fungible" : "burn-fungible"}`, account)
+        const { chunks, txFee } = await packTx(umi, tx, feeLevel)
+        const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
 
-              if (fee > 0) {
-                burnInstruction = burnInstruction.add(
-                  transferSol(umi, {
-                    destination: publicKey(process.env.NEXT_PUBLIC_FEES_WALLET!),
-                    amount: sol(fee),
-                  })
-                )
-              }
+        const { errs, successes } = await sendSignedTransactionsWithRetries(signed, "burn", deleteNfts, txFee ? 1 : 0)
+      })
 
-              return {
-                instructions: burnInstruction,
-                mint: item.nftMint,
-              }
-            }
-          })
-      )
       setBurnOpen(false)
 
-      const chunks = getUmiChunks(umi, toBurn as any)
+      toast.promise(promise, {
+        loading: "Burning assets",
+        success: "Assets burned",
+        error: "Error burning assets",
+      })
 
-      const txns = await buildTransactions(umi, chunks)
-      const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-
-      const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
-        txns.map((t) => t.mints),
-        "burn",
-        deleteNfts
-      )
-
-      notifyStatus(errs, successes, "burn", "burned")
+      await promise
     } catch (err: any) {
       console.error(err)
       toast.error(err.message)
@@ -746,7 +787,9 @@ export const Actions: FC = () => {
 
                     <Tooltip
                       title={
-                        nonOwnedSelected
+                        nextGenSelected
+                          ? "Next gen assets cannot be listed via biblio (yet)"
+                          : nonOwnedSelected
                           ? "Some selected items are owned by a linked wallet"
                           : nonListedStatusSelected
                           ? "Selection contains items that cannot be listed"
@@ -764,6 +807,7 @@ export const Actions: FC = () => {
                           disabled={
                             !selected.length ||
                             nonListedStatusSelected ||
+                            nextGenSelected ||
                             !canList ||
                             compressedSelected ||
                             !onlyNftsSelected ||
@@ -924,12 +968,12 @@ export const Actions: FC = () => {
               <Stack spacing={2}>
                 <Typography variant="h5">Selection</Typography>
                 <Stack>
-                  <Slider
+                  {/* <Slider
                     aria-label="Selection"
                     value={selected.length}
                     onChange={(e, value) => handleSelectionChange(value as number)}
                     max={filtered.length}
-                  />
+                  /> */}
                   <Typography textAlign="right">{selected.length} selected</Typography>
                 </Stack>
                 <Stack direction="row" spacing={2}>
@@ -1000,6 +1044,7 @@ export const Actions: FC = () => {
                     disabled={
                       !selected.length ||
                       nonListedStatusSelected ||
+                      nextGenSelected ||
                       !canList ||
                       !onlyNftsSelected ||
                       nonOwnedSelected ||

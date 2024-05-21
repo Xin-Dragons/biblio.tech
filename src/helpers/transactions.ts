@@ -1,4 +1,4 @@
-import { Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
+import { Signer, Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
 import { chunkBy } from "chunkier"
 import { flatten } from "lodash"
 import { toast } from "react-hot-toast"
@@ -9,6 +9,7 @@ import { MAX_TX_SIZE, PRIORITY_AND_COMPUTE_IXS_SIZE, PRIORITY_FEE_IX_SIZE, Prior
 import { base58 } from "@metaplex-foundation/umi/serializers"
 import { getPriorityFeesForTx } from "./helius"
 import { setComputeUnitLimit, setComputeUnitPrice } from "@metaplex-foundation/mpl-toolbox"
+import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
 
 export type InstructionSet = {
   instructions: TransactionBuilder
@@ -42,19 +43,17 @@ export async function buildTransactions(umi: Umi, chunks: InstructionSet[][]) {
   )
 }
 
-export function notifyStatus(errs: string[], successes: string[], type: string, pastTense: string) {
-  if (errs.length && !successes.length) {
-    toast.error(
-      `Failed to ${type} ${errs.length} item${errs.length === 1 ? "" : "s"}. Check the console for more details`
-    )
-  } else if (errs.length && successes.length) {
+export function notifyStatus(errs: number, successes: number, type: string, pastTense: string) {
+  if (errs && !successes) {
+    toast.error(`Failed to ${type} ${errs} item${errs === 1 ? "" : "s"}. Check the console for more details`)
+  } else if (errs && successes) {
     toast(
-      `${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully, ${
-        errs.length
-      } failed to ${type}. Check the console for more details`
+      `${successes} item${
+        successes === 1 ? "" : "s"
+      } ${pastTense} successfully, ${errs} failed to ${type}. Check the console for more details`
     )
-  } else if (successes.length && !errs.length) {
-    toast.success(`${successes.length} item${successes.length === 1 ? "" : "s"} ${pastTense} successfully`)
+  } else if (successes && !errs) {
+    toast.success(`${successes} item${successes === 1 ? "" : "s"} ${pastTense} successfully`)
   }
 }
 
@@ -62,11 +61,11 @@ export async function signAllTransactions(
   wallet: WalletContextState,
   umi: Umi,
   txns: Transaction[],
-  signers: string[]
+  signers: Signer[]
 ) {
   return signers.reduce(async (promise, signer, index) => {
     return promise.then(async (transactions) => {
-      if (wallet.publicKey?.toBase58() === signer) {
+      if (wallet.publicKey?.toBase58() === signer.publicKey) {
         const signedPromise = umi.identity.signAllTransactions(transactions)
         toast.promise(signedPromise, {
           loading: `Sign transaction, wallet ${index + 1} of ${signers.length}`,
@@ -76,9 +75,9 @@ export async function signAllTransactions(
         const signed = await signedPromise
         return signed
       } else {
-        const walletChangePromise = waitForWalletChange(signer)
+        const walletChangePromise = waitForWalletChange(signer.publicKey)
         toast.promise(walletChangePromise, {
-          loading: `Waiting for wallet change: ${shorten(signer)}`,
+          loading: `Waiting for wallet change: ${shorten(signer.publicKey)}`,
           success: "Wallet changed",
           error: "Error waiting for wallet change",
         })
@@ -121,19 +120,23 @@ export function unsafeSplitByTransactionSizeWithPriorityFees(
   )
 }
 
-export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: PriorityFees, computeUnits?: number) {
-  let chunks = unsafeSplitByTransactionSizeWithPriorityFees(umi, tx, !!computeUnits)
+export async function simulateAndAddCus(umi: Umi, tx: TransactionBuilder) {
+  const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!)
+  const web3tx = toWeb3JsTransaction(await tx.buildWithLatestBlockhash(umi))
+  const simulation = await connection.simulateTransaction(web3tx, { replaceRecentBlockhash: true })
+  const computeUnits = simulation.value.unitsConsumed ? simulation.value.unitsConsumed + 300 : 200_000
+  return tx.prepend(setComputeUnitLimit(umi, { units: computeUnits }))
+}
+
+export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: PriorityFees) {
+  let chunks = unsafeSplitByTransactionSizeWithPriorityFees(umi, tx, true)
 
   const [encoded] = base58.deserialize(umi.transactions.serialize(await chunks[0].buildWithLatestBlockhash(umi)))
   const txFee = feeLevel && (await getPriorityFeesForTx(encoded, feeLevel))
 
-  if (computeUnits) {
-    chunks = chunks.map((ch) => ch.prepend(setComputeUnitLimit(umi, { units: computeUnits })))
-  }
+  chunks = await Promise.all(chunks.map((tx) => simulateAndAddCus(umi, tx)))
 
-  if (txFee) {
-    chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee })))
-  }
+  chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee || 10_000 })))
   return { chunks, txFee }
 }
 

@@ -3,9 +3,7 @@ import {
   AccordionDetails,
   AccordionSummary,
   Button,
-  FormControlLabel,
   SvgIcon,
-  Switch,
   Typography,
   Link as MuiLink,
 } from "@mui/material"
@@ -14,21 +12,14 @@ import Link from "next/link"
 
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore"
 
-import StarIcon from "@mui/icons-material/Star"
-import LockIcon from "@mui/icons-material/Lock"
 import DeleteIcon from "@mui/icons-material/Delete"
-import { Filters } from "../_Filters"
-import { Sidebar } from "../Sidebar"
-import { useTags } from "../../context/tags"
 import { Tags } from "../Tags"
 import { FC, ReactNode } from "react"
-import { Router, useRouter } from "next/router"
+import { useRouter } from "next/router"
 import { useBasePath } from "../../context/base-path"
 import VaultIcon from "../Actions/vault.svg"
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn"
-import { useAccess } from "../../context/access"
 import { Sell } from "@mui/icons-material"
-import { useUiSettings } from "../../context/ui-settings"
 import { isAddress } from "viem"
 import Tokens from "./tokens.svg"
 import Nfts from "./nfts.svg"
@@ -123,6 +114,24 @@ export const SideMenu: FC<SideMenuProps> = ({ fullWidth, noAccordions, large }) 
             size={large ? "large" : "medium"}
           >
             NFTs
+          </Button>
+        </Link>
+        <Link href={relative("/nifty")} passHref>
+          <Button
+            sx={{ width: "100%" }}
+            variant={route === "/nifty" ? "contained" : "outlined"}
+            size={large ? "large" : "medium"}
+          >
+            Nifty
+          </Button>
+        </Link>
+        <Link href={relative("/core")} passHref>
+          <Button
+            sx={{ width: "100%" }}
+            variant={route === "/core" ? "contained" : "outlined"}
+            size={large ? "large" : "medium"}
+          >
+            Core
           </Button>
         </Link>
         {!isEthWallet && [

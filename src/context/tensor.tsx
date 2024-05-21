@@ -36,7 +36,7 @@ export const TensorContext = createContext({ delist: noop, list: noop, sellNow: 
 
 export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const umi = useUmi()
-  const { sendSignedTransactions } = useTransactionStatus()
+  const { sendSignedTransactionsWithRetries } = useTransactionStatus()
   const { nftsDelisted, nftsListed, nftsSold, nftsBought } = useDatabase()
   const wallet = useWallet()
   const { connection } = useConnection()
@@ -311,12 +311,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
       const txns = await getSellInstructions(items)
 
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
-      const { errs, successes } = await sendSignedTransactions(
-        signedTransactions,
-        txns.map((txn) => [txn.mint]),
-        "sell",
-        nftsSold
-      )
+      const { errs, successes } = await sendSignedTransactionsWithRetries(signedTransactions, "sell", nftsSold)
 
       notifyStatus(errs, successes, "sell", "sold")
     } catch (err: any) {
@@ -338,12 +333,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const txns = await getBuyInstructions(items)
 
     const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
-    const { errs, successes } = await sendSignedTransactions(
-      signedTransactions,
-      txns.map((txn) => [txn.mint]),
-      "buy",
-      nftsBought
-    )
+    const { errs, successes } = await sendSignedTransactionsWithRetries(signedTransactions, "buy", nftsBought)
 
     notifyStatus(errs, successes, "buy", "bought")
   }
@@ -417,9 +407,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         ...flatten(txns.map((t) => t.txn)),
         ...rescueTxns,
       ])
-      const { errs, successes } = await sendSignedTransactions(
+      const { errs, successes } = await sendSignedTransactionsWithRetries(
         signedTransactions.slice(0, txns.length),
-        txns.map((txn) => txn.mints),
         "delist",
         nftsDelisted
       )
@@ -464,9 +453,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         )
 
         const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-        const { errs, successes } = await sendSignedTransactions(
+        const { errs, successes } = await sendSignedTransactionsWithRetries(
           signedTransactions,
-          txns.map((txn) => txn.mints),
           "list",
           (mints: string[]) => nftsListed(mints, "TensorSwap")
         )
@@ -494,9 +482,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         )
 
         const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
-        const { errs, successes } = await sendSignedTransactions(
+        const { errs, successes } = await sendSignedTransactionsWithRetries(
           signedTransactions,
-          txns.map((txn) => txn.mints),
           "list",
           (mints: string[]) => nftsListed(mints, "MEv2")
         )

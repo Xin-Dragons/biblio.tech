@@ -38,7 +38,7 @@ import { shorten } from "../helpers/utils"
 import { useEffect, useState } from "react"
 import { burnV1 } from "@metaplex-foundation/mpl-token-metadata"
 import { useUmi } from "../context/umi"
-import { createNoopSigner, publicKey, sol, transactionBuilder } from "@metaplex-foundation/umi"
+import { Signer, createNoopSigner, publicKey, sol, transactionBuilder } from "@metaplex-foundation/umi"
 import toast from "react-hot-toast"
 import {
   TokExInvalidSystemProgramError,
@@ -145,7 +145,7 @@ function SplRow({ item }: { item: Nft }) {
       const promise = Promise.resolve().then(async () => {
         const built = await tx.buildWithLatestBlockhash(umi)
 
-        const signers = tx.getSigners(umi).map((item) => item.publicKey)
+        const signers = tx.getSigners(umi)
 
         const [signedTransaction] = await signAllTransactions(wallet, umi, [built], signers)
         const sig = await umi.rpc.sendTransaction(signedTransaction)
@@ -478,8 +478,8 @@ function Cleanup() {
 
         setBypassWallet(true)
 
-        const signers = uniq(flatten(txns.map((t) => t.signers.map((s) => s.publicKey)))).sort((item: string) =>
-          item === wallet.publicKey?.toBase58() ? -1 : 1
+        const signers = uniq(flatten(txns.map((t) => t.signers))).sort((item: Signer) =>
+          item.publicKey === wallet.publicKey?.toBase58() ? -1 : 1
         )
 
         const signedTransactions = await signAllTransactions(

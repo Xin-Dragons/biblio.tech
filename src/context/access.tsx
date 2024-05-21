@@ -8,13 +8,15 @@ import { getWallets } from "../helpers/wallets"
 import { DAS } from "helius-sdk"
 import axios from "axios"
 import { getDandies } from "../helpers/helius"
+import { getNiftyDandies } from "../helpers/utils"
+import { Asset } from "@nifty-oss/asset"
 
 type AccountType = "basic" | "advanced" | "pro" | "unlimited"
 
 type AccessContextProps = {
   publicKey: string | null
   user: any
-  dandies: DAS.GetAssetResponse[]
+  dandies: Array<DAS.GetAssetResponse | Asset>
   publicKeys: string[]
   isInScope: boolean
   isAdmin: boolean
@@ -50,7 +52,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
   const [user, setUser] = useState<any | null>({})
   const [publicKeys, setPublicKeys] = useState<string[]>([])
   const [userWallets, setUserWallets] = useState<string[]>([])
-  const [dandies, setDandies] = useState<DAS.GetAssetResponse[]>([])
+  const [dandies, setDandies] = useState<Array<DAS.GetAssetResponse | Asset>>([])
   const [isActive, setIsActive] = useState(false)
   const [publicKey, setPublicKey] = useState("")
   const umi = useUmi()
@@ -110,11 +112,10 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
     }
     ;(async () => {
       setUserWallets(user.wallets.map((w: any) => w.public_key))
-      const dandies = await getDandies(
-        user.wallets.filter((w: any) => w.chain === "solana").map((w: any) => w.public_key)
-      )
-      console.log({ dandies })
-      setDandies(dandies)
+      const wallets = user.wallets.filter((w: any) => w.chain === "solana").map((w: any) => w.public_key)
+      const dandies = await getDandies(wallets)
+      const niftyDandies = await getNiftyDandies(umi, wallets)
+      setDandies([...dandies, ...niftyDandies])
     })()
   }, [user])
 

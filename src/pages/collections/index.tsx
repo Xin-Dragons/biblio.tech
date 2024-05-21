@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import type { NextPage } from "next"
 import Link from "next/link"
-import React, { FC } from "react"
+import React, { FC, useEffect, useState } from "react"
 import { Layout } from "../../components/Layout"
 import { LayoutSize, useUiSettings } from "../../context/ui-settings"
 import { Items } from "../../components/Items"
@@ -12,16 +12,17 @@ import { useLiveQuery } from "dexie-react-hooks"
 import { useDatabase } from "../../context/database"
 import { useFilters } from "../../context/filters"
 import { useBasePath } from "../../context/base-path"
-import { publicKey, unwrapSome } from "@metaplex-foundation/umi"
 import { useNfts } from "../../context/nfts"
-import { difference, flatten, orderBy, sortBy } from "lodash"
+import { flatten, orderBy } from "lodash"
 import { Nft } from "../../db"
-import { useAccess } from "../../context/access"
 import { useTheme } from "../../context/theme"
 import { CURRENCIES, CurrencyItem, useBrice } from "../../context/brice"
 import Solana from "../../../public/solana.svg"
 import Eth from "../../../public/eth.svg"
 import Matic from "../../../public/matic.svg"
+import { fetchJsonMetadata } from "@metaplex-foundation/mpl-token-metadata"
+import { useUmi } from "../../context/umi"
+import axios from "axios"
 
 type CollectionProps = {
   item: any
@@ -39,9 +40,43 @@ export type CollectionItem = {
 
 export const Collection: FC<CollectionProps> = ({ item, selected }) => {
   const { showInfo, lightMode, layoutSize, preferredCurrency } = useUiSettings()
+  const { updateCollection } = useDatabase()
   const basePath = useBasePath()
   const nfts = item.nfts
   const theme = useTheme()
+  const [image, setImage] = useState(item.image)
+  const umi = useUmi()
+
+  useEffect(() => {
+    if (!item.uri) {
+      return
+    }
+
+    ;(async () => {
+      try {
+        const json = await fetchJsonMetadata(umi, item.uri)
+        await updateCollection(item.id, { image: json.image })
+        setImage(json.image)
+      } catch {
+        console.log("error getting")
+        try {
+          const res = await fetch(item.uri, {
+            mode: "no-cors",
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+          })
+          const json = await res.json()
+          await updateCollection(item.id, { image: json.image })
+          setImage(json.image)
+        } catch {
+          console.log("double fail")
+        }
+      }
+    })()
+  }, [item.image, item.uri])
 
   const margins = {
     small: 1,
@@ -108,8 +143,8 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
           <img
             onError={(e: any) => (e.target.src = lightMode ? "/books-lightest.svg" : "/books-lighter.svg")}
             src={
-              item.image
-                ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${item.image.replace(
+              image
+                ? `https://img-cdn.magiceden.dev/rs:fill:400:400:0:0/plain/${image.replace(
                     "ipfs://",
                     "https://ipfs.io/ipfs/"
                   )}`
@@ -138,63 +173,75 @@ export const Collection: FC<CollectionProps> = ({ item, selected }) => {
           )}
 
           {showInfo && (
-            <SvgIcon
-              sx={{
-                position: "absolute",
-                left: "8px",
-                top: "8px",
-                width: "30px",
-                height: "30px",
-                fill: lightMode ? "white" : "black",
-              }}
-            >
-              {item.chain === "solana" && <Solana />}
-              {item.chain === "eth" && <Eth />}
-              {item.chain === "matic" && <Matic />}
-            </SvgIcon>
+            <>
+              {["Nifty", "Core"].includes(item.assetType) ? (
+                <img
+                  src={item.assetType === "Nifty" ? "/nifty-dark.png" : "/metaplex.png"}
+                  style={{ position: "absolute", left: "8px", top: "8px", width: "30px", height: "30px" }}
+                />
+              ) : (
+                <SvgIcon
+                  sx={{
+                    position: "absolute",
+                    left: "8px",
+                    top: "8px",
+                    width: "30px",
+                    height: "30px",
+                    fill: lightMode ? "white" : "black",
+                  }}
+                >
+                  {item.chain === "solana" && <Solana />}
+                  {item.chain === "eth" && <Eth />}
+                  {item.chain === "matic" && <Matic />}
+                </SvgIcon>
+              )}
+            </>
           )}
 
-          <Box
-            sx={{
-              position: "absolute",
-              zIndex: 10,
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              color: "fontColor",
-              backgroundColor: alpha(theme.palette.background.default, 0.8),
-              opacity: 0,
-              transition: "opacity 0.2s",
-              cursor: "pointer",
-              fontWeight: "bold",
-              "&:hover": {
-                opacity: 1,
-              },
-            }}
-          >
-            <Stack>
-              <Typography textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
-                Estimated value
-              </Typography>
-              <Typography variant="h6" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
-                {item.id === "unknown" || item.value === 0
-                  ? "Unknown"
-                  : `${(item.value as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${
-                      currencySymbols[item.currency as keyof object]
-                    }`}
-              </Typography>
-              <Typography variant="body1" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
-                {item.id === "unknown" || item.price === 0
-                  ? "Unknown"
-                  : `${currency.symbol}${item.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-              </Typography>
-            </Stack>
-          </Box>
+          {!["Nifty", "Core"].includes(item.assetType) && (
+            <Box
+              sx={{
+                position: "absolute",
+                zIndex: 10,
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                color: "fontColor",
+                backgroundColor: alpha(theme.palette.background.default, 0.8),
+                opacity: 0,
+                transition: "opacity 0.2s",
+                cursor: "pointer",
+                fontWeight: "bold",
+                "&:hover": {
+                  opacity: 1,
+                },
+              }}
+            >
+              <Stack>
+                <Typography textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
+                  Estimated value
+                </Typography>
+                <Typography variant="h6" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
+                  {item.id === "unknown" || item.value === 0
+                    ? "Unknown"
+                    : `${(item.value as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${
+                        currencySymbols[item.currency as keyof object]
+                      }`}
+                </Typography>
+                <Typography variant="body1" textAlign="center" sx={{ fontSize: fontSizes(layoutSize) }}>
+                  {item.id === "unknown" || item.price === 0
+                    ? "Unknown"
+                    : `${currency.symbol}${item.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                </Typography>
+              </Stack>
+            </Box>
+          )}
         </Box>
+
         {showInfo && (
           <CardContent sx={{ padding: { xs: 1 } }}>
             <Typography
@@ -262,6 +309,8 @@ const Home: NextPage = () => {
         image: collection.image,
         name: collection.collectionName,
         chain: collection.chain,
+        uri: collection.uri,
+        assetType: collection.assetType,
         allNfts: collectionNfts,
         nfts: filtered,
         value: value || 0,
@@ -286,7 +335,9 @@ const Home: NextPage = () => {
       chain: "solana",
       allNfts: uncategorized,
       nfts: uncategorized.filter((n) => allFilteredMints.includes(n.nftMint)),
+      assetType: undefined,
       currency: "◎",
+      uri: "",
       price: 0,
       value: 0,
     })

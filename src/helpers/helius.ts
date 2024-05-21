@@ -1,8 +1,11 @@
 import { Connection } from "@solana/web3.js"
 import { DAS, Helius } from "helius-sdk"
 import { chunk, flatten, groupBy, isEqual, mapValues } from "lodash"
-import { PriorityFees } from "../constants"
+import { DANDIES_NIFTY_COLLECTION, PriorityFees } from "../constants"
 import axios from "axios"
+import { getAssetGpaBuilder } from "@nifty-oss/asset"
+import { umi } from "./umi"
+import { publicKey } from "@metaplex-foundation/umi"
 
 const client = new Helius(process.env.NEXT_PUBLIC_HELIUS_API_KEY!)
 
@@ -182,7 +185,10 @@ async function getDandiesForWallet(ownerAddress: string) {
 }
 
 export async function getDandies(wallets: string[]) {
-  const dandies = flatten(await Promise.all(wallets.map((wallet) => getDandiesForWallet(wallet))))
+  const dandies = flatten(await Promise.all(wallets.map((wallet) => getDandiesForWallet(wallet)))).filter(
+    (d) => !d.burnt
+  )
+
   return dandies
 }
 

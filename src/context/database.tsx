@@ -37,6 +37,7 @@ type DatabaseContextProps = {
   syncProgress: number
   updateCollection: Function
   revokeDelegate: Function
+  setImage: Function
 }
 
 const initial = {
@@ -63,6 +64,7 @@ const initial = {
   syncProgress: 0,
   updateCollection: noop,
   revokeDelegate: noop,
+  setImage: noop,
 }
 
 const DatabaseContext = createContext<DatabaseContextProps>(initial)
@@ -122,6 +124,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
             collectionId: c.collectionId,
             collectionName: c.collectionName,
             image: c.image || c.sample_image,
+            uri: c.uri,
+            assetType: c.assetType,
             floorPrice: c.floorPrice,
           }
         })
@@ -136,6 +140,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
             helloMoonCollectionId: c.helloMoonCollectionId,
             floorPrice: c.floorPrice,
             image: c.image || c.sample_image,
+            assetType: c.assetType,
+            uri: c.uri,
           }
 
           return {
@@ -627,6 +633,18 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
     await db.nfts.update(item.nftMint, changes)
   }
 
+  async function setImage(item: Nft, image: string) {
+    await db.nfts.update(item.nftMint, {
+      content: {
+        ...(item.content || {}),
+        links: {
+          ...(item.content?.links || {}),
+          image,
+        },
+      } as any,
+    })
+  }
+
   async function settleLoans(items: Nft[]) {
     await db.nfts.bulkUpdate(
       items
@@ -749,6 +767,7 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         syncProgress,
         updateCollection,
         revokeDelegate,
+        setImage,
       }}
     >
       {children}

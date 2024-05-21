@@ -8,29 +8,27 @@ import {
 } from "@hellomoon/api"
 import { uniqBy, groupBy, size, uniq, chunk, flatten, omit } from "lodash"
 import axios from "axios"
-import {
-  DigitalAssetWithToken,
-  JsonMetadata,
-  TokenStandard,
-  TokenState,
-  fetchAllDigitalAsset,
-  fetchAllDigitalAssetWithTokenByOwner,
-  fetchAllDigitalAssetWithTokenByOwnerAndMint,
-  fetchDigitalAsset,
-  fetchMasterEdition,
-  mplTokenMetadata,
-} from "@metaplex-foundation/mpl-token-metadata"
-import { TokenState as NftTokenState } from "@metaplex-foundation/mpl-toolbox"
+import { JsonMetadata, fetchDigitalAsset, mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
-import { isSome, publicKey, some, Option, unwrapOption } from "@metaplex-foundation/umi"
+import { publicKey, some, Option, unwrapOption, PublicKey } from "@metaplex-foundation/umi"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
 import { getAllByOwner, getAllFungiblesByOwner, getDigitalAssets, getNfts } from "../src/helpers/helius"
+import {
+  DelegateRole,
+  ExtensionType,
+  State,
+  fetchAllAsset,
+  getAssetGpaBuilder,
+  getExtension,
+  niftyAsset,
+} from "@nifty-oss/asset"
+import { Key, fetchAllCollectionV1, getAssetV1GpaBuilder, mplCore } from "@metaplex-foundation/mpl-core"
 import { DAS } from "helius-sdk"
-
-const MOB_TRAITS = publicKey("5j3KnVdZPgPRFcMgAn9cL68xNXtXSHFUbvSjcn9JUPQy")
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
   .use(mplToolbox())
+  .use(mplCore())
+  .use(niftyAsset())
   .use(mplTokenMetadata())
 
 const client = new RestClient(process.env.NEXT_PUBLIC_HELLO_MOON_API_KEY as string)
@@ -124,7 +122,8 @@ function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
     if (
       !["NonFungible", "ProgrammableNonFungible", "NonFungibleEdition", undefined].includes(
         (item.content?.metadata as any).token_standard
-      )
+      ) &&
+      item.interface !== ("MplCoreAsset" as any)
     ) {
       return item
     }
@@ -191,12 +190,24 @@ interface DigitalAssetWithStatusAndOwner extends DigitalAssetWithStatus {
   owner?: string
 }
 
+async function getNifty(owner: PublicKey) {
+  return await getAssetGpaBuilder(umi).whereField("owner", owner).getDeserialized()
+}
+
+async function getCore(owner: PublicKey) {
+  return await getAssetV1GpaBuilder(umi).whereField("owner", owner).whereField("key", Key.AssetV1).getDeserialized()
+}
+
 self.addEventListener("message", async (event) => {
   try {
     let { publicKey: owner, force, mints, publicKeys } = event.data
 
-    let [digitalAssets, fungibles, helloMoonNfts, listings] = await Promise.all([
+    const ownerPk = publicKey(owner)
+
+    let [digitalAssets, nifty, core, fungibles, helloMoonNfts, listings] = await Promise.all([
       getAllByOwner(owner),
+      getNifty(ownerPk),
+      getCore(ownerPk),
       getAllFungiblesByOwner(owner),
       getOwnedHelloMoonNfts(owner),
       // getOutstandingLoans(owner),
@@ -267,11 +278,13 @@ self.addEventListener("message", async (event) => {
       "NonFungibleEdition",
       "ProgrammableNonFungible",
       "ProgrammableNonFungibleEdition",
+      "Nifty",
+      "Core",
     ]
 
     const types = groupBy(
       digitalAssets.map((item: DigitalAssetWithStatus) => {
-        let ts = (item.content?.metadata as any).token_standard
+        let ts = item.interface === ("MplCoreAsset" as any) ? "Core" : (item.content?.metadata as any).token_standard
 
         return {
           ...item,
@@ -456,8 +469,239 @@ self.addEventListener("message", async (event) => {
 
     const editionsWithNumbers = types[3] || []
 
+    const mappedNifty = nifty.map((n) => {
+      const metadata = getExtension(n, ExtensionType.Metadata)
+      const attributes = getExtension(n, ExtensionType.Attributes)
+      const royalties = getExtension(n, ExtensionType.Royalties)
+      const creators = getExtension(n, ExtensionType.Creators)
+
+      let status
+      if (n.state === State.Locked) {
+        if (!n.delegate || (n.delegate?.address && publicKeys.includes(n.delegate.address))) {
+          status = "inVault"
+        } else if (n.delegate?.roles.includes(DelegateRole.Transfer)) {
+          status = "listed"
+        } else {
+          status = "frozen"
+        }
+      }
+
+      return {
+        id: n.publicKey,
+        nftMint: n.publicKey,
+        burnt: false,
+        chain: "solana",
+        status,
+        owner: n.owner,
+        collectionId: n.group,
+        collectionIdentifier: n.group,
+        metadata: {
+          tokenStandard: 6,
+          sellerFeeBasisPoints: royalties?.basisPoints,
+          symbol: metadata?.symbol,
+        },
+        content: {
+          json_uri: metadata?.uri,
+          metadata: {
+            attributes: attributes
+              ? attributes.values.map((a) => {
+                  return {
+                    trait_type: a.name,
+                    value: a.value,
+                  }
+                })
+              : null,
+            token_standard: 6,
+            name: n.name,
+            symbol: metadata?.symbol,
+            description: metadata?.description,
+            sellerFeeBasisPoints: royalties?.basisPoints,
+          },
+        },
+        ownership: {
+          frozen: n.state === State.Locked,
+          delegated: !!n.delegate,
+          delegate: n.delegate?.address,
+          owner: n.owner,
+        },
+        royalty: {
+          basis_points: royalties?.basisPoints,
+        },
+        creators: creators ? creators.values : [],
+        authorities: [
+          {
+            address: n.authority,
+            scopes: ["full"],
+          },
+        ],
+      }
+    })
+
+    const coreCollectionPks = uniq(
+      core
+        .map((c) => {
+          return c.updateAuthority.type === "Collection" && c.updateAuthority.address
+        })
+        .filter(Boolean)
+    ) as PublicKey[]
+
+    const niftyCollectionPks = uniq(nifty.map((c) => c.group).filter(Boolean)) as PublicKey[]
+
+    const [niftyCollections, coreCollections] = await Promise.all([
+      fetchAllAsset(umi, niftyCollectionPks),
+      fetchAllCollectionV1(umi, coreCollectionPks),
+    ])
+
+    const mappedCore = (types[7] || [])
+      .map((da) => {
+        const n = core.find((c) => c.publicKey === da.id)
+        if (!n) {
+          return null
+        }
+        let status
+        if (n.permanentFreezeDelegate?.frozen) {
+          status = "frozen"
+        } else if (n.freezeDelegate?.frozen) {
+          if (n.freezeDelegate.frozen && n.transferDelegate) {
+            status = "listed"
+          } else if (publicKeys.includes(n.freezeDelegate.authority.address)) {
+            status = "inVault"
+          } else {
+            status = "frozen"
+          }
+        }
+
+        const collectionId = n.updateAuthority.type === "Collection" && n.updateAuthority.address
+
+        let delegate
+
+        if (n.permanentFreezeDelegate) {
+          const authority = n.permanentFreezeDelegate.authority
+          if (authority.type === "Owner") {
+            delegate = n.owner
+          } else if (authority.type === "Address") {
+            delegate = authority.address
+          } else if (authority.type === "UpdateAuthority") {
+            delegate = n.updateAuthority.address
+          } else if (authority.type === "None") {
+            delegate = null
+          }
+        } else if (n.freezeDelegate) {
+          const authority = n.freezeDelegate.authority
+          if (authority.type === "Owner") {
+            delegate = n.owner
+          } else if (authority.type === "Address") {
+            delegate = authority.address
+          } else if (authority.type === "UpdateAuthority") {
+            delegate = n.updateAuthority.address
+          } else if (authority.type === "None") {
+            delegate = null
+          }
+        }
+
+        let updateAuthority
+        if (n.updateAuthority.type === "Address") {
+          updateAuthority = n.updateAuthority.address
+        } else if (n.updateAuthority.type === "Collection") {
+          const collection = coreCollections.find((c) => c.publicKey === collectionId)
+          updateAuthority = collection?.updateAuthority
+        }
+
+        return {
+          ...da,
+          nftMint: n.publicKey,
+          burnt: false,
+          chain: "solana",
+          owner: n.owner,
+          status,
+          collectionId,
+          collectionIdentifier: collectionId,
+          metadata: {
+            tokenStandard: 7,
+            sellerFeeBasisPoints: n.royalties?.basisPoints,
+          },
+          content: {
+            ...da.content,
+            json_uri: n.uri,
+            metadata: {
+              attributes: n.attributes
+                ? n.attributes.attributeList.map((a) => {
+                    return {
+                      trait_type: a.key,
+                      value: a.value,
+                    }
+                  })
+                : null,
+              token_standard: 7,
+              name: n.name,
+            },
+          },
+          ownership: {
+            frozen: n.permanentFreezeDelegate?.frozen || n.freezeDelegate?.frozen,
+            delegated: !!n.permanentFreezeDelegate || n.freezeDelegate,
+            delegate,
+            owner: n.owner,
+          },
+          royalty: {
+            basis_points: n.royalties?.basisPoints,
+          },
+          creators: n.royalties?.creators.map((c) => {
+            return {
+              address: c.address,
+              share: c.percentage,
+            }
+          }),
+          authorities: [
+            {
+              address: updateAuthority,
+              scopes: ["full"],
+            },
+          ],
+        }
+      })
+      .filter(Boolean)
+
+    const coreCollectionDas = await getDigitalAssets(coreCollections.map((c) => c.publicKey))
+    console.log(coreCollectionDas)
+
+    const mappedCoreCollections = coreCollections.map((c) => {
+      const da = coreCollectionDas.find((d) => d.id === c.publicKey)
+      return {
+        id: c.publicKey,
+        collectionId: c.publicKey,
+        chain: "solana",
+        collectionName: c.name,
+        uri: c.uri,
+        image: da?.content?.links?.image,
+        assetType: "Core",
+      }
+    })
+    const mappedNiftyCollections = niftyCollections.map((c) => {
+      const metadata = getExtension(c, ExtensionType.Metadata)
+      return {
+        id: c.publicKey,
+        collectionId: c.publicKey,
+        chain: "solana",
+        collectionName: c.name,
+        uri: metadata?.uri,
+        assetType: "Nifty",
+      }
+    })
+
+    const nftsToAdd = [...fungiblesTokens, ...nfts, ...editionsWithNumbers].map((n) => {
+      return {
+        ...omit(n, "edition", "mint", "publicKey"),
+        metadata: {
+          tokenStandard: n.metadata.tokenStandard,
+          sellerFeeBasisPoints: n.royalty?.basis_points,
+          symbol: n.metadata.symbol,
+        },
+        chain: "solana",
+      }
+    })
+
     const collectionsToAdd = uniqBy(
-      collections.map((item) => {
+      [...collections, ...mappedCoreCollections, ...mappedNiftyCollections].map((item) => {
         return {
           ...item,
           id: item.collectionId || item.helloMoonCollectionId || item.firstVerifiedCreator,
@@ -473,19 +717,11 @@ self.addEventListener("message", async (event) => {
         }
       })
 
-    const nftsToAdd = [...fungiblesTokens, ...nfts, ...editionsWithNumbers].map((n) => {
-      return {
-        ...omit(n, "edition", "mint", "publicKey"),
-        metadata: {
-          tokenStandard: n.metadata.tokenStandard,
-          sellerFeeBasisPoints: n.royalty?.basis_points,
-          symbol: n.metadata.symbol,
-        },
-        chain: "solana",
-      }
+    self.postMessage({
+      type: "done",
+      nftsToAdd: [...nftsToAdd, ...mappedNifty, ...mappedCore],
+      collectionsToAdd,
     })
-
-    self.postMessage({ type: "done", nftsToAdd, collectionsToAdd })
   } catch (err) {
     console.log(err)
     self.postMessage({ type: "error" })

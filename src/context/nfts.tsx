@@ -35,6 +35,29 @@ type NftsProviderProps = {
   children: ReactNode
 }
 
+const JUNK_WORDS = [
+  "whitelist",
+  "invited",
+  "upgrade",
+  "reward",
+  "free",
+  "pass",
+  "reveal here",
+  "upgrade here",
+  "mystery box",
+  "claim",
+  "exchange here",
+  "airdrop",
+  "mystery",
+  "unverified",
+  "limited drop",
+  "redeem",
+  "voucher",
+  "jup.pro",
+  "limited",
+  "fomo 0%",
+]
+
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
   const { publicKey, publicKeys } = useAccess()
@@ -74,6 +97,25 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   const allNfts = useLiveQuery(() => db.nfts.toArray(), [], [])
 
+  function junkFilter(item: any) {
+    return Boolean(
+      // things on HR or MR probably aren't junk
+      !rarity.find((r) => r.nftMint === item.nftMint) &&
+        // NFT editions probably aren't junk
+        item.metadata.tokenStandard !== 3 &&
+        // website in description is probably junk
+        ((item.content?.metadata.description || "").match(
+          /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+        ) ||
+          // includes junk words - probably junk
+          JUNK_WORDS.some(
+            (trigger) =>
+              (item?.content?.metadata?.description || "").toLowerCase().includes(trigger) ||
+              (item?.content?.metadata.name || "").toLowerCase().includes(trigger)
+          ))
+    )
+  }
+
   const nftsFromDb = useLiveQuery(
     () => {
       const query = showAllWallets ? db.nfts.where("owner").anyOf(publicKeys) : db.nfts.where({ owner: publicKey })
@@ -89,6 +131,12 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
       }
       if (router.query.filter === "cnfts") {
         return query.filter((item) => item.metadata.tokenStandard === 0 && !!item.compression?.compressed).toArray()
+      }
+      if (router.query.filter === "nifty") {
+        return query.filter((item) => item.metadata.tokenStandard === 6).toArray()
+      }
+      if (router.query.filter === "core") {
+        return query.filter((item) => item.metadata.tokenStandard === 7).toArray()
       }
       if (router.query.filter === "sfts") {
         return query.filter((item) => item.metadata.tokenStandard === 1).toArray()
@@ -114,44 +162,19 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
         return query.filter((item) => item.status === "listed").toArray()
       }
       if (!router.query.filter && !router.query.collectionId && !router.query.tag) {
-        return query.filter((item) => [0, 4, 5].includes(item.metadata.tokenStandard!)).toArray()
+        return query
+          .filter((item) => [0, 4, 5, 6, 7].includes(item.metadata.tokenStandard!))
+          .filter((item) => !junkFilter(item))
+          .filter((item) => {
+            if (item.id === "73Ct1hAwfCbTTKHTuUCbpZYhprb7aLfabS2HcjJvbmf5") {
+              console.log(item)
+            }
+            return true
+          })
+          .toArray()
       }
       if (router.query.filter === "junk") {
-        return query
-          .filter((item) =>
-            Boolean(
-              // things on HR or MR probably aren't junk
-              !rarity.find((r) => r.nftMint === item.nftMint) &&
-                // things categorised by HM prob aren't junk
-                !item.helloMoonCollectionId &&
-                // frozen things are probably cool
-                !item.status &&
-                // things that have a value aren't junk
-                !item.price &&
-                // NFT editions probably aren't junk
-                item.metadata.tokenStandard !== 3 &&
-                // website in description is probably junk
-                ((item.content?.metadata.description || "").match(
-                  /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
-                ) ||
-                  // includes junk words - probably junk
-                  [
-                    "whitelist",
-                    "invited",
-                    "upgrade",
-                    "reward",
-                    "free",
-                    "reveal here",
-                    "upgrade here",
-                    "mystery box",
-                    "claim",
-                    "exchange here",
-                    "airdrop",
-                    "mystery",
-                  ].some((trigger) => (item?.content?.metadata?.description || "").toLowerCase().includes(trigger)))
-            )
-          )
-          .toArray()
+        return query.filter(junkFilter).toArray()
       }
       if (router.query.tag) {
         if (router.query.tag === "untagged") {
@@ -164,7 +187,7 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
           return query
             .filter(
               (item) =>
-                [0, 4, 5].includes(item.metadata.tokenStandard!) &&
+                [0, 4, 5, 6, 7].includes(item.metadata.tokenStandard!) &&
                 !item.collectionId &&
                 !item.helloMoonCollectionId &&
                 allNFts.filter((n) => n.firstVerifiedCreator === item.firstVerifiedCreator).length === 1

@@ -3,6 +3,7 @@ import Dexie, { Table } from "dexie"
 import { Currency } from "./context/brice"
 import { LoanType } from "./context/ui-settings"
 import { DAS } from "helius-sdk"
+import { PublicKey } from "@solana/web3.js"
 
 export interface NftMetadata {
   name?: string
@@ -59,6 +60,8 @@ export interface Collection {
   image?: string
   floorPrice: number
   meIdentifier?: string
+  uri?: string
+  assetType?: string
 }
 
 export interface Tag {

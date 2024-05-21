@@ -1,10 +1,13 @@
-import { PublicKey } from "@metaplex-foundation/js"
 import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata"
+import { PublicKey, Umi, publicKey } from "@metaplex-foundation/umi"
+import { getAssetGpaBuilder } from "@nifty-oss/asset"
 import { WalletContextState } from "@solana/wallet-adapter-react"
 import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import BN from "bn.js"
 import base58 from "bs58"
+import { flatten } from "lodash"
 import { isAddress } from "viem"
+import { DANDIES_NIFTY_COLLECTION } from "../constants"
 
 export async function signMessage(wallet: WalletContextState, nonce: string) {
   const message = `Sign in to Biblio\n\${nonce}`
@@ -34,7 +37,7 @@ export function shorten(address: string) {
 
 export const isValidPublicKey = (input: string) => {
   try {
-    const pk = new PublicKey(input)
+    const pk = publicKey(input)
     return true
   } catch {
     return false
@@ -72,4 +75,17 @@ export function isNonFungible(tokenStandard: TokenStandard): Boolean {
 
 export function isFungible(tokenStandard: TokenStandard): Boolean {
   return [TokenStandard.Fungible, TokenStandard.FungibleAsset].includes(tokenStandard)
+}
+
+export async function getNiftyDandies(umi: Umi, wallets: PublicKey[]) {
+  return flatten(
+    await Promise.all(
+      wallets.map((wallet) =>
+        getAssetGpaBuilder(umi)
+          .whereField("owner", wallet)
+          .whereField("group", DANDIES_NIFTY_COLLECTION)
+          .getDeserialized()
+      )
+    )
+  )
 }

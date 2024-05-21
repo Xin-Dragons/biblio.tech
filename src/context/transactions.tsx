@@ -1,10 +1,13 @@
-import { Transaction } from "@metaplex-foundation/umi"
+import { Transaction, publicKey } from "@metaplex-foundation/umi"
 import { FC, ReactElement, createContext, useContext, useEffect, useState } from "react"
 import { useUmi } from "./umi"
 import { sleep } from "../helpers/utils"
 import { noop, uniq } from "lodash"
 import { toast } from "react-hot-toast"
 import { useNfts } from "./nfts"
+import { useConnection } from "@solana/wallet-adapter-react"
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
+import { niftyAsset } from "@nifty-oss/asset"
 
 type TransactionStatusContextProps = {
   transactions: TransactionStatus[]
@@ -12,7 +15,7 @@ type TransactionStatusContextProps = {
   setTransactionErrors: Function
   setTransactionComplete: Function
   clearTransactions: Function
-  sendSignedTransactions: Function
+  sendSignedTransactionsWithRetries: Function
 }
 
 const initial = {
@@ -21,7 +24,7 @@ const initial = {
   setTransactionErrors: noop,
   setTransactionComplete: noop,
   clearTransactions: noop,
-  sendSignedTransactions: noop,
+  sendSignedTransactionsWithRetries: noop,
 }
 
 export const TransactionStatusContext = createContext<TransactionStatusContextProps>(initial)
@@ -42,40 +45,62 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
   const [transactions, setTransactions] = useState<TransactionStatus[]>([])
   const umi = useUmi()
   const { nfts } = useNfts()
+  const { connection } = useConnection()
 
-  async function sendSignedTransactions(
-    signedTransactions: Transaction[],
-    txnMints: string[][],
+  async function sendSignedTransactionsWithRetries(
+    txs: Transaction[],
     type: TransactionStatusType,
     onSuccess?: Function,
-    recipient = ""
+    recipient = "",
+    delay = 500
   ) {
-    const blockhash = await umi.rpc.getLatestBlockhash()
-    let errs: string[] = []
-    let successes: string[] = []
+    const allNfts = nfts.map((n) => n.nftMint)
+
+    let successes = 0
+    let errors = 0
+
+    const lastValidBlockHeight = (await umi.rpc.getLatestBlockhash()).lastValidBlockHeight
+    let blockheight = await connection.getBlockHeight("confirmed")
+    let blockhash = await umi.rpc.getLatestBlockhash()
+
     await Promise.all(
-      signedTransactions.map(async (transaction, index) => {
-        const mints = txnMints[index]
+      txs.map(async (tx) => {
+        const mints = tx.message.accounts.filter((m) => allNfts.includes(m))
         try {
           setTransactionInProgress(mints, type)
-
-          const signature = await umi.rpc.sendTransaction(transaction, { skipPreflight: true })
-          const confirmed = await umi.rpc.confirmTransaction(signature, {
+          const sig = await umi.rpc.sendTransaction(tx)
+          let resolved = false
+          const confPromise = umi.rpc.confirmTransaction(sig, {
             strategy: {
               type: "blockhash",
               ...blockhash,
             },
           })
-          if (confirmed.value.err) {
-            setTransactionErrors(mints)
-            await sleep(2000)
+          while (blockheight < lastValidBlockHeight && !resolved) {
+            try {
+              console.log("sending tx")
+              await umi.rpc.sendTransaction(tx)
+              await sleep(delay)
+            } catch (err: any) {
+              if (err.message.includes("This transaction has already been processed")) {
+                resolved = true
+              } else {
+                console.log(err)
+              }
+            }
+            blockheight = await connection.getBlockHeight()
+          }
 
-            clearTransactions(mints)
+          const conf = await confPromise
+          if (conf.value.err) {
+            errors += mints.length
+            setTransactionErrors(mints)
           } else {
+            successes += mints.length
             setTransactionComplete(mints)
             onSuccess &&
               (await onSuccess(
-                nfts.filter((n) => mints.includes(n.nftMint)),
+                nfts.filter((n) => mints.includes(publicKey(n.nftMint))),
                 recipient
               ))
 
@@ -83,21 +108,17 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
 
             clearTransactions(mints)
           }
-          successes = [...successes, ...mints]
         } catch (err) {
-          console.error(err)
           setTransactionErrors(mints)
-          errs = [...errs, ...mints]
-          await sleep(2000)
-
-          clearTransactions(mints)
+          errors += mints.length
+          throw err
         }
       })
     )
 
     return {
-      errs: uniq(errs),
-      successes: uniq(successes),
+      errors,
+      successes,
     }
   }
 
@@ -116,7 +137,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
     })
   }
 
-  function setTransactionErrors(nftMints: string[]) {
+  async function setTransactionErrors(nftMints: string[]) {
     setTransactions((prevState: TransactionStatus[]) => {
       return prevState.map((item) => {
         if (nftMints.includes(item.nftMint)) {
@@ -128,9 +149,12 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         return item
       })
     })
+    await sleep(2000)
+
+    clearTransactions(nftMints)
   }
 
-  function setTransactionComplete(nftMints: string[]) {
+  async function setTransactionComplete(nftMints: string[]) {
     setTransactions((prevState: TransactionStatus[]) => {
       return prevState.map((item) => {
         if (nftMints.includes(item.nftMint)) {
@@ -142,6 +166,10 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         return item
       })
     })
+
+    await sleep(2000)
+
+    clearTransactions(nftMints)
   }
 
   function clearTransactions(nftMints: string[]) {
@@ -158,7 +186,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         setTransactionComplete,
         setTransactionErrors,
         clearTransactions,
-        sendSignedTransactions,
+        sendSignedTransactionsWithRetries,
       }}
     >
       {children}
