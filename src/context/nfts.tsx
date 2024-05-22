@@ -58,6 +58,8 @@ const JUNK_WORDS = [
   "fomo 0%",
 ]
 
+const WHITELIST_COLLECTIONS = ["CoLwvx3rWqMdvTAzMjB5oyPTUPD6jQY8J9uJLdpWmsNC"]
+
 export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
   const router = useRouter()
   const { publicKey, publicKeys } = useAccess()
@@ -97,10 +99,11 @@ export const NftsProvider: FC<NftsProviderProps> = ({ children }) => {
 
   const allNfts = useLiveQuery(() => db.nfts.toArray(), [], [])
 
-  function junkFilter(item: any) {
+  function junkFilter(item: Nft) {
     return Boolean(
-      // things on HR or MR probably aren't junk
-      !rarity.find((r) => r.nftMint === item.nftMint) &&
+      !WHITELIST_COLLECTIONS.includes(item.collectionIdentifier!) &&
+        // things on HR or MR probably aren't junk
+        !rarity.find((r) => r.nftMint === item.nftMint) &&
         // NFT editions probably aren't junk
         item.metadata.tokenStandard !== 3 &&
         // website in description is probably junk
