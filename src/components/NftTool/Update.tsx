@@ -68,6 +68,7 @@ import { useAccess } from "../../context/access"
 import { hasProfanity } from "../../helpers/has-profanity"
 import { usePriorityFees } from "../../context/priority-fees"
 import { packTx, sendAllTxsWithRetries } from "../../helpers/transactions"
+import { imageCdn } from "../../helpers/utils"
 
 export function UpdateNft() {
   const { connection } = useConnection()
@@ -883,7 +884,9 @@ export function UpdateNft() {
                           <input type="file" onChange={(e) => setNewImage(e.target.files?.[0] || null)} hidden />
                         </Button>
                         <img
-                          src={(newImage ? URL.createObjectURL(newImage) : image) || undefined}
+                          src={
+                            (newImage ? URL.createObjectURL(newImage) : image ? imageCdn(image) : image) || undefined
+                          }
                           height={55}
                           alt="The current file"
                         />
@@ -1179,7 +1182,7 @@ export function UpdateNft() {
             <PreviewNft
               name={name}
               isCollection={isCollection}
-              image={newImage ? URL.createObjectURL(newImage) : image}
+              image={newImage ? URL.createObjectURL(newImage) : image ? imageCdn(image) : image}
               multimedia={newMultimedia ? URL.createObjectURL(newMultimedia) : multimedia}
               multimediaType={multimediaType}
               description={description}

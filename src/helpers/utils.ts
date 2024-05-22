@@ -89,3 +89,7 @@ export async function getNiftyDandies(umi: Umi, wallets: PublicKey[]) {
     )
   )
 }
+
+export function imageCdn(src: string, w: number = 400, h: number = 400) {
+  return `https://img-cdn.magiceden.dev/rs:fill:${w || ""}:${h || ""}:0:0/plain/${src}`
+}
