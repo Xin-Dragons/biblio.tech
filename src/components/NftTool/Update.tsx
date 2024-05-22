@@ -29,6 +29,8 @@ import { DigitalAssetWithJson, DigitalAssetWithJsonAndToken, useNfts } from "./c
 import { MultimediaCategory, getFee, getMultimediaType, shorten } from "./helpers/utils"
 import { NftSelector } from "./NftSelector"
 import { PreviewNft } from "./PreviewNft"
+import puppeteer from "puppeteer"
+
 import {
   PublicKey,
   createGenericFileFromBrowserFile,
@@ -153,14 +155,16 @@ export function UpdateNft() {
           )
           return
         } else {
-          let { data: json } = await axios.get(nft.metadata.uri, {
-            withCredentials: false,
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-          })
-          if (typeof json === "string") {
-            json = JSON.parse(json)
+          try {
+            let json = await fetchJsonMetadata(umi, nft.metadata.uri)
+            if (typeof json === "string") {
+              json = JSON.parse(json)
+            }
+            setNft({ ...nft, json })
+          } catch {
+            const { data: json } = await axios.post("/api/get-json", { uri: nft.metadata.uri })
+            setNft({ ...nft, json })
           }
-          setNft({ ...nft, json })
         }
 
         if (nft.metadata.updateAuthority !== umi.identity.publicKey) {
