@@ -165,6 +165,7 @@ export function UpdateNft() {
           } catch {
             try {
               const da = await getDigitalAsset(nft.publicKey)
+              console.log({ da })
               if (da) {
                 const json: JsonMetadata = {
                   name: da.content?.metadata.name,
