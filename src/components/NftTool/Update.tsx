@@ -41,7 +41,7 @@ import {
   unwrapOptionRecursively,
 } from "@metaplex-foundation/umi"
 import { useUmi } from "./context/umi"
-import { AddCircleRounded, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
+import { AddCircleRounded, AirportShuttle, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
 import {
   Creator,
   DigitalAsset,
@@ -153,9 +153,9 @@ export function UpdateNft() {
           )
           return
         } else {
-          console.log("getting json")
-          let json = await fetchJsonMetadata(umi, nft.metadata.uri)
-          console.log("got json", json)
+          let { data: json } = await axios.get(nft.metadata.uri, {
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+          })
           if (typeof json === "string") {
             json = JSON.parse(json)
           }
