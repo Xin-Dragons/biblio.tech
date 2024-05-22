@@ -174,6 +174,12 @@ export async function getDigitalAssets(mints: string[]) {
   return nfts
 }
 
+export async function getDigitalAsset(id: string) {
+  const da = await client.rpc.getAsset({ id })
+
+  return da
+}
+
 async function getDandiesForWallet(ownerAddress: string) {
   const dandies = await client.rpc.searchAssets({
     ownerAddress,

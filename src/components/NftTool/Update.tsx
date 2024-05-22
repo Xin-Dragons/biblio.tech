@@ -47,6 +47,7 @@ import { AddCircleRounded, AirportShuttle, ExpandMore, RemoveCircleRounded } fro
 import {
   Creator,
   DigitalAsset,
+  JsonMetadata,
   RuleSetToggle,
   TokenStandard,
   TokenState,
@@ -62,7 +63,7 @@ import {
   verifyCollectionV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
-import { getMintlist } from "../../helpers/helius"
+import { getDigitalAsset, getMintlist } from "../../helpers/helius"
 import { useAccess } from "../../context/access"
 import { hasProfanity } from "../../helpers/has-profanity"
 import { usePriorityFees } from "../../context/priority-fees"
@@ -162,8 +163,35 @@ export function UpdateNft() {
             }
             setNft({ ...nft, json })
           } catch {
-            const { data: json } = await axios.post("/api/get-json", { uri: nft.metadata.uri })
-            setNft({ ...nft, json })
+            try {
+              const da = await getDigitalAsset(nft.publicKey)
+              if (da) {
+                const json: JsonMetadata = {
+                  name: da.content?.metadata.name,
+                  description: da.content?.metadata.description,
+                  symbol: da.content?.metadata.symbol,
+                  seller_fee_basis_points: da.royalty?.basis_points,
+                  attributes: da.content?.metadata.attributes as any[],
+                  external_url: da.content?.links?.external_url,
+                  image: da.content?.links?.image,
+                  animation_url: da.content?.links?.animation_url,
+                  properties: {
+                    files: da.content?.files as any[],
+                  },
+                }
+                setNft({
+                  ...nft,
+                  json,
+                })
+              } else {
+                throw new Error("Not found")
+              }
+            } catch {
+              // stupid bs fallback as nftstorage are actual idiots.
+              const { data: json } = await axios.post("/api/get-json", { uri: nft.metadata.uri })
+              console.log(json)
+              setNft({ ...nft, json })
+            }
           }
         }
 
