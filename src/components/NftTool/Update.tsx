@@ -154,6 +154,7 @@ export function UpdateNft() {
           return
         } else {
           let { data: json } = await axios.get(nft.metadata.uri, {
+            withCredentials: false,
             headers: { "Content-Type": "application/json", Accept: "application/json" },
           })
           if (typeof json === "string") {
