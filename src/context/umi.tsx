@@ -1,5 +1,5 @@
-import type { Umi } from "@metaplex-foundation/umi"
-import { createContext, useContext } from "react"
+import { createSignerFromKeypair, Keypair, signerIdentity, type Umi } from "@metaplex-foundation/umi"
+import { createContext, useContext, useEffect, useState } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { ReactNode } from "react"
@@ -13,32 +13,54 @@ import { useCluster } from "./cluster"
 
 type UmiContext = {
   umi: Umi | null
+  setSigner: Function
 }
 
-const DEFAULT_CONTEXT: UmiContext = {
-  umi: null,
-}
-
-export const UmiContext = createContext<UmiContext>(DEFAULT_CONTEXT)
+export const UmiContext = createContext<UmiContext | undefined>(undefined)
 
 export const UmiProvider = ({ children }: { children: ReactNode }) => {
   const { rpcHost } = useCluster()
   const wallet = useWallet()
-  const umi = createUmi(rpcHost, { commitment: "processed" })
-    .use(walletAdapterIdentity(wallet))
-    .use(mplTokenMetadata())
-    .use(mplToolbox())
-    .use(irysUploader())
-    .use(mplTokenAuthRules())
-    .use(dasApi())
 
-  return <UmiContext.Provider value={{ umi }}>{children}</UmiContext.Provider>
+  const [umi, setUmi] = useState(
+    createUmi(rpcHost, { commitment: "processed" })
+      .use(walletAdapterIdentity(wallet))
+      .use(mplTokenMetadata())
+      .use(mplToolbox())
+      .use(irysUploader())
+      .use(mplTokenAuthRules())
+      .use(dasApi())
+  )
+
+  useEffect(() => {
+    if (wallet.publicKey) {
+      setUmi(umi.use(walletAdapterIdentity(wallet)))
+    }
+  }, [wallet.publicKey])
+
+  function setSigner(keypair: Keypair) {
+    setUmi(umi.use(signerIdentity(createSignerFromKeypair(umi, keypair))))
+  }
+
+  return <UmiContext.Provider value={{ umi, setSigner }}>{children}</UmiContext.Provider>
 }
 
 export function useUmi(): Umi {
-  const umi = useContext(UmiContext).umi
+  const umi = useContext(UmiContext)
+
   if (!umi) {
     throw new Error("Umi context was not initialized. " + "Did you forget to wrap your app with <UmiProvider />?")
   }
-  return umi
+
+  return umi.umi as Umi
+}
+
+export function useUmiSetSigner() {
+  const umi = useContext(UmiContext)
+
+  if (!umi) {
+    throw new Error("Umi context was not initialized. " + "Did you forget to wrap your app with <UmiProvider />?")
+  }
+
+  return umi.setSigner
 }

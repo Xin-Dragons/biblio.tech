@@ -1,15 +1,22 @@
-import { Signer, Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
+import { PublicKey, Signer, Transaction, TransactionBuilder, Umi, transactionBuilder } from "@metaplex-foundation/umi"
 import { chunkBy } from "chunkier"
 import { flatten } from "lodash"
 import { toast } from "react-hot-toast"
 import { shorten, sleep, waitForWalletChange } from "./utils"
 import { WalletContextState } from "@solana/wallet-adapter-react"
-import { Connection } from "@solana/web3.js"
-import { MAX_TX_SIZE, PRIORITY_AND_COMPUTE_IXS_SIZE, PRIORITY_FEE_IX_SIZE, PriorityFees } from "../constants"
+import { Connection, NONCE_ACCOUNT_LENGTH, NonceAccount, SystemProgram } from "@solana/web3.js"
+import {
+  MAX_TX_SIZE,
+  NONCE_ADVANCE_IX_SIZE,
+  PRIORITY_AND_COMPUTE_IXS_SIZE,
+  PRIORITY_FEE_IX_SIZE,
+  PriorityFees,
+} from "../constants"
 import { base58 } from "@metaplex-foundation/umi/serializers"
 import { getPriorityFeesForTx } from "./helius"
 import { setComputeUnitLimit, setComputeUnitPrice } from "@metaplex-foundation/mpl-toolbox"
-import { toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
+import { fromWeb3JsInstruction, toWeb3JsPublicKey, toWeb3JsTransaction } from "@metaplex-foundation/umi-web3js-adapters"
+import Bottleneck from "bottleneck"
 
 export type InstructionSet = {
   instructions: TransactionBuilder
@@ -99,7 +106,8 @@ export async function signAllTransactions(
 export function unsafeSplitByTransactionSizeWithPriorityFees(
   umi: Umi,
   tx: TransactionBuilder,
-  computeUnits: boolean
+  computeUnits: boolean,
+  useNonce = false
 ): TransactionBuilder[] {
   return tx.items.reduce(
     (builders, item) => {
@@ -107,7 +115,9 @@ export function unsafeSplitByTransactionSizeWithPriorityFees(
       const lastBuilderWithItem = lastBuilder.add(item)
       if (
         lastBuilderWithItem.getTransactionSize(umi) <=
-        MAX_TX_SIZE - (computeUnits ? PRIORITY_AND_COMPUTE_IXS_SIZE : PRIORITY_FEE_IX_SIZE)
+        MAX_TX_SIZE -
+          (computeUnits ? PRIORITY_AND_COMPUTE_IXS_SIZE : PRIORITY_FEE_IX_SIZE) -
+          (useNonce ? NONCE_ADVANCE_IX_SIZE : 0)
       ) {
         builders.push(lastBuilderWithItem)
       } else {
@@ -120,21 +130,45 @@ export function unsafeSplitByTransactionSizeWithPriorityFees(
   )
 }
 
-export async function simulateAndAddCus(umi: Umi, tx: TransactionBuilder) {
+export async function simulateAndAddCus(umi: Umi, txs: TransactionBuilder[]) {
   const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!)
-  const web3tx = toWeb3JsTransaction(await tx.buildWithLatestBlockhash(umi))
+  const web3tx = toWeb3JsTransaction(await txs[0].buildWithLatestBlockhash(umi))
   const simulation = await connection.simulateTransaction(web3tx, { replaceRecentBlockhash: true })
-  const computeUnits = simulation.value.unitsConsumed ? simulation.value.unitsConsumed + 300 : 200_000
-  return tx.prepend(setComputeUnitLimit(umi, { units: computeUnits }))
+  const computeUnits = simulation.value.unitsConsumed ? simulation.value.unitsConsumed + 50_000 : 200_000
+  return txs.map((tx) => tx.prepend(setComputeUnitLimit(umi, { units: computeUnits })))
 }
 
-export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: PriorityFees) {
-  let chunks = unsafeSplitByTransactionSizeWithPriorityFees(umi, tx, true)
+export type NonceWithPubkey = NonceAccount & { pubkey: PublicKey }
 
-  const [encoded] = base58.deserialize(umi.transactions.serialize(await chunks[0].buildWithLatestBlockhash(umi)))
-  const txFee = feeLevel && (await getPriorityFeesForTx(encoded, feeLevel))
+export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: PriorityFees, nonce?: NonceWithPubkey) {
+  let chunks = unsafeSplitByTransactionSizeWithPriorityFees(umi, tx, true, !!nonce)
 
-  chunks = await Promise.all(chunks.map((tx) => simulateAndAddCus(umi, tx)))
+  chunks = !!nonce
+    ? chunks.map((ch) =>
+        ch.prepend({
+          instruction: fromWeb3JsInstruction(
+            SystemProgram.nonceAdvance({
+              noncePubkey: toWeb3JsPublicKey(nonce.pubkey),
+              authorizedPubkey: toWeb3JsPublicKey(umi.identity.publicKey),
+            })
+          ),
+          bytesCreatedOnChain: 0,
+          signers: [umi.identity],
+        })
+      )
+    : chunks
+
+  const encoded = !!nonce
+    ? base58.deserialize(umi.transactions.serialize(chunks[0].setBlockhash(nonce.nonce).build(umi)))[0]
+    : base58.deserialize(umi.transactions.serialize(await chunks[0].buildWithLatestBlockhash(umi)))[0]
+
+  let txFee = feeLevel ? await getPriorityFeesForTx(encoded, feeLevel) : 10_000
+
+  if (txFee < 10_000) {
+    txFee = 10_000
+  }
+
+  chunks = await simulateAndAddCus(umi, chunks)
 
   chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee || 10_000 })))
   return { chunks, txFee }
@@ -168,19 +202,17 @@ export async function sendAllTxsWithRetries(
           type: "blockhash",
           ...blockhash,
         },
-        commitment: "confirmed",
       })
 
       while (blockheight < lastValidBlockHeight && !resolved) {
         try {
-          console.log("Sending tx")
           await umi.rpc.sendTransaction(tx)
           await sleep(delay)
         } catch (err: any) {
           if (err.message.includes("This transaction has already been processed")) {
             resolved = true
           } else {
-            console.error(displayErrorFromLog(err, err.message || "Error sending tx"))
+            console.log(err)
           }
         }
         blockheight = await connection.getBlockHeight()

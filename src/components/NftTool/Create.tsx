@@ -7,6 +7,7 @@ import {
   verifyCollectionV1,
 } from "@metaplex-foundation/mpl-token-metadata"
 import {
+  PublicKey,
   createGenericFileFromBrowserFile,
   createSignerFromKeypair,
   generateSigner,
@@ -38,7 +39,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useState, useEffect } from "react"
 import toast from "react-hot-toast"
 import { useNfts } from "./context/nft"
-import { MultimediaCategory, getFee, getMultimediaType, getUmiChunks, sendBatches, shorten } from "./helpers/utils"
+import { MultimediaCategory, getFee, getMultimediaType, getUmiChunks, shorten } from "./helpers/utils"
 import { useUmi } from "./context/umi"
 import { transferSol } from "@metaplex-foundation/mpl-toolbox"
 import { NftSelector } from "./NftSelector"
@@ -52,6 +53,7 @@ import { useAccess } from "../../context/access"
 import { hasProfanity } from "../../helpers/has-profanity"
 import { packTx, sendAllTxsWithRetries } from "../../helpers/transactions"
 import { usePriorityFees } from "../../context/priority-fees"
+import { useTxs } from "../../context/txs"
 
 export const emptyAttribute = {
   trait_type: "",
@@ -64,6 +66,7 @@ export const emptyCreator = {
 }
 
 export const CreateNft = () => {
+  const { process } = useTxs()
   const { feeLevel } = usePriorityFees()
   const { collections, refresh } = useNfts()
   const { account } = useAccess()
@@ -201,66 +204,68 @@ export const CreateNft = () => {
 
     if (createMany) {
       const anonUmi = getAnonUmi(umi.identity.publicKey)
-      const builders = Array.from(Array(quantity).keys()).map((index) => {
-        let tx = transactionBuilder()
-        const mint = generateSigner(umi)
+      const allMints: PublicKey[] = []
 
-        tx = tx.add(
-          func(anonUmi, {
-            uri,
-            name,
-            mint,
-            sellerFeeBasisPoints: percentAmount(Math.round(Number(sellerFeeBasisPoints || 0))),
-            symbol,
-            creators: parsedCreators.length ? parsedCreators : undefined,
-            isMutable,
-            collection: collection
-              ? {
-                  key: publicKey(collection),
-                  verified: false,
-                }
-              : undefined,
-            ruleSet: pNft ? publicKey(ruleSet) || null : undefined,
+      const promise = Promise.resolve().then(async () => {
+        let tx = transactionBuilder().add(
+          Array.from(Array(quantity).keys()).map((index) => {
+            const mint = generateSigner(umi)
+            allMints.push(mint.publicKey)
+            let t = transactionBuilder().add(
+              func(anonUmi, {
+                uri,
+                name,
+                mint,
+                sellerFeeBasisPoints: percentAmount(Math.round(Number(sellerFeeBasisPoints || 0))),
+                symbol,
+                creators: parsedCreators.length ? parsedCreators : undefined,
+                isMutable,
+                collection: collection
+                  ? {
+                      key: publicKey(collection),
+                      verified: false,
+                    }
+                  : undefined,
+                ruleSet: pNft ? publicKey(ruleSet) || null : undefined,
+              })
+            )
+
+            if (collectionDa) {
+              if (collectionDa.metadata.updateAuthority === umi.identity.publicKey) {
+                t = t.add(
+                  verifyCollectionV1(anonUmi, {
+                    collectionMint: collectionDa.publicKey,
+                    metadata: findMetadataPda(umi, { mint: mint.publicKey }),
+                  })
+                )
+              }
+            }
+
+            const fee = getFee("nft-suite.create", account)
+
+            if (fee) {
+              t = t.add(
+                transferSol(anonUmi, {
+                  destination: FEES_WALLET,
+                  amount: sol(fee),
+                })
+              )
+            }
+
+            return t
           })
         )
 
-        if (collectionDa) {
-          if (collectionDa.metadata.updateAuthority === umi.identity.publicKey) {
-            tx = tx.add(
-              verifyCollectionV1(anonUmi, {
-                collectionMint: collectionDa.publicKey,
-                metadata: findMetadataPda(umi, { mint: mint.publicKey }),
-              })
-            )
-          }
-        }
-
-        const fee = getFee("nft-suite.create", account)
-
-        if (fee) {
-          tx = tx.add(
-            transferSol(anonUmi, {
-              destination: FEES_WALLET,
-              amount: sol(fee),
-            })
-          )
-        }
-
-        return tx
+        await process(tx, allMints)
       })
 
-      const txns = await Promise.all(getUmiChunks(anonUmi, builders))
-      const batches = chunk(txns, 50)
-
-      const sentTxns = sendBatches(batches, umi)
-
-      toast.promise(sentTxns, {
-        loading: "Minting NFTs",
-        success: `Minted NFTs!`,
+      toast.promise(promise, {
+        loading: "Building transactions",
+        success: `Transactions built, sending`,
         error: `Error minting NFTs`,
       })
 
-      await sentTxns
+      await promise
     } else {
       let tx = transactionBuilder().add(
         func(umi, {

@@ -13,7 +13,6 @@ const Context = createContext<Umi | undefined>(undefined)
 export function UmiProvider({ children }: { children: ReactNode }) {
   const { rpcHost } = useCluster()
   const wallet = useWallet()
-  console.log({ rpcHost })
 
   const umi = useMemo(
     () =>

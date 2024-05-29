@@ -10,8 +10,7 @@ import axios from "axios"
 import { getDandies } from "../helpers/helius"
 import { getNiftyDandies } from "../helpers/utils"
 import { Asset } from "@nifty-oss/asset"
-
-type AccountType = "basic" | "advanced" | "pro" | "unlimited"
+import { ACCOUNT_TYPE } from "../constants"
 
 type AccessContextProps = {
   publicKey: string | null
@@ -22,8 +21,10 @@ type AccessContextProps = {
   isAdmin: boolean
   nonce: string
   refresh: Function
-  account: AccountType
+  account: ACCOUNT_TYPE
+  nextLevel: ACCOUNT_TYPE
   userWallets: string[]
+  dandiesNeeded: number
 }
 
 const initial = {
@@ -35,8 +36,10 @@ const initial = {
   isAdmin: false,
   nonce: "",
   refresh: noop,
-  account: "basic" as AccountType,
+  account: ACCOUNT_TYPE.basic,
+  nextLevel: ACCOUNT_TYPE.advanced,
   userWallets: [],
+  dandiesNeeded: 0,
 }
 
 export const AccessContext = createContext<AccessContextProps>(initial)
@@ -53,6 +56,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
   const [publicKeys, setPublicKeys] = useState<string[]>([])
   const [userWallets, setUserWallets] = useState<string[]>([])
   const [dandies, setDandies] = useState<Array<DAS.GetAssetResponse | Asset>>([])
+
   const [isActive, setIsActive] = useState(false)
   const [publicKey, setPublicKey] = useState("")
   const umi = useUmi()
@@ -119,14 +123,22 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
     })()
   }, [user])
 
-  let account: AccountType = "basic"
+  let account = ACCOUNT_TYPE.basic
+  let nextLevel = ACCOUNT_TYPE.advanced
+  let dandiesNeeded = 1
 
   if (dandies.length >= 10) {
-    account = "unlimited"
+    account = ACCOUNT_TYPE.unlimited
+    nextLevel = ACCOUNT_TYPE.unlimited
+    dandiesNeeded = 0
   } else if (dandies.length >= 5) {
-    account = "pro"
+    account = ACCOUNT_TYPE.pro
+    nextLevel = ACCOUNT_TYPE.unlimited
+    dandiesNeeded = 10 - dandies.length
   } else if (dandies.length) {
-    account = "advanced"
+    account = ACCOUNT_TYPE.advanced
+    nextLevel = ACCOUNT_TYPE.pro
+    dandiesNeeded = 5 - dandies.length
   }
 
   return (
@@ -142,6 +154,8 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
         refresh,
         account,
         userWallets,
+        nextLevel,
+        dandiesNeeded,
       }}
     >
       {children}

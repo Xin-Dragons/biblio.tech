@@ -10,10 +10,10 @@ import {
   createAndMint,
   verifyCreatorV1,
   unverifyCollectionV1,
-  fetchAllDigitalAssetWithTokenByMint,
-  DigitalAssetWithToken,
   Creator,
   mplTokenMetadata,
+  UpdateV1InstructionDataArgs,
+  UpdateV1InstructionAccounts,
 } from "@metaplex-foundation/mpl-token-metadata"
 import {
   publicKey,
@@ -29,6 +29,7 @@ import {
   isSome,
   signerIdentity,
   createSignerFromKeypair,
+  Umi,
 } from "@metaplex-foundation/umi"
 import {
   Grid,
@@ -56,17 +57,36 @@ import {
   Alert,
   Switch,
   Checkbox,
+  Box,
+  LinearProgress,
+  Snackbar,
+  SnackbarContent,
+  CircularProgress,
+  LinearProgressProps,
+  Slider,
 } from "@mui/material"
 import { useWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
 import axios from "axios"
 import base58 from "bs58"
-import { isEqual, uniqBy, flatten, uniq, sample, chunk, filter, findKey } from "lodash"
-import { useState, useEffect } from "react"
+import {
+  isEqual,
+  uniqBy,
+  flatten,
+  uniq,
+  sample,
+  chunk,
+  filter,
+  findKey,
+  intersection,
+  groupBy,
+  upperFirst,
+} from "lodash"
+import { useState, useEffect, ReactNode } from "react"
 import toast from "react-hot-toast"
 import { METAPLEX_RULE_SET, METAPLEX_COMPATIBILITY_RULE_SET, SYSTEM_PROGRAM_PK, FEES_WALLET } from "./constants"
 import { useNfts } from "./context/nft"
-import { getFee, getUmiChunks, sendBatches, shorten } from "./helpers/utils"
+import { getFee, shorten } from "./helpers/utils"
 import { NftSelector } from "./NftSelector"
 import { NftsList } from "./NftsList"
 import { AddCircleRounded, CheckCircleRounded, ExpandMore, RemoveCircleRounded } from "@mui/icons-material"
@@ -77,11 +97,33 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { takeSnapshot } from "../../helpers/snapshot"
 import { getMintlist } from "../../helpers/helius"
 import { useAccess } from "../../context/access"
+import { packTx } from "../../helpers/transactions"
+import { usePriorityFees } from "../../context/priority-fees"
+import { useTxs } from "../../context/txs"
+import { useUmiSetSigner } from "../../context/umi"
+import { ACCOUNT_TYPE, MAX_BATCH_SIZES, TX_THROTTLE } from "../../constants"
+import { SliderWithLabel } from "../SliderWithLabel"
+import { PriorityFeesSelector } from "../PriorityFeesSelector"
+
+const BATCH_SIZE = 100
 
 export const BatchUpdateNfts = () => {
+  const {
+    process,
+    confirmedMints,
+    speed,
+    onSpeedChange,
+    batchSize,
+    onBatchSizeChange,
+    active,
+    isComplete,
+    setUseNonce,
+    useNonce,
+  } = useTxs()
+
   const [immutableChecked, setImmutableChecked] = useState(false)
   const { collections, loading: nftsLoading } = useNfts()
-  const { account } = useAccess()
+  const { account, dandies, dandiesNeeded, nextLevel } = useAccess()
   const [secretKey, setSecretKey] = useState("")
   const [secretKeyError, setSecretKeyError] = useState<string | null>(null)
   const [keypair, setKeypair] = useState<Keypair | null>(null)
@@ -115,6 +157,8 @@ export const BatchUpdateNfts = () => {
   const [collectionModalOpen, setCollectionModalOpen] = useState(false)
   const [tokenStandard, setTokenStandard] = useState(TokenStandard.NonFungible)
   const [negateFilter, setNegateFilter] = useState(false)
+  const setUmiSigner = useUmiSetSigner()
+
   const [findReplaceCreators, setFindReplaceCreators] = useState([
     {
       find: "",
@@ -159,22 +203,6 @@ export const BatchUpdateNfts = () => {
     }
   }, [programmableConfigType])
 
-  useEffect(() => {
-    if (!secretKey) {
-      setSecretKeyError(null)
-      setKeypair(null)
-    } else {
-      try {
-        const keypair = umi.eddsa.createKeypairFromSecretKey(base58.decode(secretKey))
-        setKeypair(keypair)
-        setSecretKeyError(null)
-      } catch {
-        setKeypair(null)
-        setSecretKeyError("Invalid secret key - please use a base58 encoded key")
-      }
-    }
-  }, [secretKey])
-
   function toggleCollectionModal() {
     setCollectionModalOpen(!collectionModalOpen)
   }
@@ -194,22 +222,9 @@ export const BatchUpdateNfts = () => {
     nft &&
     (nft.metadata.sellerFeeBasisPoints !== sellerFeeBasisPoints ||
       royaltiesMismatch ||
-      !isEqual(unwrapOption(nft.metadata.creators), creators) ||
       nft.metadata.updateAuthority !== updateAuthority ||
       updateAuthorityMismatch ||
       unwrapOption(nft.metadata.collection)?.key !== collection)
-
-  // useEffect(() => {
-  //   const items = [...done]
-  //   const timeout = setTimeout(() => {
-  //     setToUpdate((prevState) => {
-  //       return prevState.filter((item) => !items.includes(item.mint))
-  //     })
-  //   }, 3000)
-  //   return () => {
-  //     clearTimeout(timeout)
-  //   }
-  // }, [done])
 
   useEffect(() => {
     setUniqueCreators(
@@ -284,7 +299,13 @@ export const BatchUpdateNfts = () => {
       } else {
         setToUpdate([])
       }
-    } else if (expanded === "find-and-replace") {
+    } else if (expanded === "creators") {
+      if (creatorsIsDirty) {
+        setToUpdate(filtered)
+      } else {
+        setToUpdate([])
+      }
+    } else if (expanded === "find-replace") {
       const filters = findReplaceCreators.filter((item) => item.find && item.replace)
       setToUpdate(
         filtered.filter((n: DigitalAsset) =>
@@ -579,17 +600,6 @@ export const BatchUpdateNfts = () => {
     })
   }
 
-  function reload() {
-    setDone([])
-    lookupMints()
-  }
-
-  function triggerDone() {
-    setTimeout(() => {
-      reload()
-    }, 3500)
-  }
-
   async function findAndReplaceCreators() {
     try {
       setLoading(true)
@@ -655,7 +665,6 @@ export const BatchUpdateNfts = () => {
       toast.error("Error updating creators")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
 
@@ -667,12 +676,6 @@ export const BatchUpdateNfts = () => {
       },
     ])
   }
-
-  // async function markDone(items) {
-  //   setDone((prevState) => {
-  //     return [...prevState, ...items.map((item) => item.mint)]
-  //   })
-  // }
 
   async function validateCollection() {
     if (!collection) {
@@ -701,27 +704,17 @@ export const BatchUpdateNfts = () => {
   async function sendUpdates(getInstruction: Function) {
     async function doUpdate() {
       const updates = [...toUpdate.sort((a, b) => a.publicKey.localeCompare(b.publicKey))]
-      const builders: TransactionBuilder[] = await Promise.all(updates.map((da: DigitalAsset) => getInstruction(da)))
+      const tx = transactionBuilder().add(await Promise.all(updates.map((da) => getInstruction(da))))
+      const allMints = updates.map((u) => u.publicKey)
 
-      const txs = await Promise.all(getUmiChunks(umi, builders))
-
-      const batches = chunk(txs, 100)
-
-      const signer = keypair
-        ? createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
-            .use(mplTokenMetadata())
-            .use(mplToolbox())
-            .use(signerIdentity(createSignerFromKeypair(umi, keypair)))
-        : umi
-
-      await sendBatches(batches, signer)
+      await process(tx, allMints)
     }
 
     const updatePromise = doUpdate()
 
     toast.promise(updatePromise, {
-      loading: `Updating ${toUpdate.length} NFTs`,
-      success: "Update complete",
+      loading: `Building transactions for ${toUpdate.length} NFTs`,
+      success: "Finished building txs, check progress below",
       error: "Error updating",
     })
 
@@ -762,7 +755,6 @@ export const BatchUpdateNfts = () => {
       toast.error("Error verifying")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
 
@@ -830,7 +822,6 @@ export const BatchUpdateNfts = () => {
       toast.error("Error adding to collection")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
 
@@ -885,7 +876,6 @@ export const BatchUpdateNfts = () => {
       toast.error("Error updating pNFTs")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
 
@@ -919,39 +909,33 @@ export const BatchUpdateNfts = () => {
       toast.error("Error unverfying")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
 
-  async function updateGlobal() {
+  async function updateCreators() {
     try {
       setLoading(true)
 
-      if (updateAuthorityError) {
-        throw new Error("Invaid new update authority")
-      }
-
-      if (royaltiesError) {
-        throw new Error("Invalid royalties")
+      if (creatorsMismatch) {
+        throw new Error("Mismatched creators detected")
       }
 
       const getInstruction = (da: DigitalAsset) => {
         const anonUmi = getAnonUmi(umi.identity.publicKey)
-        let tx = transactionBuilder().add(
-          updateV1(anonUmi, {
-            mint: da.publicKey,
-            newUpdateAuthority: updateAuthority ? publicKey(updateAuthority) : undefined,
-            authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
-            edition: da.edition?.publicKey,
-            data: {
-              name: da.metadata.name,
-              symbol: da.metadata.symbol,
-              uri: da.metadata.uri,
-              sellerFeeBasisPoints,
-              creators,
-            },
-          })
-        )
+        const updates: UpdateV1InstructionAccounts & UpdateV1InstructionDataArgs = {
+          mint: da.publicKey,
+          authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
+          edition: da.edition?.publicKey,
+          data: {
+            name: da.metadata.name,
+            symbol: da.metadata.symbol,
+            uri: da.metadata.uri,
+            sellerFeeBasisPoints: da.metadata.sellerFeeBasisPoints,
+            creators,
+          },
+        }
+
+        let tx = transactionBuilder().add(updateV1(anonUmi, updates))
 
         const fee = getFee("nft-suite.batch", account)
 
@@ -972,9 +956,84 @@ export const BatchUpdateNfts = () => {
       toast.error("Error updating")
     } finally {
       setLoading(false)
-      triggerDone()
     }
   }
+
+  async function updateGlobal() {
+    try {
+      setLoading(true)
+
+      if (updateAuthorityError) {
+        throw new Error("Invaid new update authority")
+      }
+
+      if (royaltiesError) {
+        throw new Error("Invalid royalties")
+      }
+
+      const getInstruction = (da: DigitalAsset) => {
+        const anonUmi = getAnonUmi(umi.identity.publicKey)
+        const updates: UpdateV1InstructionAccounts & UpdateV1InstructionDataArgs = {
+          mint: da.publicKey,
+          authorizationRules: unwrapOptionRecursively(da.metadata.programmableConfig)?.ruleSet || undefined,
+          edition: da.edition?.publicKey,
+        }
+
+        const originalCreators = unwrapOptionRecursively(da.metadata.creators)
+
+        if (sellerFeeBasisPoints !== da.metadata.sellerFeeBasisPoints) {
+          updates.data = {
+            name: da.metadata.name,
+            symbol: da.metadata.symbol,
+            uri: da.metadata.uri,
+            sellerFeeBasisPoints: da.metadata.sellerFeeBasisPoints,
+            creators: originalCreators,
+          }
+
+          if (sellerFeeBasisPoints !== da.metadata.sellerFeeBasisPoints) {
+            updates.data.sellerFeeBasisPoints = sellerFeeBasisPoints
+          }
+        }
+
+        if (updateAuthority) {
+          updates.newUpdateAuthority = publicKey(updateAuthority)
+        }
+
+        let tx = transactionBuilder().add(updateV1(anonUmi, updates))
+
+        const fee = getFee("nft-suite.batch", account)
+
+        if (fee) {
+          tx = tx.add(
+            transferSol(anonUmi, {
+              destination: FEES_WALLET,
+              amount: sol(fee),
+            })
+          )
+        }
+
+        return tx
+      }
+      await sendUpdates(getInstruction)
+    } catch (err) {
+      console.log(err)
+      toast.error("Error updating")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isComplete) {
+      lookupMints()
+    }
+  }, [isComplete])
+
+  useEffect(() => {
+    if (confirmedMints.length === 0) {
+      setToUpdate([])
+    }
+  }, [confirmedMints.length])
 
   useEffect(() => {
     const total = creators.reduce((sum, item) => sum + (item.share || 0), 0)
@@ -987,11 +1046,15 @@ export const BatchUpdateNfts = () => {
 
   function resetGlobal() {
     setRoyalties(`${(nft?.metadata.sellerFeeBasisPoints || 100) / 100}`)
-    setCreators(nft ? unwrapOption(nft.metadata.creators) || [] : [])
     setUpdateAuthority(nft?.metadata.updateAuthority || "")
   }
 
+  function resetCreators() {
+    setCreators(nft ? unwrapOption(nft.metadata.creators) || [] : [])
+  }
+
   const findReplaceCreatorsIsDirty = findReplaceCreators.find((f) => f.find && f.replace)
+  const creatorsIsDirty = !isEqual(creators, unwrapOptionRecursively(nft?.metadata.creators))
 
   const isUpdateAuthority =
     nft &&
@@ -1255,65 +1318,7 @@ export const BatchUpdateNfts = () => {
                             overwrite any custom configuration.
                           </FormHelperText>
                         )}
-                        <Typography variant="h6">Creators</Typography>
-                        {(creators || []).map((creator, index) => {
-                          return (
-                            <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-                              <Icon color={creatorsMismatch ? "disabled" : "success"}>
-                                {creator.verified ? <CheckCircleRounded /> : null}
-                              </Icon>
-                              <TextField
-                                label="Address"
-                                value={creator.address}
-                                onChange={updateCreator(index, "address")}
-                                disabled={creatorsMismatch}
-                                fullWidth
-                              />
-                              <TextField
-                                type="number"
-                                label="Share"
-                                error={!!shareError}
-                                value={creator.share}
-                                onChange={updateCreator(index, "share")}
-                                onWheel={(e: any) => e.target.blur()}
-                                fullWidth
-                                disabled={creatorsMismatch}
-                                inputProps={{
-                                  min: 0,
-                                  max: 100,
-                                  step: 1,
-                                }}
-                                helperText={shareError}
-                              />
-                              {index === 0 ? (
-                                <IconButton color="primary" onClick={addCreator} disabled={creatorsMismatch}>
-                                  <AddCircleRounded />
-                                </IconButton>
-                              ) : (
-                                <IconButton color="error" onClick={removeCreator(index)} disabled={creatorsMismatch}>
-                                  <RemoveCircleRounded />
-                                </IconButton>
-                              )}
-                            </Stack>
-                          )
-                        })}
-                        {creatorsMismatch && (
-                          <FormHelperText color="error">
-                            Multiple creator configurations detected in provided hashlist. A global batch update can
-                            only be performed on a consitent set of creators.
-                            <br />
-                            <br />
-                            This is often the case if a collection is minted using multiple Candy Machines.
-                            <br />
-                            <br />
-                            You can either update each subset separately by entering a hashlist for each part of the
-                            collection
-                            <br />
-                            <br />
-                            Alternatively you can use the find and replace functionality below to swap out existing
-                            creator wallets but keep the shares the same.
-                          </FormHelperText>
-                        )}
+
                         <Typography variant="h6">Update authority</Typography>
                         <TextField
                           label="Update authority"
@@ -1374,14 +1379,15 @@ export const BatchUpdateNfts = () => {
                       </Stack>
                     </AccordionDetails>
                   </Accordion>
+
                   <Accordion
-                    expanded={expanded === "find-replace"}
-                    onChange={handleChange("find-replace")}
+                    expanded={expanded === "creators"}
+                    onChange={handleChange("creators")}
                     disabled={!filtered.length || !isUpdateAuthority}
                   >
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Stack direction="row" alignItems="center" spacing={2}>
-                        <Typography variant="h5">Find and replace creators</Typography>
+                        <Typography variant="h5">Creators</Typography>
                         {nft && !isUpdateAuthority && <Typography color="error">Connect with UA wallet</Typography>}
                       </Stack>
                     </AccordionSummary>
@@ -1392,6 +1398,105 @@ export const BatchUpdateNfts = () => {
                           update other verified creators, you must first unverify them by connecting with the creator
                           wallet and unverifying below.
                         </Typography>
+
+                        {(creators || []).map((creator, index) => {
+                          return (
+                            <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
+                              <Icon color={creatorsMismatch ? "disabled" : "success"}>
+                                {creator.verified ? <CheckCircleRounded /> : null}
+                              </Icon>
+                              <TextField
+                                label="Address"
+                                value={creator.address}
+                                onChange={updateCreator(index, "address")}
+                                disabled={creatorsMismatch}
+                                fullWidth
+                              />
+                              <TextField
+                                type="number"
+                                label="Share"
+                                error={!!shareError}
+                                value={creator.share}
+                                onChange={updateCreator(index, "share")}
+                                onWheel={(e: any) => e.target.blur()}
+                                fullWidth
+                                disabled={creatorsMismatch}
+                                inputProps={{
+                                  min: 0,
+                                  max: 100,
+                                  step: 1,
+                                }}
+                                helperText={shareError}
+                              />
+                              {index === 0 ? (
+                                <IconButton color="primary" onClick={addCreator} disabled={creatorsMismatch}>
+                                  <AddCircleRounded />
+                                </IconButton>
+                              ) : (
+                                <IconButton color="error" onClick={removeCreator(index)} disabled={creatorsMismatch}>
+                                  <RemoveCircleRounded />
+                                </IconButton>
+                              )}
+                            </Stack>
+                          )
+                        })}
+                        {creatorsMismatch && (
+                          <FormHelperText color="error">
+                            Multiple creator configurations detected in provided hashlist. A global batch update can
+                            only be performed on a consitent set of creators.
+                            <br />
+                            <br />
+                            This is often the case if a collection is minted using multiple Candy Machines.
+                            <br />
+                            <br />
+                            You can either update each subset separately by entering a hashlist for each part of the
+                            collection
+                            <br />
+                            <br />
+                            Alternatively you can use the find and replace functionality below to swap out existing
+                            creator wallets but keep the shares the same.
+                          </FormHelperText>
+                        )}
+
+                        <Stack direction="row" spacing={2} justifyContent="space-between">
+                          <Button
+                            variant="outlined"
+                            onClick={resetCreators}
+                            disabled={loading || !creatorsIsDirty || creatorsMismatch}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="contained"
+                            onClick={updateCreators}
+                            disabled={loading || !creatorsIsDirty || creatorsMismatch || !!royaltiesError}
+                          >
+                            Update
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Accordion
+                    expanded={expanded === "find-replace"}
+                    onChange={handleChange("find-replace")}
+                    disabled={!filtered.length || !isUpdateAuthority}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Typography variant="h5">Find & replace creators</Typography>
+                        {nft && !isUpdateAuthority && <Typography color="error">Connect with UA wallet</Typography>}
+                      </Stack>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={2}>
+                        <Typography>
+                          You can only update unverified creators, or your own address if you are a verified creator. To
+                          update other verified creators, you must first unverify them by connecting with the creator
+                          wallet and unverifying below.
+                        </Typography>
+
                         {findReplaceCreators.map((c, index) => {
                           return (
                             <Stack key={index} direction="row" spacing={2} alignItems="center">
@@ -1898,23 +2003,60 @@ export const BatchUpdateNfts = () => {
           <Card>
             <CardContent>
               <Stack spacing={2}>
-                <Typography variant="h5">Signer</Typography>
-                <Typography>
-                  Direct wallet signing can be used to save time if you are updating a large number of NFTs.
-                </Typography>
-                <Typography fontWeight="bold">THIS IS FOR CONVENIENCE ONLY</Typography>
-                <Typography>This is a client-side application and we do not store any information.</Typography>
-                <Typography fontWeight="bold">
-                  Be sure you are using the official Biblio NFT Suite - https://biblio.tech/tools/nft-suite - and not an
-                  imitation phishing site.
-                </Typography>
-                <TextField
-                  label="Secret key"
-                  error={!!secretKeyError}
-                  value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  helperText={secretKeyError}
-                />
+                <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
+                  <Typography variant="h5">Settings</Typography>
+                  <Typography fontWeight="bold" textTransform="uppercase">
+                    {account}
+                  </Typography>
+                </Stack>
+
+                <Stack spacing={2}>
+                  <SliderWithLabel
+                    label="Speed"
+                    labelRight={`Max: ${1000 / (useNonce ? 400 : TX_THROTTLE[account])} Tx/s`}
+                    min={1}
+                    max={1000 / (useNonce ? 400 : TX_THROTTLE[account])}
+                    value={speed}
+                    onChange={onSpeedChange}
+                    unit="Tx/s"
+                    tooltip="This is the speed at which transactions are broadcasted to the blockchain. Each transaction is continually sent until it is picked up or expires. Reduce this number if you are getting rate-limit errors."
+                    disabled={useNonce || active}
+                  />
+
+                  <SliderWithLabel
+                    label="Batch size"
+                    labelRight={`Max: ${MAX_BATCH_SIZES[account]}`}
+                    min={1}
+                    max={MAX_BATCH_SIZES[account]}
+                    value={batchSize}
+                    onChange={onBatchSizeChange}
+                    tooltip="Reduce this number if you are getting a large percent of expired transactions. Also wallets will crash if too many transactions are signed at once, Solflare handles 200 per batch, whilst Phantom & Backpack can struggle with more than 100"
+                    disabled={active}
+                  />
+
+                  {/* {account !== ACCOUNT_TYPE.unlimited && (
+                    <Typography fontWeight="bold" color="primary">
+                      Increase your dandies holdings by {dandiesNeeded} for tx speed of{" "}
+                      {1000 / TX_THROTTLE[nextLevel as ACCOUNT_TYPE]} Tx/s.
+                    </Typography>
+                  )} */}
+                  <Stack spacing={2}>
+                    <Typography fontWeight="bold">Priority fees</Typography>
+                    <PriorityFeesSelector disabled={active} />
+                  </Stack>
+
+                  {/* <Stack>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                      <Typography fontWeight="bold">Use durable nonce?</Typography>
+                      <Switch checked={useNonce} onChange={(e) => setUseNonce(e.target.checked)} />
+                    </Stack>
+                    <Typography variant="body2">
+                      {useNonce
+                        ? "Transactions will not expire, limited to one tx per slot (400ms) - useful for set-and-forget."
+                        : "Full speed, unconfirmed transactions will expire and need resigning after ~150 blocks"}
+                    </Typography>
+                  </Stack> */}
+                </Stack>
               </Stack>
             </CardContent>
           </Card>
@@ -1930,7 +2072,8 @@ export const BatchUpdateNfts = () => {
                   <Typography variant="h5">NFTs to update</Typography>
                   <Typography variant="h6">{filtered.length} NFTs found</Typography>
                 </Stack>
-                <NftsList nfts={toUpdate} done={done} />
+
+                <NftsList nfts={toUpdate} done={confirmedMints} />
               </Stack>
             </CardContent>
           </Card>

@@ -1364,7 +1364,7 @@ export const ItemDetails = ({ item }: { item: Nft }) => {
 
         const { chunks, txFee } = await packTx(umi, tx, feeLevel)
         const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
-        await sendAllTxsWithRetries(umi, connection, signed, txFee ? 1 : 0)
+        await sendAllTxsWithRetries(umi, connection, signed)
       })
 
       toast.promise(promise, { loading: "Revoking authority", success: "Revoked", error: "Error revoking authority" })

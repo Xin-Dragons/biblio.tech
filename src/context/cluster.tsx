@@ -11,7 +11,7 @@ const Context = createContext<
 
 const clusters = {
   devnet: process.env.NEXT_PUBLIC_DEVNET_RPC_HOST,
-  mainnet: process.env.NEXT_PUBLIC_TX_RPC_HOST,
+  mainnet: process.env.NEXT_PUBLIC_RPC_HOST,
 }
 
 export function ClusterProvider({ children }: { children: ReactNode }) {

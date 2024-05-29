@@ -37,7 +37,6 @@ async function getAllByCreator(creator: string) {
   let page = 1
   while (nfts.length < total) {
     const result = await getByCreator(creator, page)
-    console.log(result)
     total = result.grand_total as any as number
     nfts.push(...result.items)
     page++
@@ -121,12 +120,24 @@ export async function getAllFungiblesByOwner(owner: string) {
 async function getAllByCollection(collection: string) {
   const nfts = []
   let total = 1001
-  let page = 1
-  while (nfts.length < total) {
-    const result = await getByCollection(collection, page)
-    total = result.grand_total as any as number
-    nfts.push(...result.items)
-    page++
+  const first = await getByCollection(collection, 1)
+  if (!first) {
+    throw new Error("Error looking up collection")
+  }
+  nfts.push(...first.items)
+  total = first.grand_total as any as number
+
+  const pages = Math.ceil(total / 1000) - 1
+
+  if (pages) {
+    await Promise.all(
+      Array.from(new Array(pages).keys())
+        .map((k) => k + 2)
+        .map(async (page) => {
+          const result = await getByCollection(collection, page)
+          nfts.push(...result.items)
+        })
+    )
   }
 
   return nfts

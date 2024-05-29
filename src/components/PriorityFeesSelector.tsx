@@ -5,7 +5,7 @@ import { PriorityFees } from "../constants"
 import { usePriorityFees } from "../context/priority-fees"
 import InfoIcon from "@mui/icons-material/Info"
 
-export function PriorityFeesSelector() {
+export function PriorityFeesSelector({ disabled }: { disabled?: boolean }) {
   const { feeLevel, setFeeLevel } = usePriorityFees()
 
   return (
@@ -17,6 +17,7 @@ export function PriorityFeesSelector() {
         value={feeLevel}
         label="Priority tx fees"
         onChange={(e) => setFeeLevel(e.target.value as PriorityFees)}
+        disabled={disabled}
       >
         {Object.keys(PriorityFees).map((key, i) => (
           <MenuItem value={PriorityFees[key as keyof typeof PriorityFees]} key={i}>
