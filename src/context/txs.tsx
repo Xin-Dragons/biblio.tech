@@ -31,7 +31,17 @@ import { usePriorityFees } from "./priority-fees"
 import { v4 as uuid } from "uuid"
 import { Queue } from "../helpers/queue"
 import { useAccess } from "./access"
-import { ACCOUNT_TYPE, MAX_BATCH_SIZES, TX_THROTTLE } from "../constants"
+import {
+  ACCOUNT_TYPE,
+  COMPLETED_STATUSES,
+  CONFIRMING_STATUSES,
+  MAX_BATCH_SIZES,
+  RawTx,
+  TX_THROTTLE,
+  Tx,
+  TxStatus,
+  WorkerAction,
+} from "../constants"
 import { base58 } from "@metaplex-foundation/umi/serializers"
 import { Info } from "@mui/icons-material"
 import { usePrevious } from "../hooks/use-previous"
@@ -64,85 +74,6 @@ const Context = createContext<
     }
   | undefined
 >(undefined)
-
-export enum TxStatus {
-  UNSIGNED,
-  SIGNED,
-  SENT,
-  CONFIRMED,
-  EXPIRED,
-  ERROR,
-}
-
-export enum WorkerAction {
-  ITEM_PROCESSED,
-  BATCH_DONE,
-  TASK_COMPLETE,
-}
-
-export const CONFIRMING_STATUSES = [TxStatus.SENT, TxStatus.SIGNED, TxStatus.UNSIGNED]
-export const COMPLETED_STATUSES = [TxStatus.CONFIRMED, TxStatus.EXPIRED, TxStatus.ERROR]
-export const ERROR_STATUSES = [TxStatus.ERROR, TxStatus.EXPIRED]
-
-export type Tx = {
-  index: number
-  id: string
-  sig?: string
-  status: TxStatus
-  promise?: Promise<any>
-  tx: TransactionBuilder
-  mints: PublicKey[]
-  blockhash?: BlockhashWithExpiryBlockHeight
-  slot?: number
-}
-
-export type RawTx = {
-  index: number
-  id: string
-  tx: string
-  sig?: string
-}
-
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
-
-export async function sendItem(umi: Umi, item: RawTx, type: string, onProgress: (tx: Partial<Tx>) => void) {
-  try {
-    const tx = umi.transactions.deserialize(base58.serialize(item.tx))
-    const sig = await umi.rpc.sendTransaction(tx)
-    const [base58Sig] = base58.deserialize(sig)
-
-    const updatedItem = {
-      id: item.id,
-      sig: base58Sig,
-      status: TxStatus.SENT,
-    }
-    onProgress(updatedItem)
-  } catch (err: any) {
-    // console.log("error", err)
-    if (err.message.includes("Server responded with 429")) {
-      await sleep(1_000)
-      onProgress({ id: item.id })
-    } else if (err.message.includes("Transaction simulation failed: Blockhash not found")) {
-      onProgress({
-        id: item.id,
-        status: TxStatus.EXPIRED,
-      })
-    } else if (err.message.includes("custom program error")) {
-      onProgress({
-        id: item.id,
-        status: TxStatus.ERROR,
-      })
-    } else if (err.message.includes("This transaction has already been processed")) {
-      console.log("CONFIRMED", item.index)
-      onProgress({
-        id: item.id,
-        status: TxStatus.CONFIRMED,
-      })
-    } else {
-      return onProgress({ id: item.id })
-    }
-  }
-}
 
 export function TxsProvider({ children }: PropsWithChildren) {
   const [txs, setTxs] = useState<Tx[]>([])
@@ -757,8 +688,7 @@ export function TxsProvider({ children }: PropsWithChildren) {
                                 Pause to update settings such as speed, priority fees, or batch size. Your progress will
                                 not be lost. <br />
                                 <br />
-                                Pause and resume if your wallet adapter is not triggered once "Confirming" count reaches
-                                0
+                                {`Pause and resume if your wallet adapter is not triggered once "Confirming" count reaches 0`}
                               </Typography>
                             }
                           >

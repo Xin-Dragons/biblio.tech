@@ -1,4 +1,4 @@
-import { publicKey } from "@metaplex-foundation/umi"
+import { BlockhashWithExpiryBlockHeight, PublicKey, TransactionBuilder, publicKey } from "@metaplex-foundation/umi"
 
 export const MAX_TOKENS = BigInt("18446744073709551615")
 export const DANDIES_COLLECTION = publicKey("CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys")
@@ -20,6 +20,44 @@ export enum PriorityFees {
   HIGH = "High",
   VERYHIGH = "VeryHigh",
   // UNSAFEMAX = "UnsafeMax",
+}
+
+export enum TxStatus {
+  UNSIGNED,
+  SIGNED,
+  SENT,
+  CONFIRMED,
+  EXPIRED,
+  ERROR,
+}
+
+export enum WorkerAction {
+  ITEM_PROCESSED,
+  BATCH_DONE,
+  TASK_COMPLETE,
+}
+
+export const CONFIRMING_STATUSES = [TxStatus.SENT, TxStatus.SIGNED, TxStatus.UNSIGNED]
+export const COMPLETED_STATUSES = [TxStatus.CONFIRMED, TxStatus.EXPIRED, TxStatus.ERROR]
+export const ERROR_STATUSES = [TxStatus.ERROR, TxStatus.EXPIRED]
+
+export type Tx = {
+  index: number
+  id: string
+  sig?: string
+  status: TxStatus
+  promise?: Promise<any>
+  tx: TransactionBuilder
+  mints: PublicKey[]
+  blockhash?: BlockhashWithExpiryBlockHeight
+  slot?: number
+}
+
+export type RawTx = {
+  index: number
+  id: string
+  tx: string
+  sig?: string
 }
 
 export const MAX_TX_SIZE = 1232

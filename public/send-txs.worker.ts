@@ -1,10 +1,11 @@
 import { Connection } from "@solana/web3.js"
-import { CONFIRMING_STATUSES, RawTx, Tx, TxStatus, WorkerAction, sendItem } from "../src/context/txs"
 import { isEqual } from "lodash"
 import { Queue } from "../src/helpers/queue"
 import { sleep } from "../src/helpers/utils"
 import Bottleneck from "bottleneck"
 import { umi } from "../src/helpers/umi"
+import { sendItem } from "../src/helpers/transactions"
+import { CONFIRMING_STATUSES, RawTx, Tx, WorkerAction } from "../src/constants"
 
 const queue = new Queue<RawTx>()
 

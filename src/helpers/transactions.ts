@@ -11,6 +11,9 @@ import {
   PRIORITY_AND_COMPUTE_IXS_SIZE,
   PRIORITY_FEE_IX_SIZE,
   PriorityFees,
+  RawTx,
+  Tx,
+  TxStatus,
 } from "../constants"
 import { base58 } from "@metaplex-foundation/umi/serializers"
 import { getPriorityFeesForTx } from "./helius"
@@ -231,5 +234,44 @@ export async function sendAllTxsWithRetries(
   return {
     successes,
     errors,
+  }
+}
+
+export async function sendItem(umi: Umi, item: RawTx, type: string, onProgress: (tx: Partial<Tx>) => void) {
+  try {
+    const tx = umi.transactions.deserialize(base58.serialize(item.tx))
+    const sig = await umi.rpc.sendTransaction(tx)
+    const [base58Sig] = base58.deserialize(sig)
+
+    const updatedItem = {
+      id: item.id,
+      sig: base58Sig,
+      status: TxStatus.SENT,
+    }
+    onProgress(updatedItem)
+  } catch (err: any) {
+    // console.log("error", err)
+    if (err.message.includes("Server responded with 429")) {
+      await sleep(1_000)
+      onProgress({ id: item.id })
+    } else if (err.message.includes("Transaction simulation failed: Blockhash not found")) {
+      onProgress({
+        id: item.id,
+        status: TxStatus.EXPIRED,
+      })
+    } else if (err.message.includes("custom program error")) {
+      onProgress({
+        id: item.id,
+        status: TxStatus.ERROR,
+      })
+    } else if (err.message.includes("This transaction has already been processed")) {
+      console.log("CONFIRMED", item.index)
+      onProgress({
+        id: item.id,
+        status: TxStatus.CONFIRMED,
+      })
+    } else {
+      return onProgress({ id: item.id })
+    }
   }
 }
