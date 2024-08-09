@@ -108,7 +108,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
   const { connection } = useConnection()
   const { user, account } = useAccess()
   const { feeLevel } = usePriorityFees()
-  const { sendSignedTransactionsWithRetries } = useTransactionStatus()
+  const { sendSignedTransactions } = useTransactionStatus()
   const { addNftsToVault, removeNftsFromVault, updateOwnerForNfts } = useDatabase()
   const selectedItems = nfts.filter((n) => selected.includes(n.nftMint))
 
@@ -406,7 +406,7 @@ export const Vault: FC<{ onClose: Function }> = ({ onClose }) => {
 
         const signed = await signAllTransactions(wallet, umi, built, signers)
 
-        const freezeThawPromise = sendSignedTransactionsWithRetries(
+        const freezeThawPromise = sendSignedTransactions(
           signed,
           onlyFrozenSelected ? "thaw" : "freeze",
           onlyFrozenSelected ? (transfer ? updateOwnerForNfts : removeNftsFromVault) : addNftsToVault,

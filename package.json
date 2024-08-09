@@ -66,6 +66,7 @@
     "@mui/material": "^5.15.6",
     "@next/bundle-analyzer": "^13.4.3",
     "@nifty-oss/asset": "^0.5.0",
+    "@onsol/tldparser": "^0.6.5",
     "@project-serum/anchor": "^0.26.0",
     "@rainfi/sdk": "^1.2.63",
     "@sharkyfi/client": "^6.4.0",

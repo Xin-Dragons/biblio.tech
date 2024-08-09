@@ -16,6 +16,7 @@ type TransactionStatusContextProps = {
   setTransactionComplete: Function
   clearTransactions: Function
   sendSignedTransactionsWithRetries: Function
+  sendSignedTransactions: Function
 }
 
 const initial = {
@@ -25,6 +26,7 @@ const initial = {
   setTransactionComplete: noop,
   clearTransactions: noop,
   sendSignedTransactionsWithRetries: noop,
+  sendSignedTransactions: noop,
 }
 
 export const TransactionStatusContext = createContext<TransactionStatusContextProps>(initial)
@@ -46,6 +48,63 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
   const umi = useUmi()
   const { nfts } = useNfts()
   const { connection } = useConnection()
+
+  async function sendSignedTransactions(
+    txs: Transaction[],
+    type: TransactionStatusType,
+    onSuccess?: Function,
+    recipient = ""
+  ) {
+    const allNfts = nfts.map((n) => n.nftMint)
+
+    let successes = 0
+    let errors = 0
+
+    let blockhash = await umi.rpc.getLatestBlockhash()
+
+    await Promise.all(
+      txs.map(async (tx) => {
+        const mints = tx.message.accounts.filter((m) => allNfts.includes(m))
+        try {
+          setTransactionInProgress(mints, type)
+          const sig = await umi.rpc.sendTransaction(tx, { skipPreflight: true, commitment: "processed" })
+          const conf = await umi.rpc.confirmTransaction(sig, {
+            commitment: "processed",
+            strategy: {
+              type: "blockhash",
+              ...blockhash,
+            },
+          })
+
+          if (conf.value.err) {
+            errors += mints.length
+            setTransactionErrors(mints)
+          } else {
+            successes += mints.length
+            setTransactionComplete(mints)
+            onSuccess &&
+              (await onSuccess(
+                nfts.filter((n) => mints.includes(publicKey(n.nftMint))),
+                recipient
+              ))
+
+            await sleep(2000)
+
+            clearTransactions(mints)
+          }
+        } catch (err) {
+          setTransactionErrors(mints)
+          errors += mints.length
+          throw err
+        }
+      })
+    )
+
+    return {
+      errors,
+      successes,
+    }
+  }
 
   async function sendSignedTransactionsWithRetries(
     txs: Transaction[],
@@ -187,6 +246,7 @@ export const TransactionStatusProvider: FC<TransactionProviderProps> = ({ childr
         setTransactionErrors,
         clearTransactions,
         sendSignedTransactionsWithRetries,
+        sendSignedTransactions,
       }}
     >
       {children}

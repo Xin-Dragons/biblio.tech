@@ -178,7 +178,7 @@ export const Actions: FC = () => {
   const showMinMenu = useMediaQuery("(max-width:1050px)")
 
   const { deleteNfts, updateOwnerForNfts } = useDatabase()
-  const { sendSignedTransactionsWithRetries } = useTransactionStatus()
+  const { sendSignedTransactions } = useTransactionStatus()
 
   const selectedItems = selected.map((nftMint) => filtered.find((f) => f.nftMint === nftMint)).filter(Boolean) as Nft[]
 
@@ -390,7 +390,7 @@ export const Actions: FC = () => {
         const { chunks, txFee } = await packTx(umi, tx, feeLevel)
         const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
 
-        const { errs, successes } = await sendSignedTransactionsWithRetries(
+        const { errs, successes } = await sendSignedTransactions(
           signed,
           "send",
           updateOwnerForNfts,
@@ -639,7 +639,7 @@ export const Actions: FC = () => {
         const { chunks, txFee } = await packTx(umi, tx, feeLevel)
         const signed = await Promise.all(chunks.map((c) => c.buildAndSign(umi)))
 
-        const { errs, successes } = await sendSignedTransactionsWithRetries(signed, "burn", deleteNfts, txFee ? 1 : 0)
+        const { errs, successes } = await sendSignedTransactions(signed, "burn", deleteNfts, txFee ? 1 : 0)
       })
 
       setBurnOpen(false)

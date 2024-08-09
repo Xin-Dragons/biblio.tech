@@ -36,7 +36,7 @@ export const TensorContext = createContext({ delist: noop, list: noop, sellNow: 
 
 export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const umi = useUmi()
-  const { sendSignedTransactionsWithRetries } = useTransactionStatus()
+  const { sendSignedTransactions } = useTransactionStatus()
   const { nftsDelisted, nftsListed, nftsSold, nftsBought } = useDatabase()
   const wallet = useWallet()
   const { connection } = useConnection()
@@ -311,7 +311,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
       const txns = await getSellInstructions(items)
 
       const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
-      const { errs, successes } = await sendSignedTransactionsWithRetries(signedTransactions, "sell", nftsSold)
+      const { errs, successes } = await sendSignedTransactions(signedTransactions, "sell", nftsSold)
 
       notifyStatus(errs, successes, "sell", "sold")
     } catch (err: any) {
@@ -333,7 +333,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const txns = await getBuyInstructions(items)
 
     const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.transaction))
-    const { errs, successes } = await sendSignedTransactionsWithRetries(signedTransactions, "buy", nftsBought)
+    const { errs, successes } = await sendSignedTransactions(signedTransactions, "buy", nftsBought)
 
     notifyStatus(errs, successes, "buy", "bought")
   }
@@ -407,7 +407,7 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         ...flatten(txns.map((t) => t.txn)),
         ...rescueTxns,
       ])
-      const { errs, successes } = await sendSignedTransactionsWithRetries(
+      const { errs, successes } = await sendSignedTransactions(
         signedTransactions.slice(0, txns.length),
         "delist",
         nftsDelisted
@@ -453,10 +453,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         )
 
         const signedTransactions = await umi.identity.signAllTransactions(txns.map((t) => t.txn))
-        const { errs, successes } = await sendSignedTransactionsWithRetries(
-          signedTransactions,
-          "list",
-          (mints: string[]) => nftsListed(mints, "TensorSwap")
+        const { errs, successes } = await sendSignedTransactions(signedTransactions, "list", (mints: string[]) =>
+          nftsListed(mints, "TensorSwap")
         )
         notifyStatus(errs, successes, "list", "listed")
       } else if (marketplace === "me") {
@@ -482,10 +480,8 @@ export const TensorProvider: FC<{ children: ReactNode }> = ({ children }) => {
         )
 
         const signedTransactions = await umi.identity.signAllTransactions(flatten(txns.map((t) => t.txn)))
-        const { errs, successes } = await sendSignedTransactionsWithRetries(
-          signedTransactions,
-          "list",
-          (mints: string[]) => nftsListed(mints, "MEv2")
+        const { errs, successes } = await sendSignedTransactions(signedTransactions, "list", (mints: string[]) =>
+          nftsListed(mints, "MEv2")
         )
 
         notifyStatus(errs, successes, "list", "listed")
