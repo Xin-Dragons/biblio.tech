@@ -493,12 +493,13 @@ function Cleanup() {
 
         await Promise.all(
           signedTransactions.map(async (tx) => {
-            const sig = await umi.rpc.sendTransaction(tx)
+            const sig = await umi.rpc.sendTransaction(tx, { skipPreflight: true, commitment: "processed" })
             const conf = await umi.rpc.confirmTransaction(sig, {
               strategy: {
                 type: "blockhash",
                 ...blockhash,
               },
+              commitment: "processed",
             })
           })
         )
