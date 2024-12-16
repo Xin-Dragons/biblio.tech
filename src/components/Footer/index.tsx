@@ -330,18 +330,7 @@ export const Footer: FC<{ toggleSolTransferOpen: Function }> = ({ toggleSolTrans
                   </Link>
                 </Stack>
               </FooterSection>
-              <FooterSection>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  {!isSmall && (
-                    <Typography variant="body2" fontWeight="bold">
-                      Powered by
-                    </Typography>
-                  )}
-                  <Link href="https://hellomoon.io/developers" target="_blank" rel="noreferrer">
-                    <img width="20px" src="/hello-moon.svg" style={{ display: "block" }} />
-                  </Link>
-                </Stack>
-              </FooterSection>
+
               {attachWeb && (
                 <FooterSection>
                   <Tooltip
