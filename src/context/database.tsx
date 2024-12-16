@@ -183,6 +183,8 @@ export const DatabaseProvider: FC<DatabaseProviderProps> = ({ children }) => {
         }
       )
 
+      console.log(toAdd)
+
       await db.nfts.bulkAdd(toAdd)
 
       await db.nfts.bulkUpdate(

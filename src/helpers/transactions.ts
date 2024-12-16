@@ -173,7 +173,7 @@ export async function packTx(umi: Umi, tx: TransactionBuilder, feeLevel: Priorit
 
   chunks = await simulateAndAddCus(umi, chunks)
 
-  chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee || 10_000 })))
+  chunks = chunks.map((ch) => ch.prepend(setComputeUnitPrice(umi, { microLamports: txFee || 5_000 })))
   return { chunks, txFee }
 }
 

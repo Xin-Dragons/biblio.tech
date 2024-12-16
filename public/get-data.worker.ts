@@ -16,7 +16,6 @@ import {
 } from "@nifty-oss/asset"
 import { Key, fetchAllCollectionV1, getAssetV1GpaBuilder, mplCore } from "@metaplex-foundation/mpl-core"
 import { DAS } from "helius-sdk"
-import { getTensorInventory } from "../src/helpers/tensor"
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
   .use(mplToolbox())
@@ -189,11 +188,226 @@ async function getCore(owner: PublicKey) {
   return await getAssetV1GpaBuilder(umi).whereField("owner", owner).whereField("key", Key.AssetV1).getDeserialized()
 }
 
+async function getTensorInventory(owner: string) {
+  const res = await fetch("/api/get-tensor-inventory", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      publicKey: owner,
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error("Error getting inventory")
+  }
+
+  const resJson = await res.json()
+
+  return resJson.tensorInventory
+}
+
+const tokenStandard = [
+  "NonFungible",
+  "FungibleAsset",
+  "Fungible",
+  "NonFungibleEdition",
+  "ProgrammableNonFungible",
+  "ProgrammableNonFungibleEdition",
+  "Nifty",
+  "Core",
+]
+
 self.addEventListener("message", async (event) => {
   try {
     const { publicKey: owner, force, mints, publicKeys } = event.data
-    const tensorInventory = await getTensorInventory(owner)
-    console.log({ tensorInventory })
+
+    let [tensorInventory, digitalAssets, nifty, fungibles] = await Promise.all([
+      getTensorInventory(owner),
+      getAllByOwner(owner),
+      getNifty(owner),
+      getAllFungiblesByOwner(owner),
+    ])
+
+    digitalAssets = getStatus(digitalAssets, publicKeys)
+
+    digitalAssets = [...digitalAssets, ...fungibles]
+
+    const assets = flatten(tensorInventory.inventoryBySlug.map((collection) => collection.mints))
+    const collections = tensorInventory.inventoryBySlug.map((coll) => {
+      return {
+        id: coll.id,
+        collectionName: coll.name,
+        chain: "solana",
+        image: coll.imageUri,
+        floorPrice: coll.statsV2?.buyNowPrice,
+        numMints: coll.statsV2?.numMints,
+      }
+    })
+    console.log(collections)
+
+    const listedAssets = assets.filter((a) => a.activeListings.length)
+    const listedDigitalAssets = (await getDigitalAssets(listedAssets.map((a) => a.onchainId))).map((item) => {
+      const tensorAsset = listedAssets.find((l) => l.onchainId === item.id) as any
+      return {
+        ...item,
+        listing: {
+          price: tensorAsset.activeListings[0].tx.grossAmount,
+        },
+      }
+    })
+
+    console.log({ listedAssets })
+
+    const types = groupBy(
+      [...digitalAssets, ...listedDigitalAssets].map((item: DigitalAssetWithStatus) => {
+        const tensorAsset = assets.find((a: any) => a.onchainId === item.id) as any
+
+        let ts = item.interface === ("MplCoreAsset" as any) ? "Core" : (item.content?.metadata as any).token_standard
+
+        return {
+          ...item,
+          nftMint: item.id,
+          owner: (item as any).ownership.owner,
+          metadata: {
+            ...item.content?.metadata,
+            tokenStandard: ts ? tokenStandard.indexOf(ts) : 0,
+          },
+          listing: tensorAsset?.activeListings[0]?.tx,
+          collection: tensorAsset?.collection.id,
+        }
+      }),
+      (token) => token.metadata.tokenStandard
+    )
+
+    const nonFungibles = [...(types[0] || []), ...(types[4] || [])]
+
+    const nfts = nonFungibles
+      .map((item) => {
+        const creators = item.creators
+        const firstVerifiedCreator = creators && creators.find((c) => c.verified)
+
+        const delegate = item.ownership.delegate
+
+        return {
+          ...item,
+          firstVerifiedCreator: firstVerifiedCreator ? firstVerifiedCreator.address : null,
+          status: item.listing ? "listed" : item.status,
+          delegate,
+        }
+      })
+      .map((item) => {
+        return {
+          ...item,
+          collectionIdentifier: item.collection,
+        }
+      })
+
+    const fungiblesTokens = [...(types[1] || []), ...(types[2] || [])]
+    const editionsWithNumbers = types[3] || []
+
+    const mappedNifty = nifty.map((n) => {
+      const metadata = getExtension(n, ExtensionType.Metadata)
+      const attributes = getExtension(n, ExtensionType.Attributes)
+      const royalties = getExtension(n, ExtensionType.Royalties)
+      const creators = getExtension(n, ExtensionType.Creators)
+
+      let status
+      if (n.state === State.Locked) {
+        if (!n.delegate || (n.delegate?.address && publicKeys.includes(n.delegate.address))) {
+          status = "inVault"
+        } else if (n.delegate?.roles.includes(DelegateRole.Transfer)) {
+          status = "listed"
+        } else {
+          status = "frozen"
+        }
+      }
+
+      return {
+        id: n.publicKey,
+        nftMint: n.publicKey,
+        burnt: false,
+        chain: "solana",
+        status,
+        owner: n.owner,
+        collectionId: n.group,
+        collectionIdentifier: n.group,
+        metadata: {
+          tokenStandard: 6,
+          sellerFeeBasisPoints: royalties?.basisPoints,
+          symbol: metadata?.symbol,
+        },
+        content: {
+          json_uri: metadata?.uri,
+          metadata: {
+            attributes: attributes
+              ? attributes.values.map((a) => {
+                  return {
+                    trait_type: a.name,
+                    value: a.value,
+                  }
+                })
+              : null,
+            token_standard: 6,
+            name: n.name,
+            symbol: metadata?.symbol,
+            description: metadata?.description,
+            sellerFeeBasisPoints: royalties?.basisPoints,
+          },
+        },
+        ownership: {
+          frozen: n.state === State.Locked,
+          delegated: !!n.delegate,
+          delegate: n.delegate?.address,
+          owner: n.owner,
+        },
+        royalty: {
+          basis_points: royalties?.basisPoints,
+        },
+        creators: creators ? creators.values : [],
+        authorities: [
+          {
+            address: n.authority,
+            scopes: ["full"],
+          },
+        ],
+      }
+    })
+
+    const niftyCollectionPks = uniq(nifty.map((c) => c.group).filter(Boolean)) as PublicKey[]
+
+    const niftyCollections = await fetchAllAsset(umi, niftyCollectionPks)
+
+    const mappedNiftyCollections = niftyCollections.map((c) => {
+      const metadata = getExtension(c, ExtensionType.Metadata)
+      return {
+        id: c.publicKey,
+        collectionId: c.publicKey,
+        chain: "solana",
+        collectionName: c.name,
+        uri: metadata?.uri,
+        assetType: "Nifty",
+      }
+    })
+
+    const nftsToAdd = [...fungiblesTokens, ...nfts, ...editionsWithNumbers].map((n) => {
+      return {
+        ...omit(n, "edition", "mint", "publicKey"),
+        metadata: {
+          tokenStandard: n?.metadata?.tokenStandard,
+          sellerFeeBasisPoints: n.royalty?.basis_points,
+          symbol: n?.metadata?.symbol,
+        },
+        chain: "solana",
+      }
+    })
+
+    self.postMessage({
+      type: "done",
+      nftsToAdd: [...nftsToAdd, ...mappedNifty],
+      collectionsToAdd: [...collections, ...mappedNiftyCollections],
+    })
   } catch (err) {
     console.log(err)
   }

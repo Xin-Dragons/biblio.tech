@@ -10,8 +10,6 @@ export async function getTensorInventory(owner: string) {
           $includeUnverified: Boolean
           $includeFrozen: Boolean
           $includeCompressed: Boolean
-          $wallets: [String!]!
-          $sortBy: ActiveListingsSortBy!
         ) {
           inventoryBySlug(
             owner: $owner
@@ -19,6 +17,7 @@ export async function getTensorInventory(owner: string) {
             includeFrozen: $includeFrozen
             includeCompressed: $includeCompressed
           ) {
+            id
             slugDisplay
             slug
             imageUri
@@ -30,13 +29,17 @@ export async function getTensorInventory(owner: string) {
             discord
             mints {
               onchainId
-              attributes {
-                trait_type
-                value
+              collection {
+                id
               }
-              name
-              imageUri
-              rarityRankHR
+              activeListings {
+                tx {
+                  grossAmount
+                  source
+                  txAt
+                }
+              }
+              rarityRankHrtt
               rarityRankStat
               lastSale {
                 txAt
@@ -47,63 +50,17 @@ export async function getTensorInventory(owner: string) {
               buyNowPrice
               numMints
             }
-            traits {
-              traitActive
-            }
-          }
-          userActiveListingsV2(sortBy: $sortBy, wallets: $wallets) {
-            txs {
-              mint {
-                onchainId
-                attributes {
-                  trait_type
-                  value
-                }
-                name
-                imageUri
-                rarityRankHR
-                rarityRankStat
-                lastSale {
-                  txAt
-                  price
-                }
-                collection {
-                  slugDisplay
-                  slug
-                  imageUri
-                  name
-                  tensorVerified
-                  compressed
-                  twitter
-                  website
-                  discord
-                  traits {
-                    traitActive
-                  }
-                  statsV2 {
-                    buyNowPrice
-                    numMints
-                  }
-                }
-              }
-              tx {
-                grossAmount
-                source
-                txAt
-                txId
-                sellerId
-              }
-            }
+            # traits {
+            # traitActive
+            # }
           }
         }
       `,
       variables: {
         owner,
-        wallets: [owner],
         includeFrozen: true,
         includeUnverified: true,
         includeCompressed: true,
-        sortBy: "ListedDesc",
       },
     })
 
