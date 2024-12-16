@@ -234,8 +234,8 @@ self.addEventListener("message", async (event) => {
 
     digitalAssets = [...digitalAssets, ...fungibles]
 
-    const assets = flatten(tensorInventory.inventoryBySlug.map((collection) => collection.mints))
-    const collections = tensorInventory.inventoryBySlug.map((coll) => {
+    const assets = flatten(tensorInventory.inventoryBySlug.map((collection: any) => collection.mints))
+    const collections = tensorInventory.inventoryBySlug.map((coll: any) => {
       return {
         id: coll.id,
         collectionName: coll.name,
@@ -247,9 +247,9 @@ self.addEventListener("message", async (event) => {
     })
     console.log(collections)
 
-    const listedAssets = assets.filter((a) => a.activeListings.length)
-    const listedDigitalAssets = (await getDigitalAssets(listedAssets.map((a) => a.onchainId))).map((item) => {
-      const tensorAsset = listedAssets.find((l) => l.onchainId === item.id) as any
+    const listedAssets = assets.filter((a: any) => a.activeListings.length)
+    const listedDigitalAssets = (await getDigitalAssets(listedAssets.map((a: any) => a.onchainId))).map((item) => {
+      const tensorAsset = listedAssets.find((l: any) => l.onchainId === item.id) as any
       return {
         ...item,
         listing: {
