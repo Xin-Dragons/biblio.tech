@@ -1,8 +1,8 @@
-import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client";
-import { ApolloLink, concat } from "apollo-link";
+import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client"
+import { ApolloLink, concat } from "apollo-link"
 import fetch from "cross-fetch"
 
-const API_KEY = process.env.TENSOR_API_KEY ?? "";
+const API_KEY = process.env.TENSOR_API_KEY ?? ""
 
 if (!API_KEY) {
   throw new Error("Missing Tensor API key")
@@ -11,8 +11,8 @@ if (!API_KEY) {
 const authLink = new ApolloLink((operation, forward) => {
   operation.setContext({
     headers: {
-      "X-TENSOR-API-KEY": API_KEY
-    }
+      "X-TENSOR-API-KEY": API_KEY,
+    },
   })
   return forward(operation)
 })
@@ -24,14 +24,13 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
   defaultOptions: {
     query: {
-      fetchPolicy: "no-cache"
+      fetchPolicy: "no-cache",
     },
     watchQuery: {
-      fetchPolicy: 'no-cache',
-      nextFetchPolicy: "no-cache"
-    }
-  }
-
+      fetchPolicy: "no-cache",
+      nextFetchPolicy: "no-cache",
+    },
+  },
 })
 
-export default client;
+export default client

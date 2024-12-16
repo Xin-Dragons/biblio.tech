@@ -1,4 +1,5 @@
 import { gql } from "@apollo/client"
+import client from "./apollo"
 
 export async function getTensorInventory(owner: string) {
   try {
