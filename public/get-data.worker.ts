@@ -235,6 +235,7 @@ self.addEventListener("message", async (event) => {
     digitalAssets = [...digitalAssets, ...fungibles]
 
     const assets = flatten(tensorInventory.inventoryBySlug.map((collection: any) => collection.mints))
+    console.log(assets.find((a) => a.onchainId === "98Mmc1ZVBfxCy2qfqKcVK2idUvVRuBKr7WkiFLbUEtts"))
     const collections = tensorInventory.inventoryBySlug.map((coll: any) => {
       return {
         id: coll.id,
@@ -265,7 +266,6 @@ self.addEventListener("message", async (event) => {
         const tensorAsset = assets.find((a: any) => a.onchainId === item.id) as any
 
         let ts = item.interface === ("MplCoreAsset" as any) ? "Core" : (item.content?.metadata as any).token_standard
-
         return {
           ...item,
           nftMint: item.id,
@@ -281,7 +281,7 @@ self.addEventListener("message", async (event) => {
       (token) => token.metadata.tokenStandard
     )
 
-    const nonFungibles = [...(types[0] || []), ...(types[4] || [])]
+    const nonFungibles = [...(types[0] || []), ...(types[4] || []), ...(types[7] || [])]
 
     const nfts = nonFungibles
       .map((item) => {
