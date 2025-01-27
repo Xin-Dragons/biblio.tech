@@ -235,7 +235,7 @@ self.addEventListener("message", async (event) => {
     digitalAssets = [...digitalAssets, ...fungibles]
 
     const assets = flatten(tensorInventory.inventoryBySlug.map((collection: any) => collection.mints))
-    console.log(assets.find((a) => a.onchainId === "98Mmc1ZVBfxCy2qfqKcVK2idUvVRuBKr7WkiFLbUEtts"))
+
     const collections = tensorInventory.inventoryBySlug.map((coll: any) => {
       return {
         id: coll.id,
