@@ -126,20 +126,23 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
   let account = ACCOUNT_TYPE.basic
   let nextLevel = ACCOUNT_TYPE.advanced
   let dandiesNeeded = 1
+  account = ACCOUNT_TYPE.unlimited
+  nextLevel = ACCOUNT_TYPE.unlimited
+  dandiesNeeded = 0
 
-  if (dandies.length >= 10) {
-    account = ACCOUNT_TYPE.unlimited
-    nextLevel = ACCOUNT_TYPE.unlimited
-    dandiesNeeded = 0
-  } else if (dandies.length >= 5) {
-    account = ACCOUNT_TYPE.pro
-    nextLevel = ACCOUNT_TYPE.unlimited
-    dandiesNeeded = 10 - dandies.length
-  } else if (dandies.length) {
-    account = ACCOUNT_TYPE.advanced
-    nextLevel = ACCOUNT_TYPE.pro
-    dandiesNeeded = 5 - dandies.length
-  }
+  // if (dandies.length >= 10) {
+  //   account = ACCOUNT_TYPE.unlimited
+  //   nextLevel = ACCOUNT_TYPE.unlimited
+  //   dandiesNeeded = 0
+  // } else if (dandies.length >= 5) {
+  //   account = ACCOUNT_TYPE.pro
+  //   nextLevel = ACCOUNT_TYPE.unlimited
+  //   dandiesNeeded = 10 - dandies.length
+  // } else if (dandies.length) {
+  //   account = ACCOUNT_TYPE.advanced
+  //   nextLevel = ACCOUNT_TYPE.pro
+  //   dandiesNeeded = 5 - dandies.length
+  // }
 
   return (
     <AccessContext.Provider
