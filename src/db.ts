@@ -2,7 +2,7 @@ import { DigitalAsset, JsonMetadata } from "@metaplex-foundation/mpl-token-metad
 import Dexie, { Table } from "dexie"
 import { Currency } from "./context/brice"
 import { LoanType } from "./context/ui-settings"
-import { DAS } from "helius-sdk"
+import { GetAssetResponse } from "./helpers/helius"
 import { PublicKey } from "@solana/web3.js"
 
 export interface NftMetadata {
@@ -49,7 +49,7 @@ export type Nft = {
     decimals: number
     balance: number
   }
-} & DAS.GetAssetResponse
+} & GetAssetResponse
 
 export interface Collection {
   id: string

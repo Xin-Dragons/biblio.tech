@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor"
 import { Crow as CrowProgram } from "./crow"
-import { DAS } from "helius-sdk"
+import { GetAssetResponse } from "../../../helpers/helius"
 
 export type CrowWithPublicKey = {
   publicKey: anchor.web3.PublicKey
@@ -24,7 +24,7 @@ export type Crow = anchor.IdlAccounts<CrowProgram>["crow"]
 export type Asset = anchor.IdlAccounts<CrowProgram>["asset"]
 export type ProgramConfig = anchor.IdlAccounts<CrowProgram>["programConfig"]
 
-export type TokenWithTokenInfo = DAS.GetAssetResponse & {
+export type TokenWithTokenInfo = GetAssetResponse & {
   token_info: {
     balance: number
     decimals: number

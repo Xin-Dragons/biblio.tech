@@ -1,16 +1,95 @@
-import { Connection } from "@solana/web3.js"
-import { DAS, Helius } from "helius-sdk"
 import { chunk, flatten, groupBy, isEqual, mapValues } from "lodash"
-import { DANDIES_NIFTY_COLLECTION, PriorityFees } from "../constants"
-import axios from "axios"
-import { getAssetGpaBuilder } from "@nifty-oss/asset"
-import { umi } from "./umi"
-import { publicKey } from "@metaplex-foundation/umi"
+import { PriorityFees } from "../constants"
 
-const client = new Helius(process.env.NEXT_PUBLIC_HELIUS_API_KEY!)
+// Types for Helius DAS API responses
+export interface GetAssetResponse {
+  interface: string
+  id: string
+  content?: {
+    $schema: string
+    json_uri: string
+    files?: Array<{ uri?: string; mime?: string; cdn_uri?: string }>
+    metadata: {
+      attributes?: Array<{ value: string; trait_type: string }>
+      description: string
+      name: string
+      symbol: string
+      token_standard?: string
+    }
+    links?: { external_url?: string; image?: string; animation_url?: string }
+  }
+  authorities?: Array<{ address: string; scopes: string[] }>
+  compression?: {
+    eligible: boolean
+    compressed: boolean
+    data_hash: string
+    creator_hash: string
+    asset_hash: string
+    tree: string
+    seq: number
+    leaf_id: number
+  }
+  grouping?: Array<{ group_key: string; group_value: string; verified?: boolean; collection_metadata?: any }>
+  royalty?: {
+    royalty_model: string
+    target?: string
+    percent: number
+    basis_points: number
+    primary_sale_happened: boolean
+    locked: boolean
+  }
+  ownership: {
+    frozen: boolean
+    delegated: boolean
+    delegate?: string
+    ownership_model: string
+    owner: string
+  }
+  creators?: Array<{ address: string; share: number; verified: boolean }>
+  uses?: { use_method: string; remaining: number; total: number }
+  supply?: { print_max_supply: number; print_current_supply: number; edition_nonce?: number }
+  mutable: boolean
+  burnt: boolean
+  mint_extensions?: any
+  token_info?: any
+}
+
+export interface GetAssetResponseList {
+  grand_total?: number
+  total: number
+  limit: number
+  page?: number
+  cursor?: string
+  items: GetAssetResponse[]
+  nativeBalance?: { lamports: number; price_per_sol: number; total_price: number }
+}
+
+export interface GetAssetProofResponse {
+  root: string
+  proof: Array<string>
+  node_index: number
+  leaf: string
+  tree_id: string
+}
+
+// Helper to call backend Helius API
+async function heliusRpc<T>(method: string, params: any): Promise<T> {
+  const res = await fetch(`/api/helius/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || "Helius API Error")
+  }
+
+  return res.json()
+}
 
 async function getByCollection(collection: string, page: number) {
-  return await client.rpc.getAssetsByGroup({
+  return await heliusRpc<GetAssetResponseList>("getAssetsByGroup", {
     groupKey: "collection",
     groupValue: collection,
     page,
@@ -21,7 +100,7 @@ async function getByCollection(collection: string, page: number) {
 }
 
 async function getByCreator(creator: string, page: number) {
-  return await client.rpc.getAssetsByCreator({
+  return await heliusRpc<GetAssetResponseList>("getAssetsByCreator", {
     creatorAddress: creator,
     onlyVerified: true,
     page,
@@ -32,12 +111,12 @@ async function getByCreator(creator: string, page: number) {
 }
 
 async function getAllByCreator(creator: string) {
-  const nfts = []
+  const nfts: GetAssetResponse[] = []
   let total = 1001
   let page = 1
   while (nfts.length < total) {
     const result = await getByCreator(creator, page)
-    total = result.grand_total as any as number
+    total = result.grand_total as number
     nfts.push(...result.items)
     page++
   }
@@ -47,48 +126,43 @@ async function getAllByCreator(creator: string) {
 
 async function getFungiblesByOwner(ownerAddress: string, page: number) {
   try {
-    const result = await client.rpc.searchAssets({
+    const result = await heliusRpc<GetAssetResponseList>("searchAssets", {
       ownerAddress,
       page,
       tokenType: "fungible",
-    } as any)
+    })
     return result
   } catch (err) {
     console.log(err)
   }
 }
 
-const url = "https://perfect-cordy-fast-mainnet.helius-rpc.com/"
-
 export async function getPriorityFeesForTx(tx: string, feeLevel: PriorityFees) {
-  const { data } = await axios.post(url, {
-    jsonrpc: "2.0",
-    id: "1",
-    method: "getPriorityFeeEstimate",
-    params: [
+  try {
+    const result = await heliusRpc<{ priorityFeeEstimate: number }>("getPriorityFeeEstimate", [
       {
         transaction: tx,
         options: { priorityLevel: feeLevel },
       },
-    ],
-  })
-
-  return data?.result?.priorityFeeEstimate || 0
+    ])
+    return result?.priorityFeeEstimate || 0
+  } catch (err) {
+    console.log(err)
+    return 0
+  }
 }
 
 async function getByOwner(ownerAddress: string, page: number) {
   try {
-    const result = await client.rpc.getAssetsByOwner({
+    const result = await heliusRpc<GetAssetResponseList>("getAssetsByOwner", {
       ownerAddress,
       page,
       displayOptions: {
         showGrandTotal: true,
         showUnverifiedCollections: true,
         showCollectionMetadata: true,
-        // showFungible: true,
-        // showNativeBalance: true,
       },
-    } as any)
+    })
     return result
   } catch (err) {
     console.log(err)
@@ -96,7 +170,7 @@ async function getByOwner(ownerAddress: string, page: number) {
 }
 
 export async function getAllByOwner(owner: string) {
-  const nfts = []
+  const nfts: GetAssetResponse[] = []
   let page = 1
   let result
   while ((result = await getByOwner(owner, page++))?.items.length) {
@@ -107,7 +181,7 @@ export async function getAllByOwner(owner: string) {
 }
 
 export async function getAllFungiblesByOwner(owner: string) {
-  const nfts = []
+  const nfts: GetAssetResponse[] = []
   let page = 1
   let result
   while ((result = await getFungiblesByOwner(owner, page++))?.items.length) {
@@ -118,14 +192,14 @@ export async function getAllFungiblesByOwner(owner: string) {
 }
 
 async function getAllByCollection(collection: string) {
-  const nfts = []
+  const nfts: GetAssetResponse[] = []
   let total = 1001
   const first = await getByCollection(collection, 1)
   if (!first) {
     throw new Error("Error looking up collection")
   }
   nfts.push(...first.items)
-  total = first.grand_total as any as number
+  total = first.grand_total as number
 
   const pages = Math.ceil(total / 1000) - 1
 
@@ -144,7 +218,7 @@ async function getAllByCollection(collection: string) {
 }
 
 export async function getMintlist(data: any) {
-  let nfts: DAS.GetAssetResponse[] = []
+  let nfts: GetAssetResponse[] = []
   if (data.collections) {
     const nftsByCollection = flatten(await Promise.all(data.collections.map(getAllByCollection)))
     nfts = nfts.concat(...nftsByCollection)
@@ -167,7 +241,9 @@ export async function getMintlist(data: any) {
 }
 
 export async function getNfts(mints: string[]) {
-  const nfts = flatten(await Promise.all(chunk(mints, 1_000).map(async (ids) => client.rpc.getAssetBatch({ ids }))))
+  const nfts = flatten(
+    await Promise.all(chunk(mints, 1_000).map(async (ids) => heliusRpc<GetAssetResponse[]>("getAssetBatch", { ids })))
+  )
 
   const grouped = groupBy(nfts, (nft) => nft.ownership.owner)
 
@@ -180,19 +256,20 @@ export async function getNfts(mints: string[]) {
 }
 
 export async function getDigitalAssets(mints: string[]) {
-  const nfts = flatten(await Promise.all(chunk(mints, 1_000).map(async (ids) => client.rpc.getAssetBatch({ ids }))))
+  const nfts = flatten(
+    await Promise.all(chunk(mints, 1_000).map(async (ids) => heliusRpc<GetAssetResponse[]>("getAssetBatch", { ids })))
+  )
 
   return nfts
 }
 
 export async function getDigitalAsset(id: string) {
-  const da = await client.rpc.getAsset({ id })
-
+  const da = await heliusRpc<GetAssetResponse>("getAsset", { id })
   return da
 }
 
 async function getDandiesForWallet(ownerAddress: string) {
-  const dandies = await client.rpc.searchAssets({
+  const dandies = await heliusRpc<GetAssetResponseList>("searchAssets", {
     ownerAddress,
     grouping: ["collection", process.env.NEXT_PUBLIC_COLLECTION_ID!],
     page: 1,
@@ -210,7 +287,5 @@ export async function getDandies(wallets: string[]) {
 }
 
 export async function getAssetProof(id: string) {
-  return await client.rpc.getAssetProof({
-    id,
-  })
+  return await heliusRpc<GetAssetProofResponse>("getAssetProof", { id })
 }

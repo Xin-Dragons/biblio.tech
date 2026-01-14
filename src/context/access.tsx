@@ -5,9 +5,8 @@ import { noop, sortBy } from "lodash"
 import { useUmi } from "./umi"
 import { useWalletBypass } from "./wallet-bypass"
 import { getWallets } from "../helpers/wallets"
-import { DAS } from "helius-sdk"
 import axios from "axios"
-import { getDandies } from "../helpers/helius"
+import { getDandies, GetAssetResponse } from "../helpers/helius"
 import { getNiftyDandies } from "../helpers/utils"
 import { Asset } from "@nifty-oss/asset"
 import { ACCOUNT_TYPE } from "../constants"
@@ -15,7 +14,7 @@ import { ACCOUNT_TYPE } from "../constants"
 type AccessContextProps = {
   publicKey: string | null
   user: any
-  dandies: Array<DAS.GetAssetResponse | Asset>
+  dandies: Array<GetAssetResponse | Asset>
   publicKeys: string[]
   isInScope: boolean
   isAdmin: boolean
@@ -55,7 +54,7 @@ export const AccessProvider: FC<AccessProviderProps> = ({ children, nonce: origi
   const [user, setUser] = useState<any | null>({})
   const [publicKeys, setPublicKeys] = useState<string[]>([])
   const [userWallets, setUserWallets] = useState<string[]>([])
-  const [dandies, setDandies] = useState<Array<DAS.GetAssetResponse | Asset>>([])
+  const [dandies, setDandies] = useState<Array<GetAssetResponse | Asset>>([])
 
   const [isActive, setIsActive] = useState(false)
   const [publicKey, setPublicKey] = useState("")

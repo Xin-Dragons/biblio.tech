@@ -4,7 +4,13 @@ import { JsonMetadata, fetchDigitalAsset, mplTokenMetadata } from "@metaplex-fou
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults"
 import { publicKey, some, Option, unwrapOption, PublicKey } from "@metaplex-foundation/umi"
 import { mplToolbox } from "@metaplex-foundation/mpl-toolbox"
-import { getAllByOwner, getAllFungiblesByOwner, getDigitalAssets, getNfts } from "../src/helpers/helius"
+import {
+  getAllByOwner,
+  getAllFungiblesByOwner,
+  getDigitalAssets,
+  getNfts,
+  GetAssetResponse,
+} from "../src/helpers/helius"
 import {
   DelegateRole,
   ExtensionType,
@@ -15,7 +21,6 @@ import {
   niftyAsset,
 } from "@nifty-oss/asset"
 import { Key, fetchAllCollectionV1, getAssetV1GpaBuilder, mplCore } from "@metaplex-foundation/mpl-core"
-import { DAS } from "helius-sdk"
 
 const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processed" })
   .use(mplToolbox())
@@ -107,7 +112,7 @@ const umi = createUmi(process.env.NEXT_PUBLIC_RPC_HOST!, { commitment: "processe
 //   return data.data
 // }
 
-function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
+function getStatus(items: GetAssetResponse[], publicKeys: string[]) {
   return items.map((item) => {
     if (
       !["NonFungible", "ProgrammableNonFungible", "NonFungibleEdition", undefined].includes(
@@ -172,7 +177,7 @@ function getStatus(items: DAS.GetAssetResponse[], publicKeys: string[]) {
 //   return uniqBy(collections.data, (item) => item.helloMoonCollectionId)
 // }
 
-interface DigitalAssetWithStatus extends DAS.GetAssetResponse {
+interface DigitalAssetWithStatus extends GetAssetResponse {
   status?: string
 }
 
