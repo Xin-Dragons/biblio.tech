@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router"
-import { Folder, Image, Star, Coins, Trash2, Plus, X, User } from "lucide-react"
+import { Folder, Image, Star, Coins, Trash2, Plus, X, User, Lock } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -13,6 +13,7 @@ const navItems = [
   { href: "/nfts", label: "All NFTs", icon: Image },
   { href: "/starred", label: "Starred", icon: Star },
   { href: "/spl", label: "Tokens", icon: Coins },
+  { href: "/stake", label: "Staking", icon: Lock },
   { href: "/junk", label: "Junk", icon: Trash2 },
   { href: "/showcase", label: "Showcase", icon: User },
 ]
