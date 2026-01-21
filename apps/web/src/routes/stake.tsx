@@ -1,9 +1,10 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole } from "lucide-react"
 import { StakeStats } from "@/components/stake/StakeStats"
 import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/stake/AvailableToStakeGrid"
+import { StakeDialog } from "@/components/stake/StakeDialog"
 import { useWallet } from "@solana/wallet-adapter-react"
 import {
   fetchStakeDataAtom,
@@ -20,13 +21,25 @@ export function StakePage() {
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
   const fetchPendingRewards = useSetAtom(fetchPendingRewardsAtom)
+  const [stakeDialogNft, setStakeDialogNft] = useState<NFT | null>(null)
 
   const handleUnstake = (_nft: NFT, _stakeRecord: StakeRecordAccount) => {
     // TODO: US-019 - Open UnstakeDialog
   }
 
-  const handleStake = (_nft: NFT) => {
-    // TODO: US-018 - Open StakeDialog
+  const handleStake = (nft: NFT) => {
+    setStakeDialogNft(nft)
+  }
+
+  const handleStakeDialogClose = () => {
+    setStakeDialogNft(null)
+  }
+
+  const handleStakeSuccess = () => {
+    if (publicKey) {
+      fetchUserStakeRecords(publicKey.toBase58())
+      fetchPendingRewards(publicKey.toBase58())
+    }
   }
 
   useEffect(() => {
@@ -66,6 +79,10 @@ export function StakePage() {
           <StakedNftsGrid onUnstake={handleUnstake} />
           <AvailableToStakeGrid onStake={handleStake} />
         </div>
+      )}
+
+      {stakeDialogNft && (
+        <StakeDialog nft={stakeDialogNft} onClose={handleStakeDialogClose} onSuccess={handleStakeSuccess} />
       )}
     </div>
   )

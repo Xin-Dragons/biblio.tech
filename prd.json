@@ -96,8 +96,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented calculatePendingRewards that fetches stake records, gets linked emissions, and calculates pending rewards based on emission rate and time staked. Added getEmissionsByAddresses helper for fetching emissions by address array."
     },
     {
       "id": "US-008",
@@ -113,8 +113,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created store with frontend-specific types mirroring API responses. Added derived atoms: stakedMintsSetAtom (for checking if NFT is staked), totalPendingRewardsAtom, stakedNftCountAtom."
     },
     {
       "id": "US-009",
@@ -127,8 +127,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added three write-only atoms following existing nfts.ts pattern: fetchStakeDataAtom (no params), fetchUserStakeRecordsAtom(wallet), fetchPendingRewardsAtom(wallet). All handle loading/error states."
     },
     {
       "id": "US-010",
@@ -143,8 +143,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created PDA helper functions using standard Anchor seed conventions. Seeds are: STAKE_RECORD/NFT_RECORD/COLLECTION + staker + mint."
     },
     {
       "id": "US-011",
@@ -158,8 +158,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added helper functions: addr(), createSigner(), codamaInstructionToWeb3(), getProgramConfigPda(), getNftAuthorityPda(). The buildStakeCoreInstructions function derives all required PDAs and uses stake.getStakeCoreInstruction from the generated SDK."
     },
     {
       "id": "US-012",
@@ -173,8 +173,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added buildUnstakeCoreInstructions using stake.getUnstakeCoreInstruction. Requires stakeRecord, staker, collection data plus owner. Optional token reward accounts not passed (null) for Core NFT unstaking. Added ASSOCIATED_TOKEN_PROGRAM_ID import from @solana/spl-token."
     },
     {
       "id": "US-013",
@@ -188,8 +188,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added getTokenAuthorityPda helper (seeds: token_authority + emission). buildClaimInstructions handles optional token rewards by deriving stakeTokenVault and rewardReceiveAccount ATAs when tokenMint is present."
     },
     {
       "id": "US-014",
@@ -202,8 +202,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created StakePage component with LockKeyhole icon following existing route patterns. Added route to App.tsx."
     },
     {
       "id": "US-015",
@@ -217,8 +217,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created StakeStats component using Card UI. Displays NFTs Staked count and Pending Rewards with loading skeletons. Updated StakePage to fetch stake data and user records on mount."
     },
     {
       "id": "US-016",
@@ -233,8 +233,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created StakedNftsGrid with StakedNftCard components. Shows NFT image, name, staked time, and Unstake button. Joins stake records with NFT data by mint address. Includes loading skeletons and empty state."
     },
     {
       "id": "US-017",
@@ -249,8 +249,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Filters nftsAtom by DANDIES_COLLECTION_ID and excludes mints in stakedMintsSetAtom. Card shows Stake button triggering onStake callback."
     },
     {
       "id": "US-018",
@@ -266,8 +266,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created StakeDialog with NFT image/name display, stake transaction using buildStakeCoreInstructions, loading state with Loader2 spinner, success/error toasts, and data refresh on success."
     },
     {
       "id": "US-019",
