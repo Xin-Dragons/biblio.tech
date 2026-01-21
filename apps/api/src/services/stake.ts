@@ -6,7 +6,7 @@
  * between api (v5.x) and solana-programs (v2.x)
  */
 
-import { type Address, getBase64Encoder, isSome } from "@solana/kit"
+import { type Address, getBase64Encoder, getBase58Decoder, isSome } from "@solana/kit"
 import { stake } from "@biblio/solana-programs"
 import { getRpc, type SolanaClient } from "../lib/solana-client"
 import type { Env } from "../types"
@@ -19,6 +19,7 @@ function getClient(env: Env): SolanaClient {
 export type StakerAccount = stake.Staker & { address: string }
 export type CollectionAccount = stake.Collection & { address: string }
 export type EmissionAccount = stake.Emission & { address: string }
+export type StakeRecordAccount = stake.StakeRecord & { address: string }
 
 /**
  * Fetches a staker account by its public key
@@ -71,6 +72,52 @@ export async function getCollectionAccounts(env: Env, stakerPubkey: string): Pro
         address: staker.collections[i],
       })
     }
+  }
+
+  return results
+}
+
+/**
+ * Fetches all stake records for a given wallet owner
+ * Uses getProgramAccounts with a memcmp filter on the owner field
+ *
+ * StakeRecord memory layout:
+ * - discriminator: 8 bytes (offset 0)
+ * - staker: 32 bytes (offset 8)
+ * - owner: 32 bytes (offset 40)
+ */
+export async function getStakeRecordsByOwner(env: Env, owner: string): Promise<StakeRecordAccount[]> {
+  const rpc = getClient(env)
+
+  const base58Decoder = getBase58Decoder()
+  const discriminatorBase58 = base58Decoder.decode(stake.STAKE_RECORD_DISCRIMINATOR)
+
+  type Base58EncodedBytes = string & {
+    readonly "__brand:@solana/kit": "Base58EncodedBytes"
+    readonly "__stringEncoding:@solana/kit": "base58"
+  }
+
+  const response = await rpc
+    .getProgramAccounts(stake.STAKE_PROGRAM_ADDRESS, {
+      encoding: "base64",
+      filters: [
+        { memcmp: { offset: 0n, bytes: discriminatorBase58 as Base58EncodedBytes, encoding: "base58" } },
+        { memcmp: { offset: 40n, bytes: owner as Base58EncodedBytes, encoding: "base58" } },
+      ],
+    })
+    .send()
+
+  const decoder = stake.getStakeRecordDecoder()
+  const results: StakeRecordAccount[] = []
+
+  for (const account of response) {
+    const [dataBase64] = account.account.data
+    const data = getBase64Encoder().encode(dataBase64)
+    const decoded = decoder.decode(data)
+    results.push({
+      ...decoded,
+      address: account.pubkey,
+    })
   }
 
   return results

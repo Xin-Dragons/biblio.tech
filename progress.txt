@@ -1,0 +1,92 @@
+## Codebase Patterns
+- The monorepo uses pnpm workspaces with apps/ and packages/ directories
+- IDL files go in packages/solana-programs/idls/
+- The stake IDL was migrated from apps/legacy/src/apps/stake/idl/stake.json
+- Generated SDK may have export conflicts when program name matches instruction name (e.g., stake program has stake instruction). Fix by aliasing conflicting types in index.ts and programs/stake.ts
+- Run `pnpm install` from root before running scripts in packages
+- Run `pnpm generate` in packages/solana-programs to regenerate SDK from IDLs
+- **@solana/kit version mismatch**: API uses v5.x, solana-programs uses v2.x. Use manual RPC calls + decoders instead of SDK fetch functions
+- Add workspace dependencies with: `pnpm --filter @biblio/api add "@biblio/solana-programs@workspace:*"`
+- Service pattern: Follow apps/api/src/services/das.ts pattern - create getClient(env) helper, export typed functions
+- Route pattern: Create Hono router in apps/api/src/routes/{name}.ts, export as `{name}Routes`, register in index.ts with `app.route("/path", routes)`
+- **getProgramAccounts memcmp filters in @solana/kit v5**: Requires branded types for bytes field. Create local type: `type Base58EncodedBytes = string & { readonly "__brand:@solana/kit": "Base58EncodedBytes"; readonly "__stringEncoding:@solana/kit": "base58" }` and cast base58 strings to it
+- StakeRecord memory layout: discriminator (8 bytes, offset 0), staker (32 bytes, offset 8), owner (32 bytes, offset 40)
+
+---
+
+## 2026-01-21 - US-001
+- What was implemented: Copied stake IDL from legacy app to solana-programs package
+- Files changed:
+  - packages/solana-programs/idls/stake.json (created)
+- **Learnings for future iterations:**
+  - The branch ralph/dandies-staking was based on an older commit and needed to be rebased onto chore/refactor to get the monorepo structure
+  - The stake IDL source location is apps/legacy/src/apps/stake/idl/stake.json (not apps/legacy)
+  - typecheck is run with `pnpm tsc --noEmit` in the package directory
+---
+
+## 2026-01-21 - US-002
+- What was implemented: Added 'stake' to PROGRAMS array in generate.ts to enable Codama SDK generation
+- Files changed:
+  - packages/solana-programs/scripts/generate.ts (modified - added 'stake' to PROGRAMS)
+  - packages/solana-programs/src/generated/stake/ (created - 64 files including accounts, instructions, types, errors, programs)
+  - packages/solana-programs/src/generated/stake/index.ts (modified - fixed export conflicts)
+  - packages/solana-programs/src/generated/stake/programs/stake.ts (modified - renamed conflicting import)
+- **Learnings for future iterations:**
+  - Codama generates conflicting exports when program name matches instruction name (stake program + stake instruction both export `StakeInstruction` and `ParsedStakeInstruction`)
+  - Fix: In programs/stake.ts rename import `ParsedStakeInstruction` to `ParsedStakeIxInstruction`, and in index.ts use explicit named exports with aliases for programs module
+  - The generated SDK includes: accounts (9 types), instructions (39 types), types (8 types), errors, programs
+  - Key instruction builders: getStakeCoreInstruction, getUnstakeCoreInstruction, getClaimInstruction
+---
+
+## 2026-01-21 - US-003
+- What was implemented: Added stake SDK export to @biblio/solana-programs package
+- Files changed:
+  - packages/solana-programs/src/index.ts (modified - added `export * as stake from "./generated/stake"`)
+  - packages/solana-programs/src/generated/stake/index.ts (already had export conflict fixes from US-002)
+- **Learnings for future iterations:**
+  - Running `pnpm build` in solana-programs regenerates all SDK files via the generate script
+  - The export conflict fixes in generated/stake/index.ts persist because they're tracked in git
+  - The programs/stake.ts fixes get regenerated each build, but the index.ts aliases handle the conflicts at the package level
+  - Import stake SDK as: `import { stake } from "@biblio/solana-programs"` then access `stake.getStakeCoreInstruction`, etc.
+---
+
+## 2026-01-21 - US-004
+- What was implemented: Created stake service for fetching on-chain accounts
+- Files changed:
+  - apps/api/src/services/stake.ts (created)
+  - apps/api/package.json (added @biblio/solana-programs workspace dependency)
+  - packages/solana-programs/src/generated/stake/index.ts (fixed isolatedModules error for type re-exports)
+  - pnpm-lock.yaml (updated with new dependency)
+- **Learnings for future iterations:**
+  - @solana/kit has major version mismatch: API uses v5.x, solana-programs uses v2.x
+  - Cannot use SDK's fetchMaybe* functions directly due to incompatible Rpc types between versions
+  - Workaround: Use manual RPC calls (getAccountInfo, getMultipleAccounts with encoding: "base64") + SDK decoders
+  - getBase64Encoder().encode(dataBase64) converts base64 string to Uint8Array for decoding
+  - The Staker.collections array contains collection PDA addresses directly (not mint addresses)
+  - When re-exporting types from generated code with isolatedModules, must use `export type` for type-only exports
+---
+
+## 2026-01-21 - US-005
+- What was implemented: Added GET /api/stake/dandies endpoint
+- Files changed:
+  - apps/api/src/routes/stake.ts (created)
+  - apps/api/src/index.ts (modified - imported and registered stakeRoutes)
+- **Learnings for future iterations:**
+  - Route pattern: Create Hono router, export as `{name}Routes`, register in index.ts with `app.route("/path", routes)`
+  - The Dandies staker address is hardcoded as a constant (DANDIES_STAKER_PUBKEY = "2xc5go5vVNqYzFRg3XSPKmwT5zVmjBcNGiFeJWLqvHHi")
+  - Response types can be exported from routes for frontend consumption
+  - The endpoint returns { staker, collections, emissions } using the stake service functions
+---
+
+## 2026-01-21 - US-006
+- What was implemented: Added GET /api/stake/records/:wallet endpoint to fetch user's stake records
+- Files changed:
+  - apps/api/src/services/stake.ts (modified - added getStakeRecordsByOwner function and StakeRecordAccount type)
+  - apps/api/src/routes/stake.ts (modified - added GET /records/:wallet route and StakeRecordsResponse type)
+- **Learnings for future iterations:**
+  - getProgramAccounts in @solana/kit v5 requires strongly branded types for memcmp filter bytes
+  - The bytes field needs `encoding: "base58"` along with the bytes value
+  - Use getBase58Decoder().decode() to convert Uint8Array discriminator to base58 string
+  - getProgramAccounts returns the array directly (not wrapped in .value like other RPC methods)
+  - StakeRecord's owner field is at offset 40 (after 8-byte discriminator + 32-byte staker)
+---

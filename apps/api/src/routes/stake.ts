@@ -4,9 +4,11 @@ import {
   getStakerAccount,
   getCollectionAccounts,
   getEmissionAccounts,
+  getStakeRecordsByOwner,
   type StakerAccount,
   type CollectionAccount,
   type EmissionAccount,
+  type StakeRecordAccount,
 } from "../services/stake"
 
 export const stakeRoutes = new Hono<HonoEnv>()
@@ -45,5 +47,22 @@ stakeRoutes.get("/dandies", async (c) => {
     staker,
     collections,
     emissions,
+  })
+})
+
+export type StakeRecordsResponse = {
+  records: StakeRecordAccount[]
+}
+
+/**
+ * GET /stake/records/:wallet
+ * Returns all stake records for a given wallet owner
+ */
+stakeRoutes.get("/records/:wallet", async (c) => {
+  const wallet = c.req.param("wallet")
+  const records = await getStakeRecordsByOwner(c.env, wallet)
+
+  return c.json<StakeRecordsResponse>({
+    records,
   })
 })
