@@ -5,6 +5,7 @@ import { StakeStats } from "@/components/stake/StakeStats"
 import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/stake/AvailableToStakeGrid"
 import { StakeDialog } from "@/components/stake/StakeDialog"
+import { UnstakeDialog } from "@/components/stake/UnstakeDialog"
 import { useWallet } from "@solana/wallet-adapter-react"
 import {
   fetchStakeDataAtom,
@@ -22,9 +23,10 @@ export function StakePage() {
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
   const fetchPendingRewards = useSetAtom(fetchPendingRewardsAtom)
   const [stakeDialogNft, setStakeDialogNft] = useState<NFT | null>(null)
+  const [unstakeTarget, setUnstakeTarget] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null>(null)
 
-  const handleUnstake = (_nft: NFT, _stakeRecord: StakeRecordAccount) => {
-    // TODO: US-019 - Open UnstakeDialog
+  const handleUnstake = (nft: NFT, stakeRecord: StakeRecordAccount) => {
+    setUnstakeTarget({ nft, stakeRecord })
   }
 
   const handleStake = (nft: NFT) => {
@@ -36,6 +38,17 @@ export function StakePage() {
   }
 
   const handleStakeSuccess = () => {
+    if (publicKey) {
+      fetchUserStakeRecords(publicKey.toBase58())
+      fetchPendingRewards(publicKey.toBase58())
+    }
+  }
+
+  const handleUnstakeDialogClose = () => {
+    setUnstakeTarget(null)
+  }
+
+  const handleUnstakeSuccess = () => {
     if (publicKey) {
       fetchUserStakeRecords(publicKey.toBase58())
       fetchPendingRewards(publicKey.toBase58())
@@ -83,6 +96,15 @@ export function StakePage() {
 
       {stakeDialogNft && (
         <StakeDialog nft={stakeDialogNft} onClose={handleStakeDialogClose} onSuccess={handleStakeSuccess} />
+      )}
+
+      {unstakeTarget && (
+        <UnstakeDialog
+          nft={unstakeTarget.nft}
+          stakeRecord={unstakeTarget.stakeRecord}
+          onClose={handleUnstakeDialogClose}
+          onSuccess={handleUnstakeSuccess}
+        />
       )}
     </div>
   )
