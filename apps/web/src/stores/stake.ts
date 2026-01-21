@@ -90,3 +90,82 @@ export const totalPendingRewardsAtom = atom((get) => {
 export const stakedNftCountAtom = atom((get) => {
   return get(userStakeRecordsAtom).length
 })
+
+/**
+ * Fetch stake data action - fetches Dandies staker info, collections, and emissions
+ */
+export const fetchStakeDataAtom = atom(null, async (_get, set) => {
+  set(isLoadingAtom, true)
+  set(errorAtom, null)
+
+  try {
+    const response = await fetch("/api/stake/dandies")
+    if (!response.ok) {
+      throw new Error("Failed to fetch stake data")
+    }
+
+    const data = (await response.json()) as {
+      staker: StakerAccount | null
+      collections: CollectionAccount[]
+      emissions: EmissionAccount[]
+    }
+
+    set(stakerAtom, data.staker)
+    set(collectionsAtom, data.collections)
+    set(emissionsAtom, data.emissions)
+  } catch (err) {
+    set(errorAtom, err instanceof Error ? err.message : "Unknown error")
+  } finally {
+    set(isLoadingAtom, false)
+  }
+})
+
+/**
+ * Fetch user's stake records action
+ */
+export const fetchUserStakeRecordsAtom = atom(null, async (_get, set, wallet: string) => {
+  set(isLoadingAtom, true)
+  set(errorAtom, null)
+
+  try {
+    const response = await fetch(`/api/stake/records/${wallet}`)
+    if (!response.ok) {
+      throw new Error("Failed to fetch stake records")
+    }
+
+    const data = (await response.json()) as {
+      records: StakeRecordAccount[]
+    }
+
+    set(userStakeRecordsAtom, data.records)
+  } catch (err) {
+    set(errorAtom, err instanceof Error ? err.message : "Unknown error")
+  } finally {
+    set(isLoadingAtom, false)
+  }
+})
+
+/**
+ * Fetch pending rewards for a wallet
+ */
+export const fetchPendingRewardsAtom = atom(null, async (_get, set, wallet: string) => {
+  set(isLoadingAtom, true)
+  set(errorAtom, null)
+
+  try {
+    const response = await fetch(`/api/stake/pending/${wallet}`)
+    if (!response.ok) {
+      throw new Error("Failed to fetch pending rewards")
+    }
+
+    const data = (await response.json()) as {
+      pending: PendingReward[]
+    }
+
+    set(pendingRewardsAtom, data.pending)
+  } catch (err) {
+    set(errorAtom, err instanceof Error ? err.message : "Unknown error")
+  } finally {
+    set(isLoadingAtom, false)
+  }
+})
