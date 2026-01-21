@@ -9,6 +9,7 @@ import { tokensRoutes } from "./routes/tokens"
 import { healthRoutes } from "./routes/health"
 import { showcaseRoutes } from "./routes/showcase"
 import { lockRoutes } from "./routes/lock"
+import { stakeRoutes } from "./routes/stake"
 
 // Export Durable Objects
 export { UserDO } from "./dos/user"
@@ -37,6 +38,7 @@ app.route("/nfts", nftsRoutes)
 app.route("/tokens", tokensRoutes)
 app.route("/showcase", showcaseRoutes)
 app.route("/lock", lockRoutes)
+app.route("/stake", stakeRoutes)
 
 // 404 handler
 app.notFound((c) => {
