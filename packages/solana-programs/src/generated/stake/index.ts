@@ -9,12 +9,9 @@
 export * from "./accounts"
 export * from "./errors"
 export * from "./instructions"
-export {
-  STAKE_PROGRAM_ADDRESS,
-  StakeAccount,
-  identifyStakeAccount,
+export { STAKE_PROGRAM_ADDRESS, StakeAccount, identifyStakeAccount, identifyStakeInstruction } from "./programs"
+export type {
   StakeInstruction as StakeProgramInstruction,
-  identifyStakeInstruction,
   ParsedStakeInstruction as ParsedStakeProgramInstruction,
 } from "./programs"
 export * from "./types"

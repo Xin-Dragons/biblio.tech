@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@biblio/solana-programs':
+        specifier: workspace:*
+        version: link:../../packages/solana-programs
       '@solana/kit':
         specifier: ^5.4.0
         version: 5.4.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
