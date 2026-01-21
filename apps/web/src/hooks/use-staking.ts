@@ -1,8 +1,9 @@
 import { PublicKey, TransactionInstruction } from "@solana/web3.js"
+import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token"
 import type { Address, TransactionSigner } from "@solana/kit"
 import { stake } from "@biblio/solana-programs"
 import type { NFT } from "../stores/nfts"
-import type { CollectionAccount, StakerAccount } from "../stores/stake"
+import type { CollectionAccount, StakerAccount, StakeRecordAccount } from "../stores/stake"
 
 /**
  * Stake Program ID
@@ -208,6 +209,59 @@ export function buildStakeCoreInstructions(input: BuildStakeCoreInstructionsInpu
     feesWallet: addr(FEES_WALLET),
     coreProgram: addr(MPL_CORE_PROGRAM_ID),
     selection: null,
+  })
+
+  return [codamaInstructionToWeb3(ix)]
+}
+
+/**
+ * Input parameters for building unstake core instructions
+ */
+export interface BuildUnstakeCoreInstructionsInput {
+  nft: NFT
+  stakeRecord: StakeRecordAccount
+  staker: StakerAccount
+  collection: CollectionAccount
+  owner: PublicKey
+}
+
+/**
+ * Builds the transaction instructions required to unstake a Core NFT (Dandies)
+ *
+ * This creates an UnstakeCore instruction that:
+ * 1. Closes the StakeRecord PDA and returns rent to owner
+ * 2. Optionally updates the NftRecord PDA with final points
+ * 3. Revokes the NFT delegation from the stake program's nftAuthority
+ *
+ * @param input - The unstake parameters including NFT, stakeRecord, staker, collection, and owner
+ * @returns Array of TransactionInstructions to execute the unstake
+ */
+export function buildUnstakeCoreInstructions(input: BuildUnstakeCoreInstructionsInput): TransactionInstruction[] {
+  const { nft, stakeRecord, staker, collection, owner } = input
+
+  const stakerPubkey = new PublicKey(staker.address)
+  const collectionPubkey = new PublicKey(collection.address)
+  const nftMint = new PublicKey(nft.mint)
+  const collectionMintPubkey = new PublicKey(collection.collectionMint)
+  const stakeRecordPubkey = new PublicKey(stakeRecord.address)
+
+  const nftRecordPda = getNftRecordPda(stakerPubkey, nftMint)
+  const programConfigPda = getProgramConfigPda()
+  const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
+
+  const ix = stake.getUnstakeCoreInstruction({
+    programConfig: addr(programConfigPda),
+    staker: addr(stakerPubkey),
+    collection: addr(collectionPubkey),
+    stakeRecord: addr(stakeRecordPubkey),
+    nftRecord: addr(nftRecordPda),
+    nftMint: addr(nftMint),
+    collectionMint: addr(collectionMintPubkey),
+    feesWallet: addr(FEES_WALLET),
+    nftAuthority: addr(nftAuthorityPda),
+    owner: createSigner(owner),
+    associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
+    coreProgram: addr(MPL_CORE_PROGRAM_ID),
   })
 
   return [codamaInstructionToWeb3(ix)]
