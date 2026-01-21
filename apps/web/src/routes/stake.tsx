@@ -3,6 +3,7 @@ import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole } from "lucide-react"
 import { StakeStats } from "@/components/stake/StakeStats"
 import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
+import { AvailableToStakeGrid } from "@/components/stake/AvailableToStakeGrid"
 import { useWallet } from "@solana/wallet-adapter-react"
 import {
   fetchStakeDataAtom,
@@ -22,6 +23,10 @@ export function StakePage() {
 
   const handleUnstake = (_nft: NFT, _stakeRecord: StakeRecordAccount) => {
     // TODO: US-019 - Open UnstakeDialog
+  }
+
+  const handleStake = (_nft: NFT) => {
+    // TODO: US-018 - Open StakeDialog
   }
 
   useEffect(() => {
@@ -59,6 +64,7 @@ export function StakePage() {
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto">
           <StakeStats />
           <StakedNftsGrid onUnstake={handleUnstake} />
+          <AvailableToStakeGrid onStake={handleStake} />
         </div>
       )}
     </div>
