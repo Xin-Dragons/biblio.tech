@@ -10,29 +10,45 @@
     "bindings": [
       {
         "name": "USER_DO",
-        "class_name": "UserDO"
+        "class_name": "UserDO",
       },
       {
         "name": "RATE_LIMITER_DO",
-        "class_name": "RateLimiterDO"
+        "class_name": "RateLimiterDO",
       },
       {
         "name": "TENSOR_RATE_LIMITER_DO",
-        "class_name": "TensorRateLimiterDO"
-      }
-    ]
+        "class_name": "TensorRateLimiterDO",
+      },
+      {
+        "name": "USERNAMES_DO",
+        "class_name": "UsernamesDO",
+      },
+      {
+        "name": "VOTING_DO",
+        "class_name": "VotingDO",
+      },
+    ],
   },
 
   // Migrations for Durable Objects
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["UserDO", "RateLimiterDO"]
+      "new_classes": ["UserDO", "RateLimiterDO"],
     },
     {
       "tag": "v2",
-      "new_classes": ["TensorRateLimiterDO"]
-    }
+      "new_classes": ["TensorRateLimiterDO"],
+    },
+    {
+      "tag": "v3",
+      "new_classes": ["UsernamesDO"],
+    },
+    {
+      "tag": "v4",
+      "new_classes": ["VotingDO"],
+    },
   ],
 
   // D1 Database
@@ -40,14 +56,14 @@
     {
       "binding": "DB",
       "database_name": "biblio-db",
-      "database_id": "placeholder-will-be-set-after-creation"
-    }
+      "database_id": "placeholder-will-be-set-after-creation",
+    },
   ],
 
   // Environment variables (secrets set via wrangler secret)
   "vars": {
-    "ENVIRONMENT": "development"
-  }
+    "ENVIRONMENT": "development",
+  },
 
   // Uncomment for production
   // "env": {

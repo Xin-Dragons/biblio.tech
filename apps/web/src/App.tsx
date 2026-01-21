@@ -7,6 +7,7 @@ import { SettingsPage } from "./routes/settings"
 import { StarredPage } from "./routes/starred"
 import { JunkPage } from "./routes/junk"
 import { SplPage } from "./routes/spl"
+import { ShowcasePage } from "./routes/showcase"
 
 export function App() {
   return (
@@ -19,6 +20,8 @@ export function App() {
         <Route path="starred" element={<StarredPage />} />
         <Route path="junk" element={<JunkPage />} />
         <Route path="spl" element={<SplPage />} />
+        <Route path="showcase" element={<ShowcasePage />} />
+        <Route path="showcase/:username" element={<ShowcasePage />} />
       </Route>
     </Routes>
   )

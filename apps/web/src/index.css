@@ -83,3 +83,14 @@
 .wallet-adapter-modal-list .wallet-adapter-button {
   @apply bg-transparent hover:bg-accent !important;
 }
+
+/* Collage grid drag cursors - override ruuri default */
+.ruuri-draggable-item.muuri-item-shown {
+  cursor: grab !important;
+}
+
+.ruuri-draggable-item.muuri-item-shown:active,
+.ruuri-draggable-item.muuri-item-dragging {
+  cursor: grabbing !important;
+}
+

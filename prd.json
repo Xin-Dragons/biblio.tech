@@ -1,0 +1,338 @@
+{
+  "project": "biblio.tech",
+  "branchName": "ralph/dandies-staking",
+  "description": "Dandies Staking Integration - Enable users to stake/unstake Dandies NFTs and claim rewards via the existing on-chain stake program",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Copy stake IDL to solana-programs package",
+      "description": "As a developer, I need the stake IDL in the correct location so Codama can generate the SDK.",
+      "acceptanceCriteria": [
+        "Copy apps/legacy/src/apps/stake/idl/stake.json to packages/solana-programs/idls/stake.json",
+        "File exists at packages/solana-programs/idls/stake.json",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Update generate.ts to include stake program",
+      "description": "As a developer, I need the generate script to process the stake IDL.",
+      "acceptanceCriteria": [
+        "Add 'stake' to PROGRAMS array in packages/solana-programs/scripts/generate.ts",
+        "Running pnpm generate creates packages/solana-programs/src/generated/stake/ directory",
+        "Generated stake directory contains accounts/, instructions/, types/, and index.ts",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Export stake SDK from solana-programs index",
+      "description": "As a developer, I need to import the stake SDK from @biblio/solana-programs.",
+      "acceptanceCriteria": [
+        "Add 'export * as stake from ./generated/stake' to packages/solana-programs/src/index.ts",
+        "Build succeeds with pnpm build in packages/solana-programs",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Create stake service for fetching on-chain accounts",
+      "description": "As a developer, I need a service to fetch staker, collection, and emission accounts from the blockchain.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/services/stake.ts",
+        "Implement getStakerAccount(stakerPubkey) function",
+        "Implement getCollectionAccounts(stakerPubkey) function",
+        "Implement getEmissionAccounts(collectionPubkeys) function",
+        "Use existing solana-client.ts for RPC connection",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add GET /api/stake/dandies endpoint",
+      "description": "As a frontend, I need to fetch Dandies staker info including collections and emissions.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/routes/stake.ts",
+        "Add GET /stake/dandies route returning { staker, collections, emissions }",
+        "Register route in apps/api/src/index.ts",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add GET /api/stake/records/:wallet endpoint",
+      "description": "As a frontend, I need to fetch a user's stake records to show their staked NFTs.",
+      "acceptanceCriteria": [
+        "Add getStakeRecordsByOwner(wallet) to stake service",
+        "Add GET /stake/records/:wallet route returning { records: StakeRecord[] }",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add GET /api/stake/pending/:wallet endpoint",
+      "description": "As a frontend, I need to calculate and display pending rewards for a user.",
+      "acceptanceCriteria": [
+        "Add calculatePendingRewards(wallet) to stake service",
+        "Add GET /stake/pending/:wallet route returning { pending: { emission, amount }[] }",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Create stake store with Jotai atoms",
+      "description": "As a frontend developer, I need state management for staking data.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/stores/stake.ts",
+        "Add stakerAtom for cached staker account",
+        "Add collectionsAtom for staking collections",
+        "Add userStakeRecordsAtom for user's stakes",
+        "Add pendingRewardsAtom for calculated rewards",
+        "Add isLoadingAtom and errorAtom",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add fetch stake data action to store",
+      "description": "As a frontend, I need to fetch and populate staking data from the API.",
+      "acceptanceCriteria": [
+        "Add fetchStakeDataAtom that fetches /api/stake/dandies",
+        "Add fetchUserStakeRecordsAtom that fetches /api/stake/records/:wallet",
+        "Add fetchPendingRewardsAtom that fetches /api/stake/pending/:wallet",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Create use-staking hook with PDA helpers",
+      "description": "As a frontend developer, I need helper functions to derive stake program PDAs.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/hooks/use-staking.ts",
+        "Implement getStakeRecordPda(staker, nftMint) function",
+        "Implement getNftRecordPda(staker, nftMint) function",
+        "Implement getCollectionPda(staker, collectionMint) function",
+        "Export STAKE_PROGRAM_ID constant",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Implement buildStakeCoreInstructions",
+      "description": "As a user, I need to stake my Core NFTs (Dandies).",
+      "acceptanceCriteria": [
+        "Add buildStakeCoreInstructions(nft, staker, collection) to use-staking hook",
+        "Use stake SDK's getStakeCoreInstruction",
+        "Include all required accounts (staker, collection, asset, nftAuthority, etc.)",
+        "Convert Codama instruction to web3.js TransactionInstruction",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Implement buildUnstakeCoreInstructions",
+      "description": "As a user, I need to unstake my Core NFTs (Dandies).",
+      "acceptanceCriteria": [
+        "Add buildUnstakeCoreInstructions(nft, stakeRecord) to use-staking hook",
+        "Use stake SDK's getUnstakeCoreInstruction",
+        "Include all required accounts",
+        "Convert Codama instruction to web3.js TransactionInstruction",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement buildClaimInstructions",
+      "description": "As a user, I need to claim my staking rewards.",
+      "acceptanceCriteria": [
+        "Add buildClaimInstructions(stakeRecord, emission) to use-staking hook",
+        "Use stake SDK's getClaimInstruction",
+        "Include all required accounts including reward token accounts",
+        "Convert Codama instruction to web3.js TransactionInstruction",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add /stake route to App.tsx",
+      "description": "As a user, I need to navigate to the stake page.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/routes/stake.tsx with basic StakePage component",
+        "Add Route path='/stake' element={<StakePage />} to App.tsx",
+        "Page renders without errors",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Create StakeStats component",
+      "description": "As a user, I want to see my staking statistics at a glance.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/StakeStats.tsx",
+        "Display total NFTs staked count",
+        "Display pending rewards amount",
+        "Add component to StakePage",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Create StakedNftsGrid component",
+      "description": "As a user, I want to see my currently staked NFTs.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/StakedNftsGrid.tsx",
+        "Display grid of staked NFT cards with images and names",
+        "Each card has Unstake button",
+        "Shows loading state while fetching",
+        "Add component to StakePage",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Create AvailableToStakeGrid component",
+      "description": "As a user, I want to see my unstaked Dandies that can be staked.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/AvailableToStakeGrid.tsx",
+        "Filter user's NFTs to show only Dandies collection",
+        "Exclude already-staked NFTs",
+        "Each card has Stake button",
+        "Add component to StakePage",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Add StakeDialog confirmation",
+      "description": "As a user, I want to confirm before staking an NFT.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/StakeDialog.tsx",
+        "Show NFT image and name in dialog",
+        "Confirm button triggers stake transaction",
+        "Show loading state during transaction",
+        "Close dialog and refresh data on success",
+        "Show error toast on failure",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Add UnstakeDialog confirmation",
+      "description": "As a user, I want to confirm before unstaking an NFT.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/UnstakeDialog.tsx",
+        "Show NFT image and name in dialog",
+        "Show warning if minimum stake period not met",
+        "Confirm button triggers unstake transaction",
+        "Show loading state during transaction",
+        "Close dialog and refresh data on success",
+        "Show error toast on failure",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Add ClaimRewardsButton and ClaimDialog",
+      "description": "As a user, I want to claim my staking rewards.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/stake/ClaimDialog.tsx",
+        "Add Claim Rewards button to StakePage (disabled if no rewards)",
+        "Dialog shows pending reward amount",
+        "Confirm button triggers claim transaction",
+        "Show loading state during transaction",
+        "Close dialog and refresh data on success",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Add Staked badge to NFTs in main grid",
+      "description": "As a user, I want to see which NFTs are staked when browsing my portfolio.",
+      "acceptanceCriteria": [
+        "Modify apps/web/src/components/nft-grid.tsx or related component",
+        "Check if NFT mint is in userStakeRecordsAtom",
+        "Display 'Staked' badge on staked NFTs",
+        "Badge styled to be clearly visible",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Add staking link to sidebar navigation",
+      "description": "As a user, I want easy access to the staking page from the sidebar.",
+      "acceptanceCriteria": [
+        "Add Stake link to apps/web/src/components/layout/sidebar.tsx",
+        "Use appropriate icon (e.g., LockClosed or similar)",
+        "Link navigates to /stake",
+        "Active state when on /stake route",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { authMiddleware } from "../middleware/auth"
+import { heliusService } from "../services/helius"
+
+const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
 
 export const userRoutes = new Hono<HonoEnv>()
 
@@ -247,4 +250,147 @@ userRoutes.put("/dandies", async (c) => {
     })
   )
   return c.body(null, 204)
+})
+
+// NFT Cache
+userRoutes.get("/nft-cache/:wallet", async (c) => {
+  const userDO = getUserDO(c)
+  const wallet = c.req.param("wallet")
+  const res = await userDO.fetch(new Request(`http://do/nft-cache/${wallet}`))
+  return c.json(await res.json())
+})
+
+userRoutes.put("/nft-cache/:wallet", async (c) => {
+  const userDO = getUserDO(c)
+  const wallet = c.req.param("wallet")
+  const body = await c.req.json()
+  await userDO.fetch(
+    new Request(`http://do/nft-cache/${wallet}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })
+  )
+  return c.body(null, 204)
+})
+
+userRoutes.delete("/nft-cache/:wallet", async (c) => {
+  const userDO = getUserDO(c)
+  const wallet = c.req.param("wallet")
+  await userDO.fetch(new Request(`http://do/nft-cache/${wallet}`, { method: "DELETE" }))
+  return c.body(null, 204)
+})
+
+// Username
+function getUsernamesDO(c: { env: HonoEnv["Bindings"] }) {
+  return c.env.USERNAMES_DO.get(c.env.USERNAMES_DO.idFromName("global"))
+}
+
+userRoutes.get("/username", async (c) => {
+  const userDO = getUserDO(c)
+  const res = await userDO.fetch(new Request("http://do/username"))
+  return c.json(await res.json())
+})
+
+userRoutes.post("/username", async (c) => {
+  const userDO = getUserDO(c)
+  const usernamesDO = getUsernamesDO(c)
+  const userId = c.get("userId")
+  if (!userId) return c.json({ error: "Unauthorized" }, 401)
+
+  const { username } = await c.req.json<{ username: string }>()
+
+  // Get user's linked wallets
+  const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+  const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
+
+  if (wallets.length === 0) {
+    return c.json({ error: "No wallets linked" }, 400)
+  }
+
+  // Check for a Dandy locked to Biblio's wallet across all linked wallets
+  const biblioLockWallet = c.env.BIBLIO_LOCK_WALLET
+  let hasLockedDandy = false
+
+  for (const { publicKey: wallet } of wallets) {
+    const dandies = await heliusService.searchAssets(c.env.HELIUS_API_KEY, {
+      ownerAddress: wallet,
+      grouping: ["collection", DANDIES_COLLECTION_ID],
+    })
+
+    const lockedDandy = dandies.items.find(
+      (item) => item.ownership.frozen && item.ownership.delegate === biblioLockWallet
+    )
+
+    if (lockedDandy) {
+      hasLockedDandy = true
+      break
+    }
+  }
+
+  if (!hasLockedDandy) {
+    return c.json({ error: "Must lock a Dandy to Biblio to claim a username" }, 403)
+  }
+
+  // Claim username mapped to userId
+  const claimRes = await usernamesDO.fetch(
+    new Request("http://do/claim", {
+      method: "POST",
+      body: JSON.stringify({ username, publicKey: userId }),
+    })
+  )
+
+  if (!claimRes.ok) {
+    const err = await claimRes.json<{ error: string }>()
+    return c.json(err, 400)
+  }
+
+  await userDO.fetch(
+    new Request("http://do/username", {
+      method: "PUT",
+      body: JSON.stringify({ username: username.toLowerCase() }),
+    })
+  )
+
+  return c.json({ success: true, username: username.toLowerCase() })
+})
+
+userRoutes.delete("/username", async (c) => {
+  const userDO = getUserDO(c)
+  const usernamesDO = getUsernamesDO(c)
+  const userId = c.get("userId")
+  if (!userId) return c.json({ error: "Unauthorized" }, 401)
+
+  const usernameRes = await userDO.fetch(new Request("http://do/username"))
+  const { username } = await usernameRes.json<{ username: string | null }>()
+  if (!username) return c.json({ error: "No username to release" }, 400)
+
+  await usernamesDO.fetch(
+    new Request("http://do/release", {
+      method: "POST",
+      body: JSON.stringify({ username, publicKey: userId }),
+    })
+  )
+
+  await userDO.fetch(new Request("http://do/username", { method: "DELETE" }))
+
+  return c.body(null, 204)
+})
+
+// Showcase
+userRoutes.get("/showcase", async (c) => {
+  const userDO = getUserDO(c)
+  const res = await userDO.fetch(new Request("http://do/showcase"))
+  return c.json(await res.json())
+})
+
+userRoutes.put("/showcase", async (c) => {
+  const userDO = getUserDO(c)
+  const body = await c.req.json()
+  const res = await userDO.fetch(
+    new Request("http://do/showcase", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })
+  )
+  return c.json(await res.json())
 })

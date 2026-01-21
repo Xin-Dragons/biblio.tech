@@ -24,6 +24,40 @@ export interface Wallet {
   addedAt: number
 }
 
+export interface CachedNft {
+  mint: string
+  name: string
+  image: string
+  collectionId: string
+  collectionName: string | null
+  attributes: Array<{ trait_type: string; value: string }>
+  frozen: boolean
+  compressed: boolean
+  tokenStandard: string
+}
+
+export interface CachedCollection {
+  id: string
+  name: string
+  image: string
+  numMints: number
+}
+
+export interface NftCache {
+  wallet: string
+  nfts: CachedNft[]
+  collections: CachedCollection[]
+  cachedAt: number
+}
+
+export interface ShowcaseConfig {
+  enabled: boolean
+  items: string[]
+  order: string[]
+  sizes: Record<string, "small" | "medium" | "large" | "xlarge">
+  updatedAt: number
+}
+
 export class UserDO extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -180,6 +214,60 @@ export class UserDO extends DurableObject<Env> {
     await this.ctx.storage.put("dandies", { mints, verifiedAt: Date.now() })
   }
 
+  // NFT Cache
+  async getNftCache(wallet: string): Promise<NftCache | null> {
+    return (await this.ctx.storage.get<NftCache>(`nft-cache:${wallet}`)) ?? null
+  }
+
+  async setNftCache(wallet: string, nfts: CachedNft[], collections: CachedCollection[]): Promise<void> {
+    const cache: NftCache = {
+      wallet,
+      nfts,
+      collections,
+      cachedAt: Date.now(),
+    }
+    await this.ctx.storage.put(`nft-cache:${wallet}`, cache)
+  }
+
+  async clearNftCache(wallet: string): Promise<void> {
+    await this.ctx.storage.delete(`nft-cache:${wallet}`)
+  }
+
+  // Username
+  async getUsername(): Promise<string | null> {
+    return (await this.ctx.storage.get<string>("username")) ?? null
+  }
+
+  async setUsername(username: string): Promise<void> {
+    await this.ctx.storage.put("username", username.toLowerCase())
+  }
+
+  async clearUsername(): Promise<void> {
+    await this.ctx.storage.delete("username")
+  }
+
+  // Showcase
+  async getShowcase(): Promise<ShowcaseConfig | null> {
+    return (await this.ctx.storage.get<ShowcaseConfig>("showcase")) ?? null
+  }
+
+  async setShowcase(config: Partial<ShowcaseConfig>): Promise<ShowcaseConfig> {
+    const current = (await this.getShowcase()) ?? {
+      enabled: false,
+      items: [],
+      order: [],
+      sizes: {},
+      updatedAt: Date.now(),
+    }
+    const updated: ShowcaseConfig = {
+      ...current,
+      ...config,
+      updatedAt: Date.now(),
+    }
+    await this.ctx.storage.put("showcase", updated)
+    return updated
+  }
+
   // HTTP handler for the DO
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
@@ -311,6 +399,50 @@ export class UserDO extends DurableObject<Env> {
         const { mints } = await request.json<{ mints: string[] }>()
         await this.setDandies(mints)
         return new Response(null, { status: 204 })
+      }
+
+      // NFT Cache
+      if (path.startsWith("/nft-cache/") && request.method === "GET") {
+        const wallet = path.split("/")[2]
+        return Response.json(await this.getNftCache(wallet))
+      }
+      if (path.startsWith("/nft-cache/") && request.method === "PUT") {
+        const wallet = path.split("/")[2]
+        const { nfts, collections } = await request.json<{
+          nfts: CachedNft[]
+          collections: CachedCollection[]
+        }>()
+        await this.setNftCache(wallet, nfts, collections)
+        return new Response(null, { status: 204 })
+      }
+      if (path.startsWith("/nft-cache/") && request.method === "DELETE") {
+        const wallet = path.split("/")[2]
+        await this.clearNftCache(wallet)
+        return new Response(null, { status: 204 })
+      }
+
+      // Username
+      if (path === "/username" && request.method === "GET") {
+        return Response.json({ username: await this.getUsername() })
+      }
+      if (path === "/username" && request.method === "PUT") {
+        const { username } = await request.json<{ username: string }>()
+        await this.setUsername(username)
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/username" && request.method === "DELETE") {
+        await this.clearUsername()
+        return new Response(null, { status: 204 })
+      }
+
+      // Showcase
+      if (path === "/showcase" && request.method === "GET") {
+        return Response.json(await this.getShowcase())
+      }
+      if (path === "/showcase" && request.method === "PUT") {
+        const config = await request.json<Partial<ShowcaseConfig>>()
+        const updated = await this.setShowcase(config)
+        return Response.json(updated)
       }
 
       return new Response("Not found", { status: 404 })

@@ -1,16 +1,18 @@
 import { useParams, Link } from "react-router"
 import { useAtomValue } from "jotai"
 import { ArrowLeft } from "lucide-react"
-import { nftsAtom, collectionsAtom } from "@/stores/nfts"
+import { nftsAtom, collectionsAtom, isLoadingAtom } from "@/stores/nfts"
 import { searchQueryAtom, sortOptionAtom, layoutTypeAtom } from "@/stores/ui"
 import { NftGrid } from "@/components/nft-grid"
 import { SortableNftGrid } from "@/components/sortable-nft-grid"
 import { CollageNftGrid } from "@/components/collage-nft-grid"
+import { NftGridSkeleton } from "@/components/ui/skeleton"
 
 export function CollectionPage() {
   const { id } = useParams<{ id: string }>()
   const nfts = useAtomValue(nftsAtom)
   const collections = useAtomValue(collectionsAtom)
+  const isLoading = useAtomValue(isLoadingAtom)
   const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
   const sortOption = useAtomValue(sortOptionAtom)
   const layoutType = useAtomValue(layoutTypeAtom)
@@ -25,6 +27,9 @@ export function CollectionPage() {
   }
 
   const renderGrid = () => {
+    if (isLoading && collectionNfts.length === 0) {
+      return <NftGridSkeleton count={12} />
+    }
     if (sortOption === "custom") {
       return <SortableNftGrid nfts={collectionNfts} />
     }
@@ -45,7 +50,9 @@ export function CollectionPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-xl font-bold">{collection?.name ?? "Collection"}</h1>
-          <p className="text-sm text-muted-foreground">{collectionNfts.length} items</p>
+          <p className="text-sm text-muted-foreground">
+            {isLoading && collectionNfts.length === 0 ? "Loading..." : `${collectionNfts.length} items`}
+          </p>
         </div>
       </div>
       <div className="min-h-0 flex-1">{renderGrid()}</div>

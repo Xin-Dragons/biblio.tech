@@ -125,6 +125,76 @@ export const saveCustomOrderAtom = atom(null, async (_get, set, order: string[],
   }
 })
 
+// Collage sizes - stored in user DO
+export type CollageSizeClass = "small" | "medium" | "large" | "xlarge"
+export const collageSizesAtom = atom<Record<string, CollageSizeClass>>({})
+
+export const fetchCollageSizesAtom = atom(null, async (_get, set, context: string = "nfts") => {
+  try {
+    const res = await authFetch(`/api/user/sizes/${context}`)
+    if (res.ok) {
+      const data = (await res.json()) as Record<string, CollageSizeClass>
+      set(collageSizesAtom, data ?? {})
+    }
+  } catch {
+    // Ignore errors - user might not be authenticated
+  }
+})
+
+export const saveCollageSizesAtom = atom(
+  null,
+  async (_get, set, sizes: Record<string, CollageSizeClass>, context: string = "nfts") => {
+    set(collageSizesAtom, sizes)
+    try {
+      await authFetch(`/api/user/sizes/${context}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sizes),
+      })
+    } catch {
+      // Ignore errors - user might not be authenticated
+    }
+  }
+)
+
+// Collage order - stored in user DO
+export const collageOrderAtom = atom<string[]>([])
+
+export const fetchCollageOrderAtom = atom(null, async (_get, set, context: string = "nfts") => {
+  try {
+    const res = await authFetch(`/api/user/order/${context}`)
+    if (res.ok) {
+      const data = (await res.json()) as Record<string, number> | string[]
+      if (Array.isArray(data)) {
+        set(collageOrderAtom, data)
+      } else {
+        // Convert old format (mint -> index) to new format (ordered array)
+        const entries = Object.entries(data)
+        entries.sort((a, b) => a[1] - b[1])
+        set(
+          collageOrderAtom,
+          entries.map(([mint]) => mint)
+        )
+      }
+    }
+  } catch {
+    // Ignore errors - user might not be authenticated
+  }
+})
+
+export const saveCollageOrderAtom = atom(null, async (_get, set, order: string[], context: string = "nfts") => {
+  set(collageOrderAtom, order)
+  try {
+    await authFetch(`/api/user/order/${context}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(order),
+    })
+  } catch {
+    // Ignore errors - user might not be authenticated
+  }
+})
+
 // Actions
 export const toggleStarredAtom = atom(null, (get, set, mint: string) => {
   const starred = get(starredAtom)

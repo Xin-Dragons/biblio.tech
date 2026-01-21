@@ -7,11 +7,15 @@ import { userRoutes } from "./routes/user"
 import { nftsRoutes } from "./routes/nfts"
 import { tokensRoutes } from "./routes/tokens"
 import { healthRoutes } from "./routes/health"
+import { showcaseRoutes } from "./routes/showcase"
+import { lockRoutes } from "./routes/lock"
 
 // Export Durable Objects
 export { UserDO } from "./dos/user"
 export { RateLimiterDO } from "./dos/rate-limiter"
 export { TensorRateLimiterDO } from "./dos/tensor-rate-limiter"
+export { UsernamesDO } from "./dos/usernames"
+export { VotingDO } from "./dos/voting"
 
 const app = new Hono<HonoEnv>()
 
@@ -31,6 +35,8 @@ app.route("/auth", authRoutes)
 app.route("/user", userRoutes)
 app.route("/nfts", nftsRoutes)
 app.route("/tokens", tokensRoutes)
+app.route("/showcase", showcaseRoutes)
+app.route("/lock", lockRoutes)
 
 // 404 handler
 app.notFound((c) => {

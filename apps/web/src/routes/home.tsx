@@ -1,23 +1,16 @@
 import { useWallet } from "@solana/wallet-adapter-react"
-import { useAtomValue, useSetAtom } from "jotai"
-import { useEffect } from "react"
-import { Folder } from "lucide-react"
-import { nftsAtom, filteredCollectionsAtom, isLoadingAtom, fetchNftsAtom } from "@/stores/nfts"
+import { useAtomValue } from "jotai"
+import { Folder, RefreshCw } from "lucide-react"
+import { nftsAtom, filteredCollectionsAtom, isLoadingAtom, isRefreshingAtom } from "@/stores/nfts"
 import { CollectionGrid } from "@/components/collection-grid"
 import { CollectionGridSkeleton } from "@/components/ui/skeleton"
 
 export function HomePage() {
-  const { connected, publicKey } = useWallet()
+  const { connected } = useWallet()
   const nfts = useAtomValue(nftsAtom)
   const collections = useAtomValue(filteredCollectionsAtom)
   const isLoading = useAtomValue(isLoadingAtom)
-  const fetchNfts = useSetAtom(fetchNftsAtom)
-
-  useEffect(() => {
-    if (connected && publicKey) {
-      fetchNfts(publicKey.toBase58())
-    }
-  }, [connected, publicKey, fetchNfts])
+  const isRefreshing = useAtomValue(isRefreshingAtom)
 
   if (!connected) {
     return (
@@ -49,8 +42,9 @@ export function HomePage() {
     <div className="flex h-full flex-col">
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <h1 className="text-xl font-bold">Collections</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
           {nfts.length} NFTs in {collections.length} collections
+          {isRefreshing && <RefreshCw className="h-3 w-3 animate-spin" />}
         </p>
       </div>
       <div className="min-h-0 flex-1">

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router"
-import { Folder, Image, Star, Coins, Trash2, Plus, X } from "lucide-react"
+import { Folder, Image, Star, Coins, Trash2, Plus, X, User } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/starred", label: "Starred", icon: Star },
   { href: "/spl", label: "Tokens", icon: Coins },
   { href: "/junk", label: "Junk", icon: Trash2 },
+  { href: "/showcase", label: "Showcase", icon: User },
 ]
 
 const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"]

@@ -2,7 +2,48 @@ import { atom } from "jotai"
 import { searchQueryAtom, sortOptionAtom } from "./ui"
 import { junkAtom, customOrderAtom } from "./user"
 
-export type TokenStandard = "NonFungible" | "ProgrammableNonFungible" | "NonFungibleEdition" | "ProgrammableNonFungibleEdition"
+function getAuthHeaders(): HeadersInit {
+  try {
+    const sessionStr = localStorage.getItem("biblio-session")
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr)
+      if (session?.token) {
+        return { Authorization: `Bearer ${session.token}` }
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return {}
+}
+
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(options.headers)
+  const authHeaders = getAuthHeaders()
+  for (const [key, value] of Object.entries(authHeaders)) {
+    headers.set(key, value)
+  }
+  return fetch(url, { ...options, headers })
+}
+
+function isAuthenticated(): boolean {
+  try {
+    const sessionStr = localStorage.getItem("biblio-session")
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr)
+      return !!session?.token
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return false
+}
+
+export type TokenStandard =
+  | "NonFungible"
+  | "ProgrammableNonFungible"
+  | "NonFungibleEdition"
+  | "ProgrammableNonFungibleEdition"
 
 export interface NFT {
   mint: string
@@ -30,22 +71,134 @@ export interface Collection {
 
 // Base atoms
 export const isLoadingAtom = atom(false)
+export const isRefreshingAtom = atom(false) // True when refreshing in background
 export const errorAtom = atom<string | null>(null)
 export const fetchedWalletAtom = atom<string | null>(null)
+export const cacheLoadedAtom = atom(false)
 
 // NFTs atom
 export const nftsAtom = atom<NFT[]>([])
 export const collectionsAtom = atom<Collection[]>([])
 
-// Fetch NFTs action - only fetches if wallet changed
+// Helper to map API response to NFT type
+function mapNftData(mint: Record<string, unknown>): NFT {
+  return {
+    mint: mint.mint as string,
+    name: mint.name as string,
+    image: mint.image as string,
+    collectionId: (mint.collectionId as string) ?? "",
+    collectionName: (mint.collectionName as string) ?? null,
+    attributes: (mint.attributes as Array<{ trait_type: string; value: string }>) ?? [],
+    rarityRank: null,
+    frozen: mint.frozen as boolean,
+    compressed: mint.compressed as boolean,
+    tokenStandard: (mint.tokenStandard as TokenStandard) ?? "NonFungible",
+    listing: null,
+  }
+}
+
+function mapCollectionData(col: Record<string, unknown>): Collection {
+  return {
+    id: col.id as string,
+    name: col.name as string,
+    image: (col.image as string) ?? "",
+    numMints: col.count as number,
+  }
+}
+
+// Save to cache (fire and forget)
+async function saveToCache(wallet: string, nfts: NFT[], collections: Collection[]) {
+  if (!isAuthenticated()) return
+  try {
+    await authFetch(`/api/user/nft-cache/${wallet}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nfts, collections }),
+    })
+  } catch {
+    // Ignore cache save errors
+  }
+}
+
+// Fetch NFTs action - loads from cache first if available
 export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
   const fetchedWallet = get(fetchedWalletAtom)
   const existingNfts = get(nftsAtom)
+  const cacheLoaded = get(cacheLoadedAtom)
 
+  // If already have data for this wallet, just refresh in background
   if (fetchedWallet === wallet && existingNfts.length > 0) {
+    // Background refresh if cache was loaded
+    if (cacheLoaded) {
+      set(isRefreshingAtom, true)
+      try {
+        const response = await fetch(`/api/nfts/by-owner/${wallet}`)
+        if (response.ok) {
+          const data = await response.json()
+          const nfts: NFT[] = data.mints.map(mapNftData)
+          const collections: Collection[] = data.collections.map(mapCollectionData)
+          set(nftsAtom, nfts)
+          set(collectionsAtom, collections)
+          set(cacheLoadedAtom, false)
+          // Save updated data to cache
+          saveToCache(wallet, nfts, collections)
+        }
+      } catch {
+        // Ignore background refresh errors
+      } finally {
+        set(isRefreshingAtom, false)
+      }
+    }
     return
   }
 
+  // Try to load from cache first (only if authenticated)
+  if (isAuthenticated()) {
+    try {
+      const cacheRes = await authFetch(`/api/user/nft-cache/${wallet}`)
+      if (cacheRes.ok) {
+        const cache = await cacheRes.json()
+        if (cache && cache.nfts && cache.nfts.length > 0) {
+          // Have cached data - load it immediately
+          const cachedNfts: NFT[] = cache.nfts.map((n: Record<string, unknown>) => ({
+            ...n,
+            rarityRank: null,
+            listing: null,
+          }))
+          set(nftsAtom, cachedNfts)
+          set(collectionsAtom, cache.collections)
+          set(fetchedWalletAtom, wallet)
+          set(cacheLoadedAtom, true)
+          // Now fetch fresh data in background
+          set(isRefreshingAtom, true)
+          fetch(`/api/nfts/by-owner/${wallet}`)
+            .then(async (response) => {
+              if (response.ok) {
+                const data = await response.json()
+                const nfts: NFT[] = data.mints.map(mapNftData)
+                const collections: Collection[] = data.collections.map(mapCollectionData)
+                set(nftsAtom, nfts)
+                set(collectionsAtom, collections)
+                set(cacheLoadedAtom, false)
+                // Save updated data to cache
+                saveToCache(wallet, nfts, collections)
+              }
+            })
+            .catch(() => {
+              // Ignore background refresh errors
+            })
+            .finally(() => {
+              set(isRefreshingAtom, false)
+            })
+          return
+        }
+      }
+    } catch {
+      // Cache not available, continue with normal fetch
+    }
+  }
+
+  // No cache - do full load
   set(isLoadingAtom, true)
   set(errorAtom, null)
 
@@ -56,31 +209,16 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
     }
 
     const data = await response.json()
-
-    const nfts: NFT[] = data.mints.map((mint: Record<string, unknown>) => ({
-      mint: mint.mint as string,
-      name: mint.name as string,
-      image: mint.image as string,
-      collectionId: (mint.collectionId as string) ?? "",
-      collectionName: (mint.collectionName as string) ?? null,
-      attributes: (mint.attributes as Array<{ trait_type: string; value: string }>) ?? [],
-      rarityRank: null,
-      frozen: mint.frozen as boolean,
-      compressed: mint.compressed as boolean,
-      tokenStandard: (mint.tokenStandard as TokenStandard) ?? "NonFungible",
-      listing: null,
-    }))
-
-    const collections: Collection[] = data.collections.map((col: Record<string, unknown>) => ({
-      id: col.id as string,
-      name: col.name as string,
-      image: (col.image as string) ?? "",
-      numMints: col.count as number,
-    }))
+    const nfts: NFT[] = data.mints.map(mapNftData)
+    const collections: Collection[] = data.collections.map(mapCollectionData)
 
     set(nftsAtom, nfts)
     set(collectionsAtom, collections)
     set(fetchedWalletAtom, wallet)
+    set(cacheLoadedAtom, false)
+
+    // Save to cache
+    saveToCache(wallet, nfts, collections)
   } catch (err) {
     set(errorAtom, err instanceof Error ? err.message : "Unknown error")
   } finally {
