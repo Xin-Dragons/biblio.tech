@@ -8,6 +8,7 @@ import { StarredPage } from "./routes/starred"
 import { JunkPage } from "./routes/junk"
 import { SplPage } from "./routes/spl"
 import { ShowcasePage } from "./routes/showcase"
+import { StakePage } from "./routes/stake"
 
 export function App() {
   return (
@@ -22,6 +23,7 @@ export function App() {
         <Route path="spl" element={<SplPage />} />
         <Route path="showcase" element={<ShowcasePage />} />
         <Route path="showcase/:username" element={<ShowcasePage />} />
+        <Route path="stake" element={<StakePage />} />
       </Route>
     </Routes>
   )
