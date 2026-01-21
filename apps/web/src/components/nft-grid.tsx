@@ -1,4 +1,4 @@
-import { Star, Trash2, Check } from "lucide-react"
+import { Star, Trash2, Check, Lock } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
@@ -7,6 +7,7 @@ import { starredAtom, toggleStarredAtom, junkAtom, toggleJunkAtom } from "@/stor
 import { layoutSizeAtom, showInfoAtom, type LayoutSize } from "@/stores/ui"
 import { selectedNftAtom, type NFT } from "@/stores/nfts"
 import { isSelectModeAtom, selectedMintsAtom, toggleSelectedAtom } from "@/stores/selection"
+import { stakedMintsSetAtom } from "@/stores/stake"
 
 interface NftCardProps {
   nft: NFT
@@ -16,6 +17,7 @@ interface NftCardProps {
 function NftCard({ nft, showInfo }: NftCardProps) {
   const starred = useAtomValue(starredAtom)
   const junk = useAtomValue(junkAtom)
+  const stakedMints = useAtomValue(stakedMintsSetAtom)
   const toggleStarred = useSetAtom(toggleStarredAtom)
   const toggleJunk = useSetAtom(toggleJunkAtom)
   const setSelectedNft = useSetAtom(selectedNftAtom)
@@ -25,6 +27,7 @@ function NftCard({ nft, showInfo }: NftCardProps) {
   const isStarred = starred.has(nft.mint)
   const isJunk = junk.has(nft.mint)
   const isSelected = selectedMints.has(nft.mint)
+  const isStaked = stakedMints.has(nft.mint)
 
   const handleClick = () => {
     if (isSelectMode) {
@@ -96,6 +99,12 @@ function NftCard({ nft, showInfo }: NftCardProps) {
           >
             <Star className={cn("h-4 w-4", isStarred ? "fill-yellow-400 text-yellow-400" : "text-white")} />
           </button>
+        </div>
+      )}
+      {isStaked && (
+        <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
+          <Lock className="h-3 w-3" />
+          Staked
         </div>
       )}
     </div>
