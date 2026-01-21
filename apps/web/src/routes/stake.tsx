@@ -2,22 +2,27 @@ import { useEffect } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole } from "lucide-react"
 import { StakeStats } from "@/components/stake/StakeStats"
+import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
 import { useWallet } from "@solana/wallet-adapter-react"
 import {
   fetchStakeDataAtom,
   fetchUserStakeRecordsAtom,
   fetchPendingRewardsAtom,
-  isLoadingAtom,
   errorAtom,
+  type StakeRecordAccount,
 } from "@/stores/stake"
+import { type NFT } from "@/stores/nfts"
 
 export function StakePage() {
   const { publicKey } = useWallet()
-  const [isLoading] = useAtom(isLoadingAtom)
   const [error] = useAtom(errorAtom)
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
   const fetchPendingRewards = useSetAtom(fetchPendingRewardsAtom)
+
+  const handleUnstake = (_nft: NFT, _stakeRecord: StakeRecordAccount) => {
+    // TODO: US-019 - Open UnstakeDialog
+  }
 
   useEffect(() => {
     fetchStakeData()
@@ -51,16 +56,9 @@ export function StakePage() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-6">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto">
           <StakeStats />
-
-          <div className="min-h-0 flex-1">
-            <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-border">
-              <LockKeyhole className="mb-4 h-12 w-12 text-muted-foreground/50" />
-              <p className="text-lg font-medium">{isLoading ? "Loading..." : "Staking"}</p>
-              <p className="text-sm text-muted-foreground">Stake your Dandies NFTs to earn rewards</p>
-            </div>
-          </div>
+          <StakedNftsGrid onUnstake={handleUnstake} />
         </div>
       )}
     </div>
