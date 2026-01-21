@@ -171,3 +171,113 @@ export async function getEmissionAccounts(env: Env, collections: CollectionAccou
 
   return results
 }
+
+/**
+ * Fetches emission accounts by their addresses
+ */
+export async function getEmissionsByAddresses(env: Env, addresses: Address[]): Promise<EmissionAccount[]> {
+  if (addresses.length === 0) {
+    return []
+  }
+
+  const rpc = getClient(env)
+  const response = await rpc.getMultipleAccounts(addresses, { encoding: "base64" }).send()
+
+  const decoder = stake.getEmissionDecoder()
+  const results: EmissionAccount[] = []
+
+  for (let i = 0; i < response.value.length; i++) {
+    const account = response.value[i]
+    if (account) {
+      const [dataBase64] = account.data
+      const data = getBase64Encoder().encode(dataBase64)
+      const decoded = decoder.decode(data)
+      results.push({
+        ...decoded,
+        address: addresses[i],
+      })
+    }
+  }
+
+  return results
+}
+
+export type PendingReward = {
+  emission: string
+  amount: bigint
+  rewardType: string
+  tokenMint: string | null
+}
+
+/**
+ * Calculates pending rewards for a wallet's staked NFTs
+ *
+ * For each stake record:
+ * 1. Get the stored pendingClaim (already accrued in on-chain state)
+ * 2. Calculate additional rewards accrued since last update based on emission rate
+ *
+ * The reward rate is stored per second in the emission.reward array
+ * Total pending = pendingClaim + (currentTime - stakedAt) * rewardRate / stakedItems
+ */
+export async function calculatePendingRewards(env: Env, wallet: string): Promise<PendingReward[]> {
+  const stakeRecords = await getStakeRecordsByOwner(env, wallet)
+
+  if (stakeRecords.length === 0) {
+    return []
+  }
+
+  const allEmissionAddresses = new Set<Address>()
+  for (const record of stakeRecords) {
+    for (const emission of record.emissions) {
+      allEmissionAddresses.add(emission)
+    }
+  }
+
+  const emissions = await getEmissionsByAddresses(env, Array.from(allEmissionAddresses))
+  const emissionMap = new Map<string, EmissionAccount>()
+  for (const emission of emissions) {
+    emissionMap.set(emission.address, emission)
+  }
+
+  const pendingByEmission = new Map<string, bigint>()
+
+  const currentTime = BigInt(Math.floor(Date.now() / 1000))
+
+  for (const record of stakeRecords) {
+    for (const emissionAddress of record.emissions) {
+      const emission = emissionMap.get(emissionAddress)
+      if (!emission || !emission.active) {
+        continue
+      }
+
+      const existingPending = pendingByEmission.get(emissionAddress) ?? 0n
+      let recordPending = record.pendingClaim
+
+      if (emission.reward.length > 0 && emission.stakedItems > 0n) {
+        const currentRate = emission.reward[0]
+        const timeSinceStaked = currentTime - record.stakedAt
+        if (timeSinceStaked > 0n) {
+          const additionalReward = (currentRate * timeSinceStaked) / emission.stakedItems
+          recordPending += additionalReward
+        }
+      }
+
+      pendingByEmission.set(emissionAddress, existingPending + recordPending)
+    }
+  }
+
+  const results: PendingReward[] = []
+  for (const [emissionAddress, amount] of pendingByEmission) {
+    const emission = emissionMap.get(emissionAddress)
+    if (emission) {
+      results.push({
+        emission: emissionAddress,
+        amount,
+        rewardType: emission.rewardType.__kind,
+        tokenMint: isSome(emission.tokenMint) ? emission.tokenMint.value : null,
+      })
+    }
+  }
+
+  return results
+}

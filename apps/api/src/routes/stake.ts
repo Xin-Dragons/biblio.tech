@@ -5,10 +5,12 @@ import {
   getCollectionAccounts,
   getEmissionAccounts,
   getStakeRecordsByOwner,
+  calculatePendingRewards,
   type StakerAccount,
   type CollectionAccount,
   type EmissionAccount,
   type StakeRecordAccount,
+  type PendingReward,
 } from "../services/stake"
 
 export const stakeRoutes = new Hono<HonoEnv>()
@@ -64,5 +66,22 @@ stakeRoutes.get("/records/:wallet", async (c) => {
 
   return c.json<StakeRecordsResponse>({
     records,
+  })
+})
+
+export type PendingRewardsResponse = {
+  pending: PendingReward[]
+}
+
+/**
+ * GET /stake/pending/:wallet
+ * Returns calculated pending rewards for a given wallet
+ */
+stakeRoutes.get("/pending/:wallet", async (c) => {
+  const wallet = c.req.param("wallet")
+  const pending = await calculatePendingRewards(c.env, wallet)
+
+  return c.json<PendingRewardsResponse>({
+    pending,
   })
 })
