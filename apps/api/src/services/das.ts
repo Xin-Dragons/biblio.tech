@@ -25,6 +25,7 @@ export type TokenStandard =
   | "ProgrammableNonFungible"
   | "NonFungibleEdition"
   | "ProgrammableNonFungibleEdition"
+  | "Nifty"
 
 export type DASAsset = {
   mint: string
