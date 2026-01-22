@@ -80,18 +80,12 @@ export type NiftyAsset = {
   attributes: NiftyAttribute[]
 }
 
-/**
- * Decodes a base58 address from bytes
- */
 function decodeAddress(data: Uint8Array, offset: number): string {
   const bytes = data.slice(offset, offset + 32)
   const base58Decoder = getBase58Decoder()
   return base58Decoder.decode(bytes)
 }
 
-/**
- * Checks if an address is all zeros (null address)
- */
 function isNullAddress(address: string): boolean {
   return address === "11111111111111111111111111111111"
 }

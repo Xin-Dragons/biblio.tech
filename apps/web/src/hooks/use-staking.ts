@@ -189,7 +189,6 @@ function codamaInstructionToWeb3(ix: unknown): TransactionInstruction {
       isWritable: acc.role === 1 || acc.role === 3,
     }))
 
-    // Data from Codama is Uint8Array, TransactionInstruction expects Buffer
     const dataArray = instruction.data as Uint8Array
     return new TransactionInstruction({
       programId,
