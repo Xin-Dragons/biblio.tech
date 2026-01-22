@@ -14,11 +14,12 @@ import {
   buildTransaction,
   sendTransaction,
   confirmMultipleTransactionsViaWebSocket,
+  MAX_TX_SIZE,
+  SIZE_BUFFER,
+  getTransactionSize,
 } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
 
-const MAX_TX_SIZE = 1232
-const SIZE_BUFFER = 100
 const CU_PER_STAKE = 250_000
 const MAX_CU_PER_TX = 1_400_000
 const MAX_STAKES_PER_TX = Math.floor(MAX_CU_PER_TX / CU_PER_STAKE)
@@ -27,14 +28,6 @@ interface BulkStakeDialogProps {
   nfts: NFT[]
   onClose: () => void
   onSuccess: () => void
-}
-
-function getTransactionSize(tx: Transaction): number {
-  try {
-    return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length
-  } catch {
-    return Infinity
-  }
 }
 
 export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogProps) {

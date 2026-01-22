@@ -4,6 +4,17 @@ import { Transaction, ComputeBudgetProgram, PublicKey, TransactionInstruction } 
 
 const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
 
+export const MAX_TX_SIZE = 1232
+export const SIZE_BUFFER = 100
+
+export function getTransactionSize(tx: Transaction): number {
+  try {
+    return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length
+  } catch {
+    return Infinity
+  }
+}
+
 const ANCHOR_ERROR_CODES: Record<number, string> = {
   3000: "AccountDiscriminatorAlreadySet",
   3001: "AccountDiscriminatorNotFound",

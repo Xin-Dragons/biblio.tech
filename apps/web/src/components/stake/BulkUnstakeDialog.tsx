@@ -19,19 +19,11 @@ import {
   getPriorityFee,
   buildTransaction,
   confirmMultipleTransactionsViaWebSocket,
+  MAX_TX_SIZE,
+  SIZE_BUFFER,
+  getTransactionSize,
 } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
-
-const MAX_TX_SIZE = 1232
-const SIZE_BUFFER = 100
-
-function getTransactionSize(tx: Transaction): number {
-  try {
-    return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length
-  } catch {
-    return Infinity
-  }
-}
 
 interface BulkUnstakeItem {
   nft: NFT
