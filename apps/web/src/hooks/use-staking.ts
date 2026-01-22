@@ -562,6 +562,106 @@ export function buildUnstakeCoreInstructions(input: BuildUnstakeCoreInstructions
 }
 
 /**
+ * Input parameters for building unstake nifty instructions
+ */
+export interface BuildUnstakeNiftyInstructionsInput {
+  nft: NFT
+  stakeRecord: StakeRecordAccount
+  staker: StakerAccount
+  collection: CollectionAccount
+  emissions: EmissionAccount[]
+  owner: string
+}
+
+/**
+ * Builds the transaction instructions required to unstake a Nifty NFT (nifty-oss)
+ *
+ * This creates an UnstakeNifty instruction that:
+ * 1. Closes the StakeRecord PDA and returns rent to owner
+ * 2. Optionally updates the NftRecord PDA with final points
+ * 3. Revokes the NFT delegation from the stake program's nftAuthority
+ *
+ * @param input - The unstake parameters including NFT, stakeRecord, staker, collection, emissions, and owner
+ * @returns Array of TransactionInstructions to execute the unstake
+ */
+export function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInstructionsInput): TransactionInstruction[] {
+  const { nft, stakeRecord, staker, collection, emissions, owner } = input
+
+  const ownerPubkey = new PublicKey(owner)
+  const stakerPubkey = new PublicKey(staker.address)
+  const collectionPubkey = new PublicKey(collection.address)
+  const nftMint = new PublicKey(nft.mint)
+  const collectionMintPubkey = new PublicKey(collection.collectionMint)
+  const stakeRecordPubkey = new PublicKey(stakeRecord.address)
+
+  const programConfigPda = getProgramConfigPda()
+  const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
+
+  // Find token emission for this stake record to get token accounts
+  let tokenMintPubkey: PublicKey | undefined
+  let stakeTokenVault: PublicKey | undefined
+  let rewardReceiveAccount: PublicKey | undefined
+  let tokenAuthorityPda: PublicKey | undefined
+  let hasPointsEmission = false
+
+  for (const emissionAddress of stakeRecord.emissions) {
+    const emission = emissions.find((e) => e.address === emissionAddress)
+    if (emission) {
+      if (emission.rewardType.__kind === "Points") {
+        hasPointsEmission = true
+      }
+      if (emission.rewardType.__kind === "Token") {
+        if (emission.tokenMint.__option === "Some") {
+          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
+        } else if (staker.tokenMint.__option === "Some") {
+          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
+        }
+        if (tokenMintPubkey) {
+          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
+          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
+          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
+        }
+      }
+    }
+  }
+
+  // nftRecord is only needed for Points emissions - don't pass if not needed
+  const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
+
+  const ix = stake.getUnstakeNiftyInstruction({
+    programConfig: addr(programConfigPda),
+    staker: addr(stakerPubkey),
+    collection: addr(collectionPubkey),
+    stakeRecord: addr(stakeRecordPubkey),
+    nftRecord: nftRecordPda ? addr(nftRecordPda) : undefined,
+    rewardMint: tokenMintPubkey ? addr(tokenMintPubkey) : undefined,
+    stakeTokenVault: stakeTokenVault ? addr(stakeTokenVault) : undefined,
+    rewardReceiveAccount: rewardReceiveAccount ? addr(rewardReceiveAccount) : undefined,
+    nftMint: addr(nftMint),
+    collectionMint: addr(collectionMintPubkey),
+    feesWallet: addr(FEES_WALLET),
+    tokenAuthority: tokenAuthorityPda ? addr(tokenAuthorityPda) : undefined,
+    nftAuthority: addr(nftAuthorityPda),
+    owner: createSigner(ownerPubkey),
+    associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
+    niftyProgram: addr(NIFTY_PROGRAM_ID),
+  })
+
+  const web3Ix = codamaInstructionToWeb3(ix)
+
+  // Add emissions as remaining accounts (required by program)
+  for (const emissionAddress of stakeRecord.emissions) {
+    web3Ix.keys.push({
+      pubkey: new PublicKey(emissionAddress),
+      isSigner: false,
+      isWritable: true,
+    })
+  }
+
+  return [web3Ix]
+}
+
+/**
  * Input parameters for building unstake instructions (pNFT)
  */
 export interface BuildUnstakeInstructionsInput {
