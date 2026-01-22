@@ -48,6 +48,16 @@ export const DANDIES_STAKER = new PublicKey("6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRq
  */
 export const DANDIES_NFT_AUTHORITY = new PublicKey("HSRNyULArR9zpyPfncYMezYrfBvPNUzvLYzJPppCxgYM")
 
+/**
+ * Nifty-OSS Asset Program ID
+ */
+export const NIFTY_PROGRAM_ID = new PublicKey("AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73")
+
+/**
+ * Dandies Nifty Collection address (for nifty-oss Dandies)
+ */
+export const DANDIES_NIFTY_COLLECTION = new PublicKey("BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF")
+
 const encoder = new TextEncoder()
 
 /**
