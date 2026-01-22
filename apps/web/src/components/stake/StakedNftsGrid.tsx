@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { userStakeRecordsAtom, isLoadingAtom, type StakeRecordAccount } from "@/stores/stake"
 import { nftsAtom, type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
+import { isNiftyAsset } from "@/hooks/use-staking"
 
 interface StakedNftCardProps {
   nft: NFT
@@ -16,15 +17,22 @@ interface StakedNftCardProps {
 }
 
 const StakedNftCard = memo(function StakedNftCard({ nft, stakeRecord, onUnstake }: StakedNftCardProps) {
+  const isNifty = isNiftyAsset(nft)
+
   return (
     <div className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg">
-      <div className="aspect-square overflow-hidden">
+      <div className="relative aspect-square overflow-hidden">
         <img
           src={nft.image}
           alt={nft.name}
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
+        {isNifty && (
+          <div className="absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
+            Nifty
+          </div>
+        )}
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
