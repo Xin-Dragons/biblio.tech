@@ -411,6 +411,57 @@ export function buildStakeCoreInstructions(input: BuildStakeCoreInstructionsInpu
 }
 
 /**
+ * Input parameters for building stake nifty instructions
+ */
+export interface BuildStakeNiftyInstructionsInput {
+  nft: NFT
+  staker: StakerAccount
+  collection: CollectionAccount
+  owner: string
+}
+
+/**
+ * Builds the transaction instructions required to stake a Nifty NFT (nifty-oss)
+ *
+ * This creates a StakeNifty instruction that:
+ * 1. Creates a StakeRecord PDA to track the stake position
+ * 2. Optionally creates an NftRecord PDA for points tracking
+ * 3. Delegates the NFT to the stake program's nftAuthority via nifty-oss
+ *
+ * @param input - The stake parameters including NFT, staker, collection, and owner
+ * @returns Array of TransactionInstructions to execute the stake
+ */
+export function buildStakeNiftyInstructions(input: BuildStakeNiftyInstructionsInput): TransactionInstruction[] {
+  const { nft, staker, collection, owner } = input
+
+  const ownerPubkey = new PublicKey(owner)
+  const stakerPubkey = new PublicKey(staker.address)
+  const collectionPubkey = new PublicKey(collection.address)
+  const nftMint = new PublicKey(nft.mint)
+
+  const stakeRecordPda = getStakeRecordPda(stakerPubkey, nftMint)
+  const nftRecordPda = getNftRecordPda(stakerPubkey, nftMint)
+  const programConfigPda = getProgramConfigPda()
+  const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
+
+  const ix = stake.getStakeNiftyInstruction({
+    staker: addr(stakerPubkey),
+    collection: addr(collectionPubkey),
+    nftRecord: addr(nftRecordPda),
+    stakeRecord: addr(stakeRecordPda),
+    programConfig: addr(programConfigPda),
+    asset: addr(nftMint),
+    nftAuthority: addr(nftAuthorityPda),
+    signer: createSigner(ownerPubkey),
+    feesWallet: addr(FEES_WALLET),
+    niftyProgram: addr(NIFTY_PROGRAM_ID),
+    selection: null,
+  })
+
+  return [codamaInstructionToWeb3(ix)]
+}
+
+/**
  * Input parameters for building unstake core instructions
  */
 export interface BuildUnstakeCoreInstructionsInput {
