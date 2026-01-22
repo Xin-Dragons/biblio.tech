@@ -4,6 +4,7 @@ import type { Address, TransactionSigner } from "@solana/kit"
 import { stake } from "@biblio/solana-programs"
 import type { NFT } from "../stores/nfts"
 import type { CollectionAccount, EmissionAccount, StakerAccount, StakeRecordAccount } from "../stores/stake"
+import { logger } from "../lib/logger"
 
 /**
  * Stake Program ID
@@ -831,7 +832,7 @@ export function buildClaimInstructions(input: BuildClaimInstructionsInput): Tran
 
     const ownerPubkey = new PublicKey(owner)
 
-    console.log("buildClaimInstructions input:", {
+    logger.debug("buildClaimInstructions input:", {
       staker: staker.address,
       stakerTokenMint: staker.tokenMint,
       collection: collection.address,
@@ -858,13 +859,13 @@ export function buildClaimInstructions(input: BuildClaimInstructionsInput): Tran
 
     let tokenMintPubkey: PublicKey | null = null
     if (emission.tokenMint.__option === "Some") {
-      console.log("Using emission tokenMint:", emission.tokenMint.value)
+      logger.debug("Using emission tokenMint:", emission.tokenMint.value)
       tokenMintPubkey = new PublicKey(emission.tokenMint.value)
     } else if (emission.rewardType.__kind === "Token" && staker.tokenMint.__option === "Some") {
-      console.log("Using staker tokenMint:", staker.tokenMint.value)
+      logger.debug("Using staker tokenMint:", staker.tokenMint.value)
       tokenMintPubkey = new PublicKey(staker.tokenMint.value)
     } else {
-      console.log("No tokenMint found - emission:", emission.tokenMint, "staker:", staker.tokenMint)
+      logger.debug("No tokenMint found - emission:", emission.tokenMint, "staker:", staker.tokenMint)
     }
 
     let stakeTokenVault: PublicKey | null = null
@@ -873,14 +874,14 @@ export function buildClaimInstructions(input: BuildClaimInstructionsInput): Tran
     if (tokenMintPubkey) {
       stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
       rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
-      console.log("Token accounts:", {
+      logger.debug("Token accounts:", {
         tokenMint: tokenMintPubkey.toBase58(),
         stakeTokenVault: stakeTokenVault.toBase58(),
         rewardReceiveAccount: rewardReceiveAccount.toBase58(),
       })
     }
 
-    console.log("Building claim instruction with accounts...")
+    logger.debug("Building claim instruction with accounts...")
     const ix = stake.getClaimInstruction({
       programConfig: addr(programConfigPda),
       staker: addr(stakerPubkey),
@@ -898,11 +899,11 @@ export function buildClaimInstructions(input: BuildClaimInstructionsInput): Tran
       associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
     })
 
-    console.log("Codama instruction built:", ix)
-    console.log("Instruction data length:", (ix as CodamaInstruction).data?.length)
+    logger.debug("Codama instruction built:", ix)
+    logger.debug("Instruction data length:", (ix as CodamaInstruction).data?.length)
 
     const web3ix = codamaInstructionToWeb3(ix)
-    console.log("Web3 instruction built successfully")
+    logger.debug("Web3 instruction built successfully")
     return [web3ix]
   } catch (err) {
     console.error("buildClaimInstructions error:", err)

@@ -15,6 +15,7 @@ import {
 import { buildUnstakeInstructions, buildUnstakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import { decodeSimulationError } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
 
 interface UnstakeDialogProps {
@@ -67,7 +68,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
     try {
       const ownerPubkey = new PublicKey(account)
 
-      console.log("Building unstake instruction with:", {
+      logger.debug("Building unstake instruction with:", {
         nft: { mint: nft.mint, name: nft.name, collectionId: nft.collectionId },
         stakeRecord: { address: stakeRecord.address, nftMint: stakeRecord.nftMint, owner: stakeRecord.owner },
         staker: { address: staker.address },
@@ -92,7 +93,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
             emissions,
             owner: account,
           })
-      console.log("Unstake instruction built:", instructions[0])
+      logger.debug("Unstake instruction built:", instructions[0])
 
       // Get blockhash via RPC proxy
       const blockhashResponse = await fetch("/api/rpc", {
@@ -144,7 +145,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
       // Calculate CU limit: actual consumed + 10% buffer
       const unitsConsumed = simData.result?.value.unitsConsumed ?? 200_000
       const cuLimit = Math.ceil(unitsConsumed * 1.1)
-      console.log(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
+      logger.debug(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
 
       // Build transaction to get priority fee estimate
       const txForFeeEstimate = new Transaction()
@@ -167,7 +168,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
       })
       const feeData = (await feeResponse.json()) as { result?: number }
       const priorityFeeEstimate = feeData.result ?? 1000
-      console.log(`Priority fee estimate: ${priorityFeeEstimate} microLamports`)
+      logger.debug(`Priority fee estimate: ${priorityFeeEstimate} microLamports`)
 
       // Build final transaction with correct CU limit and priority fee
       const transaction = new Transaction()
@@ -191,7 +192,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
         result?: string
         error?: { message: string }
       }
-      console.log("Helius Sender response:", sendResult)
+      logger.debug("Helius Sender response:", sendResult)
 
       if (sendResult.error) {
         throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
@@ -202,7 +203,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
       }
 
       const signature = sendResult.result
-      console.log("Transaction sent via Helius Sender:", signature)
+      logger.debug("Transaction sent via Helius Sender:", signature)
 
       await confirmTransactionViaWebSocket(signature)
 

@@ -23,6 +23,7 @@ import {
   SIZE_BUFFER,
   getTransactionSize,
 } from "@/lib/transaction"
+import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
 
 interface BulkUnstakeItem {
@@ -130,7 +131,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       for (const item of items) {
         const collection = collections.find((c) => c.collectionMint === item.nft.collectionId)
         if (!collection) {
-          console.warn(`No collection found for NFT ${item.nft.name}, skipping`)
+          logger.warn(`No collection found for NFT ${item.nft.name}, skipping`)
           continue
         }
 
@@ -198,10 +199,10 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
 
         const { unitsConsumed } = await simulateTransaction(flatInstructions, ownerPubkey, blockhash)
         const cuLimit = Math.ceil(unitsConsumed * 1.1)
-        console.log(`Batch ${i + 1}: Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
+        logger.debug(`Batch ${i + 1}: Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
 
         const priorityFee = await getPriorityFee(flatInstructions, ownerPubkey, blockhash, cuLimit)
-        console.log(`Batch ${i + 1}: Priority fee estimate: ${priorityFee} microLamports`)
+        logger.debug(`Batch ${i + 1}: Priority fee estimate: ${priorityFee} microLamports`)
 
         const tx = buildTransaction(flatInstructions, ownerPubkey, blockhash, cuLimit, priorityFee)
         transactions.push({ tx, items: batch.items })
