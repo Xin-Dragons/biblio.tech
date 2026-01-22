@@ -6,9 +6,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const idlsDir = join(__dirname, "..", "idls")
 
 const IDL_SOURCES = {
-  "token-metadata": "https://raw.githubusercontent.com/metaplex-foundation/mpl-token-metadata/main/idls/token_metadata.json",
-  "bubblegum": "https://raw.githubusercontent.com/metaplex-foundation/mpl-bubblegum/main/idls/bubblegum.json",
+  "token-metadata":
+    "https://raw.githubusercontent.com/metaplex-foundation/mpl-token-metadata/main/idls/token_metadata.json",
+  bubblegum: "https://raw.githubusercontent.com/metaplex-foundation/mpl-bubblegum/main/idls/bubblegum.json",
   "mpl-core": "https://raw.githubusercontent.com/metaplex-foundation/mpl-core/main/idls/mpl_core.json",
+  asset: "https://raw.githubusercontent.com/nifty-oss/asset/main/idls/asset_program.json",
 }
 
 async function fetchIdls() {
