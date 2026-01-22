@@ -6,7 +6,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
 import { stakerAtom, collectionsAtom, addStakeRecordAtom } from "@/stores/stake"
-import { buildStakeInstructions } from "@/hooks/use-staking"
+import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
 
@@ -80,12 +80,19 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
     try {
       const ownerPubkey = new PublicKey(account)
 
-      const instructions = buildStakeInstructions({
-        nft,
-        staker,
-        collection,
-        owner: account,
-      })
+      const instructions = isNiftyAsset(nft)
+        ? buildStakeNiftyInstructions({
+            nft,
+            staker,
+            collection,
+            owner: account,
+          })
+        : buildStakeInstructions({
+            nft,
+            staker,
+            collection,
+            owner: account,
+          })
 
       // Get blockhash via RPC proxy
       const blockhashResponse = await fetch("/api/rpc", {

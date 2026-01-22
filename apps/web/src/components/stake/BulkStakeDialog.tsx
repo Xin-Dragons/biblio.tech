@@ -6,7 +6,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
 import { stakerAtom, collectionsAtom, addStakeRecordAtom } from "@/stores/stake"
-import { buildStakeInstructions } from "@/hooks/use-staking"
+import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import {
   getBlockhash,
   simulateTransaction,
@@ -77,7 +77,9 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
         currentInstructions = []
       }
 
-      const instructions = buildStakeInstructions({ nft, staker, collection, owner: dummyFeePayer.toBase58() })
+      const instructions = isNiftyAsset(nft)
+        ? buildStakeNiftyInstructions({ nft, staker, collection, owner: dummyFeePayer.toBase58() })
+        : buildStakeInstructions({ nft, staker, collection, owner: dummyFeePayer.toBase58() })
 
       const testTx = new Transaction()
       testTx.recentBlockhash = dummyBlockhash
@@ -122,12 +124,19 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
           continue
         }
 
-        const instructions = buildStakeInstructions({
-          nft,
-          staker,
-          collection,
-          owner: account,
-        })
+        const instructions = isNiftyAsset(nft)
+          ? buildStakeNiftyInstructions({
+              nft,
+              staker,
+              collection,
+              owner: account,
+            })
+          : buildStakeInstructions({
+              nft,
+              staker,
+              collection,
+              owner: account,
+            })
         nftInstructions.push({ nft, instructions })
       }
 
