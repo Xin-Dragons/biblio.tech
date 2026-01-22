@@ -5,7 +5,7 @@ import { Transaction, PublicKey } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, addStakeRecordAtom } from "@/stores/stake"
+import { stakerAtom, collectionsAtom, addStakeRecordAtom, getEmissionAddresses } from "@/stores/stake"
 import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import { decodeSimulationError } from "@/lib/errors"
@@ -26,16 +26,6 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
   const addStakeRecord = useSetAtom(addStakeRecordAtom)
 
   const collection = collections.find((c) => c.collectionMint === nft.collectionId)
-
-  const getEmissionAddresses = (): string[] => {
-    if (!collection) return []
-    const emissions: string[] = []
-    if (collection.tokenEmission.__option === "Some") emissions.push(collection.tokenEmission.value)
-    if (collection.selectionEmission.__option === "Some") emissions.push(collection.selectionEmission.value)
-    if (collection.pointsEmission.__option === "Some") emissions.push(collection.pointsEmission.value)
-    if (collection.distributionEmission.__option === "Some") emissions.push(collection.distributionEmission.value)
-    return emissions
-  }
 
   const handleStake = async () => {
     if (!account || !signer || !capabilities.canSign || !staker || !collection) {
@@ -141,7 +131,7 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
         nftMint: nft.mint,
         owner: account,
         staker: staker.address,
-        emissions: getEmissionAddresses(),
+        emissions: collection ? getEmissionAddresses(collection) : [],
       })
 
       toast.success(`Staked ${nft.name} successfully!`)

@@ -5,7 +5,7 @@ import { Transaction, ComputeBudgetProgram, PublicKey, type TransactionInstructi
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, addStakeRecordAtom } from "@/stores/stake"
+import { stakerAtom, collectionsAtom, addStakeRecordAtom, getEmissionAddresses } from "@/stores/stake"
 import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import {
   getBlockhash,
@@ -38,17 +38,6 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
   const addStakeRecord = useSetAtom(addStakeRecordAtom)
-
-  const getEmissionAddresses = (collectionMint: string): string[] => {
-    const collection = collections.find((c) => c.collectionMint === collectionMint)
-    if (!collection) return []
-    const emissions: string[] = []
-    if (collection.tokenEmission.__option === "Some") emissions.push(collection.tokenEmission.value)
-    if (collection.selectionEmission.__option === "Some") emissions.push(collection.selectionEmission.value)
-    if (collection.pointsEmission.__option === "Some") emissions.push(collection.pointsEmission.value)
-    if (collection.distributionEmission.__option === "Some") emissions.push(collection.distributionEmission.value)
-    return emissions
-  }
 
   const estimatedTxCount = useMemo(() => {
     if (!staker || nfts.length === 0) return 1
@@ -209,11 +198,12 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
       await confirmMultipleTransactionsViaWebSocket(signatures)
 
       for (const nft of successfulNfts) {
+        const nftCollection = collections.find((c) => c.collectionMint === nft.collectionId)
         addStakeRecord({
           nftMint: nft.mint,
           owner: account,
           staker: staker.address,
-          emissions: getEmissionAddresses(nft.collectionId),
+          emissions: nftCollection ? getEmissionAddresses(nftCollection) : [],
         })
       }
 

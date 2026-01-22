@@ -98,6 +98,18 @@ export const isLoadingAtom = atom(false)
 export const errorAtom = atom<string | null>(null)
 
 /**
+ * Extracts all emission addresses from a collection account
+ */
+export function getEmissionAddresses(collection: CollectionAccount): string[] {
+  const emissions: string[] = []
+  if (collection.tokenEmission.__option === "Some") emissions.push(collection.tokenEmission.value)
+  if (collection.selectionEmission.__option === "Some") emissions.push(collection.selectionEmission.value)
+  if (collection.pointsEmission.__option === "Some") emissions.push(collection.pointsEmission.value)
+  if (collection.distributionEmission.__option === "Some") emissions.push(collection.distributionEmission.value)
+  return emissions
+}
+
+/**
  * Derived atom to check if a specific NFT mint is staked
  */
 export const stakedMintsSetAtom = atom((get) => {
