@@ -75,6 +75,71 @@ export function isNiftyDandy(nft: NFT): boolean {
 const encoder = new TextEncoder()
 
 /**
+ * Result from resolving token emission accounts for unstake operations
+ */
+interface TokenEmissionAccounts {
+  tokenMintPubkey: PublicKey | undefined
+  stakeTokenVault: PublicKey | undefined
+  rewardReceiveAccount: PublicKey | undefined
+  tokenAuthorityPda: PublicKey | undefined
+  hasPointsEmission: boolean
+}
+
+/**
+ * Resolves token emission accounts for unstake operations.
+ * Iterates through stake record emissions to find token mint, vault, and reward accounts.
+ *
+ * @param stakeRecord - The stake record containing emission addresses
+ * @param emissions - Available emission accounts to search
+ * @param staker - The staker account (fallback for token mint)
+ * @param stakerPubkey - The staker's public key for PDA derivation
+ * @param ownerPubkey - The owner's public key for reward account derivation
+ * @returns Resolved token emission accounts
+ */
+function resolveTokenEmissionAccounts(
+  stakeRecord: StakeRecordAccount,
+  emissions: EmissionAccount[],
+  staker: StakerAccount,
+  stakerPubkey: PublicKey,
+  ownerPubkey: PublicKey
+): TokenEmissionAccounts {
+  let tokenMintPubkey: PublicKey | undefined
+  let stakeTokenVault: PublicKey | undefined
+  let rewardReceiveAccount: PublicKey | undefined
+  let tokenAuthorityPda: PublicKey | undefined
+  let hasPointsEmission = false
+
+  for (const emissionAddress of stakeRecord.emissions) {
+    const emission = emissions.find((e) => e.address === emissionAddress)
+    if (emission) {
+      if (emission.rewardType.__kind === "Points") {
+        hasPointsEmission = true
+      }
+      if (emission.rewardType.__kind === "Token") {
+        if (emission.tokenMint.__option === "Some") {
+          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
+        } else if (staker.tokenMint.__option === "Some") {
+          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
+        }
+        if (tokenMintPubkey) {
+          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
+          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
+          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
+        }
+      }
+    }
+  }
+
+  return {
+    tokenMintPubkey,
+    stakeTokenVault,
+    rewardReceiveAccount,
+    tokenAuthorityPda,
+    hasPointsEmission,
+  }
+}
+
+/**
  * Converts a web3.js PublicKey to Codama Address type
  */
 function addr(pubkey: PublicKey): Address {
@@ -511,35 +576,9 @@ export function buildUnstakeCoreInstructions(input: BuildUnstakeCoreInstructions
   const programConfigPda = getProgramConfigPda()
   const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
 
-  // Find token emission for this stake record to get token accounts
-  let tokenMintPubkey: PublicKey | undefined
-  let stakeTokenVault: PublicKey | undefined
-  let rewardReceiveAccount: PublicKey | undefined
-  let tokenAuthorityPda: PublicKey | undefined
-  let hasPointsEmission = false
+  const { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission } =
+    resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerPubkey, ownerPubkey)
 
-  for (const emissionAddress of stakeRecord.emissions) {
-    const emission = emissions.find((e) => e.address === emissionAddress)
-    if (emission) {
-      if (emission.rewardType.__kind === "Points") {
-        hasPointsEmission = true
-      }
-      if (emission.rewardType.__kind === "Token") {
-        if (emission.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
-        } else if (staker.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
-        }
-        if (tokenMintPubkey) {
-          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
-          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
-          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
-        }
-      }
-    }
-  }
-
-  // nftRecord is only needed for Points emissions - don't pass if not needed
   const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
 
   const ix = stake.getUnstakeCoreInstruction({
@@ -611,35 +650,9 @@ export function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInstructio
   const programConfigPda = getProgramConfigPda()
   const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
 
-  // Find token emission for this stake record to get token accounts
-  let tokenMintPubkey: PublicKey | undefined
-  let stakeTokenVault: PublicKey | undefined
-  let rewardReceiveAccount: PublicKey | undefined
-  let tokenAuthorityPda: PublicKey | undefined
-  let hasPointsEmission = false
+  const { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission } =
+    resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerPubkey, ownerPubkey)
 
-  for (const emissionAddress of stakeRecord.emissions) {
-    const emission = emissions.find((e) => e.address === emissionAddress)
-    if (emission) {
-      if (emission.rewardType.__kind === "Points") {
-        hasPointsEmission = true
-      }
-      if (emission.rewardType.__kind === "Token") {
-        if (emission.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
-        } else if (staker.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
-        }
-        if (tokenMintPubkey) {
-          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
-          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
-          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
-        }
-      }
-    }
-  }
-
-  // nftRecord is only needed for Points emissions - don't pass if not needed
   const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
 
   const ix = stake.getUnstakeNiftyInstruction({
@@ -725,35 +738,9 @@ export function buildUnstakeInstructions(input: BuildUnstakeInstructionsInput): 
   // For delegation: NFT stays in owner's wallet, both token records are the same
   const tokenRecordPda = getTokenRecordPda(nftMint, nftToken)
 
-  // Find token emission for this stake record to get token accounts
-  let tokenMintPubkey: PublicKey | undefined
-  let stakeTokenVault: PublicKey | undefined
-  let rewardReceiveAccount: PublicKey | undefined
-  let tokenAuthorityPda: PublicKey | undefined
-  let hasPointsEmission = false
+  const { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission } =
+    resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerPubkey, ownerPubkey)
 
-  for (const emissionAddress of stakeRecord.emissions) {
-    const emission = emissions.find((e) => e.address === emissionAddress)
-    if (emission) {
-      if (emission.rewardType.__kind === "Points") {
-        hasPointsEmission = true
-      }
-      if (emission.rewardType.__kind === "Token") {
-        if (emission.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
-        } else if (staker.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
-        }
-        if (tokenMintPubkey) {
-          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
-          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
-          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
-        }
-      }
-    }
-  }
-
-  // nftRecord is only needed for Points emissions - don't pass if not needed
   const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
 
   const ix = stake.getUnstakeInstruction({
