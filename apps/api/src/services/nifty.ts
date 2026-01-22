@@ -339,3 +339,62 @@ export async function getNiftyAssetsByOwner(env: Env, wallet: string): Promise<N
 
   return assets
 }
+
+export type NiftyCollection = {
+  address: string
+  name: string
+  image: string | null
+  symbol: string | null
+}
+
+/**
+ * Fetches nifty collection metadata for a list of collection addresses
+ * Collections in nifty-oss are also asset accounts referenced by the `group` field
+ */
+export async function fetchNiftyCollections(
+  env: Env,
+  collectionMints: string[]
+): Promise<Map<string, NiftyCollection>> {
+  const collections = new Map<string, NiftyCollection>()
+
+  if (collectionMints.length === 0) {
+    return collections
+  }
+
+  const uniqueMints = [...new Set(collectionMints)]
+
+  const rpc = getClient(env)
+  const base64Encoder = getBase64Encoder()
+  const BATCH_SIZE = 100
+
+  for (let i = 0; i < uniqueMints.length; i += BATCH_SIZE) {
+    const batch = uniqueMints.slice(i, i + BATCH_SIZE) as Address[]
+
+    const response = await rpc.getMultipleAccounts(batch, { encoding: "base64" }).send()
+
+    for (let j = 0; j < response.value.length; j++) {
+      const accountInfo = response.value[j]
+      const address = batch[j]
+
+      if (!accountInfo || !accountInfo.data) {
+        continue
+      }
+
+      const [dataBase64] = accountInfo.data
+      const rawData = base64Encoder.encode(dataBase64)
+      const data = new Uint8Array(rawData)
+
+      const decodedAsset = decodeNiftyAsset(data, address)
+      if (decodedAsset) {
+        collections.set(address, {
+          address,
+          name: decodedAsset.name,
+          image: decodedAsset.uri,
+          symbol: decodedAsset.symbol,
+        })
+      }
+    }
+  }
+
+  return collections
+}
