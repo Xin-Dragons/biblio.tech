@@ -8,8 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { stakedMintsSetAtom, isLoadingAtom } from "@/stores/stake"
 import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
+import { DANDIES_NIFTY_COLLECTION, isNiftyAsset } from "@/hooks/use-staking"
 
 const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
+const DANDIES_NIFTY_COLLECTION_ID = DANDIES_NIFTY_COLLECTION.toBase58()
 
 interface AvailableNftCardProps {
   nft: NFT
@@ -17,6 +19,8 @@ interface AvailableNftCardProps {
 }
 
 const AvailableNftCard = memo(function AvailableNftCard({ nft, onStake }: AvailableNftCardProps) {
+  const isNifty = isNiftyAsset(nft)
+
   return (
     <div className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg">
       <div className="aspect-square overflow-hidden">
@@ -26,6 +30,11 @@ const AvailableNftCard = memo(function AvailableNftCard({ nft, onStake }: Availa
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
+        {isNifty && (
+          <div className="absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
+            Nifty
+          </div>
+        )}
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
@@ -122,7 +131,9 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
   const isLoading = isStakeLoading || isNftsLoading
 
   const availableDandies = nfts.filter(
-    (nft) => nft.collectionId === DANDIES_COLLECTION_ID && !stakedMints.has(nft.mint)
+    (nft) =>
+      (nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ID) &&
+      !stakedMints.has(nft.mint)
   )
 
   if (isLoading) {
