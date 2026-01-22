@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const idlsDir = join(__dirname, "..", "idls")
 const generatedDir = join(__dirname, "..", "src", "generated")
 
-const PROGRAMS = ["token-metadata", "bubblegum", "mpl-core", "stake"]
+const PROGRAMS = ["token-metadata", "bubblegum", "mpl-core", "stake", "asset"]
 
 async function generate() {
   mkdirSync(generatedDir, { recursive: true })

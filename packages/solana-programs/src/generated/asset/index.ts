@@ -6,15 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
-export * from "./accounts"
 export * from "./errors"
 export * from "./instructions"
-export {
-  STAKE_PROGRAM_ADDRESS,
-  StakeAccount,
-  StakeInstruction,
-  identifyStakeAccount,
-  identifyStakeInstruction,
-} from "./programs"
-export type { ParsedStakeInstruction as ParsedStakeProgramInstruction } from "./programs"
+export * from "./programs"
 export * from "./types"

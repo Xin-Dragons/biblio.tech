@@ -886,6 +886,90 @@
           }
         ]
       }
+    },
+    {
+      "name": "Standard",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NonFungible"
+          },
+          {
+            "name": "Managed"
+          },
+          {
+            "name": "Soulbound"
+          },
+          {
+            "name": "Proxied"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DelegateRole",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "None"
+          },
+          {
+            "name": "Transfer"
+          },
+          {
+            "name": "Lock"
+          },
+          {
+            "name": "Burn"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExtensionType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "None"
+          },
+          {
+            "name": "Attributes"
+          },
+          {
+            "name": "Blob"
+          },
+          {
+            "name": "Creators"
+          },
+          {
+            "name": "Links"
+          },
+          {
+            "name": "Metadata"
+          },
+          {
+            "name": "Grouping"
+          },
+          {
+            "name": "Royalties"
+          },
+          {
+            "name": "Manager"
+          },
+          {
+            "name": "Proxy"
+          },
+          {
+            "name": "Properties"
+          },
+          {
+            "name": "Bucket"
+          }
+        ]
+      }
     }
   ],
   "errors": [
