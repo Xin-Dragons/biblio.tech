@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
+import { cn } from "@/lib/utils"
 
 export function WalletButton() {
   const { isConnected, isConnecting } = useWallet()
@@ -31,15 +32,17 @@ export function WalletButton() {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2">
-            <Wallet className="h-4 w-4" />
-            {formatted}
-            <ChevronDown className="h-3 w-3" />
+          <Button variant="outline" className="gap-2 pl-3 pr-2">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+              <Wallet className="h-3 w-3 text-primary" />
+            </div>
+            <span className="font-mono text-xs">{formatted}</span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={() => copy()}>
-            {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onClick={() => copy()} className="gap-2">
+            {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
             {copied ? "Copied!" : "Copy Address"}
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
@@ -47,15 +50,15 @@ export function WalletButton() {
               href={`https://solscan.io/account/${address}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center"
+              className="flex items-center gap-2"
             >
-              <ExternalLink className="mr-2 h-4 w-4" />
+              <ExternalLink className="h-4 w-4" />
               View on Solscan
             </a>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => disconnect()} className="text-destructive focus:text-destructive">
-            <LogOut className="mr-2 h-4 w-4" />
+          <DropdownMenuItem onClick={() => disconnect()} className="gap-2 text-destructive focus:text-destructive">
+            <LogOut className="h-4 w-4" />
             Disconnect
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -65,9 +68,9 @@ export function WalletButton() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setShowWalletModal(true)} disabled={isConnecting} className="gap-2">
+      <Button variant="default" onClick={() => setShowWalletModal(true)} disabled={isConnecting} className="gap-2" glow>
         <Wallet className="h-4 w-4" />
-        {isConnecting ? "Connecting..." : "Connect Wallet"}
+        {isConnecting ? "Connecting..." : "Connect"}
       </Button>
 
       <Dialog open={showWalletModal} onOpenChange={setShowWalletModal}>
@@ -75,25 +78,36 @@ export function WalletButton() {
           <DialogHeader>
             <DialogTitle>Connect Wallet</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2">
+          <div className="grid gap-2 pt-2">
             {installedWallets.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                No wallets detected. Please install a Solana wallet extension.
-              </p>
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <Wallet className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  No wallets detected. Please install a Solana wallet extension.
+                </p>
+              </div>
             ) : (
-              installedWallets.map((wallet) => (
-                <Button
+              installedWallets.map((wallet, index) => (
+                <button
                   key={wallet.id}
-                  variant="outline"
-                  className="justify-start gap-3 h-12"
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border border-border p-4",
+                    "transition-all duration-200",
+                    "hover:border-primary/30 hover:bg-accent/50",
+                    "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background",
+                    "animate-fade-up opacity-0"
+                  )}
+                  style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
                   onClick={async () => {
                     await connect(wallet.id)
                     setShowWalletModal(false)
                   }}
                 >
-                  {wallet.icon && <img src={wallet.icon} alt={wallet.name} className="h-6 w-6 rounded" />}
-                  {wallet.name}
-                </Button>
+                  {wallet.icon && <img src={wallet.icon} alt={wallet.name} className="h-8 w-8 rounded-lg" />}
+                  <span className="font-medium">{wallet.name}</span>
+                </button>
               ))
             )}
           </div>

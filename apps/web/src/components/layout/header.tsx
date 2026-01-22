@@ -26,44 +26,63 @@ export function Header() {
 
   return (
     <>
-      <header className="flex h-14 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
+      <header className="flex h-16 items-center justify-between border-b border-white/5 px-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
           <Link to="/" className="flex items-center gap-2 md:hidden">
-            <img src="/logo.svg" alt="Biblio" className="h-6 w-6" />
+            <img src="/logo.svg" alt="Biblio" className="h-7 w-7" />
           </Link>
-          <Button variant="ghost" size="icon" onClick={() => refreshNfts()} disabled={isLoading} title="Refresh NFTs">
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => refreshNfts()}
+            disabled={isLoading}
+            title="Refresh NFTs"
+            className="group"
+          >
+            <RefreshCw
+              className={cn(
+                "h-4 w-4 transition-transform duration-500",
+                isLoading ? "animate-spin" : "group-hover:rotate-180"
+              )}
+            />
           </Button>
         </div>
+
         <div className="flex items-center gap-2">
           <Link to="/settings">
-            <Button variant="ghost" size="icon">
-              <Settings className="h-4 w-4" />
+            <Button variant="ghost" size="icon-sm" className="group">
+              <Settings className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
             </Button>
           </Link>
           <WalletButton />
         </div>
       </header>
 
+      {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed inset-y-0 left-0 w-64 bg-card">
-            <div className="flex h-14 items-center justify-between border-b border-border px-4">
-              <Link to="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                <img src="/logo.svg" alt="Biblio" className="h-7 w-7" />
-                <span className="text-lg font-bold text-primary">Biblio</span>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 w-72 bg-background-secondary border-r border-border/50 animate-slide-in-left">
+            <div className="flex h-16 items-center justify-between border-b border-border/50 px-5">
+              <Link to="/" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
+                <img src="/logo.svg" alt="Biblio" className="h-8 w-8" />
+                <span className="font-display text-xl font-bold text-primary">Biblio</span>
               </Link>
-              <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
+              <Button variant="ghost" size="icon-sm" onClick={() => setMobileMenuOpen(false)}>
                 <X className="h-5 w-5" />
               </Button>
             </div>
             <nav className="space-y-1 p-3">
-              <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">Wallet</p>
-              {navItems.map((item) => {
+              <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Wallet
+              </p>
+              {navItems.map((item, index) => {
                 const Icon = item.icon
                 const isActive = location.pathname === item.href
                 return (
@@ -72,11 +91,13 @@ export function Header() {
                     to={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                      "animate-fade-up opacity-0",
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
+                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}

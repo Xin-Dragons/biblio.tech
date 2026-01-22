@@ -1,8 +1,45 @@
 import { useAtomValue } from "jotai"
 import { Layers, Gift } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { stakedNftCountAtom, totalPendingRewardsAtom, isLoadingAtom } from "@/stores/stake"
+import { cn } from "@/lib/utils"
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  isLoading,
+  accentColor = "primary",
+}: {
+  icon: typeof Layers
+  label: string
+  value: string
+  isLoading: boolean
+  accentColor?: "primary" | "emerald" | "amber"
+}) {
+  const colors = {
+    primary: "bg-primary/10 text-primary",
+    emerald: "bg-emerald-500/10 text-emerald-400",
+    amber: "bg-amber-500/10 text-amber-400",
+  }
+
+  return (
+    <div className="stat-card p-4">
+      <div className="flex items-center gap-4">
+        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", colors[accentColor])}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          {isLoading ? (
+            <div className="mt-1.5 h-7 w-20 rounded-md shimmer" />
+          ) : (
+            <p className="font-display text-2xl font-bold tracking-tight">{value}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function StakeStats() {
   const stakedCount = useAtomValue(stakedNftCountAtom)
@@ -13,33 +50,20 @@ export function StakeStats() {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Card>
-        <CardContent className="flex items-center gap-4 p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Layers className="h-5 w-5 text-primary" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-muted-foreground">NFTs Staked</p>
-            {isLoading ? <Skeleton className="mt-1 h-7 w-16" /> : <p className="text-2xl font-bold">{stakedCount}</p>}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="flex items-center gap-4 p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Gift className="h-5 w-5 text-primary" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-muted-foreground">Pending Rewards</p>
-            {isLoading ? (
-              <Skeleton className="mt-1 h-7 w-24" />
-            ) : (
-              <p className="text-2xl font-bold">{formattedPending}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <StatCard
+        icon={Layers}
+        label="NFTs Staked"
+        value={stakedCount.toString()}
+        isLoading={isLoading}
+        accentColor="primary"
+      />
+      <StatCard
+        icon={Gift}
+        label="Pending Rewards"
+        value={formattedPending}
+        isLoading={isLoading}
+        accentColor="emerald"
+      />
     </div>
   )
 }

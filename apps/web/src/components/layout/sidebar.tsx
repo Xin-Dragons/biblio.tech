@@ -22,19 +22,19 @@ const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b8
 
 function TagItem({ tag, onRemove }: { tag: TagType; onRemove: () => void }) {
   return (
-    <div className="group flex items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-accent">
-      <div className="flex items-center gap-2">
-        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
-        <span className="text-muted-foreground">{tag.name}</span>
+    <div className="group flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-all duration-200 hover:bg-accent/50">
+      <div className="flex items-center gap-2.5">
+        <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white/10" style={{ backgroundColor: tag.color }} />
+        <span className="text-muted-foreground group-hover:text-foreground transition-colors">{tag.name}</span>
       </div>
       <button
         onClick={(e) => {
           e.preventDefault()
           onRemove()
         }}
-        className="opacity-0 transition-opacity group-hover:opacity-100"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/20 rounded"
       >
-        <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
       </button>
     </div>
   )
@@ -58,15 +58,15 @@ function AddTagDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-          <Plus className="h-4 w-4" />
+        <Button variant="ghost" size="icon-sm" className="h-6 w-6 opacity-60 hover:opacity-100">
+          <Plus className="h-3.5 w-3.5" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Create Tag</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <label className="text-sm font-medium">Name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tag name" autoFocus />
@@ -80,16 +80,18 @@ function AddTagDialog() {
                   type="button"
                   onClick={() => setColor(c)}
                   className={cn(
-                    "h-6 w-6 rounded-full transition-transform",
-                    color === c && "scale-125 ring-2 ring-white ring-offset-2 ring-offset-background"
+                    "h-7 w-7 rounded-full transition-all duration-200",
+                    color === c
+                      ? "scale-110 ring-2 ring-white ring-offset-2 ring-offset-background"
+                      : "hover:scale-105 ring-1 ring-white/20"
                   )}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={!name.trim()}>
@@ -108,16 +110,26 @@ export function Sidebar() {
   const removeTag = useSetAtom(removeTagAtom)
 
   return (
-    <aside className="hidden w-56 flex-col border-r border-border bg-card md:flex">
-      <div className="flex h-14 items-center border-b border-border px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Biblio" className="h-7 w-7" />
-          <span className="text-lg font-bold text-primary">Biblio</span>
+    <aside className="hidden w-60 flex-col border-r border-white/5 md:flex">
+      {/* Logo */}
+      <div className="flex h-16 items-center border-b border-white/5 px-5">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="relative">
+            <img
+              src="/logo.svg"
+              alt="Biblio"
+              className="h-8 w-8 transition-transform duration-300 group-hover:scale-110"
+            />
+            <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <span className="font-display text-xl font-bold text-primary">Biblio</span>
         </Link>
       </div>
+
+      {/* Navigation */}
       <nav className="flex-1 space-y-1 p-3">
-        <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">Wallet</p>
-        {navItems.map((item) => {
+        <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Wallet</p>
+        {navItems.map((item, index) => {
           const Icon = item.icon
           const isActive = location.pathname === item.href
           return (
@@ -125,25 +137,34 @@ export function Sidebar() {
               key={item.href}
               to={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                "animate-fade-up opacity-0",
                 isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary/10 text-primary border-l-2 border-primary"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               )}
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
             >
-              <Icon className="h-4 w-4" />
+              <Icon
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200",
+                  isActive ? "text-primary" : "group-hover:scale-110"
+                )}
+              />
               {item.label}
             </Link>
           )
         })}
       </nav>
-      <div className="border-t border-border p-3">
+
+      {/* Tags Section */}
+      <div className="border-t border-white/5 p-3">
         <div className="mb-2 flex items-center justify-between px-3">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Tags</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Tags</p>
           <AddTagDialog />
         </div>
         {tags.length === 0 ? (
-          <p className="px-3 text-xs text-muted-foreground">No tags yet</p>
+          <p className="px-3 py-2 text-xs text-muted-foreground/60">No tags yet</p>
         ) : (
           <div className="space-y-0.5">
             {tags.map((tag) => (

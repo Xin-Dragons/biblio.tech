@@ -35,6 +35,7 @@ import { filteredNftsAtom, refreshNftsAtom } from "@/stores/nfts"
 import { BulkSendDialog } from "./bulk-send-dialog"
 import { BulkBurnDialog } from "./bulk-burn-dialog"
 import { CollageExportDialog } from "./collage-export-dialog"
+import { Button } from "./ui/button"
 
 const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[] = [
   { value: "large", icon: Grid2X2, label: "Large" },
@@ -82,99 +83,102 @@ export function Toolbar() {
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-4 border-b border-border bg-card/50 px-4 py-2">
-        <div className="relative flex-1">
+      <div className="flex shrink-0 items-center gap-3 border-b border-white/5 px-4 py-2.5">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search NFTs..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-full max-w-sm rounded-md border border-border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={cn(
+              "h-9 w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-3 text-sm",
+              "placeholder:text-muted-foreground/60",
+              "transition-all duration-200",
+              "focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+              "hover:border-white/20"
+            )}
           />
         </div>
 
+        {/* Selection Mode Actions */}
         {isSelectMode && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selectedMints.size} selected</span>
+          <div className="flex items-center gap-2 animate-fade-in">
+            <span className="text-sm text-muted-foreground tabular-nums">{selectedMints.size} selected</span>
 
-            <button
+            <Button
+              variant="default"
+              size="sm"
               onClick={() => setSendDialogOpen(true)}
               disabled={selectedMints.size === 0}
-              className={cn(
-                "flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
-                selectedMints.size > 0
-                  ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "border-border bg-background text-muted-foreground opacity-50"
-              )}
-              title="Send selected NFTs"
+              className="gap-1.5"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-3.5 w-3.5" />
               Send
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => setBurnDialogOpen(true)}
               disabled={selectedMints.size === 0}
-              className={cn(
-                "flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
-                selectedMints.size > 0
-                  ? "border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "border-border bg-background text-muted-foreground opacity-50"
-              )}
-              title="Burn selected NFTs"
+              className="gap-1.5"
             >
-              <Flame className="h-4 w-4" />
+              <Flame className="h-3.5 w-3.5" />
               Burn
-            </button>
+            </Button>
 
-            <div className="mx-2 h-6 w-px bg-border" />
+            <div className="mx-1 h-5 w-px bg-border" />
 
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => selectAll(filteredNfts.map((nft) => nft.mint))}
-              className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm hover:bg-accent"
+              className="gap-1.5"
             >
-              <CheckSquare className="h-4 w-4" />
-              Select All
-            </button>
-            <button
-              onClick={() => clearSelection()}
-              className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm hover:bg-accent"
-              disabled={selectedMints.size === 0}
-            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              All
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => clearSelection()} disabled={selectedMints.size === 0}>
               Clear
-            </button>
+            </Button>
           </div>
         )}
 
+        {/* Controls */}
         <div className="flex items-center gap-2">
-          <button
+          {/* Select Mode Toggle */}
+          <Button
+            variant={isSelectMode ? "default" : "outline"}
+            size="sm"
             onClick={() => toggleSelectMode()}
-            className={cn(
-              "flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
-              isSelectMode
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            )}
-            title="Select mode"
+            className="gap-1.5"
           >
-            {isSelectMode ? <X className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
+            {isSelectMode ? <X className="h-3.5 w-3.5" /> : <MousePointerClick className="h-3.5 w-3.5" />}
             {isSelectMode ? "Done" : "Select"}
-          </button>
+          </Button>
 
+          {/* Sort Dropdown */}
           <select
             value={sortOption}
             onChange={(e) => setSortOption(e.target.value as SortOption)}
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={cn(
+              "h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-sm",
+              "transition-all duration-200",
+              "focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+              "hover:border-white/20 cursor-pointer"
+            )}
           >
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>
-                Sort: {option.label}
+                {option.label}
               </option>
             ))}
           </select>
 
-          <div className="flex rounded-md border border-border">
+          {/* Layout Type Toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-white/10">
             {layoutTypeOptions.map((option) => {
               const Icon = option.icon
               return (
@@ -182,10 +186,10 @@ export function Toolbar() {
                   key={option.value}
                   onClick={() => setLayoutType(option.value)}
                   className={cn(
-                    "flex h-9 w-9 items-center justify-center transition-colors",
+                    "flex h-8 w-8 items-center justify-center transition-all duration-200",
                     layoutType === option.value
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   )}
                   title={option.label}
                 >
@@ -195,18 +199,16 @@ export function Toolbar() {
             })}
           </div>
 
+          {/* Collage Export */}
           {layoutType === "collage" && (
-            <button
-              onClick={() => setCollageDialogOpen(true)}
-              className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              title="Download collage image"
-            >
-              <Camera className="h-4 w-4" />
-              Collage
-            </button>
+            <Button variant="outline" size="sm" onClick={() => setCollageDialogOpen(true)} className="gap-1.5">
+              <Camera className="h-3.5 w-3.5" />
+              Export
+            </Button>
           )}
 
-          <div className="flex rounded-md border border-border">
+          {/* Grid Size Toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-white/10">
             {layoutOptions.map((option) => {
               const Icon = option.icon
               return (
@@ -214,10 +216,10 @@ export function Toolbar() {
                   key={option.value}
                   onClick={() => setLayoutSize(option.value)}
                   className={cn(
-                    "flex h-9 w-9 items-center justify-center transition-colors",
+                    "flex h-8 w-8 items-center justify-center transition-all duration-200",
                     layoutSize === option.value
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   )}
                   title={option.label}
                 >
