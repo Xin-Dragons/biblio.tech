@@ -138,6 +138,13 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
           {(Number(nft.listing.price) / 1e9).toFixed(2)} SOL
         </div>
       )}
+
+      {/* Nifty Badge */}
+      {nft.tokenStandard === "Nifty" && !isStaked && (
+        <div className="absolute bottom-2.5 left-2.5 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
+          Nifty
+        </div>
+      )}
     </div>
   )
 })
