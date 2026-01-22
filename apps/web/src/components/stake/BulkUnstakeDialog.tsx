@@ -18,6 +18,7 @@ import {
   simulateTransaction,
   getPriorityFee,
   buildTransaction,
+  sendTransaction,
   confirmMultipleTransactionsViaWebSocket,
   MAX_TX_SIZE,
   SIZE_BUFFER,
@@ -216,22 +217,11 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
         const { tx, items: batchItems } = transactions[i]
         const txBytes = tx.serialize({ requireAllSignatures: false })
         const signedBytes = await signer.signTransaction(txBytes)
+        const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
 
-        const sendResponse = await fetch("/api/rpc/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transaction: Buffer.from(signedBytes as Uint8Array).toString("base64") }),
-        })
-        const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
-
-        if (sendResult.error) {
-          throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
-        }
-
-        if (sendResult.result) {
-          signatures.push(sendResult.result)
-          successfulItems.push(...batchItems)
-        }
+        const signature = await sendTransaction(signedBase64)
+        signatures.push(signature)
+        successfulItems.push(...batchItems)
       }
 
       await confirmMultipleTransactionsViaWebSocket(signatures)
