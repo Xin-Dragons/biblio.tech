@@ -12,7 +12,7 @@ import {
   removeStakeRecordAtom,
   type StakeRecordAccount,
 } from "@/stores/stake"
-import { buildUnstakeInstructions } from "@/hooks/use-staking"
+import { buildUnstakeInstructions, buildUnstakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
 
@@ -107,14 +107,23 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
         owner: account,
       })
 
-      const instructions = buildUnstakeInstructions({
-        nft,
-        stakeRecord,
-        staker,
-        collection,
-        emissions,
-        owner: account,
-      })
+      const instructions = isNiftyAsset(nft)
+        ? buildUnstakeNiftyInstructions({
+            nft,
+            stakeRecord,
+            staker,
+            collection,
+            emissions,
+            owner: account,
+          })
+        : buildUnstakeInstructions({
+            nft,
+            stakeRecord,
+            staker,
+            collection,
+            emissions,
+            owner: account,
+          })
       console.log("Unstake instruction built:", instructions[0])
 
       // Get blockhash via RPC proxy

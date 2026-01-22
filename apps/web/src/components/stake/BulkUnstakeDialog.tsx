@@ -12,7 +12,7 @@ import {
   removeStakeRecordAtom,
   type StakeRecordAccount,
 } from "@/stores/stake"
-import { buildUnstakeInstructions } from "@/hooks/use-staking"
+import { buildUnstakeInstructions, buildUnstakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
 import {
   getBlockhash,
   simulateTransaction,
@@ -80,14 +80,23 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       const collection = collections.find((c) => c.collectionMint === item.nft.collectionId)
       if (!collection) continue
 
-      const instructions = buildUnstakeInstructions({
-        nft: item.nft,
-        stakeRecord: item.stakeRecord,
-        staker,
-        collection,
-        emissions,
-        owner: account,
-      })
+      const instructions = isNiftyAsset(item.nft)
+        ? buildUnstakeNiftyInstructions({
+            nft: item.nft,
+            stakeRecord: item.stakeRecord,
+            staker,
+            collection,
+            emissions,
+            owner: account,
+          })
+        : buildUnstakeInstructions({
+            nft: item.nft,
+            stakeRecord: item.stakeRecord,
+            staker,
+            collection,
+            emissions,
+            owner: account,
+          })
 
       const testTx = new Transaction()
       testTx.recentBlockhash = dummyBlockhash
@@ -133,14 +142,23 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
           continue
         }
 
-        const instructions = buildUnstakeInstructions({
-          nft: item.nft,
-          stakeRecord: item.stakeRecord,
-          staker,
-          collection,
-          emissions,
-          owner: account,
-        })
+        const instructions = isNiftyAsset(item.nft)
+          ? buildUnstakeNiftyInstructions({
+              nft: item.nft,
+              stakeRecord: item.stakeRecord,
+              staker,
+              collection,
+              emissions,
+              owner: account,
+            })
+          : buildUnstakeInstructions({
+              nft: item.nft,
+              stakeRecord: item.stakeRecord,
+              staker,
+              collection,
+              emissions,
+              owner: account,
+            })
         itemInstructions.push({ item, instructions })
       }
 
