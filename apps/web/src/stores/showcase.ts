@@ -304,7 +304,11 @@ export const fetchDandiesAtom = atom(null, async (_get, set) => {
 
 export const buildLockTxAtom = atom(
   null,
-  async (_get, _set, { mint, owner }: { mint: string; owner: string }): Promise<{ transaction: string; blockhash: string; lastValidBlockHeight: number } | null> => {
+  async (
+    _get,
+    _set,
+    { mint, owner }: { mint: string; owner: string }
+  ): Promise<{ transaction: string; blockhash: string; lastValidBlockHeight: number } | null> => {
     try {
       const res = await authFetch("/api/lock/build-lock-tx", {
         method: "POST",

@@ -12,6 +12,7 @@ import {
   AlignJustify,
   Send,
   Flame,
+  Camera,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -33,6 +34,7 @@ import {
 import { filteredNftsAtom, refreshNftsAtom } from "@/stores/nfts"
 import { BulkSendDialog } from "./bulk-send-dialog"
 import { BulkBurnDialog } from "./bulk-burn-dialog"
+import { CollageExportDialog } from "./collage-export-dialog"
 
 const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[] = [
   { value: "large", icon: Grid2X2, label: "Large" },
@@ -68,6 +70,7 @@ export function Toolbar() {
 
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const [burnDialogOpen, setBurnDialogOpen] = useState(false)
+  const [collageDialogOpen, setCollageDialogOpen] = useState(false)
 
   const selectedNfts = filteredNfts.filter((nft) => selectedMints.has(nft.mint))
 
@@ -192,6 +195,17 @@ export function Toolbar() {
             })}
           </div>
 
+          {layoutType === "collage" && (
+            <button
+              onClick={() => setCollageDialogOpen(true)}
+              className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              title="Download collage image"
+            >
+              <Camera className="h-4 w-4" />
+              Collage
+            </button>
+          )}
+
           <div className="flex rounded-md border border-border">
             {layoutOptions.map((option) => {
               const Icon = option.icon
@@ -216,20 +230,14 @@ export function Toolbar() {
       </div>
 
       {sendDialogOpen && (
-        <BulkSendDialog
-          nfts={selectedNfts}
-          onClose={() => setSendDialogOpen(false)}
-          onSuccess={handleActionSuccess}
-        />
+        <BulkSendDialog nfts={selectedNfts} onClose={() => setSendDialogOpen(false)} onSuccess={handleActionSuccess} />
       )}
 
       {burnDialogOpen && (
-        <BulkBurnDialog
-          nfts={selectedNfts}
-          onClose={() => setBurnDialogOpen(false)}
-          onSuccess={handleActionSuccess}
-        />
+        <BulkBurnDialog nfts={selectedNfts} onClose={() => setBurnDialogOpen(false)} onSuccess={handleActionSuccess} />
       )}
+
+      {collageDialogOpen && <CollageExportDialog onClose={() => setCollageDialogOpen(false)} />}
     </>
   )
 }

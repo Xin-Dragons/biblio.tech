@@ -3,6 +3,7 @@ import type { RateLimiterDO } from "./dos/rate-limiter"
 import type { TensorRateLimiterDO } from "./dos/tensor-rate-limiter"
 import type { UsernamesDO } from "./dos/usernames"
 import type { VotingDO } from "./dos/voting"
+import type { RpcWebSocketDO } from "./dos/rpc-websocket"
 
 export interface Env {
   // Durable Objects
@@ -11,6 +12,7 @@ export interface Env {
   TENSOR_RATE_LIMITER_DO: DurableObjectNamespace<TensorRateLimiterDO>
   USERNAMES_DO: DurableObjectNamespace<UsernamesDO>
   VOTING_DO: DurableObjectNamespace<VotingDO>
+  RPC_WEBSOCKET_DO: DurableObjectNamespace<RpcWebSocketDO>
 
   // D1 Database
   DB: D1Database

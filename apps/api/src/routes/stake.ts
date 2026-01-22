@@ -12,6 +12,7 @@ import {
   type StakeRecordAccount,
   type PendingReward,
 } from "../services/stake"
+import { stringifyBigInts } from "../lib/json"
 
 export const stakeRoutes = new Hono<HonoEnv>()
 
@@ -19,7 +20,7 @@ export const stakeRoutes = new Hono<HonoEnv>()
  * Dandies staker account address
  * This is the main Dandies staking pool on mainnet
  */
-const DANDIES_STAKER_PUBKEY = "2xc5go5vVNqYzFRg3XSPKmwT5zVmjBcNGiFeJWLqvHHi"
+const DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a"
 
 export type DandiesStakeResponse = {
   staker: StakerAccount | null
@@ -45,11 +46,13 @@ stakeRoutes.get("/dandies", async (c) => {
   const collections = await getCollectionAccounts(c.env, DANDIES_STAKER_PUBKEY)
   const emissions = await getEmissionAccounts(c.env, collections)
 
-  return c.json<DandiesStakeResponse>({
-    staker,
-    collections,
-    emissions,
-  })
+  return c.json(
+    stringifyBigInts<DandiesStakeResponse>({
+      staker,
+      collections,
+      emissions,
+    })
+  )
 })
 
 export type StakeRecordsResponse = {
@@ -58,15 +61,18 @@ export type StakeRecordsResponse = {
 
 /**
  * GET /stake/records/:wallet
- * Returns all stake records for a given wallet owner
+ * Returns Dandies stake records for a given wallet owner
  */
 stakeRoutes.get("/records/:wallet", async (c) => {
   const wallet = c.req.param("wallet")
-  const records = await getStakeRecordsByOwner(c.env, wallet)
+  const allRecords = await getStakeRecordsByOwner(c.env, wallet)
+  const records = allRecords.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
 
-  return c.json<StakeRecordsResponse>({
-    records,
-  })
+  return c.json(
+    stringifyBigInts<StakeRecordsResponse>({
+      records,
+    })
+  )
 })
 
 export type PendingRewardsResponse = {
@@ -75,13 +81,15 @@ export type PendingRewardsResponse = {
 
 /**
  * GET /stake/pending/:wallet
- * Returns calculated pending rewards for a given wallet
+ * Returns calculated pending Dandies rewards for a given wallet
  */
 stakeRoutes.get("/pending/:wallet", async (c) => {
   const wallet = c.req.param("wallet")
-  const pending = await calculatePendingRewards(c.env, wallet)
+  const pending = await calculatePendingRewards(c.env, wallet, DANDIES_STAKER_PUBKEY)
 
-  return c.json<PendingRewardsResponse>({
-    pending,
-  })
+  return c.json(
+    stringifyBigInts<PendingRewardsResponse>({
+      pending,
+    })
+  )
 })

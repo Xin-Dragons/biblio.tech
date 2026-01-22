@@ -1,4 +1,4 @@
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useEffect } from "react"
 import { Coins, ExternalLink } from "lucide-react"
@@ -37,18 +37,18 @@ function TokenCard({ token }: { token: Token }) {
 }
 
 export function SplPage() {
-  const { connected, publicKey } = useWallet()
+  const { isConnected, account } = useWallet()
   const tokens = useAtomValue(tokensAtom)
   const isLoading = useAtomValue(tokensLoadingAtom)
   const fetchTokens = useSetAtom(fetchTokensAtom)
 
   useEffect(() => {
-    if (connected && publicKey) {
-      fetchTokens(publicKey.toBase58())
+    if (isConnected && account) {
+      fetchTokens(account)
     }
-  }, [connected, publicKey, fetchTokens])
+  }, [isConnected, account, fetchTokens])
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <div className="flex h-full flex-col items-center justify-center">
         <Coins className="mb-4 h-12 w-12 text-muted-foreground/50" />

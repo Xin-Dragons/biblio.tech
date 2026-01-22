@@ -1,46 +1,90 @@
 import { useState } from "react"
 import { Gift, X, Loader2 } from "lucide-react"
-import { Transaction } from "@solana/web3.js"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { useAtomValue } from "jotai"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { Transaction, PublicKey } from "@solana/web3.js"
+import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, emissionsAtom, userStakeRecordsAtom, pendingRewardsAtom } from "@/stores/stake"
+import {
+  stakerAtom,
+  collectionsAtom,
+  emissionsAtom,
+  userStakeRecordsAtom,
+  pendingRewardsAtom,
+  clearPendingRewardsAtom,
+} from "@/stores/stake"
 import { buildClaimInstructions } from "@/hooks/use-staking"
+import { confirmMultipleTransactionsViaWebSocket } from "@/lib/transaction"
+
+const ANCHOR_ERROR_CODES: Record<number, string> = {
+  3000: "AccountDiscriminatorAlreadySet",
+  3001: "AccountDiscriminatorNotFound",
+  3002: "AccountDiscriminatorMismatch",
+  3003: "AccountDidNotDeserialize",
+  3004: "AccountDidNotSerialize",
+  3005: "AccountNotEnoughKeys",
+  3006: "AccountNotMutable",
+  3007: "AccountOwnedByWrongProgram",
+  3008: "InvalidProgramId",
+  3009: "InvalidProgramExecutable",
+  3010: "AccountNotSigner",
+  3011: "AccountNotSystemOwned",
+  3012: "AccountNotInitialized - A required account does not exist",
+  3013: "AccountNotProgramData",
+  3014: "AccountNotAssociatedTokenAccount",
+  3015: "AccountSysvarMismatch",
+}
+
+function decodeSimulationError(err: { InstructionError?: [number, { Custom?: number }] }): string | null {
+  if (!err.InstructionError) return null
+  const [ixIndex, errDetail] = err.InstructionError
+  if (typeof errDetail === "object" && errDetail.Custom !== undefined) {
+    const code = errDetail.Custom
+    const anchorMsg = ANCHOR_ERROR_CODES[code]
+    if (anchorMsg) {
+      return `Instruction ${ixIndex} failed: ${anchorMsg} (code ${code})`
+    }
+    return `Instruction ${ixIndex} failed with custom error: ${code}`
+  }
+  return `Instruction ${ixIndex} failed: ${JSON.stringify(errDetail)}`
+}
 
 interface ClaimDialogProps {
   onClose: () => void
   onSuccess: () => void
 }
 
+const TOKEN_DECIMALS = 9
+
 function formatRewardAmount(amount: bigint): string {
   if (amount === 0n) {
     return "0"
   }
-  const asNumber = Number(amount)
-  if (asNumber >= 1_000_000) {
-    return `${(asNumber / 1_000_000).toFixed(2)}M`
+  const humanReadable = Number(amount) / 10 ** TOKEN_DECIMALS
+  if (humanReadable >= 1_000_000) {
+    return `${(humanReadable / 1_000_000).toFixed(2)}M`
   }
-  if (asNumber >= 1_000) {
-    return `${(asNumber / 1_000).toFixed(2)}K`
+  if (humanReadable >= 1_000) {
+    return `${(humanReadable / 1_000).toFixed(2)}K`
   }
-  return asNumber.toLocaleString()
+  return humanReadable.toFixed(2)
 }
 
 export function ClaimDialog({ onClose, onSuccess }: ClaimDialogProps) {
   const [claiming, setClaiming] = useState(false)
-  const { connection } = useConnection()
-  const { publicKey, signTransaction } = useWallet()
+  const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
   const emissions = useAtomValue(emissionsAtom)
   const stakeRecords = useAtomValue(userStakeRecordsAtom)
   const pendingRewards = useAtomValue(pendingRewardsAtom)
+  const clearPendingRewards = useSetAtom(clearPendingRewardsAtom)
 
   const totalPending = pendingRewards.reduce((sum, p) => sum + p.amount, 0n)
 
   const handleClaim = async () => {
-    if (!publicKey || !signTransaction || !staker || collections.length === 0) {
+    if (!account || !signer || !capabilities.canSign || !staker || collections.length === 0) {
       toast.error("Wallet not connected or staking not available")
       return
     }
@@ -53,6 +97,7 @@ export function ClaimDialog({ onClose, onSuccess }: ClaimDialogProps) {
     setClaiming(true)
 
     try {
+      const ownerPubkey = new PublicKey(account)
       const instructions = []
 
       for (const stakeRecord of stakeRecords) {
@@ -68,7 +113,7 @@ export function ClaimDialog({ onClose, onSuccess }: ClaimDialogProps) {
             emission,
             staker,
             collection,
-            owner: publicKey,
+            owner: account,
           })
           instructions.push(...claimIxs)
         }
@@ -80,21 +125,101 @@ export function ClaimDialog({ onClose, onSuccess }: ClaimDialogProps) {
         return
       }
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-
-      const transaction = new Transaction()
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = publicKey
-      transaction.add(...instructions)
-
-      const signed = await signTransaction(transaction)
-      const signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: true,
+      // Get blockhash via RPC proxy
+      const blockhashResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "getLatestBlockhash",
+          params: [{ commitment: "finalized" }],
+        }),
       })
+      const blockhashData = (await blockhashResponse.json()) as {
+        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
+      }
+      const blockhash = blockhashData.result?.value.blockhash
+      if (!blockhash) throw new Error("Failed to get blockhash")
 
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed")
+      // Batch instructions - ~5 claims per tx to stay within size limits
+      const BATCH_SIZE = 5
+      const transactions: Transaction[] = []
+      for (let i = 0; i < instructions.length; i += BATCH_SIZE) {
+        const batch = instructions.slice(i, i + BATCH_SIZE)
+        const transaction = new Transaction()
+        transaction.recentBlockhash = blockhash
+        transaction.feePayer = ownerPubkey
+        transaction.add(...batch)
+        transactions.push(transaction)
+      }
 
-      toast.success("Rewards claimed successfully!")
+      // Simulate all transactions before signing
+      for (let i = 0; i < transactions.length; i++) {
+        const simResponse = await fetch("/api/rpc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: crypto.randomUUID(),
+            method: "simulateTransaction",
+            params: [
+              transactions[i].serialize({ requireAllSignatures: false }).toString("base64"),
+              { encoding: "base64" },
+            ],
+          }),
+        })
+        const simData = (await simResponse.json()) as {
+          result?: { value: { err: unknown; logs: string[] } }
+        }
+
+        if (simData.result?.value.err) {
+          console.error(`Claim simulation failed for tx ${i + 1}:`, simData.result.value.err)
+          console.error("Simulation logs:", simData.result.value.logs)
+          const decodedError = decodeSimulationError(
+            simData.result.value.err as { InstructionError?: [number, { Custom?: number }] }
+          )
+          throw new Error(
+            decodedError || `Transaction ${i + 1} simulation failed: ${JSON.stringify(simData.result.value.err)}`
+          )
+        }
+      }
+
+      // Sign and send each transaction
+      const signatures: string[] = []
+      for (const tx of transactions) {
+        const txBytes = tx.serialize({ requireAllSignatures: false })
+        const signedBytes = await signer.signTransaction(txBytes)
+
+        const sendResponse = await fetch("/api/rpc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: crypto.randomUUID(),
+            method: "sendTransaction",
+            params: [
+              Buffer.from(signedBytes as Uint8Array).toString("base64"),
+              { encoding: "base64", skipPreflight: true },
+            ],
+          }),
+        })
+        const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
+
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
+        }
+
+        if (sendResult.result) {
+          signatures.push(sendResult.result)
+        }
+      }
+
+      await confirmMultipleTransactionsViaWebSocket(signatures)
+
+      clearPendingRewards()
+
+      toast.success(`Claimed rewards in ${transactions.length} transactions!`)
       onSuccess()
       onClose()
     } catch (err) {
@@ -105,7 +230,7 @@ export function ClaimDialog({ onClose, onSuccess }: ClaimDialogProps) {
     }
   }
 
-  const isReady = !!publicKey && !!signTransaction && !!staker && collections.length > 0
+  const isReady = !!account && !!signer && capabilities.canSign && !!staker && collections.length > 0
   const hasRewards = totalPending > 0n
 
   return (

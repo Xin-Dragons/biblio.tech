@@ -67,7 +67,14 @@ function createDelegateUtilityInstruction(
   const data = Buffer.from([
     44, // Delegate discriminator
     5, // UtilityV1 variant index
-    1, 0, 0, 0, 0, 0, 0, 0, // amount: u64 = 1
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0, // amount: u64 = 1
     0, // authorization_data: None
   ])
 

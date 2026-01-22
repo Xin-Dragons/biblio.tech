@@ -20,7 +20,11 @@ function getClient(env: Env): SolanaClient {
   return getRpc(rpcUrl)
 }
 
-export type TokenStandard = "NonFungible" | "ProgrammableNonFungible" | "NonFungibleEdition" | "ProgrammableNonFungibleEdition"
+export type TokenStandard =
+  | "NonFungible"
+  | "ProgrammableNonFungible"
+  | "NonFungibleEdition"
+  | "ProgrammableNonFungibleEdition"
 
 export type DASAsset = {
   mint: string
@@ -79,9 +83,8 @@ export async function getAssetsByOwner(
 
       const rawImage = item.content?.links?.image ?? item.content?.files?.[0]?.uri ?? ""
 
-      const tokenStandard: TokenStandard = item.interface === "ProgrammableNFT"
-        ? "ProgrammableNonFungible"
-        : "NonFungible"
+      const tokenStandard: TokenStandard =
+        item.interface === "ProgrammableNFT" ? "ProgrammableNonFungible" : "NonFungible"
 
       const asset: DASAsset = {
         mint: item.id,

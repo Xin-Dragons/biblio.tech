@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Send, X, Loader2 } from "lucide-react"
-import { PublicKey } from "@solana/web3.js"
+import { isAddress } from "@solana/kit"
 import toast from "react-hot-toast"
 import { cn } from "@/lib/utils"
 import { useSolanaActions } from "@/hooks/use-solana-actions"
@@ -19,14 +19,7 @@ export function BulkSendDialog({ nfts, onClose, onSuccess }: BulkSendDialogProps
   const [progress, setProgress] = useState({ completed: 0, total: 0 })
   const { sendNfts, isReady } = useSolanaActions()
 
-  const isValidAddress = (() => {
-    try {
-      new PublicKey(recipient)
-      return recipient.length >= 32
-    } catch {
-      return false
-    }
-  })()
+  const isValidAddress = recipient.length >= 32 && isAddress(recipient)
 
   const compressedCount = nfts.filter((n) => n.compressed).length
   const sendableCount = nfts.length - compressedCount
@@ -116,7 +109,11 @@ export function BulkSendDialog({ nfts, onClose, onSuccess }: BulkSendDialogProps
           <Button variant="outline" onClick={onClose} disabled={sending} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleSend} disabled={!isValidAddress || !isReady || sending || sendableCount === 0} className="flex-1">
+          <Button
+            onClick={handleSend}
+            disabled={!isValidAddress || !isReady || sending || sendableCount === 0}
+            className="flex-1"
+          >
             {sending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

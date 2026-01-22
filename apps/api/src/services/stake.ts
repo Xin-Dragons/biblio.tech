@@ -218,9 +218,16 @@ export type PendingReward = {
  *
  * The reward rate is stored per second in the emission.reward array
  * Total pending = pendingClaim + (currentTime - stakedAt) * rewardRate / stakedItems
+ *
+ * @param stakerFilter - Optional staker address to filter records by
  */
-export async function calculatePendingRewards(env: Env, wallet: string): Promise<PendingReward[]> {
-  const stakeRecords = await getStakeRecordsByOwner(env, wallet)
+export async function calculatePendingRewards(
+  env: Env,
+  wallet: string,
+  stakerFilter?: string
+): Promise<PendingReward[]> {
+  const allRecords = await getStakeRecordsByOwner(env, wallet)
+  const stakeRecords = stakerFilter ? allRecords.filter((r) => r.staker === stakerFilter) : allRecords
 
   if (stakeRecords.length === 0) {
     return []
@@ -253,11 +260,16 @@ export async function calculatePendingRewards(env: Env, wallet: string): Promise
       const existingPending = pendingByEmission.get(emissionAddress) ?? 0n
       let recordPending = record.pendingClaim
 
-      if (emission.reward.length > 0 && emission.stakedItems > 0n) {
+      if (emission.reward.length > 0) {
         const currentRate = emission.reward[0]
-        const timeSinceStaked = currentTime - record.stakedAt
-        if (timeSinceStaked > 0n) {
-          const additionalReward = (currentRate * timeSinceStaked) / emission.stakedItems
+
+        const effectiveEndTime =
+          isSome(emission.endTime) && emission.endTime.value < currentTime ? emission.endTime.value : currentTime
+        const effectiveStartTime = record.stakedAt > emission.startTime ? record.stakedAt : emission.startTime
+        const rewardDuration = effectiveEndTime - effectiveStartTime
+
+        if (rewardDuration > 0n) {
+          const additionalReward = currentRate * rewardDuration
           recordPending += additionalReward
         }
       }

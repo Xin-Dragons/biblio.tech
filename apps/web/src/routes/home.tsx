@@ -1,4 +1,4 @@
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useWallet } from "@solana/connector/react"
 import { useAtomValue } from "jotai"
 import { Folder, RefreshCw } from "lucide-react"
 import { nftsAtom, filteredCollectionsAtom, isLoadingAtom, isRefreshingAtom } from "@/stores/nfts"
@@ -6,13 +6,13 @@ import { CollectionGrid } from "@/components/collection-grid"
 import { CollectionGridSkeleton } from "@/components/ui/skeleton"
 
 export function HomePage() {
-  const { connected } = useWallet()
+  const { isConnected } = useWallet()
   const nfts = useAtomValue(nftsAtom)
   const collections = useAtomValue(filteredCollectionsAtom)
   const isLoading = useAtomValue(isLoadingAtom)
   const isRefreshing = useAtomValue(isRefreshingAtom)
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">

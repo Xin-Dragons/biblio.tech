@@ -10,6 +10,8 @@ import { healthRoutes } from "./routes/health"
 import { showcaseRoutes } from "./routes/showcase"
 import { lockRoutes } from "./routes/lock"
 import { stakeRoutes } from "./routes/stake"
+import { rpcRoutes } from "./routes/rpc"
+import { imageProxyRoutes } from "./routes/image-proxy"
 
 // Export Durable Objects
 export { UserDO } from "./dos/user"
@@ -17,6 +19,7 @@ export { RateLimiterDO } from "./dos/rate-limiter"
 export { TensorRateLimiterDO } from "./dos/tensor-rate-limiter"
 export { UsernamesDO } from "./dos/usernames"
 export { VotingDO } from "./dos/voting"
+export { RpcWebSocketDO } from "./dos/rpc-websocket"
 
 const app = new Hono<HonoEnv>()
 
@@ -39,6 +42,8 @@ app.route("/tokens", tokensRoutes)
 app.route("/showcase", showcaseRoutes)
 app.route("/lock", lockRoutes)
 app.route("/stake", stakeRoutes)
+app.route("/rpc", rpcRoutes)
+app.route("/image-proxy", imageProxyRoutes)
 
 // 404 handler
 app.notFound((c) => {

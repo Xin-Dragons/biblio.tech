@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { sessionAtom, signInAtom, signOutAtom } from "@/stores/auth"
 
@@ -8,24 +8,29 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { connected, publicKey, signMessage, disconnecting } = useWallet()
+  const { isConnected, account, status } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const session = useAtomValue(sessionAtom)
   const signIn = useSetAtom(signInAtom)
   const signOut = useSetAtom(signOutAtom)
   const signingInRef = useRef(false)
+  const wasConnectedRef = useRef(false)
 
   useEffect(() => {
-    if (disconnecting) {
+    if (isConnected) {
+      wasConnectedRef.current = true
+    }
+
+    if (status === "disconnected" && wasConnectedRef.current) {
+      wasConnectedRef.current = false
       signOut()
       return
     }
 
-    if (!connected || !publicKey || !signMessage) return
-
-    const walletAddress = publicKey.toBase58()
+    if (!isConnected || !account || !signer || !capabilities.canSignMessage) return
 
     // Already signed in with this wallet
-    if (session?.wallet === walletAddress && session.expiresAt > Date.now()) {
+    if (session?.wallet === account && session.expiresAt > Date.now()) {
       return
     }
 
@@ -33,10 +38,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (signingInRef.current) return
     signingInRef.current = true
 
-    signIn({ publicKey: walletAddress, signMessage }).finally(() => {
+    const signMessage = async (message: Uint8Array) => {
+      if (!signer.signMessage) throw new Error("Wallet does not support message signing")
+      return signer.signMessage(message)
+    }
+
+    signIn({ publicKey: account, signMessage }).finally(() => {
       signingInRef.current = false
     })
-  }, [connected, publicKey, signMessage, disconnecting, session, signIn, signOut])
+  }, [isConnected, account, signer, capabilities.canSignMessage, status, session, signIn, signOut])
 
   return <>{children}</>
 }

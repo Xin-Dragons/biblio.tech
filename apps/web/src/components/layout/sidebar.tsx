@@ -108,7 +108,7 @@ export function Sidebar() {
   const removeTag = useSetAtom(removeTagAtom)
 
   return (
-    <aside className="flex w-56 flex-col border-r border-border bg-card">
+    <aside className="hidden w-56 flex-col border-r border-border bg-card md:flex">
       <div className="flex h-14 items-center border-b border-border px-4">
         <Link to="/" className="flex items-center gap-2">
           <img src="/logo.svg" alt="Biblio" className="h-7 w-7" />

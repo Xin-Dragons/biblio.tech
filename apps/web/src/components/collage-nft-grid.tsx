@@ -119,7 +119,7 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
         />
       </div>
       {showInfo && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
           <h3 className="truncate text-sm font-medium text-white">{nft.name}</h3>
           {nft.listing?.price && (
             <p className="text-xs text-white/70">{(Number(nft.listing.price) / 1e9).toFixed(2)} SOL</p>
@@ -137,9 +137,7 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
         </div>
       )}
       {!isSelectMode && isAuthenticated && (
-        <div
-          className="absolute left-2 top-2 flex cursor-pointer items-center gap-0.5 rounded-md bg-black/60 p-0.5 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
-        >
+        <div className="absolute left-2 top-2 flex cursor-pointer items-center gap-0.5 rounded-md bg-black/60 p-0.5 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
           <button
             onClick={handleDecreaseSize}
             onMouseDown={(e) => e.stopPropagation()}
@@ -303,7 +301,7 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto">
+    <div id="collage-grid-container" className="h-full w-full overflow-y-auto">
       <DraggableGrid
         ref={gridRef}
         data={gridData}

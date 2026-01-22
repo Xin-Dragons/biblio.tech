@@ -132,4 +132,18 @@ export const heliusService = {
       limit: 1000,
     })
   },
+
+  async getPriorityFeeEstimate(
+    apiKey: string,
+    transaction: string,
+    priorityLevel: "Min" | "Low" | "Medium" | "High" | "VeryHigh" = "Medium"
+  ): Promise<number> {
+    const result = await heliusRpc<{ priorityFeeEstimate: number }>(apiKey, "getPriorityFeeEstimate", [
+      {
+        transaction,
+        options: { priorityLevel },
+      },
+    ])
+    return result?.priorityFeeEstimate || 0
+  },
 }

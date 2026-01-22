@@ -1,5 +1,7 @@
+import { useMemo, memo } from "react"
 import { Star, Trash2, Check, Lock } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
+import { selectAtom } from "jotai/utils"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { cn } from "@/lib/utils"
@@ -14,20 +16,22 @@ interface NftCardProps {
   showInfo: boolean
 }
 
-function NftCard({ nft, showInfo }: NftCardProps) {
+const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
   const starred = useAtomValue(starredAtom)
   const junk = useAtomValue(junkAtom)
-  const stakedMints = useAtomValue(stakedMintsSetAtom)
   const toggleStarred = useSetAtom(toggleStarredAtom)
   const toggleJunk = useSetAtom(toggleJunkAtom)
   const setSelectedNft = useSetAtom(selectedNftAtom)
   const isSelectMode = useAtomValue(isSelectModeAtom)
   const selectedMints = useAtomValue(selectedMintsAtom)
   const toggleSelected = useSetAtom(toggleSelectedAtom)
+
+  const isStakedAtom = useMemo(() => selectAtom(stakedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
+  const isStaked = useAtomValue(isStakedAtom)
+
   const isStarred = starred.has(nft.mint)
   const isJunk = junk.has(nft.mint)
   const isSelected = selectedMints.has(nft.mint)
-  const isStaked = stakedMints.has(nft.mint)
 
   const handleClick = () => {
     if (isSelectMode) {
@@ -109,7 +113,7 @@ function NftCard({ nft, showInfo }: NftCardProps) {
       )}
     </div>
   )
-}
+})
 
 type CellData = {
   nfts: NFT[]

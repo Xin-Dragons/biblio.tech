@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useParams, Link } from "react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { Transaction } from "@solana/web3.js"
+import { useWallet, useSolanaClient, useTransactionSigner } from "@solana/connector/react"
 import bs58 from "bs58"
 import {
   User,
@@ -167,8 +166,9 @@ function ShowcaseItem({ name, image, size, isEditing, onSizeChange }: ShowcaseIt
 }
 
 function DandyLockSelector({ onLockSuccess }: { onLockSuccess: () => void }) {
-  const { connection } = useConnection()
-  const { publicKey, signTransaction } = useWallet()
+  const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
+  const solanaClient = useSolanaClient()
   const dandies = useAtomValue(dandiesAtom)
   const dandiesLoading = useAtomValue(dandiesLoadingAtom)
   const fetchDandies = useSetAtom(fetchDandiesAtom)
@@ -185,7 +185,7 @@ function DandyLockSelector({ onLockSuccess }: { onLockSuccess: () => void }) {
   const availableDandies = dandies.filter((d) => !d.locked)
 
   const handleLock = async () => {
-    if (!selectedDandy || !publicKey || !signTransaction) return
+    if (!selectedDandy || !account || !signer || !capabilities.canSign || !solanaClient) return
 
     setIsLocking(true)
     setError(null)
@@ -198,13 +198,71 @@ function DandyLockSelector({ onLockSuccess }: { onLockSuccess: () => void }) {
         return
       }
 
-      const tx = Transaction.from(bs58.decode(txData.transaction))
-      const signedTx = await signTransaction(tx)
-      const sig = await connection.sendRawTransaction(signedTx.serialize())
-      await connection.confirmTransaction(
-        { signature: sig, blockhash: txData.blockhash, lastValidBlockHeight: txData.lastValidBlockHeight },
-        "confirmed"
-      )
+      // Decode the transaction from the API response
+      const txBytes = bs58.decode(txData.transaction)
+
+      // Sign the transaction using the signer
+      const signedTx = await signer.signTransaction(txBytes)
+
+      // Send the signed transaction via RPC proxy
+      const sendResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "sendTransaction",
+          params: [bs58.encode(signedTx as Uint8Array), { encoding: "base58", skipPreflight: true }],
+        }),
+      })
+      const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
+
+      if (sendResult.error) {
+        throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
+      }
+
+      const signature = sendResult.result
+      if (!signature) {
+        throw new Error("No signature returned from RPC")
+      }
+
+      // Poll for transaction confirmation
+      const startTime = Date.now()
+      const timeout = 60000
+      let confirmed = false
+
+      while (!confirmed && Date.now() - startTime < timeout) {
+        const statusResponse = await fetch("/api/rpc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: crypto.randomUUID(),
+            method: "getSignatureStatuses",
+            params: [[signature], { searchTransactionHistory: true }],
+          }),
+        })
+        const statusData = (await statusResponse.json()) as {
+          result?: { value: Array<{ confirmationStatus: string; err: unknown } | null> }
+        }
+
+        const status = statusData.result?.value?.[0]
+        if (status) {
+          if (status.err) {
+            throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`)
+          }
+          if (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized") {
+            confirmed = true
+            break
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+
+      if (!confirmed) {
+        throw new Error("Transaction confirmation timeout after 60 seconds")
+      }
 
       await fetchDandies()
       onLockSuccess()
@@ -843,7 +901,7 @@ function Leaderboard() {
 
 export function ShowcasePage() {
   const { username: urlUsername } = useParams<{ username: string }>()
-  const { connected } = useWallet()
+  const { isConnected } = useWallet()
   const isAuthenticated = useAtomValue(isAuthenticatedAtom)
   const session = useAtomValue(sessionAtom)
 
@@ -929,7 +987,7 @@ export function ShowcasePage() {
     }
   }
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <div className="mx-auto max-w-2xl space-y-8 py-8">
         <div className="text-center">

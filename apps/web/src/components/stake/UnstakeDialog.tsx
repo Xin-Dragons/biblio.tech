@@ -1,13 +1,53 @@
 import { useState } from "react"
 import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
-import { Transaction } from "@solana/web3.js"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { useAtomValue } from "jotai"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { Transaction, ComputeBudgetProgram, PublicKey } from "@solana/web3.js"
+import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, type StakeRecordAccount } from "@/stores/stake"
-import { buildUnstakeCoreInstructions } from "@/hooks/use-staking"
+import {
+  stakerAtom,
+  collectionsAtom,
+  emissionsAtom,
+  removeStakeRecordAtom,
+  type StakeRecordAccount,
+} from "@/stores/stake"
+import { buildUnstakeInstructions } from "@/hooks/use-staking"
+import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
+
+const ANCHOR_ERROR_CODES: Record<number, string> = {
+  3000: "AccountDiscriminatorAlreadySet",
+  3001: "AccountDiscriminatorNotFound",
+  3002: "AccountDiscriminatorMismatch",
+  3003: "AccountDidNotDeserialize",
+  3004: "AccountDidNotSerialize",
+  3005: "AccountNotEnoughKeys",
+  3006: "AccountNotMutable",
+  3007: "AccountOwnedByWrongProgram",
+  3008: "InvalidProgramId",
+  3009: "InvalidProgramExecutable",
+  3010: "AccountNotSigner",
+  3011: "AccountNotSystemOwned",
+  3012: "AccountNotInitialized - A required account does not exist",
+  3013: "AccountNotProgramData",
+  3014: "AccountNotAssociatedTokenAccount",
+  3015: "AccountSysvarMismatch",
+}
+
+function decodeSimulationError(err: { InstructionError?: [number, { Custom?: number }] }): string | null {
+  if (!err.InstructionError) return null
+  const [ixIndex, errDetail] = err.InstructionError
+  if (typeof errDetail === "object" && errDetail.Custom !== undefined) {
+    const code = errDetail.Custom
+    const anchorMsg = ANCHOR_ERROR_CODES[code]
+    if (anchorMsg) {
+      return `Instruction ${ixIndex} failed: ${anchorMsg} (code ${code})`
+    }
+    return `Instruction ${ixIndex} failed with custom error: ${code}`
+  }
+  return `Instruction ${ixIndex} failed: ${JSON.stringify(errDetail)}`
+}
 
 interface UnstakeDialogProps {
   nft: NFT
@@ -32,10 +72,12 @@ function formatDuration(seconds: number): string {
 
 export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeDialogProps) {
   const [unstaking, setUnstaking] = useState(false)
-  const { connection } = useConnection()
-  const { publicKey, signTransaction } = useWallet()
+  const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
+  const emissions = useAtomValue(emissionsAtom)
+  const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
 
   const collection = collections.find((c) => c.collectionMint === nft.collectionId)
 
@@ -47,7 +89,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
   const isMinPeriodMet = remainingSeconds <= 0
 
   const handleUnstake = async () => {
-    if (!publicKey || !signTransaction || !staker || !collection) {
+    if (!account || !signer || !capabilities.canSign || !staker || !collection) {
       toast.error("Wallet not connected or staking not available")
       return
     }
@@ -55,40 +97,156 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
     setUnstaking(true)
 
     try {
-      const instructions = buildUnstakeCoreInstructions({
+      const ownerPubkey = new PublicKey(account)
+
+      console.log("Building unstake instruction with:", {
+        nft: { mint: nft.mint, name: nft.name, collectionId: nft.collectionId },
+        stakeRecord: { address: stakeRecord.address, nftMint: stakeRecord.nftMint, owner: stakeRecord.owner },
+        staker: { address: staker.address },
+        collection: { address: collection.address, collectionMint: collection.collectionMint },
+        owner: account,
+      })
+
+      const instructions = buildUnstakeInstructions({
         nft,
         stakeRecord,
         staker,
         collection,
-        owner: publicKey,
+        emissions,
+        owner: account,
       })
+      console.log("Unstake instruction built:", instructions[0])
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+      // Get blockhash via RPC proxy
+      const blockhashResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "getLatestBlockhash",
+          params: [{ commitment: "finalized" }],
+        }),
+      })
+      const blockhashData = (await blockhashResponse.json()) as {
+        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
+      }
+      const blockhash = blockhashData.result?.value.blockhash
+      if (!blockhash) throw new Error("Failed to get blockhash")
 
+      // First simulate with high CU limit to get actual units consumed
+      const simTx = new Transaction()
+      simTx.recentBlockhash = blockhash
+      simTx.feePayer = ownerPubkey
+      simTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
+      simTx.add(...instructions)
+
+      const simResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "simulateTransaction",
+          params: [simTx.serialize({ requireAllSignatures: false }).toString("base64"), { encoding: "base64" }],
+        }),
+      })
+      const simData = (await simResponse.json()) as {
+        result?: { value: { err: unknown; logs: string[]; unitsConsumed: number } }
+      }
+
+      if (simData.result?.value.err) {
+        console.error("Unstake simulation failed:", simData.result.value.err)
+        console.error("Simulation logs:", simData.result.value.logs)
+        const decodedError = decodeSimulationError(
+          simData.result.value.err as { InstructionError?: [number, { Custom?: number }] }
+        )
+        throw new Error(decodedError || `Transaction simulation failed: ${JSON.stringify(simData.result.value.err)}`)
+      }
+
+      // Calculate CU limit: actual consumed + 10% buffer
+      const unitsConsumed = simData.result?.value.unitsConsumed ?? 200_000
+      const cuLimit = Math.ceil(unitsConsumed * 1.1)
+      console.log(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
+
+      // Build transaction to get priority fee estimate
+      const txForFeeEstimate = new Transaction()
+      txForFeeEstimate.recentBlockhash = blockhash
+      txForFeeEstimate.feePayer = ownerPubkey
+      txForFeeEstimate.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
+      txForFeeEstimate.add(...instructions)
+
+      // Get priority fee estimate from Helius
+      const serializedTx = txForFeeEstimate.serialize({ requireAllSignatures: false }).toString("base64")
+      const feeResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "getPriorityFeeEstimate",
+          params: [{ transaction: serializedTx, options: { priorityLevel: "Medium" } }],
+        }),
+      })
+      const feeData = (await feeResponse.json()) as { result?: number }
+      const priorityFeeEstimate = feeData.result ?? 1000
+      console.log(`Priority fee estimate: ${priorityFeeEstimate} microLamports`)
+
+      // Build final transaction with correct CU limit and priority fee
       const transaction = new Transaction()
       transaction.recentBlockhash = blockhash
-      transaction.feePayer = publicKey
+      transaction.feePayer = ownerPubkey
+      transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
+      transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate }))
       transaction.add(...instructions)
 
-      const signed = await signTransaction(transaction)
-      const signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: true,
-      })
+      // Serialize and sign via connector
+      const txBytes = transaction.serialize({ requireAllSignatures: false })
+      const signedBytes = await signer.signTransaction(txBytes)
 
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed")
+      // Send via Helius Sender for faster landing
+      const sendResponse = await fetch("/api/rpc/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction: Buffer.from(signedBytes as Uint8Array).toString("base64") }),
+      })
+      const sendResult = (await sendResponse.json()) as {
+        result?: string
+        error?: { message: string }
+      }
+      console.log("Helius Sender response:", sendResult)
+
+      if (sendResult.error) {
+        throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
+      }
+
+      if (!sendResult.result) {
+        throw new Error(`No signature returned from Helius Sender: ${JSON.stringify(sendResult)}`)
+      }
+
+      const signature = sendResult.result
+      console.log("Transaction sent via Helius Sender:", signature)
+
+      await confirmTransactionViaWebSocket(signature)
+
+      removeStakeRecord(nft.mint)
 
       toast.success(`Unstaked ${nft.name} successfully!`)
       onSuccess()
       onClose()
     } catch (err) {
       console.error("Unstake failed:", err)
+      if (err && typeof err === "object") {
+        console.error("Error details:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2))
+        if ("logs" in err) console.error("Transaction logs:", (err as { logs: string[] }).logs)
+      }
       toast.error(err instanceof Error ? err.message : "Failed to unstake NFT")
     } finally {
       setUnstaking(false)
     }
   }
 
-  const isReady = !!publicKey && !!signTransaction && !!staker && !!collection
+  const isReady = !!account && !!signer && capabilities.canSign && !!staker && !!collection
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

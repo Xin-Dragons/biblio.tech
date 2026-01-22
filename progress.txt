@@ -251,3 +251,48 @@
   - State management: Use useState<NFT | null> for dialog target, null means closed
   - Refresh pattern: Call fetchUserStakeRecords and fetchPendingRewards in onSuccess callback to update UI after staking
 ---
+
+## 2026-01-21 - US-019
+- What was implemented: Created UnstakeDialog confirmation component for unstaking NFTs
+- Files changed:
+  - apps/web/src/components/stake/UnstakeDialog.tsx (created)
+  - apps/web/src/routes/stake.tsx (modified - added UnstakeDialog import, unstakeTarget state, handlers)
+- **Learnings for future iterations:**
+  - Minimum stake period: Collection.minStakePeriod (bigint seconds) + StakeRecord.stakedAt (bigint timestamp) to calculate remaining time
+  - formatDuration helper: Converts seconds to human-readable string (days/hours/minutes/seconds)
+  - Dialog state for compound data: Use useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null> when dialog needs multiple inputs
+  - Early unstake warning: Show AlertTriangle icon with yellow styling when remainingSeconds > 0
+---
+
+## 2026-01-21 - US-020
+- What was implemented: Created ClaimDialog and Claim Rewards button for claiming staking rewards
+- Files changed:
+  - apps/web/src/components/stake/ClaimDialog.tsx (created)
+  - apps/web/src/routes/stake.tsx (modified - added ClaimDialog import, showClaimDialog state, handlers, Claim Rewards button)
+- **Learnings for future iterations:**
+  - Claim rewards iterates over all stakeRecords and their emissions to build claim instructions
+  - Each stakeRecord has an emissions array containing addresses of linked emission accounts
+  - Match emission.collection to collection.address to find the parent collection for each emission
+  - Claim button in header uses totalPendingRewardsAtom to determine disabled state (disabled when 0n)
+  - Dialog state for simple boolean: Use useState<boolean> when dialog doesn't need data passed to it
+---
+
+## 2026-01-21 - US-021
+- What was implemented: Added Staked badge to NFTs in main portfolio grid
+- Files changed:
+  - apps/web/src/components/nft-grid.tsx (modified - added Lock icon import, stakedMintsSetAtom import, isStaked check, and badge rendering)
+- **Learnings for future iterations:**
+  - Use stakedMintsSetAtom (derived atom returning Set) for O(1) lookup of staked NFT mints
+  - Badge positioned bottom-left to avoid conflicts: top-left has select checkbox, top-right has star/junk buttons
+  - Badge uses bg-primary with Lock icon for consistent staking theme
+---
+
+## 2026-01-21 - US-022
+- What was implemented: Added Staking link to sidebar navigation
+- Files changed:
+  - apps/web/src/components/layout/sidebar.tsx (modified - added Lock icon import, added Staking nav item to navItems array)
+- **Learnings for future iterations:**
+  - Sidebar navigation uses navItems array with { href, label, icon } objects
+  - Active state styling is automatic via isActive check comparing location.pathname to href
+  - Lock icon used consistently for staking features (badge, sidebar, page header)
+---

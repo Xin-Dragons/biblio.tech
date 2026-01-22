@@ -5,6 +5,11 @@
   "compatibility_date": "2024-12-01",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Dev server configuration
+  "dev": {
+    "port": 8800
+  },
+
   // Durable Objects
   "durable_objects": {
     "bindings": [
@@ -28,6 +33,10 @@
         "name": "VOTING_DO",
         "class_name": "VotingDO",
       },
+      {
+        "name": "RPC_WEBSOCKET_DO",
+        "class_name": "RpcWebSocketDO",
+      },
     ],
   },
 
@@ -48,6 +57,10 @@
     {
       "tag": "v4",
       "new_classes": ["VotingDO"],
+    },
+    {
+      "tag": "v5",
+      "new_classes": ["RpcWebSocketDO"],
     },
   ],
 

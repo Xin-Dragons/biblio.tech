@@ -1,24 +1,24 @@
-import { FC, ReactNode, useMemo } from "react"
-import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from "@solana/wallet-adapter-react"
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
-import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets"
-
-import "@solana/wallet-adapter-react-ui/styles.css"
-
-const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com"
+import { FC, ReactNode } from "react"
+import { AppProvider, getDefaultConfig } from "@solana/connector/react"
 
 interface WalletProviderProps {
   children: ReactNode
 }
 
 export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], [])
+  const rpcProxyUrl = `${window.location.origin}/api/rpc`
 
-  return (
-    <ConnectionProvider endpoint={RPC_ENDPOINT}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </SolanaWalletProvider>
-    </ConnectionProvider>
-  )
+  const config = getDefaultConfig({
+    appName: "Biblio",
+    clusters: [
+      {
+        id: "solana:mainnet",
+        label: "Mainnet",
+        url: rpcProxyUrl,
+      },
+    ],
+    autoConnect: true,
+  })
+
+  return <AppProvider connectorConfig={config}>{children}</AppProvider>
 }

@@ -44,16 +44,18 @@ export function StakeStats() {
   )
 }
 
+const TOKEN_DECIMALS = 9
+
 function formatRewardAmount(amount: bigint): string {
   if (amount === 0n) {
     return "0"
   }
-  const asNumber = Number(amount)
-  if (asNumber >= 1_000_000) {
-    return `${(asNumber / 1_000_000).toFixed(2)}M`
+  const humanReadable = Number(amount) / 10 ** TOKEN_DECIMALS
+  if (humanReadable >= 1_000_000) {
+    return `${(humanReadable / 1_000_000).toFixed(2)}M`
   }
-  if (asNumber >= 1_000) {
-    return `${(asNumber / 1_000).toFixed(2)}K`
+  if (humanReadable >= 1_000) {
+    return `${(humanReadable / 1_000).toFixed(2)}K`
   }
-  return asNumber.toLocaleString()
+  return humanReadable.toFixed(2)
 }

@@ -1,13 +1,47 @@
 import { useState } from "react"
 import { Lock, X, Loader2 } from "lucide-react"
-import { Transaction } from "@solana/web3.js"
-import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { useAtomValue } from "jotai"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { Transaction, PublicKey } from "@solana/web3.js"
+import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom } from "@/stores/stake"
-import { buildStakeCoreInstructions } from "@/hooks/use-staking"
+import { stakerAtom, collectionsAtom, addStakeRecordAtom } from "@/stores/stake"
+import { buildStakeInstructions } from "@/hooks/use-staking"
+import { confirmTransactionViaWebSocket } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
+
+const ANCHOR_ERROR_CODES: Record<number, string> = {
+  3000: "AccountDiscriminatorAlreadySet",
+  3001: "AccountDiscriminatorNotFound",
+  3002: "AccountDiscriminatorMismatch",
+  3003: "AccountDidNotDeserialize",
+  3004: "AccountDidNotSerialize",
+  3005: "AccountNotEnoughKeys",
+  3006: "AccountNotMutable",
+  3007: "AccountOwnedByWrongProgram",
+  3008: "InvalidProgramId",
+  3009: "InvalidProgramExecutable",
+  3010: "AccountNotSigner",
+  3011: "AccountNotSystemOwned",
+  3012: "AccountNotInitialized - A required account does not exist",
+  3013: "AccountNotProgramData",
+  3014: "AccountNotAssociatedTokenAccount",
+  3015: "AccountSysvarMismatch",
+}
+
+function decodeSimulationError(err: { InstructionError?: [number, { Custom?: number }] }): string | null {
+  if (!err.InstructionError) return null
+  const [ixIndex, errDetail] = err.InstructionError
+  if (typeof errDetail === "object" && errDetail.Custom !== undefined) {
+    const code = errDetail.Custom
+    const anchorMsg = ANCHOR_ERROR_CODES[code]
+    if (anchorMsg) {
+      return `Instruction ${ixIndex} failed: ${anchorMsg} (code ${code})`
+    }
+    return `Instruction ${ixIndex} failed with custom error: ${code}`
+  }
+  return `Instruction ${ixIndex} failed: ${JSON.stringify(errDetail)}`
+}
 
 interface StakeDialogProps {
   nft: NFT
@@ -17,15 +51,26 @@ interface StakeDialogProps {
 
 export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
   const [staking, setStaking] = useState(false)
-  const { connection } = useConnection()
-  const { publicKey, signTransaction } = useWallet()
+  const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
+  const addStakeRecord = useSetAtom(addStakeRecordAtom)
 
   const collection = collections.find((c) => c.collectionMint === nft.collectionId)
 
+  const getEmissionAddresses = (): string[] => {
+    if (!collection) return []
+    const emissions: string[] = []
+    if (collection.tokenEmission.__option === "Some") emissions.push(collection.tokenEmission.value)
+    if (collection.selectionEmission.__option === "Some") emissions.push(collection.selectionEmission.value)
+    if (collection.pointsEmission.__option === "Some") emissions.push(collection.pointsEmission.value)
+    if (collection.distributionEmission.__option === "Some") emissions.push(collection.distributionEmission.value)
+    return emissions
+  }
+
   const handleStake = async () => {
-    if (!publicKey || !signTransaction || !staker || !collection) {
+    if (!account || !signer || !capabilities.canSign || !staker || !collection) {
       toast.error("Wallet not connected or staking not available")
       return
     }
@@ -33,26 +78,96 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
     setStaking(true)
 
     try {
-      const instructions = buildStakeCoreInstructions({
+      const ownerPubkey = new PublicKey(account)
+
+      const instructions = buildStakeInstructions({
         nft,
         staker,
         collection,
-        owner: publicKey,
+        owner: account,
       })
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
+      // Get blockhash via RPC proxy
+      const blockhashResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "getLatestBlockhash",
+          params: [{ commitment: "finalized" }],
+        }),
+      })
+      const blockhashData = (await blockhashResponse.json()) as {
+        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
+      }
+      const blockhash = blockhashData.result?.value.blockhash
+      if (!blockhash) throw new Error("Failed to get blockhash")
 
       const transaction = new Transaction()
       transaction.recentBlockhash = blockhash
-      transaction.feePayer = publicKey
+      transaction.feePayer = ownerPubkey
       transaction.add(...instructions)
 
-      const signed = await signTransaction(transaction)
-      const signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: true,
+      // Simulate transaction before sending to wallet
+      const simResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "simulateTransaction",
+          params: [transaction.serialize({ requireAllSignatures: false }).toString("base64"), { encoding: "base64" }],
+        }),
       })
+      const simData = (await simResponse.json()) as {
+        result?: { value: { err: unknown; logs: string[] } }
+      }
 
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed")
+      if (simData.result?.value.err) {
+        console.error("Stake simulation failed:", simData.result.value.err)
+        console.error("Simulation logs:", simData.result.value.logs)
+        const decodedError = decodeSimulationError(
+          simData.result.value.err as { InstructionError?: [number, { Custom?: number }] }
+        )
+        throw new Error(decodedError || `Transaction simulation failed: ${JSON.stringify(simData.result.value.err)}`)
+      }
+
+      // Sign via connector
+      const txBytes = transaction.serialize({ requireAllSignatures: false })
+      const signedBytes = await signer.signTransaction(txBytes)
+
+      // Send via RPC
+      const sendResponse = await fetch("/api/rpc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method: "sendTransaction",
+          params: [
+            Buffer.from(signedBytes as Uint8Array).toString("base64"),
+            { encoding: "base64", skipPreflight: true },
+          ],
+        }),
+      })
+      const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
+
+      if (sendResult.error) {
+        throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
+      }
+
+      const signature = sendResult.result
+      if (!signature) throw new Error("No signature returned")
+
+      await confirmTransactionViaWebSocket(signature)
+
+      addStakeRecord({
+        nftMint: nft.mint,
+        owner: account,
+        staker: staker.address,
+        emissions: getEmissionAddresses(),
+      })
 
       toast.success(`Staked ${nft.name} successfully!`)
       onSuccess()
@@ -65,7 +180,7 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
     }
   }
 
-  const isReady = !!publicKey && !!signTransaction && !!staker && !!collection
+  const isReady = !!account && !!signer && capabilities.canSign && !!staker && !!collection
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
