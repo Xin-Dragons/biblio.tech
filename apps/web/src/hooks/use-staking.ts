@@ -58,6 +58,20 @@ export const NIFTY_PROGRAM_ID = new PublicKey("AssetGtQBTSgm5s91d1RAQod5JmaZiJDx
  */
 export const DANDIES_NIFTY_COLLECTION = new PublicKey("BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF")
 
+/**
+ * Checks if an NFT is a nifty-oss asset
+ */
+export function isNiftyAsset(nft: NFT): boolean {
+  return nft.tokenStandard === "Nifty"
+}
+
+/**
+ * Checks if an NFT is a nifty-oss Dandies asset
+ */
+export function isNiftyDandy(nft: NFT): boolean {
+  return isNiftyAsset(nft) && nft.collectionId === DANDIES_NIFTY_COLLECTION.toBase58()
+}
+
 const encoder = new TextEncoder()
 
 /**
