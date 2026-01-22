@@ -1,0 +1,82 @@
+## Codebase Patterns
+- Token emission account resolution is shared via `resolveTokenEmissionAccounts()` in `use-staking.ts`
+- Unstake functions (pNFT, Core, Nifty) all use the same pattern for resolving emission accounts
+- Use `getTokenAuthorityPda()` for deriving token authority, `getAssociatedTokenAddressSync()` for vault/reward accounts
+- Emission addresses extraction is shared via `getEmissionAddresses(collection)` in `stores/stake.ts`
+- Use `logger.debug()` for debug logs (suppressed in production), `logger.warn()` for warnings, `logger.error()` for errors
+- Logger is in `lib/logger.ts` and respects `import.meta.env.DEV`
+
+---
+
+## 2026-01-22 - US-003
+- What was implemented: Created `resolveTokenEmissionAccounts()` helper function that extracts the duplicated emission lookup logic
+- Files changed: `apps/web/src/hooks/use-staking.ts`
+- **Learnings for future iterations:**
+  - The token emission lookup is identical across `buildUnstakeInstructions`, `buildUnstakeCoreInstructions`, and `buildUnstakeNiftyInstructions`
+  - The helper returns a `TokenEmissionAccounts` interface with all resolved PDAs and a `hasPointsEmission` flag
+  - `nftRecord` PDA is only needed when `hasPointsEmission` is true
+---
+
+## 2026-01-22 - US-004
+- What was implemented: Extracted `getEmissionAddresses()` helper to `stores/stake.ts` and updated stake dialogs
+- Files changed: `apps/web/src/stores/stake.ts`, `apps/web/src/components/stake/StakeDialog.tsx`, `apps/web/src/components/stake/BulkStakeDialog.tsx`
+- **Learnings for future iterations:**
+  - The function takes a `CollectionAccount` and returns an array of emission addresses
+  - Previously each dialog had its own inline version that duplicated the logic
+  - BulkStakeDialog needs to find the collection by collectionMint first since it iterates over multiple NFTs
+---
+
+## 2026-01-22 - US-005
+- What was implemented: Created `logger` utility in `lib/logger.ts` and replaced console.logs with logger.debug in stake components
+- Files changed: `apps/web/src/lib/logger.ts` (new), `apps/web/src/hooks/use-staking.ts`, `apps/web/src/components/stake/UnstakeDialog.tsx`, `apps/web/src/components/stake/BulkStakeDialog.tsx`, `apps/web/src/components/stake/BulkUnstakeDialog.tsx`
+- **Learnings for future iterations:**
+  - Logger checks `import.meta.env.DEV` to suppress debug logs in production
+  - Use `logger.debug()` for dev-only logs, `logger.warn()` for warnings visible in production
+  - Keep `console.error` for actual errors as these should be visible in production
+---
+
+## 2026-01-22 - US-006
+- What was implemented: Removed `buildStakeCoreInstructions`, `buildUnstakeCoreInstructions`, `BuildStakeCoreInstructionsInput`, and `BuildUnstakeCoreInstructionsInput`
+- Files changed: `apps/web/src/hooks/use-staking.ts`
+- **Learnings for future iterations:**
+  - Core instruction builders were never used - Dandies are pNFT or Nifty only
+  - Left `MPL_CORE_PROGRAM_ID` export in place since it's used by legacy app
+  - Removed 127 lines of dead code
+---
+
+## 2026-01-22 - US-007
+- What was implemented: Added violet "Nifty" badge to staked NFT cards matching the AvailableToStakeGrid style
+- Files changed: `apps/web/src/components/stake/StakedNftsGrid.tsx`
+- **Learnings for future iterations:**
+  - Badge uses `isNiftyAsset()` from `use-staking.ts` which checks `nft.tokenStandard === "Nifty"`
+  - Badge style: `bg-violet-500/90`, `rounded-lg`, positioned bottom-left with `absolute bottom-2 left-2`
+  - Added `relative` class to image container to enable absolute positioning
+---
+
+## 2026-01-22 - US-008
+- What was implemented: Replaced raw fetch to `/api/rpc/send` with `sendTransaction()` from `lib/transaction.ts`
+- Files changed: `apps/web/src/components/stake/BulkUnstakeDialog.tsx`
+- **Learnings for future iterations:**
+  - BulkStakeDialog already uses `sendTransaction()` - now both are consistent
+  - The shared `sendTransaction()` function goes to `/api/rpc` with `sendTransaction` method
+  - This ensures consistent error handling across bulk dialogs
+---
+
+## 2026-01-22 - US-009
+- What was implemented: Removed obvious comments from use-staking.ts and nifty.ts
+- Files changed: `apps/web/src/hooks/use-staking.ts`, `apps/api/src/services/nifty.ts`
+- **Learnings for future iterations:**
+  - Removed comment from `codamaInstructionToWeb3()` - the code is self-explanatory
+  - Removed JSDoc from `decodeAddress()` and `isNullAddress()` - function names are descriptive enough
+  - Per CLAUDE.md: only add comments if code is NOT self-explanatory
+---
+
+## 2026-01-22 - US-010
+- What was implemented: Ran final quality checks on all modified files
+- Files changed: None (validation only)
+- **Learnings for future iterations:**
+  - Run `pnpm prettier --write "apps/web/src/**/*.{ts,tsx}"` for web files
+  - Run `pnpm prettier --write "apps/api/src/**/*.ts"` for api files
+  - Run `pnpm --filter @biblio/web typecheck` and `pnpm --filter @biblio/api typecheck` to verify no type errors
+  - All quality checks passed - no errors or warnings
+---

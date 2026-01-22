@@ -1,0 +1,163 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/nifty-oss-cleanup",
+  "description": "Nifty-OSS Feature Cleanup - Eliminate code duplication, add logging utility, remove unused code, fix UI inconsistencies",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create shared error utilities",
+      "description": "As a developer, I want error decoding utilities in a shared location so I don't duplicate code across dialogs.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/lib/errors.ts with ANCHOR_ERROR_CODES object and decodeSimulationError function",
+        "Update StakeDialog.tsx to import from @/lib/errors",
+        "Update UnstakeDialog.tsx to import from @/lib/errors",
+        "Remove duplicated ANCHOR_ERROR_CODES and decodeSimulationError from both dialog files",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Created apps/web/src/lib/errors.ts with ANCHOR_ERROR_CODES and decodeSimulationError. Updated both dialogs to import from shared location."
+    },
+    {
+      "id": "US-002",
+      "title": "Create shared transaction size utilities",
+      "description": "As a developer, I want transaction size calculation utilities in a shared location for bulk operations.",
+      "acceptanceCriteria": [
+        "Add MAX_TX_SIZE and SIZE_BUFFER constants to apps/web/src/lib/transaction.ts",
+        "Add getTransactionSize(tx: Transaction): number function to apps/web/src/lib/transaction.ts",
+        "Update BulkStakeDialog.tsx to import from @/lib/transaction",
+        "Update BulkUnstakeDialog.tsx to import from @/lib/transaction",
+        "Remove duplicated constants and function from both bulk dialog files",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Added MAX_TX_SIZE, SIZE_BUFFER exports and getTransactionSize function to transaction.ts. Both bulk dialogs now import from shared location."
+    },
+    {
+      "id": "US-003",
+      "title": "Extract token emission lookup helper",
+      "description": "As a developer, I want token emission resolution logic extracted to reduce duplication in unstake builders.",
+      "acceptanceCriteria": [
+        "Create resolveTokenEmissionAccounts helper function in apps/web/src/hooks/use-staking.ts",
+        "Helper takes stakeRecord, emissions, staker, owner and returns { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission }",
+        "Refactor buildUnstakeNiftyInstructions to use the helper",
+        "Refactor buildUnstakeInstructions to use the helper",
+        "Remove duplicated emission lookup blocks from both functions",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Created resolveTokenEmissionAccounts() helper function. Refactored buildUnstakeInstructions and buildUnstakeNiftyInstructions to use it."
+    },
+    {
+      "id": "US-004",
+      "title": "Extract getEmissionAddresses helper",
+      "description": "As a developer, I want emission address extraction in a shared location for stake dialogs.",
+      "acceptanceCriteria": [
+        "Add getEmissionAddresses(collection: CollectionAccount): string[] function to apps/web/src/stores/stake.ts",
+        "Update StakeDialog.tsx to import and use getEmissionAddresses from @/stores/stake",
+        "Update BulkStakeDialog.tsx to import and use getEmissionAddresses from @/stores/stake",
+        "Remove duplicated getEmissionAddresses functions from both dialog files",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Added getEmissionAddresses() to stake.ts. Updated StakeDialog and BulkStakeDialog to import from shared location."
+    },
+    {
+      "id": "US-005",
+      "title": "Create logging utility and replace console.logs",
+      "description": "As a developer, I want a proper logging utility so debug logs can be controlled and don't pollute production.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/lib/logger.ts with logger object having debug, info, warn, error methods",
+        "Logger debug/info methods only log when import.meta.env.DEV is true",
+        "Logger error method always logs regardless of environment",
+        "Replace all console.log calls in use-staking.ts buildClaimInstructions with logger.debug",
+        "Replace all console.log calls in UnstakeDialog.tsx with logger.debug",
+        "Replace all console.log/warn calls in BulkStakeDialog.tsx with logger.debug/warn",
+        "Replace all console.log calls in BulkUnstakeDialog.tsx with logger.debug",
+        "Keep console.error calls as-is for actual errors",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Created logger utility in lib/logger.ts. Replaced console.logs with logger.debug in use-staking.ts, UnstakeDialog, BulkStakeDialog, BulkUnstakeDialog."
+    },
+    {
+      "id": "US-006",
+      "title": "Remove unused Core instruction builders",
+      "description": "As a developer, I want unused code removed so the codebase stays lean and doesn't confuse future developers.",
+      "acceptanceCriteria": [
+        "Remove buildStakeCoreInstructions function from apps/web/src/hooks/use-staking.ts",
+        "Remove buildUnstakeCoreInstructions function from apps/web/src/hooks/use-staking.ts",
+        "Remove BuildStakeCoreInstructionsInput interface from apps/web/src/hooks/use-staking.ts",
+        "Remove BuildUnstakeCoreInstructionsInput interface from apps/web/src/hooks/use-staking.ts",
+        "Verify no files import these removed items using grep",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Removed buildStakeCoreInstructions, buildUnstakeCoreInstructions, and related interfaces. Removed 127 lines of dead code."
+    },
+    {
+      "id": "US-007",
+      "title": "Add Nifty badge to StakedNftsGrid",
+      "description": "As a user, I want to see which of my staked NFTs are Nifty assets so the UI is consistent with the available grid.",
+      "acceptanceCriteria": [
+        "Import isNiftyAsset from @/hooks/use-staking in StakedNftsGrid.tsx",
+        "Add violet Nifty badge to StakedNftCard component matching AvailableToStakeGrid style",
+        "Badge uses classes: absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm",
+        "Badge positioned at bottom-left of image div",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Added Nifty badge to StakedNftsGrid using isNiftyAsset() from use-staking.ts. Badge positioned bottom-left with violet styling."
+    },
+    {
+      "id": "US-008",
+      "title": "Fix BulkUnstakeDialog transaction sending",
+      "description": "As a developer, I want consistent transaction sending patterns across all dialogs.",
+      "acceptanceCriteria": [
+        "Import sendTransaction from @/lib/transaction in BulkUnstakeDialog.tsx",
+        "Replace raw fetch to /api/rpc/send with sendTransaction() call",
+        "Remove inline fetch logic for transaction sending",
+        "Behavior matches BulkStakeDialog.tsx pattern exactly",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Replaced raw fetch to /api/rpc/send with sendTransaction() from lib/transaction.ts. Matches BulkStakeDialog pattern."
+    },
+    {
+      "id": "US-009",
+      "title": "Remove obvious comments",
+      "description": "As a developer, I want self-explanatory code without redundant comments.",
+      "acceptanceCriteria": [
+        "Remove comment '// Data from Codama is Uint8Array, TransactionInstruction expects Buffer' from use-staking.ts codamaInstructionToWeb3 function",
+        "Remove JSDoc comment from decodeAddress function in apps/api/src/services/nifty.ts (line 83-85)",
+        "Remove JSDoc comment from isNullAddress function in apps/api/src/services/nifty.ts (line 91-93)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Removed comment from codamaInstructionToWeb3 in use-staking.ts. Removed JSDoc from decodeAddress and isNullAddress in nifty.ts."
+    },
+    {
+      "id": "US-010",
+      "title": "Run final quality checks",
+      "description": "As a developer, I want all changes to pass quality gates before completion.",
+      "acceptanceCriteria": [
+        "Run pnpm prettier --write on all modified files in apps/web/src/",
+        "Run pnpm prettier --write on all modified files in apps/api/src/",
+        "Run pnpm --filter @biblio/web typecheck with no errors",
+        "Run pnpm --filter @biblio/api typecheck with no errors",
+        "No new lint warnings introduced"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Ran prettier on all web and api source files. Both web and api typechecks pass with no errors. No new lint warnings introduced."
+    }
+  ]
+}
