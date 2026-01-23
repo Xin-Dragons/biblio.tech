@@ -84,13 +84,6 @@ export interface StakeRecordAccount {
   bump: number
 }
 
-export interface PendingReward {
-  emission: string
-  amount: bigint
-  rewardType: string
-  tokenMint: string | null
-}
-
 /**
  * Base atoms for stake data
  */
@@ -123,68 +116,6 @@ export function getEmissionAddresses(collection: CollectionAccount): string[] {
 export const stakedMintsSetAtom = atom((get) => {
   const records = get(userStakeRecordsAtom)
   return new Set(records.map((r) => r.nftMint))
-})
-
-/**
- * Derived atom that calculates pending rewards from stake records + emissions
- * No API call needed - all data is already available client-side
- */
-export const pendingRewardsAtom = atom((get) => {
-  const stakeRecords = get(userStakeRecordsAtom)
-  const emissions = get(emissionsAtom)
-
-  if (stakeRecords.length === 0 || emissions.length === 0) return []
-
-  const emissionMap = new Map(emissions.map((e) => [e.address, e]))
-  const pendingByEmission = new Map<string, bigint>()
-  const currentTime = BigInt(Math.floor(Date.now() / 1000))
-
-  for (const record of stakeRecords) {
-    for (const emissionAddress of record.emissions) {
-      const emission = emissionMap.get(emissionAddress)
-      if (!emission || !emission.active) continue
-
-      const existing = pendingByEmission.get(emissionAddress) ?? 0n
-      let recordPending = record.pendingClaim
-
-      if (emission.reward.length > 0) {
-        const currentRate = emission.reward[0]
-        const effectiveEndTime =
-          isSome(emission.endTime) && emission.endTime.value < currentTime ? emission.endTime.value : currentTime
-        const effectiveStartTime = record.stakedAt > emission.startTime ? record.stakedAt : emission.startTime
-        const rewardDuration = effectiveEndTime - effectiveStartTime
-
-        if (rewardDuration > 0n) {
-          recordPending += currentRate * rewardDuration
-        }
-      }
-
-      pendingByEmission.set(emissionAddress, existing + recordPending)
-    }
-  }
-
-  const results: PendingReward[] = []
-  for (const [emissionAddress, amount] of pendingByEmission) {
-    const emission = emissionMap.get(emissionAddress)
-    if (emission) {
-      results.push({
-        emission: emissionAddress,
-        amount,
-        rewardType: emission.rewardType.__kind,
-        tokenMint: isSome(emission.tokenMint) ? emission.tokenMint.value : null,
-      })
-    }
-  }
-
-  return results
-})
-
-/**
- * Derived atom to get total pending rewards amount (sum of all emissions)
- */
-export const totalPendingRewardsAtom = atom((get) => {
-  const pending = get(pendingRewardsAtom)
-  return pending.reduce((sum, p) => sum + p.amount, 0n)
 })
 
 /**
@@ -301,19 +232,6 @@ export const removeStakeRecordAtom = atom(null, (get, set, nftMint: string) => {
   set(
     userStakeRecordsAtom,
     records.filter((r) => r.nftMint !== nftMint)
-  )
-})
-
-/**
- * Optimistic update: Reset pending claims after successful claim
- * Sets all records' pendingClaim to 0 and stakedAt to now so derived pending recalculates to ~0
- */
-export const clearPendingRewardsAtom = atom(null, (get, set) => {
-  const records = get(userStakeRecordsAtom)
-  const now = BigInt(Math.floor(Date.now() / 1000))
-  set(
-    userStakeRecordsAtom,
-    records.map((r) => ({ ...r, pendingClaim: 0n, stakedAt: now }))
   )
 })
 
