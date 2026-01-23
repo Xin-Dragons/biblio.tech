@@ -11,13 +11,13 @@ import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/n
 import { layoutSizeAtom, searchQueryAtom, type LayoutSize } from "@/stores/ui"
 import { isNiftyAsset } from "@/hooks/use-staking"
 
-interface StakedNftCardProps {
+interface LockedDandyCardProps {
   nft: NFT
   stakeRecord: StakeRecordAccount
-  onUnstake: (nft: NFT, stakeRecord: StakeRecordAccount) => void
+  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
 }
 
-const StakedNftCard = memo(function StakedNftCard({ nft, stakeRecord, onUnstake }: StakedNftCardProps) {
+const LockedDandyCard = memo(function LockedDandyCard({ nft, stakeRecord, onUnlock }: LockedDandyCardProps) {
   const isNifty = isNiftyAsset(nft)
 
   return (
@@ -33,22 +33,22 @@ const StakedNftCard = memo(function StakedNftCard({ nft, stakeRecord, onUnstake 
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
-        <p className="text-xs text-muted-foreground">Staked {formatTimeAgo(stakeRecord.stakedAt)}</p>
+        <p className="text-xs text-muted-foreground">Locked {formatTimeAgo(stakeRecord.stakedAt)}</p>
         <Button
           variant="outline"
           size="sm"
           className="mt-2 w-full text-[clamp(0.65rem,1.5vw,0.875rem)]"
-          onClick={() => onUnstake(nft, stakeRecord)}
+          onClick={() => onUnlock(nft, stakeRecord)}
         >
           <LockOpen className="mr-1 h-[1em] w-[1em]" />
-          Unstake
+          Unlock
         </Button>
       </div>
     </div>
   )
 })
 
-function StakedNftCardSkeleton() {
+function LockedDandyCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Skeleton className="aspect-square w-full" />
@@ -61,20 +61,20 @@ function StakedNftCardSkeleton() {
   )
 }
 
-type StakedNftWithRecord = {
+type LockedDandyWithRecord = {
   nft: NFT
   record: StakeRecordAccount
 }
 
 type CellData = {
-  items: StakedNftWithRecord[]
+  items: LockedDandyWithRecord[]
   columnCount: number
-  onUnstake: (nft: NFT, stakeRecord: StakeRecordAccount) => void
+  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
   gap: number
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { items, columnCount, onUnstake, gap } = data
+  const { items, columnCount, onUnlock, gap } = data
   const index = rowIndex * columnCount + columnIndex
   const item = items[index]
 
@@ -84,7 +84,7 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
 
   return (
     <div style={{ ...style, padding }}>
-      <StakedNftCard nft={item.nft} stakeRecord={item.record} onUnstake={onUnstake} />
+      <LockedDandyCard nft={item.nft} stakeRecord={item.record} onUnlock={onUnlock} />
     </div>
   )
 }
@@ -116,12 +116,12 @@ function getColumnCount(width: number, layoutSize: LayoutSize): number {
   return sizes.xs
 }
 
-interface StakedNftsGridProps {
-  onUnstake: (nft: NFT, stakeRecord: StakeRecordAccount) => void
-  onUnstakeAll: (items: { nft: NFT; stakeRecord: StakeRecordAccount }[]) => void
+interface LockedDandiesGridProps {
+  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
+  onUnlockAll: (items: { nft: NFT; stakeRecord: StakeRecordAccount }[]) => void
 }
 
-export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps) {
+export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridProps) {
   const stakeRecords = useAtomValue(userStakeRecordsAtom)
   const nfts = useAtomValue(nftsAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
@@ -132,12 +132,12 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
 
   const nftsByMint = new Map(nfts.map((nft) => [nft.mint, nft]))
 
-  const stakedNftsWithRecords = stakeRecords
+  const lockedDandiesWithRecords = stakeRecords
     .map((record) => ({
       nft: nftsByMint.get(record.nftMint),
       record,
     }))
-    .filter((item): item is StakedNftWithRecord => {
+    .filter((item): item is LockedDandyWithRecord => {
       if (!item.nft) return false
       if (!searchQuery) return true
       return item.nft.name.toLowerCase().includes(searchQuery) || item.nft.mint.toLowerCase().includes(searchQuery)
@@ -147,7 +147,7 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
-          <h2 className="text-lg font-semibold">Your Staked NFTs</h2>
+          <h2 className="text-lg font-semibold">Your Locked Dandies</h2>
         </div>
         <div className="min-h-0 flex-1 p-2">
           <AutoSizer>
@@ -174,7 +174,7 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
                   }}
                 >
                   {Array.from({ length: totalSkeletons }).map((_, i) => (
-                    <StakedNftCardSkeleton key={i} />
+                    <LockedDandyCardSkeleton key={i} />
                   ))}
                 </div>
               )
@@ -185,14 +185,14 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
     )
   }
 
-  if (stakedNftsWithRecords.length === 0) {
+  if (lockedDandiesWithRecords.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
-          <h2 className="text-lg font-semibold">Your Staked NFTs</h2>
+          <h2 className="text-lg font-semibold">Your Locked Dandies</h2>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center p-4">
-          <p className="text-sm text-muted-foreground">No NFTs staked yet</p>
+          <p className="text-sm text-muted-foreground">No Dandies locked yet</p>
         </div>
       </div>
     )
@@ -201,16 +201,16 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/50 px-4 py-3">
-        <h2 className="text-lg font-semibold">Your Staked NFTs ({stakedNftsWithRecords.length})</h2>
+        <h2 className="text-lg font-semibold">Your Locked Dandies ({lockedDandiesWithRecords.length})</h2>
         <Button
           variant="outline"
           size="sm"
           onClick={() =>
-            onUnstakeAll(stakedNftsWithRecords.map((item) => ({ nft: item.nft, stakeRecord: item.record })))
+            onUnlockAll(lockedDandiesWithRecords.map((item) => ({ nft: item.nft, stakeRecord: item.record })))
           }
         >
           <Unlock className="mr-2 h-4 w-4" />
-          Unstake All
+          Unlock All
         </Button>
       </div>
       <div className="min-h-0 flex-1 p-2">
@@ -222,7 +222,7 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
             const columnWidth = width / columnCount
             const cardWidth = columnWidth - gap
             const rowHeight = cardWidth + infoHeight + gap
-            const rowCount = Math.ceil(stakedNftsWithRecords.length / columnCount)
+            const rowCount = Math.ceil(lockedDandiesWithRecords.length / columnCount)
 
             return (
               <FixedSizeGrid<CellData>
@@ -232,7 +232,7 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
                 columnWidth={columnWidth}
                 rowCount={rowCount}
                 rowHeight={rowHeight}
-                itemData={{ items: stakedNftsWithRecords, columnCount, onUnstake, gap }}
+                itemData={{ items: lockedDandiesWithRecords, columnCount, onUnlock, gap }}
               >
                 {Cell}
               </FixedSizeGrid>
