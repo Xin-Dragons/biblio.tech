@@ -16,7 +16,7 @@ const navItems = [
   { href: "/nfts", label: "All NFTs", icon: Image },
   { href: "/starred", label: "Starred", icon: Star },
   { href: "/spl", label: "Tokens", icon: Coins },
-  { href: "/stake", label: "Staking", icon: Lock },
+  { href: "/membership", label: "Membership", icon: Lock },
   { href: "/junk", label: "Junk", icon: Trash2 },
   { href: "/showcase", label: "Showcase", icon: User },
 ]
