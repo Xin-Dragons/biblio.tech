@@ -7,7 +7,7 @@
 
   // Dev server configuration
   "dev": {
-    "port": 8800
+    "port": 8800,
   },
 
   // Durable Objects
@@ -37,6 +37,18 @@
         "name": "RPC_WEBSOCKET_DO",
         "class_name": "RpcWebSocketDO",
       },
+      {
+        "name": "STAKER_SETTINGS_DO",
+        "class_name": "StakerSettingsDO",
+      },
+      {
+        "name": "NFT_CACHE_DO",
+        "class_name": "NftCacheDO",
+      },
+      {
+        "name": "STAKE_RECORDS_DO",
+        "class_name": "StakeRecordsDO",
+      },
     ],
   },
 
@@ -61,6 +73,18 @@
     {
       "tag": "v5",
       "new_classes": ["RpcWebSocketDO"],
+    },
+    {
+      "tag": "v6",
+      "new_sqlite_classes": ["StakerSettingsDO"],
+    },
+    {
+      "tag": "v7",
+      "new_sqlite_classes": ["NftCacheDO"],
+    },
+    {
+      "tag": "v8",
+      "new_sqlite_classes": ["StakeRecordsDO"],
     },
   ],
 

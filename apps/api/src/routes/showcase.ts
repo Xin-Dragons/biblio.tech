@@ -2,10 +2,8 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { isValidUsername } from "../dos/usernames"
 import { authMiddleware } from "../middleware/auth"
-import { getStakeRecordsByOwner } from "../services/stake"
 import { getTierFromStakedCount, getVotesForTier } from "../lib/tiers"
-
-const DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a"
+import { getCachedStakeRecords } from "./stake"
 
 export const showcaseRoutes = new Hono<HonoEnv>()
 
@@ -28,12 +26,9 @@ async function getUserMaxVotes(c: {
   const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
   const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
 
-  let stakedCount = 0
-  for (const { publicKey: wallet } of wallets) {
-    const records = await getStakeRecordsByOwner(c.env, wallet)
-    const dandiesRecords = records.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
-    stakedCount += dandiesRecords.length
-  }
+  const recordsPromises = wallets.map(({ publicKey: wallet }) => getCachedStakeRecords(c.env, wallet))
+  const allRecords = await Promise.all(recordsPromises)
+  const stakedCount = allRecords.reduce((sum, records) => sum + records.length, 0)
 
   const tier = getTierFromStakedCount(stakedCount)
   return getVotesForTier(tier)

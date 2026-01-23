@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useLocation } from "react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Search,
@@ -13,6 +14,11 @@ import {
   Send,
   Flame,
   Camera,
+  RefreshCw,
+  Settings,
+  Info,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -20,6 +26,8 @@ import {
   layoutTypeAtom,
   searchQueryAtom,
   sortOptionAtom,
+  showInfoAtom,
+  sidebarCollapsedAtom,
   type LayoutSize,
   type LayoutType,
   type SortOption,
@@ -31,11 +39,20 @@ import {
   selectAllAtom,
   clearSelectionAtom,
 } from "@/stores/selection"
-import { filteredNftsAtom, refreshNftsAtom } from "@/stores/nfts"
+import { filteredNftsAtom, refreshNftsAtom, isLoadingAtom } from "@/stores/nfts"
 import { BulkSendDialog } from "./bulk-send-dialog"
 import { BulkBurnDialog } from "./bulk-burn-dialog"
 import { CollageExportDialog } from "./collage-export-dialog"
+import { WalletButton } from "./wallet-button"
 import { Button } from "./ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu"
 
 const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[] = [
   { value: "large", icon: Grid2X2, label: "Large" },
@@ -57,6 +74,7 @@ const sortOptions: { value: SortOption; label: string }[] = [
 ]
 
 export function Toolbar() {
+  const location = useLocation()
   const [layoutSize, setLayoutSize] = useAtom(layoutSizeAtom)
   const [layoutType, setLayoutType] = useAtom(layoutTypeAtom)
   const [sortOption, setSortOption] = useAtom(sortOptionAtom)
@@ -68,6 +86,16 @@ export function Toolbar() {
   const clearSelection = useSetAtom(clearSelectionAtom)
   const filteredNfts = useAtomValue(filteredNftsAtom)
   const refreshNfts = useSetAtom(refreshNftsAtom)
+  const isLoading = useAtomValue(isLoadingAtom)
+  const [showInfo, setShowInfo] = useAtom(showInfoAtom)
+  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
+
+  const showNftControls =
+    location.pathname === "/nfts" ||
+    location.pathname.startsWith("/collection/") ||
+    location.pathname === "/starred" ||
+    location.pathname === "/junk" ||
+    (location.pathname.startsWith("/showcase/") && location.pathname !== "/showcase")
 
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const [burnDialogOpen, setBurnDialogOpen] = useState(false)
@@ -83,7 +111,24 @@ export function Toolbar() {
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-3 border-b border-white/5 px-4 py-2.5">
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/5 bg-background/80 px-4 backdrop-blur-xl">
+        {/* Refresh - Far Left */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => refreshNfts()}
+          disabled={isLoading}
+          title="Refresh NFTs"
+          className="group"
+        >
+          <RefreshCw
+            className={cn(
+              "h-4 w-4 transition-transform duration-500",
+              isLoading ? "animate-spin" : "group-hover:rotate-180"
+            )}
+          />
+        </Button>
+
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -103,7 +148,7 @@ export function Toolbar() {
         </div>
 
         {/* Selection Mode Actions */}
-        {isSelectMode && (
+        {showNftControls && isSelectMode && (
           <div className="flex items-center gap-2 animate-fade-in">
             <span className="text-sm text-muted-foreground tabular-nums">{selectedMints.size} selected</span>
 
@@ -146,88 +191,126 @@ export function Toolbar() {
           </div>
         )}
 
-        {/* Controls */}
-        <div className="flex items-center gap-2">
-          {/* Select Mode Toggle */}
-          <Button
-            variant={isSelectMode ? "default" : "outline"}
-            size="sm"
-            onClick={() => toggleSelectMode()}
-            className="gap-1.5"
-          >
-            {isSelectMode ? <X className="h-3.5 w-3.5" /> : <MousePointerClick className="h-3.5 w-3.5" />}
-            {isSelectMode ? "Done" : "Select"}
-          </Button>
-
-          {/* Sort Dropdown */}
-          <select
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value as SortOption)}
-            className={cn(
-              "h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-sm",
-              "transition-all duration-200",
-              "focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "hover:border-white/20 cursor-pointer"
-            )}
-          >
-            {sortOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Layout Type Toggle */}
-          <div className="flex overflow-hidden rounded-lg border border-white/10">
-            {layoutTypeOptions.map((option) => {
-              const Icon = option.icon
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setLayoutType(option.value)}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center transition-all duration-200",
-                    layoutType === option.value
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                  title={option.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Collage Export */}
-          {layoutType === "collage" && (
-            <Button variant="outline" size="sm" onClick={() => setCollageDialogOpen(true)} className="gap-1.5">
-              <Camera className="h-3.5 w-3.5" />
-              Export
+        {/* Controls - only on NFT grid pages */}
+        {showNftControls && (
+          <div className="flex items-center gap-2">
+            {/* Select Mode Toggle */}
+            <Button
+              variant={isSelectMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleSelectMode()}
+              className="gap-1.5"
+            >
+              {isSelectMode ? <X className="h-3.5 w-3.5" /> : <MousePointerClick className="h-3.5 w-3.5" />}
+              {isSelectMode ? "Done" : "Select"}
             </Button>
-          )}
 
-          {/* Grid Size Toggle */}
-          <div className="flex overflow-hidden rounded-lg border border-white/10">
-            {layoutOptions.map((option) => {
-              const Icon = option.icon
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setLayoutSize(option.value)}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center transition-all duration-200",
-                    layoutSize === option.value
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                  title={option.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              )
-            })}
+            {/* Sort Dropdown */}
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              className={cn(
+                "h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-sm",
+                "transition-all duration-200",
+                "focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+                "hover:border-white/20 cursor-pointer"
+              )}
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Layout Type Toggle */}
+            <div className="flex overflow-hidden rounded-lg border border-white/10">
+              {layoutTypeOptions.map((option) => {
+                const Icon = option.icon
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setLayoutType(option.value)}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center transition-all duration-200",
+                      layoutType === option.value
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                    title={option.label}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Collage Export */}
+            {layoutType === "collage" && (
+              <Button variant="outline" size="sm" onClick={() => setCollageDialogOpen(true)} className="gap-1.5">
+                <Camera className="h-3.5 w-3.5" />
+                Export
+              </Button>
+            )}
+
+            {/* Grid Size Toggle */}
+            <div className="flex overflow-hidden rounded-lg border border-white/10">
+              {layoutOptions.map((option) => {
+                const Icon = option.icon
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setLayoutSize(option.value)}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center transition-all duration-200",
+                      layoutSize === option.value
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                    title={option.label}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                )
+              })}
+            </div>
           </div>
+        )}
+
+        {/* Far Right - Settings & Wallet */}
+        <div className="flex items-center gap-2 ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="group">
+                <Settings className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={showInfo}
+                onCheckedChange={setShowInfo}
+                onSelect={(e) => e.preventDefault()}
+              >
+                <Info className="mr-2 h-4 w-4" />
+                Show NFT Info
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={!sidebarCollapsed}
+                onCheckedChange={(checked) => setSidebarCollapsed(!checked)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeft className="mr-2 h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="mr-2 h-4 w-4" />
+                )}
+                Show Sidebar
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <WalletButton />
         </div>
       </div>
 

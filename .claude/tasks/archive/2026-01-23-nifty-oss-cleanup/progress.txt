@@ -1,0 +1,37 @@
+# Ralph Progress Log
+# Feature: nifty-oss-cleanup
+# Started: 2026-01-22
+
+## Codebase Patterns
+- Error utilities should go in apps/web/src/lib/errors.ts
+- Transaction utilities are in apps/web/src/lib/transaction.ts
+- Logger should check import.meta.env.DEV for environment detection
+- Stake store is at apps/web/src/stores/stake.ts
+- Staking hooks are at apps/web/src/hooks/use-staking.ts
+- Nifty badge style: absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm
+
+---
+
+## 2026-01-22 - US-001
+- What was implemented: Created shared error utilities in apps/web/src/lib/errors.ts
+- Files changed:
+  - apps/web/src/lib/errors.ts (created - ANCHOR_ERROR_CODES object and decodeSimulationError function)
+  - apps/web/src/components/stake/StakeDialog.tsx (modified - imports from @/lib/errors)
+  - apps/web/src/components/stake/UnstakeDialog.tsx (modified - imports from @/lib/errors)
+- **Learnings for future iterations:**
+  - Error utilities should be centralized in apps/web/src/lib/errors.ts
+  - ANCHOR_ERROR_CODES maps error codes 3000-3015 to human-readable messages
+  - decodeSimulationError parses InstructionError format from simulation results
+---
+
+## 2026-01-22 - US-002
+- What was implemented: Created shared transaction size utilities in apps/web/src/lib/transaction.ts
+- Files changed:
+  - apps/web/src/lib/transaction.ts (modified - added MAX_TX_SIZE, SIZE_BUFFER exports and getTransactionSize function)
+  - apps/web/src/components/stake/BulkStakeDialog.tsx (modified - imports from @/lib/transaction, removed duplicated code)
+  - apps/web/src/components/stake/BulkUnstakeDialog.tsx (modified - imports from @/lib/transaction, removed duplicated code)
+- **Learnings for future iterations:**
+  - Transaction size utilities (MAX_TX_SIZE=1232, SIZE_BUFFER=100, getTransactionSize) are in apps/web/src/lib/transaction.ts
+  - getTransactionSize uses serialize with requireAllSignatures: false, verifySignatures: false, returns Infinity on error
+---
+

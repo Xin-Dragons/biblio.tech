@@ -7,15 +7,30 @@ import { getNiftyAssetsByOwner, fetchNiftyCollections, type NiftyAsset } from ".
 
 export const nftsRoutes = new Hono<HonoEnv>()
 
+// Dandies collection IDs - nifty Dandies should be merged into pNFT Dandies collection
+const DANDIES_PNFT_COLLECTION = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
+const DANDIES_NIFTY_COLLECTION = "BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF"
+
 // Apply rate limiting to all NFT routes
 nftsRoutes.use("*", rateLimiterMiddleware(10))
 
 function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string | null): DASAsset {
+  // Normalize nifty Dandies to use the pNFT Dandies collection ID
+  // Debug: Check if group comparison works correctly
+  const groupMatches = niftyAsset.group === DANDIES_NIFTY_COLLECTION
+  if (niftyAsset.group && !groupMatches) {
+    console.log(
+      `[nfts] Nifty asset group mismatch - asset: ${niftyAsset.address}, group: "${niftyAsset.group}", expected: "${DANDIES_NIFTY_COLLECTION}", match: ${groupMatches}`
+    )
+  }
+
+  const collectionId = groupMatches ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+
   return {
     mint: niftyAsset.address,
     name: niftyAsset.name,
-    image: niftyAsset.uri ?? "",
-    collectionId: niftyAsset.group,
+    image: niftyAsset.image ?? "",
+    collectionId,
     collectionName,
     attributes: niftyAsset.attributes.map((attr) => ({
       trait_type: attr.name,
@@ -56,13 +71,16 @@ nftsRoutes.get("/by-owner/:wallet", async (c) => {
 
     for (const niftyAsset of niftyAssets) {
       if (niftyAsset.group) {
-        const existing = collectionsMap.get(niftyAsset.group)
+        // Normalize nifty Dandies to pNFT Dandies collection
+        const collectionId = niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+
+        const existing = collectionsMap.get(collectionId)
         if (existing) {
           existing.count++
         } else {
           const collectionData = niftyCollections.get(niftyAsset.group)
-          collectionsMap.set(niftyAsset.group, {
-            id: niftyAsset.group,
+          collectionsMap.set(collectionId, {
+            id: collectionId,
             name: collectionData?.name ?? niftyAsset.group,
             image: collectionData?.image ?? null,
             count: 1,

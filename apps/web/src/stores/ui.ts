@@ -10,3 +10,4 @@ export const layoutTypeAtom = atomWithStorage<LayoutType>("biblio-layout-type", 
 export const sortOptionAtom = atomWithStorage<SortOption>("biblio-sort", "collection")
 export const searchQueryAtom = atom("")
 export const showInfoAtom = atomWithStorage("biblio-show-info", true)
+export const sidebarCollapsedAtom = atomWithStorage("biblio-sidebar-collapsed", false)

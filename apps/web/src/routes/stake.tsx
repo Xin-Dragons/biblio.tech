@@ -1,25 +1,16 @@
 import { useEffect, useState } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { LockKeyhole, Gift, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useAtom, useSetAtom } from "jotai"
+import { LockKeyhole, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
 import { StakeStats } from "@/components/stake/StakeStats"
 import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/stake/AvailableToStakeGrid"
 import { StakeDialog } from "@/components/stake/StakeDialog"
 import { UnstakeDialog } from "@/components/stake/UnstakeDialog"
-import { ClaimDialog } from "@/components/stake/ClaimDialog"
 import { BulkStakeDialog } from "@/components/stake/BulkStakeDialog"
 import { BulkUnstakeDialog } from "@/components/stake/BulkUnstakeDialog"
 import { useWallet } from "@solana/connector/react"
 import { cn } from "@/lib/utils"
-import {
-  fetchStakeDataAtom,
-  fetchUserStakeRecordsAtom,
-  fetchPendingRewardsAtom,
-  errorAtom,
-  totalPendingRewardsAtom,
-  type StakeRecordAccount,
-} from "@/stores/stake"
+import { fetchStakeDataAtom, fetchUserStakeRecordsAtom, errorAtom, type StakeRecordAccount } from "@/stores/stake"
 import { type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
 
@@ -32,14 +23,11 @@ const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[
 export function StakePage() {
   const { account } = useWallet()
   const [error] = useAtom(errorAtom)
-  const totalPending = useAtomValue(totalPendingRewardsAtom)
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
-  const fetchPendingRewards = useSetAtom(fetchPendingRewardsAtom)
   const [layoutSize, setLayoutSize] = useAtom(layoutSizeAtom)
   const [stakeDialogNft, setStakeDialogNft] = useState<NFT | null>(null)
   const [unstakeTarget, setUnstakeTarget] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null>(null)
-  const [showClaimDialog, setShowClaimDialog] = useState(false)
   const [bulkStakeNfts, setBulkStakeNfts] = useState<NFT[] | null>(null)
   const [bulkUnstakeItems, setBulkUnstakeItems] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount }[] | null>(null)
 
@@ -66,7 +54,6 @@ export function StakePage() {
   const handleBulkStakeSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
-      fetchPendingRewards({ wallet: account, silent: true })
     }
   }
 
@@ -77,7 +64,6 @@ export function StakePage() {
   const handleBulkUnstakeSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
-      fetchPendingRewards({ wallet: account, silent: true })
     }
   }
 
@@ -88,7 +74,6 @@ export function StakePage() {
   const handleStakeSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
-      fetchPendingRewards({ wallet: account, silent: true })
     }
   }
 
@@ -99,18 +84,6 @@ export function StakePage() {
   const handleUnstakeSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
-      fetchPendingRewards({ wallet: account, silent: true })
-    }
-  }
-
-  const handleClaimDialogClose = () => {
-    setShowClaimDialog(false)
-  }
-
-  const handleClaimSuccess = () => {
-    if (account) {
-      fetchUserStakeRecords({ wallet: account, silent: true })
-      fetchPendingRewards({ wallet: account, silent: true })
     }
   }
 
@@ -121,41 +94,32 @@ export function StakePage() {
   useEffect(() => {
     if (account) {
       fetchUserStakeRecords(account)
-      fetchPendingRewards(account)
     }
-  }, [account, fetchUserStakeRecords, fetchPendingRewards])
+  }, [account, fetchUserStakeRecords])
 
   return (
     <div className="flex h-full flex-col">
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <h1 className="text-xl font-bold">Stake</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex overflow-hidden rounded-md border border-border">
-            {layoutOptions.map((option) => {
-              const Icon = option.icon
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setLayoutSize(option.value)}
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center transition-colors",
-                    layoutSize === option.value
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                  title={option.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              )
-            })}
-          </div>
-          {account && (
-            <Button variant="outline" onClick={() => setShowClaimDialog(true)} disabled={totalPending === 0n}>
-              <Gift className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Claim Rewards</span>
-            </Button>
-          )}
+        <div className="flex overflow-hidden rounded-md border border-border">
+          {layoutOptions.map((option) => {
+            const Icon = option.icon
+            return (
+              <button
+                key={option.value}
+                onClick={() => setLayoutSize(option.value)}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center transition-colors",
+                  layoutSize === option.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+                title={option.label}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -195,8 +159,6 @@ export function StakePage() {
           onSuccess={handleUnstakeSuccess}
         />
       )}
-
-      {showClaimDialog && <ClaimDialog onClose={handleClaimDialogClose} onSuccess={handleClaimSuccess} />}
 
       {bulkStakeNfts && (
         <BulkStakeDialog nfts={bulkStakeNfts} onClose={handleBulkStakeDialogClose} onSuccess={handleBulkStakeSuccess} />

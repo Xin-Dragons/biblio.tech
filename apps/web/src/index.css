@@ -427,6 +427,16 @@
   }
 }
 
+@keyframes logo-breathe {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Animation classes */
 .animate-fade-in {
   animation: fade-in 0.3s ease-out forwards;
@@ -462,6 +472,10 @@
 
 .animate-shimmer {
   animation: tier-shimmer 2s ease-in-out infinite;
+}
+
+.animate-logo-breathe {
+  animation: logo-breathe 2s ease-in-out infinite;
 }
 
 /* Wallet adapter overrides - enhanced */

@@ -1,6 +1,7 @@
 import { createSolanaRpcSubscriptions } from "@solana/kit"
 import type { Signature } from "@solana/kit"
 import { Transaction, ComputeBudgetProgram, PublicKey, TransactionInstruction } from "@solana/web3.js"
+import { decodeSimulationError } from "./errors"
 
 const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
 
@@ -13,39 +14,6 @@ export function getTransactionSize(tx: Transaction): number {
   } catch {
     return Infinity
   }
-}
-
-const ANCHOR_ERROR_CODES: Record<number, string> = {
-  3000: "AccountDiscriminatorAlreadySet",
-  3001: "AccountDiscriminatorNotFound",
-  3002: "AccountDiscriminatorMismatch",
-  3003: "AccountDidNotDeserialize",
-  3004: "AccountDidNotSerialize",
-  3005: "AccountNotEnoughKeys",
-  3006: "AccountNotMutable",
-  3007: "AccountOwnedByWrongProgram",
-  3008: "InvalidProgramId",
-  3009: "InvalidProgramExecutable",
-  3010: "AccountNotSigner",
-  3011: "AccountNotSystemOwned",
-  3012: "AccountNotInitialized - A required account does not exist",
-  3013: "AccountNotProgramData",
-  3014: "AccountNotAssociatedTokenAccount",
-  3015: "AccountSysvarMismatch",
-}
-
-function decodeSimulationError(err: { InstructionError?: [number, { Custom?: number }] }): string | null {
-  if (!err.InstructionError) return null
-  const [ixIndex, errDetail] = err.InstructionError
-  if (typeof errDetail === "object" && errDetail.Custom !== undefined) {
-    const code = errDetail.Custom
-    const anchorMsg = ANCHOR_ERROR_CODES[code]
-    if (anchorMsg) {
-      return `Instruction ${ixIndex} failed: ${anchorMsg} (code ${code})`
-    }
-    return `Instruction ${ixIndex} failed with custom error: ${code}`
-  }
-  return `Instruction ${ixIndex} failed: ${JSON.stringify(errDetail)}`
 }
 
 export async function getBlockhash(): Promise<string> {

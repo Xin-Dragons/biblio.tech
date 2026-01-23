@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { Transaction, ComputeBudgetProgram, PublicKey } from "@solana/web3.js"
+import { PublicKey } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
@@ -10,11 +10,23 @@ import {
   collectionsAtom,
   emissionsAtom,
   removeStakeRecordAtom,
+  invalidateStakeRecordsCache,
   type StakeRecordAccount,
 } from "@/stores/stake"
-import { buildUnstakeInstructions, buildUnstakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
-import { confirmTransactionViaWebSocket } from "@/lib/transaction"
-import { decodeSimulationError } from "@/lib/errors"
+import {
+  buildUnstakeInstructions,
+  buildUnstakeNiftyInstructions,
+  isNiftyAsset,
+  DANDIES_NIFTY_COLLECTION,
+} from "@/hooks/use-staking"
+import {
+  getBlockhash,
+  simulateTransaction,
+  getPriorityFee,
+  buildTransaction,
+  sendTransaction,
+  confirmTransactionViaWebSocket,
+} from "@/lib/transaction"
 import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
 
@@ -48,14 +60,15 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
   const emissions = useAtomValue(emissionsAtom)
   const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
 
-  const collection = collections.find((c) => c.collectionMint === nft.collectionId)
+  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+  const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
   const stakedAtSeconds = Number(stakeRecord.stakedAt)
-  const minStakePeriodSeconds = collection ? Number(collection.minStakePeriod) : 0
+  const minStakePeriodSeconds = collection?.minStakePeriod ? Number(collection.minStakePeriod) : 0
   const currentTimeSeconds = Math.floor(Date.now() / 1000)
   const timeStakedSeconds = currentTimeSeconds - stakedAtSeconds
   const remainingSeconds = minStakePeriodSeconds - timeStakedSeconds
-  const isMinPeriodMet = remainingSeconds <= 0
+  const isMinPeriodMet = minStakePeriodSeconds === 0 || remainingSeconds <= 0
 
   const handleUnstake = async () => {
     if (!account || !signer || !capabilities.canSign || !staker || !collection) {
@@ -95,120 +108,28 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
           })
       logger.debug("Unstake instruction built:", instructions[0])
 
-      // Get blockhash via RPC proxy
-      const blockhashResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getLatestBlockhash",
-          params: [{ commitment: "finalized" }],
-        }),
-      })
-      const blockhashData = (await blockhashResponse.json()) as {
-        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
-      }
-      const blockhash = blockhashData.result?.value.blockhash
-      if (!blockhash) throw new Error("Failed to get blockhash")
-
-      // First simulate with high CU limit to get actual units consumed
-      const simTx = new Transaction()
-      simTx.recentBlockhash = blockhash
-      simTx.feePayer = ownerPubkey
-      simTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-      simTx.add(...instructions)
-
-      const simResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "simulateTransaction",
-          params: [simTx.serialize({ requireAllSignatures: false }).toString("base64"), { encoding: "base64" }],
-        }),
-      })
-      const simData = (await simResponse.json()) as {
-        result?: { value: { err: unknown; logs: string[]; unitsConsumed: number } }
-      }
-
-      if (simData.result?.value.err) {
-        console.error("Unstake simulation failed:", simData.result.value.err)
-        console.error("Simulation logs:", simData.result.value.logs)
-        const decodedError = decodeSimulationError(
-          simData.result.value.err as { InstructionError?: [number, { Custom?: number }] }
-        )
-        throw new Error(decodedError || `Transaction simulation failed: ${JSON.stringify(simData.result.value.err)}`)
-      }
-
-      // Calculate CU limit: actual consumed + 10% buffer
-      const unitsConsumed = simData.result?.value.unitsConsumed ?? 200_000
+      const blockhash = await getBlockhash()
+      const { unitsConsumed } = await simulateTransaction(instructions, ownerPubkey, blockhash)
       const cuLimit = Math.ceil(unitsConsumed * 1.1)
       logger.debug(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
 
-      // Build transaction to get priority fee estimate
-      const txForFeeEstimate = new Transaction()
-      txForFeeEstimate.recentBlockhash = blockhash
-      txForFeeEstimate.feePayer = ownerPubkey
-      txForFeeEstimate.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
-      txForFeeEstimate.add(...instructions)
+      const priorityFee = await getPriorityFee(instructions, ownerPubkey, blockhash, cuLimit)
+      logger.debug(`Priority fee estimate: ${priorityFee} microLamports`)
 
-      // Get priority fee estimate from Helius
-      const serializedTx = txForFeeEstimate.serialize({ requireAllSignatures: false }).toString("base64")
-      const feeResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getPriorityFeeEstimate",
-          params: [{ transaction: serializedTx, options: { priorityLevel: "Medium" } }],
-        }),
-      })
-      const feeData = (await feeResponse.json()) as { result?: number }
-      const priorityFeeEstimate = feeData.result ?? 1000
-      logger.debug(`Priority fee estimate: ${priorityFeeEstimate} microLamports`)
+      const transaction = buildTransaction(instructions, ownerPubkey, blockhash, cuLimit, priorityFee)
 
-      // Build final transaction with correct CU limit and priority fee
-      const transaction = new Transaction()
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = ownerPubkey
-      transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
-      transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate }))
-      transaction.add(...instructions)
-
-      // Serialize and sign via connector
       const txBytes = transaction.serialize({ requireAllSignatures: false })
       const signedBytes = await signer.signTransaction(txBytes)
+      const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
 
-      // Send via Helius Sender for faster landing
-      const sendResponse = await fetch("/api/rpc/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transaction: Buffer.from(signedBytes as Uint8Array).toString("base64") }),
-      })
-      const sendResult = (await sendResponse.json()) as {
-        result?: string
-        error?: { message: string }
-      }
-      logger.debug("Helius Sender response:", sendResult)
-
-      if (sendResult.error) {
-        throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
-      }
-
-      if (!sendResult.result) {
-        throw new Error(`No signature returned from Helius Sender: ${JSON.stringify(sendResult)}`)
-      }
-
-      const signature = sendResult.result
-      logger.debug("Transaction sent via Helius Sender:", signature)
+      const signature = await sendTransaction(signedBase64)
+      logger.debug("Transaction sent:", signature)
 
       await confirmTransactionViaWebSocket(signature)
 
       removeStakeRecord(nft.mint)
 
+      invalidateStakeRecordsCache(account)
       toast.success(`Unstaked ${nft.name} successfully!`)
       onSuccess()
       onClose()

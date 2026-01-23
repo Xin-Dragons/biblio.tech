@@ -3,6 +3,7 @@ import { Check, Plus, Minus } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import DraggableGrid, { type DraggableGridHandle } from "ruuri"
 import { cn } from "@/lib/utils"
+import { NiftyBadge } from "@/components/nifty-badge"
 import {
   collageSizesAtom,
   collageOrderAtom,
@@ -165,6 +166,7 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
           </button>
         </div>
       )}
+      {nft.tokenStandard === "Nifty" && <NiftyBadge />}
     </div>
   )
 }

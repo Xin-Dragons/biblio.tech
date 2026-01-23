@@ -1,0 +1,30 @@
+# Ralph Progress Log
+# Feature: membership-refactor
+# Started: 2026-01-23
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**TIER SYSTEM (from previous ralph/membership-tiers):**
+- apps/api/src/lib/tiers.ts — tier constants, thresholds, helpers
+- apps/web/src/components/tier-badge.tsx — TierBadge component, Tier enum, getTierFromDandyCount()
+- apps/web/src/stores/tier.ts — tierAtom, fetchTierAtom
+- apps/web/src/components/tier-benefits-card.tsx — TierBenefitsCard component
+
+**STAKING SYSTEM (to be refactored):**
+- apps/web/src/components/stake/ — all dialog and grid components
+- apps/web/src/routes/stake.tsx — main staking page
+- apps/web/src/stores/stake.ts — stake atoms (keep core, remove rewards)
+- apps/web/src/hooks/use-staking.ts — instruction builders (keep stake/unstake, remove claim)
+
+**TIER THRESHOLDS:**
+- Free: 0, Bronze: 1, Silver: 5, Gold: 15, Diamond: 50
+
+**KEY TERMINOLOGY CHANGES:**
+- Stake → Lock
+- Unstake → Unlock
+- Staked NFTs → Locked Dandies
+- Available to Stake → Available to Lock
+- /stake → /membership
+
+---
+

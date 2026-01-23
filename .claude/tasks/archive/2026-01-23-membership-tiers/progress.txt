@@ -1,0 +1,191 @@
+# Ralph Progress Log
+# Feature: membership-tiers
+# Started: 2026-01-23
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**VOTING SYSTEM ALREADY EXISTS:**
+- apps/api/src/dos/voting.ts — VotingDO with daily vote tracking
+- maxVotes is now passed as parameter to vote() and getRemainingVotes()
+- Already has getRemainingVotes(), vote(), leaderboard()
+
+**USERNAME SYSTEM ALREADY EXISTS:**
+- apps/api/src/dos/usernames.ts — UsernamesDO with claim/release
+- apps/api/src/dos/user.ts — UserDO.getUsername()/setUsername()
+- apps/api/src/routes/user.ts — POST /username requires Gold tier (15+ staked)
+
+**SHOWCASE ALREADY EXISTS:**
+- apps/api/src/routes/showcase.ts — vote endpoints, leaderboard
+- apps/web/src/routes/showcase.tsx — full showcase editor, vote display, username claim UI
+- apps/web/src/stores/showcase.ts — remainingVotesAtom, usernameAtom, etc.
+
+**DO NOT RECREATE:**
+- VotingDO, UsernamesDO, UserDO
+- Showcase routes and UI
+- Vote tracking, username claiming
+
+**TIER SYSTEM (NEW):**
+- apps/api/src/lib/tiers.ts — tier constants and helpers (DONE)
+- apps/web/src/components/tier-badge.tsx — TierBadge component + getTierFromDandyCount() helper (DONE)
+- apps/web/src/stores/tier.ts — tierAtom, fetchTierAtom, Tier enum (DONE)
+- apps/web/src/components/tier-benefits-card.tsx — benefits display (DONE)
+- Use getTierFromDandyCount() from tier-badge.tsx to convert dandyCount to Tier for display purposes
+
+- VotingDO now accepts maxVotes as parameter (no more hardcoded 3)
+- Both /votes/remaining and /:identifier/vote endpoints now include maxVotes in response
+
+---
+
+## 2026-01-23 - US-010
+- Created apps/web/src/components/tier-benefits-card.tsx with TierBenefitsCard component
+- Props: stakedCount (number), className (optional string)
+- Displays current tier with TierBadge in header
+- Shows staked count and Dandies needed for next tier
+- Lists benefits: votes/day, vanity username access, fee discount %
+- Unlocked features show green checkmark; locked features show gray lock icon with opacity
+- Link to staking page at bottom (styled as button)
+- Uses Card, CardHeader, CardTitle, CardContent, CardFooter from ui/card
+- TIER_THRESHOLDS, VOTES_PER_DAY, FEE_DISCOUNTS duplicated from API (same pattern as tier-badge.tsx)
+- Files changed: apps/web/src/components/tier-benefits-card.tsx (new)
+- **Learnings for future iterations:**
+  - Button component doesn't support asChild prop (no Slot/polymorphism) - use Link with button-like className instead
+  - BenefitRow helper component pattern makes list items consistent
+  - getNextTier() helper returns null for Diamond (already at max)
+---
+
+## 2026-01-23 - US-009
+- Updated vote display to show tier-based limits
+- Changed vote display from "{remaining} votes left today" to "{used}/{maxVotes} votes today"
+- Updated remainingVotesAtom type to include maxVotes: number
+- Updated voteForShowcaseAtom to preserve maxVotes when updating state after voting
+- Files changed: apps/web/src/stores/showcase.ts, apps/web/src/routes/showcase.tsx
+- **Learnings for future iterations:**
+  - The API already returns maxVotes from both /votes/remaining and /:identifier/vote endpoints (from US-004)
+  - Display format X/Y shows used votes / total votes (not remaining / total)
+---
+
+## 2026-01-23 - US-008
+- Added TierBadge display to showcase page
+- Imported TierBadge component and tier store in showcase.tsx
+- Added fetchTier() call when authenticated alongside fetchUsername and fetchRemainingVotes
+- Editor view: Badge displays next to username using tierInfo.tier
+- Public view: Badge displays next to username using getTierFromDandyCount(showcase.dandyCount)
+- Leaderboard: Badge displays next to each entry using getTierFromDandyCount(entry.dandyCount)
+- Added getTierFromDandyCount() helper function to tier-badge.tsx (same logic as API's getTierFromStakedCount)
+- Files changed: apps/web/src/components/tier-badge.tsx, apps/web/src/routes/showcase.tsx
+- **Learnings for future iterations:**
+  - For public showcase and leaderboard, tier is calculated from dandyCount directly since we don't have auth context
+  - For editor view, tier comes from the authenticated user's tier info (tierAtom)
+  - TIER_THRESHOLDS are now duplicated in tier-badge.tsx to avoid needing API types in frontend
+---
+
+## 2026-01-23 - US-007
+- Created apps/web/src/stores/tier.ts with tier state management
+- Added Tier enum (duplicated from API since types aren't shared)
+- Added TierInfo interface matching API response shape
+- Added tierAtom and tierLoadingAtom for state
+- Added fetchTierAtom that calls GET /api/user/tier with auth headers
+- Reused same authFetch pattern from showcase.ts
+- Files changed: apps/web/src/stores/tier.ts (new)
+- **Learnings for future iterations:**
+  - Tier enum is duplicated between API (apps/api/src/lib/tiers.ts) and web (stores/tier.ts, components/tier-badge.tsx)
+  - Could consolidate in a shared package later, but for now keep in sync manually
+  - Same authFetch/getAuthHeaders pattern used across all stores that need auth
+---
+
+## 2026-01-23 - US-006
+- Created apps/web/src/components/tier-badge.tsx with TierBadge component
+- Props: tier (Tier enum), size (sm/md/lg)
+- Tier styling: Bronze (amber), Silver (slate/gray), Gold (yellow), Diamond (cyan + shimmer)
+- Free tier returns null (no badge)
+- Added animate-shimmer class and tier-shimmer keyframe animation to index.css
+- Diamond badge has subtle pulsing glow effect using box-shadow animation
+- Files changed: apps/web/src/components/tier-badge.tsx (new), apps/web/src/index.css
+- **Learnings for future iterations:**
+  - Use cn() from @/lib/utils for combining tailwind classes
+  - Follow existing Record<Type, Style> pattern from toast.tsx for tier-based styling
+  - Tier enum is duplicated in frontend component since API types aren't shared yet
+  - Animation classes can be added to index.css with @keyframes for reuse
+---
+
+## 2026-01-23 - US-005
+- Updated POST /username endpoint in apps/api/src/routes/user.ts
+- Changed requirement from 'locked Dandy' to 'tier >= Gold (15+ staked)'
+- Removed heliusService import and DANDIES_COLLECTION_ID (no longer needed)
+- Now uses getStakeRecordsByOwner to count staked Dandies across all wallets
+- Calculates tier using getTierFromStakedCount and checks for Gold or Diamond
+- Returns 403 with error 'Requires Gold tier (15+ staked Dandies)' if tier too low
+- Files changed: apps/api/src/routes/user.ts
+- **Learnings for future iterations:**
+  - Same staking count pattern used in /tier endpoint can be reused for any tier-based gating
+  - DANDIES_STAKER_PUBKEY constant remains for filtering stake records
+---
+
+## 2026-01-23 - US-004
+- Updated VotingDO.vote() to accept maxVotes parameter (removed hardcoded = 3)
+- Updated VotingDO.getRemainingVotes() to accept maxVotes parameter
+- Updated VotingDO.fetch() to read maxVotes from request body/query params
+- Added getUserMaxVotes() helper to showcase.ts that fetches staked Dandies count and calculates tier
+- Updated /votes/remaining endpoint to pass maxVotes based on user tier
+- Updated /:identifier/vote endpoint to pass maxVotes based on user tier
+- Response types now include maxVotes in response for frontend use
+- Files changed: apps/api/src/dos/voting.ts, apps/api/src/routes/showcase.ts
+- **Learnings for future iterations:**
+  - VotingDO fetch() uses query params for GET (?maxVotes=X) and body JSON for POST
+  - getUserMaxVotes() can be reused anywhere tier-based vote limits are needed
+  - Default maxVotes is 1 (Free tier) when userId is not available
+---
+
+## 2026-01-23 - US-003
+- Added GET /tier endpoint to apps/api/src/routes/user.ts
+- Uses authMiddleware (already applied to all user routes via use("*", authMiddleware))
+- Gets user's wallets, then fetches stake records for each wallet via getStakeRecordsByOwner
+- Filters to only Dandies staker records, counts them for stakedCount
+- Returns { tier, stakedCount, votesPerDay, feeDiscount, hasVanityAccess }
+- Exported TierResponse type for frontend use
+- Files changed: apps/api/src/routes/user.ts
+- **Learnings for future iterations:**
+  - getUserDO pattern used to get user's wallets: `userDO.fetch("http://do/wallets")`
+  - DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a" (also in stake.ts)
+  - getStakeRecordsByOwner returns all stake records, filter by staker for specific programs
+---
+
+## 2026-01-23 - US-002
+- Added BASE_FEES object to apps/api/src/lib/tiers.ts with:
+  - nftSuite: { create: 0.01, update: 0.002, batch: 0.002 }
+  - tokenTool: { create: 0.05, update: 0.025 }
+  - biblio: { send: 0.002, burnNft: 0.002, burnFt: 0.0002, cleanup: 0.0002, basicLock: 0.05, secureLock: 0.1 }
+- Added Operation type as template literal union for type-safe operation strings
+- Added getFeeForOperation(operation, tier) that returns 0 for Diamond, applies discount for others
+- Files changed: apps/api/src/lib/tiers.ts
+- **Learnings for future iterations:**
+  - Use `as const` for fee objects to get literal types
+  - Template literal types like `nftSuite.${NftSuiteOperation}` provide type-safe operation strings
+  - Diamond tier short-circuits to 0 before any calculations
+---
+
+## 2026-01-23 - US-001
+- Created apps/api/src/lib/tiers.ts with:
+  - Tier enum (Free, Bronze, Silver, Gold, Diamond)
+  - TIER_THRESHOLDS, VOTES_PER_DAY, FEE_DISCOUNTS constants
+  - getTierFromStakedCount() and getVotesForTier() functions
+- Files changed: apps/api/src/lib/tiers.ts (new)
+- **Learnings for future iterations:**
+  - lib/ directory already exists at apps/api/src/lib/ with utilities like solana-client.ts
+  - Use Record<Tier, number> for tier-indexed objects for type safety
+---
+
+
+## 2026-01-23 - US-011
+- Added TierBenefitsCard to showcase setup page
+- Imported TierBenefitsCard component in apps/web/src/routes/showcase.tsx
+- Username claim section: Added TierBenefitsCard above the options when tierInfo is available
+- Editor view (existing users): Added collapsible <details> section below header with TierBadge summary and TierBenefitsCard content
+- Collapsible section uses "View membership benefits" as trigger text
+- TierBenefitsCard in editor view has max-w-sm to keep it compact
+- Files changed: apps/web/src/routes/showcase.tsx
+- **Learnings for future iterations:**
+  - HTML <details>/<summary> elements work well for collapsible sections without adding state
+  - tierInfo already available from tierAtom, just need to use stakedCount prop
+  - Existing tierInfo fetch happens on mount when authenticated (line 935)
+---

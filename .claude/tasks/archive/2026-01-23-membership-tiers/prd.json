@@ -1,0 +1,185 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/membership-tiers",
+  "description": "Membership Tier System - Add tier-based benefits on top of existing voting and username systems",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Define tier constants and types",
+      "description": "As a developer, I need shared tier definitions so both API and web can determine user tiers consistently.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/lib/tiers.ts with Tier enum (Free, Bronze, Silver, Gold, Diamond)",
+        "Export TIER_THRESHOLDS: { Free: 0, Bronze: 1, Silver: 5, Gold: 15, Diamond: 50 }",
+        "Export VOTES_PER_DAY: { Free: 1, Bronze: 3, Silver: 7, Gold: 15, Diamond: 25 }",
+        "Export FEE_DISCOUNTS: { Free: 0, Bronze: 0.25, Silver: 0.5, Gold: 0.75, Diamond: 1 }",
+        "Export getTierFromStakedCount(count: number): Tier function",
+        "Export getVotesForTier(tier: Tier): number function",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Define base fee constants",
+      "description": "As a developer, I need fee constants for all tool operations to calculate tier discounts.",
+      "acceptanceCriteria": [
+        "Add BASE_FEES object to apps/api/src/lib/tiers.ts",
+        "NFT Suite: { create: 0.01, update: 0.002, batch: 0.002 }",
+        "Token Tool: { create: 0.05, update: 0.025 }",
+        "Biblio: { send: 0.002, burnNft: 0.002, burnFt: 0.0002, cleanup: 0.0002, basicLock: 0.05, secureLock: 0.1 }",
+        "Export getFeeForOperation(operation: string, tier: Tier): number function",
+        "Diamond tier returns 0 for all operations",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add /user/tier API endpoint",
+      "description": "As a frontend, I need to fetch the current user's tier to display benefits.",
+      "acceptanceCriteria": [
+        "Add GET /tier route to apps/api/src/routes/user.ts",
+        "Endpoint requires auth (use existing authMiddleware)",
+        "Fetch user's staked Dandies count from existing staking infrastructure",
+        "Calculate tier using getTierFromStakedCount",
+        "Return: { tier, stakedCount, votesPerDay, feeDiscount, hasVanityAccess: tier >= Gold }",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Update VotingDO to use tier-based vote limits",
+      "description": "As a system, I need vote limits based on user tier instead of hardcoded 3.",
+      "acceptanceCriteria": [
+        "Update VotingDO.vote() in apps/api/src/dos/voting.ts to accept maxVotes parameter",
+        "Update VotingDO.getRemainingVotes() to accept maxVotes parameter",
+        "Update showcase.ts vote endpoint to get user's tier and pass correct maxVotes",
+        "Update showcase.ts /votes/remaining endpoint to return tier-based limit",
+        "Remove hardcoded maxVotes = 3 from VotingDO",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Update username gating from lock to tier",
+      "description": "As a Gold+ member, I want to claim a username based on my tier not just locking.",
+      "acceptanceCriteria": [
+        "Update POST /username in apps/api/src/routes/user.ts",
+        "Change requirement from 'locked Dandy' to 'tier >= Gold (15+ staked)'",
+        "Return 403 with error 'Requires Gold tier (15+ staked Dandies)' if tier too low",
+        "Keep existing username validation and claiming logic",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Create TierBadge component",
+      "description": "As a user, I want to see tier badges that visually distinguish membership levels.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/tier-badge.tsx",
+        "Props: { tier: Tier, size?: 'sm' | 'md' | 'lg' }",
+        "Bronze: amber/bronze colors",
+        "Silver: gray/silver colors",
+        "Gold: yellow/gold colors",
+        "Diamond: cyan with subtle shimmer effect",
+        "Free tier returns null",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add tier store and fetch hook",
+      "description": "As a frontend, I need to fetch and cache the user's tier info.",
+      "acceptanceCriteria": [
+        "Add tier atoms to apps/web/src/stores/showcase.ts or create apps/web/src/stores/tier.ts",
+        "Add tierAtom with shape: { tier, stakedCount, votesPerDay, feeDiscount, hasVanityAccess } | null",
+        "Add fetchTierAtom that calls GET /api/user/tier",
+        "Export Tier enum for use in components",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Display tier badge on showcase page",
+      "description": "As a user, I want to see my tier badge on the showcase page.",
+      "acceptanceCriteria": [
+        "Import TierBadge in apps/web/src/routes/showcase.tsx",
+        "Fetch tier info when authenticated",
+        "Display TierBadge next to username in both editor and public view",
+        "Badge shows on leaderboard entries based on dandyCount",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Update vote display to show tier-based limits",
+      "description": "As a user, I want to see my tier-based vote limit not hardcoded 3.",
+      "acceptanceCriteria": [
+        "Update apps/web/src/routes/showcase.tsx vote display",
+        "Show 'X/Y votes today' where Y comes from tier info",
+        "Update remainingVotesAtom response type to include maxVotes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Create tier benefits card component",
+      "description": "As a user, I want to see my current tier benefits and progress to next tier.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/tier-benefits-card.tsx",
+        "Display current tier with TierBadge",
+        "Show staked count and Dandies needed for next tier",
+        "List features: votes/day, vanity username access, fee discount %",
+        "Show locked features grayed out",
+        "Link to staking page",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add tier benefits card to showcase setup",
+      "description": "As a user, I want to see tier benefits when setting up my showcase.",
+      "acceptanceCriteria": [
+        "Import TierBenefitsCard in apps/web/src/routes/showcase.tsx",
+        "Show card in the username claim section to explain tier requirements",
+        "Show card in settings or profile area for existing users",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

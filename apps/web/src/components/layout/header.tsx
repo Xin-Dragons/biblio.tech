@@ -1,10 +1,7 @@
 import { useState } from "react"
-import { RefreshCw, Settings, Menu, X } from "lucide-react"
+import { Menu, X } from "lucide-react"
 import { Link, useLocation } from "react-router"
-import { useSetAtom, useAtomValue } from "jotai"
 import { Button } from "../ui/button"
-import { WalletButton } from "../wallet-button"
-import { refreshNftsAtom, isLoadingAtom } from "@/stores/nfts"
 import { cn } from "@/lib/utils"
 import { Folder, Image, Star, Coins, Trash2, User, Lock } from "lucide-react"
 
@@ -19,45 +16,19 @@ const navItems = [
 ]
 
 export function Header() {
-  const refreshNfts = useSetAtom(refreshNftsAtom)
-  const isLoading = useAtomValue(isLoadingAtom)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
 
   return (
     <>
-      <header className="flex h-16 items-center justify-between border-b border-white/5 px-4">
+      <header className="flex h-16 items-center justify-between border-b border-white/5 px-4 md:hidden">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
+          <Button variant="ghost" size="icon-sm" onClick={() => setMobileMenuOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <Link to="/" className="flex items-center gap-2 md:hidden">
+          <Link to="/" className="flex items-center gap-2">
             <img src="/logo.svg" alt="Biblio" className="h-7 w-7" />
           </Link>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => refreshNfts()}
-            disabled={isLoading}
-            title="Refresh NFTs"
-            className="group"
-          >
-            <RefreshCw
-              className={cn(
-                "h-4 w-4 transition-transform duration-500",
-                isLoading ? "animate-spin" : "group-hover:rotate-180"
-              )}
-            />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link to="/settings">
-            <Button variant="ghost" size="icon-sm" className="group">
-              <Settings className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-            </Button>
-          </Link>
-          <WalletButton />
         </div>
       </header>
 

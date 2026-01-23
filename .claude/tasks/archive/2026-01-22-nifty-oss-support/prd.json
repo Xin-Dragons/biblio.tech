@@ -1,0 +1,220 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/nifty-oss-support",
+  "description": "Add nifty-oss asset support for portfolio display and staking. CRITICAL: Use @solana/kit ONLY - NEVER use @solana/web3.js for new code.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fetch nifty-oss asset IDL from GitHub",
+      "description": "As a developer, I need the nifty-oss asset program IDL to generate a type-safe SDK.",
+      "acceptanceCriteria": [
+        "Update packages/solana-programs/scripts/fetch-idls.ts to add nifty-oss IDL source",
+        "IDL source URL: https://raw.githubusercontent.com/nifty-oss/asset/main/idls/asset_program.json",
+        "Save IDL to packages/solana-programs/idls/asset.json",
+        "Run pnpm fetch-idls successfully",
+        "IDL contains program address AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Generate nifty-oss SDK with Codama",
+      "description": "As a developer, I need a generated SDK to decode and interact with nifty-oss assets.",
+      "acceptanceCriteria": [
+        "Update packages/solana-programs/scripts/generate.ts PROGRAMS array to include 'asset'",
+        "Run pnpm generate successfully",
+        "Generated files exist in packages/solana-programs/src/generated/asset/",
+        "Export asset SDK from packages/solana-programs/src/index.ts: export * as asset from './generated/asset'",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Patched fetch-idls.ts to add missing type definitions (Standard, DelegateRole, ExtensionType) since the upstream nifty-oss IDL is incomplete. Fixed stake SDK export conflicts for isolatedModules."
+    },
+    {
+      "id": "US-003",
+      "title": "Create nifty asset fetching service in API",
+      "description": "As a developer, I need a backend service to fetch nifty-oss assets by wallet address.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/services/nifty.ts",
+        "Implement getNiftyAssetsByOwner(wallet: string) function",
+        "Use @solana/kit for RPC calls (getProgramAccounts with owner filter)",
+        "NEVER import from @solana/web3.js",
+        "Use generated asset SDK to decode account data",
+        "Nifty program ID: AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73",
+        "Return assets with metadata: mint, name, image (from uri), group (collection)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented manual decoder for nifty-oss asset account structure since Codama only generates instructions, not account decoders. Parses 168-byte base structure plus Metadata and Attributes extensions."
+    },
+    {
+      "id": "US-004",
+      "title": "Fetch nifty collection metadata",
+      "description": "As a developer, I need to fetch collection metadata for nifty assets to display collection info.",
+      "acceptanceCriteria": [
+        "Add fetchNiftyCollections(collectionMints: string[]) to apps/api/src/services/nifty.ts",
+        "Use fetchMultipleAccounts with batching to avoid rate limits",
+        "Decode collection assets using generated SDK",
+        "Return collection name, image from metadata URI",
+        "Handle ungrouped assets (no group field) gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented fetchNiftyCollections using getMultipleAccounts with batch size 100. Reuses existing decodeNiftyAsset decoder. Returns Map<address, NiftyCollection> with name, image (from uri), and symbol."
+    },
+    {
+      "id": "US-005",
+      "title": "Add nifty assets to NFT fetching endpoint",
+      "description": "As a user, I want to see my nifty-oss assets alongside my other NFTs.",
+      "acceptanceCriteria": [
+        "Update apps/api/src/routes/nfts.ts GET /by-owner/:wallet endpoint",
+        "Fetch DAS assets and nifty assets in parallel using Promise.all",
+        "Map nifty assets to match DAS response format with tokenStandard: 6",
+        "Merge nifty collections into collections array",
+        "Ungrouped nifty assets go to 'Ungrouped' collection (same as DAS)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Added 'Nifty' to TokenStandard type in both API and frontend. Fetches DAS and nifty assets in parallel, maps nifty assets to DAS format, merges collections with proper count handling. Ungrouped nifty assets have collectionId: null like DAS."
+    },
+    {
+      "id": "US-006",
+      "title": "Add Nifty badge to NFT cards",
+      "description": "As a user, I want to see which NFTs are nifty-oss assets with a badge indicator.",
+      "acceptanceCriteria": [
+        "Update apps/web/src/components/nft-card.tsx",
+        "Show 'Nifty' badge when nft.tokenStandard === 6",
+        "Badge positioned similar to existing badges (e.g., Staked badge)",
+        "Use subtle styling consistent with design system",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Added Nifty badge in bottom-left position (same as Staked badge, shows when not staked). Uses violet-500 color for distinction. Updated nft-grid.tsx (not nft-card.tsx - card is inline component). TokenStandard is string 'Nifty' not number 6."
+    },
+    {
+      "id": "US-007",
+      "title": "Add NIFTY_PROGRAM_ID constant to staking hooks",
+      "description": "As a developer, I need the nifty program ID available for building stake transactions.",
+      "acceptanceCriteria": [
+        "Add NIFTY_PROGRAM_ID constant to apps/web/src/hooks/use-staking.ts",
+        "Value: AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73",
+        "Add DANDIES_NIFTY_COLLECTION constant: BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF",
+        "Follow existing constant patterns in the file",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Added both constants following existing PublicKey pattern in use-staking.ts"
+    },
+    {
+      "id": "US-008",
+      "title": "Implement buildStakeNiftyInstructions function",
+      "description": "As a user, I want to stake my nifty Dandies NFTs.",
+      "acceptanceCriteria": [
+        "Add BuildStakeNiftyInstructionsInput interface to apps/web/src/hooks/use-staking.ts",
+        "Add buildStakeNiftyInstructions function",
+        "Use stake.getStakeNiftyInstruction from @biblio/solana-programs",
+        "Required accounts: staker, collection, nftRecord, stakeRecord, programConfig, asset, nftAuthority, signer, feesWallet, systemProgram, niftyProgram",
+        "Pass NIFTY_PROGRAM_ID as niftyProgram account",
+        "Follow existing buildStakeCoreInstructions pattern for PDA derivation",
+        "Use codamaInstructionToWeb3 helper to convert instruction",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "systemProgram defaults automatically in Codama SDK. Added BuildStakeNiftyInstructionsInput and buildStakeNiftyInstructions following Core pattern."
+    },
+    {
+      "id": "US-009",
+      "title": "Implement buildUnstakeNiftyInstructions function",
+      "description": "As a user, I want to unstake my nifty Dandies NFTs.",
+      "acceptanceCriteria": [
+        "Add BuildUnstakeNiftyInstructionsInput interface to apps/web/src/hooks/use-staking.ts",
+        "Add buildUnstakeNiftyInstructions function",
+        "Use stake.getUnstakeNiftyInstruction from @biblio/solana-programs",
+        "Required accounts: programConfig, staker, collection, stakeRecord, nftRecord?, rewardMint?, stakeTokenVault?, rewardReceiveAccount?, nftMint, collectionMint, feesWallet, tokenAuthority?, nftAuthority, owner, tokenProgram, associatedTokenProgram, systemProgram, niftyProgram",
+        "Pass NIFTY_PROGRAM_ID as niftyProgram account",
+        "Handle token emissions same as buildUnstakeCoreInstructions",
+        "Add emission accounts as remaining accounts",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Copied buildUnstakeCoreInstructions pattern exactly, changed coreProgram to niftyProgram using NIFTY_PROGRAM_ID. tokenProgram and systemProgram default automatically in Codama SDK."
+    },
+    {
+      "id": "US-010",
+      "title": "Add isNiftyAsset helper function",
+      "description": "As a developer, I need to detect nifty assets to use correct staking instructions.",
+      "acceptanceCriteria": [
+        "Add isNiftyAsset(nft: NFT): boolean helper to apps/web/src/hooks/use-staking.ts",
+        "Returns true if nft.tokenStandard === 6",
+        "Add isNiftyDandy(nft: NFT): boolean helper",
+        "Returns true if isNiftyAsset AND nft.collection === DANDIES_NIFTY_COLLECTION",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "TokenStandard is 'Nifty' string, not number 6. Uses nft.collectionId (not nft.collection) to compare with DANDIES_NIFTY_COLLECTION.toBase58()."
+    },
+    {
+      "id": "US-011",
+      "title": "Update stake page to show nifty Dandies as available",
+      "description": "As a user, I want to see my nifty Dandies in the 'Available to Stake' section.",
+      "acceptanceCriteria": [
+        "Update apps/web/src/routes/stake.tsx",
+        "Filter available NFTs to include nifty Dandies (tokenStandard === 6 AND collection matches)",
+        "Nifty Dandies collection: BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF",
+        "Show Nifty badge on nifty assets in stake grid",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Updated AvailableToStakeGrid.tsx (not stake.tsx) - filter logic is in the grid component. Added DANDIES_NIFTY_COLLECTION_ID to OR filter. Added Nifty badge using isNiftyAsset helper."
+    },
+    {
+      "id": "US-012",
+      "title": "Wire up stake button for nifty assets",
+      "description": "As a user, I want to click Stake on a nifty Dandy and have it use the correct instruction.",
+      "acceptanceCriteria": [
+        "Update stake handler in apps/web/src/routes/stake.tsx",
+        "Detect if asset is nifty using isNiftyAsset helper",
+        "Call buildStakeNiftyInstructions for nifty assets",
+        "Call buildStakeCoreInstructions for Core assets (existing behavior)",
+        "Transaction succeeds and NFT moves to staked section",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Updated StakeDialog.tsx and BulkStakeDialog.tsx (not stake.tsx - handler just opens dialog). Uses ternary with isNiftyAsset() to select instruction builder. Note: pNFT staking uses buildStakeInstructions, not buildStakeCoreInstructions."
+    },
+    {
+      "id": "US-013",
+      "title": "Wire up unstake button for nifty assets",
+      "description": "As a user, I want to click Unstake on a staked nifty Dandy and have it use the correct instruction.",
+      "acceptanceCriteria": [
+        "Update unstake handler in apps/web/src/routes/stake.tsx",
+        "Detect if asset is nifty using isNiftyAsset helper",
+        "Call buildUnstakeNiftyInstructions for nifty assets",
+        "Call buildUnstakeCoreInstructions for Core assets (existing behavior)",
+        "Transaction succeeds and NFT moves back to available section",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Updated UnstakeDialog.tsx and BulkUnstakeDialog.tsx (not stake.tsx). Uses ternary with isNiftyAsset() to select instruction builder. Note: pNFT uses buildUnstakeInstructions, not buildUnstakeCoreInstructions."
+    }
+  ]
+}

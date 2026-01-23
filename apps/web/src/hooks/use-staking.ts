@@ -3,7 +3,13 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, getAssociatedTokenAddres
 import type { Address, TransactionSigner } from "@solana/kit"
 import { stake } from "@biblio/solana-programs"
 import type { NFT } from "../stores/nfts"
-import type { CollectionAccount, EmissionAccount, StakerAccount, StakeRecordAccount } from "../stores/stake"
+import {
+  getEmissionAddresses,
+  type CollectionAccount,
+  type EmissionAccount,
+  type StakerAccount,
+  type StakeRecordAccount,
+} from "../stores/stake"
 import { logger } from "../lib/logger"
 
 /**
@@ -433,7 +439,17 @@ export function buildStakeInstructions(input: BuildStakeInstructionsInput): Tran
     selection: null,
   })
 
-  return [codamaInstructionToWeb3(ix)]
+  const web3Ix = codamaInstructionToWeb3(ix)
+
+  for (const emissionAddress of getEmissionAddresses(collection)) {
+    web3Ix.keys.push({
+      pubkey: new PublicKey(emissionAddress),
+      isSigner: false,
+      isWritable: true,
+    })
+  }
+
+  return [web3Ix]
 }
 
 /**
@@ -484,7 +500,17 @@ export function buildStakeNiftyInstructions(input: BuildStakeNiftyInstructionsIn
     selection: null,
   })
 
-  return [codamaInstructionToWeb3(ix)]
+  const web3Ix = codamaInstructionToWeb3(ix)
+
+  for (const emissionAddress of getEmissionAddresses(collection)) {
+    web3Ix.keys.push({
+      pubkey: new PublicKey(emissionAddress),
+      isSigner: false,
+      isWritable: true,
+    })
+  }
+
+  return [web3Ix]
 }
 
 /**

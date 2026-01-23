@@ -1,12 +1,15 @@
 import { Link, useLocation } from "react-router"
-import { Folder, Image, Star, Coins, Trash2, Plus, X, User, Lock } from "lucide-react"
-import { useAtomValue, useSetAtom } from "jotai"
+import { Folder, Image, Star, Coins, Trash2, Plus, X, User, Lock, ChevronLeft, ChevronRight } from "lucide-react"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { tagsAtom, addTagAtom, removeTagAtom, type Tag as TagType } from "@/stores/user"
+import { sidebarCollapsedAtom } from "@/stores/ui"
+import { tierAtom, Tier } from "@/stores/tier"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
+import { BiblioLogo } from "../biblio-logo"
 
 const navItems = [
   { href: "/", label: "Collections", icon: Folder },
@@ -104,31 +107,69 @@ function AddTagDialog() {
   )
 }
 
+const tierLogoColors: Record<Exclude<Tier, Tier.Free>, string> = {
+  [Tier.Bronze]: "text-amber-500 animate-logo-breathe",
+  [Tier.Silver]: "text-slate-400 animate-logo-breathe",
+  [Tier.Gold]: "text-yellow-400 animate-logo-breathe",
+  [Tier.Diamond]: "text-cyan-400 animate-logo-breathe",
+}
+
+const tierBadgeStyles: Record<Exclude<Tier, Tier.Free>, string> = {
+  [Tier.Bronze]: "bg-amber-900/40 text-amber-400 border-amber-600/30",
+  [Tier.Silver]: "bg-slate-700/40 text-slate-300 border-slate-500/30",
+  [Tier.Gold]: "bg-yellow-900/40 text-yellow-400 border-yellow-500/30",
+  [Tier.Diamond]: "bg-cyan-900/40 text-cyan-300 border-cyan-400/30 animate-shimmer",
+}
+
 export function Sidebar() {
   const location = useLocation()
   const tags = useAtomValue(tagsAtom)
   const removeTag = useSetAtom(removeTagAtom)
+  const [collapsed, setCollapsed] = useAtom(sidebarCollapsedAtom)
+  const tierInfo = useAtomValue(tierAtom)
+  const hasTier = tierInfo && tierInfo.tier !== Tier.Free
 
   return (
-    <aside className="hidden w-60 flex-col border-r border-white/5 md:flex">
+    <aside
+      className={cn(
+        "relative z-10 hidden flex-col border-r border-white/5 bg-background/80 backdrop-blur-xl transition-all duration-300 md:flex",
+        collapsed ? "w-16" : "w-60"
+      )}
+    >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b border-white/5 px-5">
+      <div className={cn("flex h-16 items-center border-b border-white/5", collapsed ? "justify-center px-2" : "px-4")}>
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="relative">
-            <img
-              src="/logo.svg"
-              alt="Biblio"
-              className="h-8 w-8 transition-transform duration-300 group-hover:scale-110"
-            />
-            <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <span className="font-display text-xl font-bold text-primary">Biblio</span>
+          <BiblioLogo
+            className={cn(
+              "transition-transform duration-300 group-hover:scale-110",
+              hasTier ? tierLogoColors[tierInfo.tier as Exclude<Tier, Tier.Free>] : "text-white"
+            )}
+          />
+          {!collapsed && (
+            <>
+              <img src="/biblio-text.svg" alt="Biblio" className="h-4 invert" />
+              {hasTier && (
+                <span
+                  className={cn(
+                    "ml-1 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    tierBadgeStyles[tierInfo.tier as Exclude<Tier, Tier.Free>]
+                  )}
+                >
+                  {tierInfo.tier}
+                </span>
+              )}
+            </>
+          )}
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-3">
-        <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Wallet</p>
+      <nav className="flex-1 space-y-1 p-2">
+        {!collapsed && (
+          <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Wallet
+          </p>
+        )}
         {navItems.map((item, index) => {
           const Icon = item.icon
           const isActive = location.pathname === item.href
@@ -136,9 +177,11 @@ export function Sidebar() {
             <Link
               key={item.href}
               to={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                "group flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
                 "animate-fade-up opacity-0",
+                collapsed ? "justify-center px-2" : "px-3",
                 isActive
                   ? "bg-primary/10 text-primary border-l-2 border-primary"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -147,32 +190,42 @@ export function Sidebar() {
             >
               <Icon
                 className={cn(
-                  "h-4 w-4 transition-transform duration-200",
+                  "h-4 w-4 shrink-0 transition-transform duration-200",
                   isActive ? "text-primary" : "group-hover:scale-110"
                 )}
               />
-              {item.label}
+              {!collapsed && item.label}
             </Link>
           )
         })}
       </nav>
 
-      {/* Tags Section */}
-      <div className="border-t border-white/5 p-3">
-        <div className="mb-2 flex items-center justify-between px-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Tags</p>
-          <AddTagDialog />
-        </div>
-        {tags.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted-foreground/60">No tags yet</p>
-        ) : (
-          <div className="space-y-0.5">
-            {tags.map((tag) => (
-              <TagItem key={tag.id} tag={tag} onRemove={() => removeTag(tag.id)} />
-            ))}
+      {/* Tags Section - hidden when collapsed */}
+      {!collapsed && (
+        <div className="border-t border-white/5 p-3">
+          <div className="mb-2 flex items-center justify-between px-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Tags</p>
+            <AddTagDialog />
           </div>
-        )}
-      </div>
+          {tags.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground/60">No tags yet</p>
+          ) : (
+            <div className="space-y-0.5">
+              {tags.map((tag) => (
+                <TagItem key={tag.id} tag={tag} onRemove={() => removeTag(tag.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Collapse Toggle */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+      </button>
     </aside>
   )
 }

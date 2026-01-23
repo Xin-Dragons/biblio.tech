@@ -1,0 +1,185 @@
+# Ralph Progress Log
+# Feature: nifty-oss-support
+# Started: 2026-01-22
+
+## Codebase Patterns
+- Run fetch-idls from the solana-programs directory: `cd packages/solana-programs && pnpm fetch-idls`
+- IDL_SOURCES object in fetch-idls.ts maps short names (e.g., "asset") to raw GitHub URLs
+- IDLs are saved to `packages/solana-programs/idls/` with the key name + .json extension
+- **Incomplete IDLs**: nifty-oss asset IDL is missing type definitions (Standard, DelegateRole, ExtensionType). Use patchAssetIdl() in fetch-idls.ts to add them.
+- **Stake SDK export conflicts**: When program name matches instruction name, fix with explicit exports and type aliases in generated/stake/index.ts and programs/stake.ts
+- Import asset SDK as: `import { asset } from "@biblio/solana-programs"` then access `asset.Standard`, `asset.ExtensionType`, etc.
+- **Nifty asset decoding**: Codama only generates instructions for nifty-oss, NOT account decoders. Use manual decoder in `apps/api/src/services/nifty.ts`.
+- **Nifty asset layout**: 168-byte base (discriminator:1, state:1, standard:1, mutable:1, owner:32, group:32, authority:32, delegate:33, name:35) + variable extensions
+- **@solana/kit ReadonlyUint8Array**: Use `new Uint8Array(rawData)` to convert ReadonlyUint8Array from getBase64Encoder().encode() for manual decoding
+- **TokenStandard types**: Both API (das.ts) and frontend (stores/nfts.ts) have TokenStandard types - must keep in sync. Nifty assets use "Nifty" string value.
+- **Merging nifty collections**: When adding nifty collections to DAS collections, check if collection already exists and increment count; otherwise add new entry.
+
+- **NftCard is inline in nft-grid.tsx**: The NftCard component is defined inside nft-grid.tsx, not in a separate nft-card.tsx file.
+- **Nifty badge positioning**: Uses bottom-left like Staked badge, hidden when NFT is staked (isStaked check) to avoid overlap. Uses violet-500 for distinction from Staked badge (primary color).
+- **Nifty constants location**: NIFTY_PROGRAM_ID and DANDIES_NIFTY_COLLECTION are in apps/web/src/hooks/use-staking.ts
+- **StakeNifty accounts**: staker, collection, nftRecord?, stakeRecord, programConfig, asset, nftAuthority, signer, feesWallet, systemProgram (auto), niftyProgram
+- **Nifty staking vs Core**: Nifty staking doesn't need assetCollection account (collection is passed separately), uses niftyProgram instead of coreProgram
+- **UnstakeNifty accounts**: Same as UnstakeCore but uses niftyProgram instead of coreProgram. tokenProgram and systemProgram default automatically.
+- **NFT type fields**: tokenStandard is string "Nifty" (not number), collectionId is string (use nft.collectionId not nft.collection)
+- **Stake filter logic is in AvailableToStakeGrid.tsx**: Not in stake.tsx - the filtering is in the grid component
+- **Stake/Unstake handlers are in dialog components**: StakeDialog.tsx, BulkStakeDialog.tsx, UnstakeDialog.tsx, BulkUnstakeDialog.tsx - not in stake.tsx
+- **pNFT instruction names**: buildStakeInstructions and buildUnstakeInstructions (not Core variants - those are for Metaplex Core)
+
+---
+
+## 2026-01-22 16:40 - US-013
+- **What was implemented**: Wired up unstake button for nifty assets
+- **Files changed**:
+  - `apps/web/src/components/stake/UnstakeDialog.tsx` - Uses ternary to select buildUnstakeNiftyInstructions or buildUnstakeInstructions
+  - `apps/web/src/components/stake/BulkUnstakeDialog.tsx` - Same pattern, 2 call sites updated
+- **Learnings for future iterations**:
+  - Same pattern as stake dialogs: isNiftyAsset(nft) ? niftyVersion : pnftVersion
+  - BulkUnstakeDialog has 2 places using buildUnstakeInstructions (estimator and actual handler)
+---
+
+## 2026-01-22 16:35 - US-012
+- **What was implemented**: Wired up stake button for nifty assets
+- **Files changed**:
+  - `apps/web/src/components/stake/StakeDialog.tsx` - Uses ternary to select buildStakeNiftyInstructions or buildStakeInstructions
+  - `apps/web/src/components/stake/BulkStakeDialog.tsx` - Same pattern, 2 call sites updated
+- **Learnings for future iterations**:
+  - Transaction building is in dialog components, not in stake.tsx
+  - Use ternary: isNiftyAsset(nft) ? buildStakeNiftyInstructions(...) : buildStakeInstructions(...)
+  - pNFT uses buildStakeInstructions, Core uses buildStakeCoreInstructions (PRD was slightly wrong)
+  - Both single and bulk stake dialogs need updating
+---
+
+## 2026-01-22 16:30 - US-011
+- **What was implemented**: Updated stake page to show nifty Dandies as available
+- **Files changed**:
+  - `apps/web/src/components/stake/AvailableToStakeGrid.tsx` - Added DANDIES_NIFTY_COLLECTION_ID to filter, added Nifty badge to card
+- **Learnings for future iterations**:
+  - Filter logic for available Dandies is in AvailableToStakeGrid.tsx, not stake.tsx
+  - Use OR condition: collectionId === DANDIES_COLLECTION_ID || collectionId === DANDIES_NIFTY_COLLECTION_ID
+  - Import DANDIES_NIFTY_COLLECTION from use-staking.ts and call .toBase58() for string comparison
+  - Nifty badge uses same violet-500 styling as nft-grid.tsx for consistency
+---
+
+## 2026-01-22 16:25 - US-010
+- **What was implemented**: Added isNiftyAsset and isNiftyDandy helper functions
+- **Files changed**:
+  - `apps/web/src/hooks/use-staking.ts` - Added isNiftyAsset and isNiftyDandy functions after constants section
+- **Learnings for future iterations**:
+  - isNiftyAsset checks tokenStandard === "Nifty" (string, not number)
+  - isNiftyDandy uses collectionId field (not collection) and compares with DANDIES_NIFTY_COLLECTION.toBase58()
+  - NFT type comes from stores/nfts.ts
+---
+
+## 2026-01-22 16:20 - US-009
+- **What was implemented**: Added buildUnstakeNiftyInstructions function for unstaking nifty-oss assets
+- **Files changed**:
+  - `apps/web/src/hooks/use-staking.ts` - Added BuildUnstakeNiftyInstructionsInput interface and buildUnstakeNiftyInstructions function
+- **Learnings for future iterations**:
+  - UnstakeNifty is almost identical to UnstakeCore - same token emission handling, same remaining accounts pattern
+  - Uses niftyProgram: addr(NIFTY_PROGRAM_ID) instead of coreProgram: addr(MPL_CORE_PROGRAM_ID)
+  - Emissions added as remaining accounts (writable, non-signer)
+---
+
+## 2026-01-22 16:15 - US-008
+- **What was implemented**: Added buildStakeNiftyInstructions function for staking nifty-oss assets
+- **Files changed**:
+  - `apps/web/src/hooks/use-staking.ts` - Added BuildStakeNiftyInstructionsInput interface and buildStakeNiftyInstructions function
+- **Learnings for future iterations**:
+  - StakeNifty instruction is similar to StakeCore but uses niftyProgram instead of coreProgram
+  - No assetCollection account needed for nifty staking (unlike Core which needs it)
+  - systemProgram defaults automatically in Codama SDK - don't need to pass it
+  - Pattern: derive stakeRecordPda, nftRecordPda, programConfigPda, nftAuthorityPda using existing helpers
+---
+
+## 2026-01-22 16:10 - US-007
+- **What was implemented**: Added NIFTY_PROGRAM_ID and DANDIES_NIFTY_COLLECTION constants
+- **Files changed**:
+  - `apps/web/src/hooks/use-staking.ts` - Added two new PublicKey constants
+- **Learnings for future iterations**:
+  - Constants follow existing pattern: export const NAME = new PublicKey("address")
+  - NIFTY_PROGRAM_ID: AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73
+  - DANDIES_NIFTY_COLLECTION: BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF (group address for nifty Dandies)
+---
+
+## 2026-01-22 16:00 - US-006
+- **What was implemented**: Added Nifty badge to NFT cards for nifty-oss assets
+- **Files changed**:
+  - `apps/web/src/components/nft-grid.tsx` - Added Nifty badge in NftCard component
+- **Learnings for future iterations**:
+  - NftCard component is inline in nft-grid.tsx, not a separate file (PRD referenced nft-card.tsx which doesn't exist)
+  - TokenStandard is a string union "Nifty", not a number 6 (PRD was incorrect)
+  - Badge positioned bottom-left same as Staked badge; hidden when staked to avoid overlap
+  - Uses violet-500 color to distinguish from Staked badge (which uses primary color)
+---
+
+## 2026-01-22 15:30 - US-005
+- **What was implemented**: Added nifty assets to NFT fetching endpoint
+- **Files changed**:
+  - `apps/api/src/routes/nfts.ts` - Updated GET /by-owner/:wallet to fetch DAS and nifty assets in parallel
+  - `apps/api/src/services/das.ts` - Added "Nifty" to TokenStandard type
+  - `apps/web/src/stores/nfts.ts` - Added "Nifty" to TokenStandard type
+- **Learnings for future iterations**:
+  - Map nifty assets to DAS format using mapNiftyAssetToDASFormat helper
+  - Nifty asset state "Locked" maps to frozen: true in DAS format
+  - Ungrouped nifty assets have collectionId: null (same as DAS ungrouped)
+  - Use Promise.all for parallel fetching of DAS and nifty assets
+  - After fetching nifty assets, fetch their collections to get collection names
+  - TokenStandard must be kept in sync between API and frontend - both as string unions
+---
+
+## 2026-01-22 15:15 - US-004
+- **What was implemented**: Added fetchNiftyCollections function to fetch collection metadata
+- **Files changed**:
+  - `apps/api/src/services/nifty.ts` - Added NiftyCollection type and fetchNiftyCollections function
+- **Learnings for future iterations**:
+  - Nifty collections are also asset accounts (same structure as regular nifty assets)
+  - Collections are referenced by the `group` field in regular assets
+  - Use getMultipleAccounts with batch size 100 for efficient collection fetching
+  - Reuse decodeNiftyAsset decoder for collection accounts - same format
+  - Return Map<address, NiftyCollection> for O(1) lookup when merging with assets
+---
+
+## 2026-01-22 14:45 - US-003
+- **What was implemented**: Created nifty asset fetching service for API
+- **Files changed**:
+  - `apps/api/src/services/nifty.ts` - New service with getNiftyAssetsByOwner function
+- **Learnings for future iterations**:
+  - Codama generates instruction builders only for nifty-oss, NOT account decoders (unlike Anchor programs)
+  - Must implement manual decoder for nifty asset account structure
+  - Nifty asset has 168-byte fixed base + variable extensions section
+  - Extensions have 16-byte header (type:4, length:4, boundary:4, padding:4) then data
+  - Metadata extension order: symbol, description, uri (each with 4-byte length prefix)
+  - Attributes extension: 4-byte count, then array of (name_len:4, name, value_len:4, value)
+  - Use getProgramAccounts with memcmp filter at offset 4 (owner field) for efficient querying
+  - @solana/kit returns ReadonlyUint8Array from getBase64Encoder().encode() - convert with new Uint8Array()
+---
+
+## 2026-01-22 14:02 - US-002
+- **What was implemented**: Generated nifty-oss SDK using Codama and exported from @biblio/solana-programs
+- **Files changed**:
+  - `packages/solana-programs/scripts/generate.ts` - Added 'asset' to PROGRAMS array
+  - `packages/solana-programs/scripts/fetch-idls.ts` - Added patchAssetIdl() to inject missing type definitions
+  - `packages/solana-programs/idls/asset.json` - Updated with patched types
+  - `packages/solana-programs/src/index.ts` - Added `export * as asset from "./generated/asset"`
+  - `packages/solana-programs/src/generated/asset/` - New directory with 37 generated files
+  - `packages/solana-programs/src/generated/stake/index.ts` - Fixed export conflicts
+  - `packages/solana-programs/src/generated/stake/programs/stake.ts` - Renamed conflicting import
+- **Learnings for future iterations**:
+  - nifty-oss upstream Anchor IDL is incomplete - missing Standard, DelegateRole, ExtensionType enum definitions
+  - The Codama JSON format (asset-program.codama.json) has complete types but version 0.20.4 is incompatible with Codama 1.5.0
+  - Solution: Patch the Anchor IDL after fetching with patchAssetIdl() function
+  - Stake SDK has export conflicts when program name matches instruction name - use explicit exports with type aliases
+  - For isolatedModules, type re-exports must use `export type { ... }` syntax
+---
+
+## 2026-01-22 13:47 - US-001
+- **What was implemented**: Added nifty-oss asset IDL fetching to the fetch-idls script
+- **Files changed**:
+  - `packages/solana-programs/scripts/fetch-idls.ts` - Added asset IDL source URL
+  - `packages/solana-programs/idls/asset.json` - New IDL file with program address AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73
+- **Learnings for future iterations**:
+  - The solana-programs package doesn't have its own typecheck script - use web/api packages which import it
+  - Prettier reformats the IDL_SOURCES object keys (removes quotes from simple keys like `bubblegum`)
+---
+

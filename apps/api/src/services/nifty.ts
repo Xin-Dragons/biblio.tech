@@ -75,6 +75,7 @@ export type NiftyAsset = {
   authority: string
   delegate: string | null
   uri: string | null
+  image: string | null
   description: string | null
   symbol: string | null
   attributes: NiftyAttribute[]
@@ -91,19 +92,39 @@ function isNullAddress(address: string): boolean {
 }
 
 /**
- * Decodes a string from bytes using the nifty format
+ * Decodes a fixed-size null-terminated string from bytes
+ * The string is stored directly without a length prefix, padded with nulls
+ */
+function decodeFixedString(data: Uint8Array, offset: number, maxLength: number): string {
+  const strBytes = data.slice(offset, offset + maxLength)
+  const nullIndex = strBytes.indexOf(0)
+  const actualBytes = nullIndex >= 0 ? strBytes.slice(0, nullIndex) : strBytes
+  return new TextDecoder().decode(actualBytes)
+}
+
+/**
+ * Decodes a length-prefixed string from bytes
  * Format: 4 byte little-endian length prefix followed by UTF-8 bytes
  */
-function decodeString(data: Uint8Array, offset: number, maxLength: number): string {
+function decodeLengthPrefixedString(data: Uint8Array, offset: number, maxLen: number): { value: string; bytesRead: number } {
+  if (offset + 4 > data.length) {
+    return { value: "", bytesRead: 0 }
+  }
+
   const view = new DataView(data.buffer, data.byteOffset + offset, 4)
   const length = view.getUint32(0, true)
 
-  if (length === 0 || length > maxLength) {
-    return ""
+  if (length === 0) {
+    return { value: "", bytesRead: 4 }
+  }
+
+  if (length > maxLen || offset + 4 + length > data.length) {
+    return { value: "", bytesRead: 4 }
   }
 
   const strBytes = data.slice(offset + 4, offset + 4 + length)
-  return new TextDecoder().decode(strBytes).replace(/\0/g, "")
+  const value = new TextDecoder().decode(strBytes).replace(/\0/g, "")
+  return { value, bytesRead: 4 + length }
 }
 
 /**
@@ -131,7 +152,8 @@ function parseExtensionHeader(
 
 /**
  * Parse Metadata extension
- * Format: 4 byte symbol length + symbol + 4 byte description length + description + 4 byte uri length + uri
+ * Nifty uses length-prefixed strings with 4-byte LE length
+ * Format: symbol (len + bytes) + description (len + bytes) + uri (len + bytes)
  */
 function parseMetadataExtension(
   data: Uint8Array,
@@ -149,32 +171,55 @@ function parseMetadataExtension(
   let description: string | null = null
   let uri: string | null = null
 
-  if (pos + 4 <= endOffset) {
-    const view = new DataView(data.buffer, data.byteOffset + pos, 4)
-    const symbolLen = view.getUint32(0, true)
-    pos += 4
-    if (symbolLen > 0 && pos + symbolLen <= endOffset) {
-      symbol = new TextDecoder().decode(data.slice(pos, pos + symbolLen)).replace(/\0/g, "")
-      pos += symbolLen
+  const maxStringLen = 1000
+
+  // Read symbol
+  const symbolResult = decodeLengthPrefixedString(data, pos, maxStringLen)
+  if (symbolResult.bytesRead > 0) {
+    symbol = symbolResult.value || null
+    pos += symbolResult.bytesRead
+  }
+
+  // Read description
+  if (pos < endOffset) {
+    const descResult = decodeLengthPrefixedString(data, pos, maxStringLen)
+    if (descResult.bytesRead > 0) {
+      description = descResult.value || null
+      pos += descResult.bytesRead
     }
   }
 
-  if (pos + 4 <= endOffset) {
-    const view = new DataView(data.buffer, data.byteOffset + pos, 4)
-    const descLen = view.getUint32(0, true)
-    pos += 4
-    if (descLen > 0 && pos + descLen <= endOffset) {
-      description = new TextDecoder().decode(data.slice(pos, pos + descLen)).replace(/\0/g, "")
-      pos += descLen
+  // Read uri
+  if (pos < endOffset) {
+    const uriResult = decodeLengthPrefixedString(data, pos, maxStringLen)
+    if (uriResult.bytesRead > 0) {
+      uri = uriResult.value || null
     }
   }
 
-  if (pos + 4 <= endOffset) {
-    const view = new DataView(data.buffer, data.byteOffset + pos, 4)
-    const uriLen = view.getUint32(0, true)
-    pos += 4
-    if (uriLen > 0 && pos + uriLen <= endOffset) {
-      uri = new TextDecoder().decode(data.slice(pos, pos + uriLen)).replace(/\0/g, "")
+  // Fallback: if we didn't find URI with length-prefix, search for https://
+  if (!uri) {
+    const extData = data.slice(offset, offset + length)
+    const httpsMarker = new TextEncoder().encode("https://")
+    let httpsIndex = -1
+    for (let i = 0; i < extData.length - httpsMarker.length; i++) {
+      let match = true
+      for (let j = 0; j < httpsMarker.length; j++) {
+        if (extData[i + j] !== httpsMarker[j]) {
+          match = false
+          break
+        }
+      }
+      if (match) {
+        httpsIndex = i
+        break
+      }
+    }
+    if (httpsIndex >= 0) {
+      const uriBytes = extData.slice(httpsIndex)
+      const nullIndex = uriBytes.indexOf(0)
+      const actualUri = nullIndex > 0 ? uriBytes.slice(0, nullIndex) : uriBytes
+      uri = new TextDecoder().decode(actualUri)
     }
   }
 
@@ -255,7 +300,8 @@ function decodeNiftyAsset(data: Uint8Array, address: string): NiftyAsset | null 
   const delegateFlag = data[100]
   const delegate = delegateFlag === 1 ? decodeAddress(data, 101) : null
 
-  const name = decodeString(data, 133, 31)
+  // Name is stored as fixed 35-byte field at offset 133 (null-terminated, no length prefix)
+  const name = decodeFixedString(data, 133, 35)
 
   let uri: string | null = null
   let description: string | null = null
@@ -293,9 +339,56 @@ function decodeNiftyAsset(data: Uint8Array, address: string): NiftyAsset | null 
     authority,
     delegate,
     uri,
+    image: null, // Will be populated by fetchNiftyMetadata
     description,
     symbol,
     attributes,
+  }
+}
+
+type NiftyMetadata = {
+  image?: string
+  name?: string
+  description?: string
+  attributes?: Array<{ trait_type: string; value: string }>
+}
+
+/**
+ * Fetches off-chain metadata JSON for nifty assets and extracts image URLs
+ * Handles arweave URLs that may require redirect following
+ */
+async function fetchNiftyMetadata(assets: NiftyAsset[]): Promise<void> {
+  const assetsWithUri = assets.filter((a) => a.uri)
+  if (assetsWithUri.length === 0) return
+
+  const BATCH_SIZE = 10
+  for (let i = 0; i < assetsWithUri.length; i += BATCH_SIZE) {
+    const batch = assetsWithUri.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (asset) => {
+        if (!asset.uri) return
+        try {
+          const response = await fetch(asset.uri, {
+            redirect: "follow",
+            headers: { Accept: "application/json" },
+          })
+          if (response.ok) {
+            const contentType = response.headers.get("content-type") ?? ""
+            if (contentType.includes("application/json") || contentType.includes("text/plain")) {
+              const metadata = (await response.json()) as NiftyMetadata
+              if (metadata.image) {
+                asset.image = metadata.image
+              }
+            } else if (contentType.includes("image/")) {
+              // The URI itself is an image
+              asset.image = asset.uri
+            }
+          }
+        } catch {
+          // Ignore metadata fetch errors, image will remain null
+        }
+      })
+    )
   }
 }
 
@@ -330,6 +423,9 @@ export async function getNiftyAssetsByOwner(env: Env, wallet: string): Promise<N
       assets.push(decodedAsset)
     }
   }
+
+  // Fetch off-chain metadata to get actual image URLs
+  await fetchNiftyMetadata(assets)
 
   return assets
 }
@@ -383,12 +479,43 @@ export async function fetchNiftyCollections(
         collections.set(address, {
           address,
           name: decodedAsset.name,
-          image: decodedAsset.uri,
+          image: null, // Will be populated below
           symbol: decodedAsset.symbol,
         })
+        // Store uri temporarily for metadata fetch
+        ;(collections.get(address) as NiftyCollection & { uri?: string }).uri = decodedAsset.uri ?? undefined
       }
     }
   }
+
+  // Fetch metadata for collections to get actual image URLs
+  const collectionsArray = Array.from(collections.values())
+  await Promise.all(
+    collectionsArray.map(async (collection) => {
+      const uri = (collection as NiftyCollection & { uri?: string }).uri
+      if (!uri) return
+      try {
+        const response = await fetch(uri, {
+          redirect: "follow",
+          headers: { Accept: "application/json" },
+        })
+        if (response.ok) {
+          const contentType = response.headers.get("content-type") ?? ""
+          if (contentType.includes("application/json") || contentType.includes("text/plain")) {
+            const metadata = (await response.json()) as { image?: string }
+            if (metadata.image) {
+              collection.image = metadata.image
+            }
+          } else if (contentType.includes("image/")) {
+            collection.image = uri
+          }
+        }
+      } catch {
+        // Ignore metadata fetch errors
+      }
+      delete (collection as NiftyCollection & { uri?: string }).uri
+    })
+  )
 
   return collections
 }

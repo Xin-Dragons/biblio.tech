@@ -24,32 +24,6 @@ export interface Wallet {
   addedAt: number
 }
 
-export interface CachedNft {
-  mint: string
-  name: string
-  image: string
-  collectionId: string
-  collectionName: string | null
-  attributes: Array<{ trait_type: string; value: string }>
-  frozen: boolean
-  compressed: boolean
-  tokenStandard: string
-}
-
-export interface CachedCollection {
-  id: string
-  name: string
-  image: string
-  numMints: number
-}
-
-export interface NftCache {
-  wallet: string
-  nfts: CachedNft[]
-  collections: CachedCollection[]
-  cachedAt: number
-}
-
 export interface ShowcaseConfig {
   enabled: boolean
   items: string[]
@@ -212,25 +186,6 @@ export class UserDO extends DurableObject<Env> {
 
   async setDandies(mints: string[]): Promise<void> {
     await this.ctx.storage.put("dandies", { mints, verifiedAt: Date.now() })
-  }
-
-  // NFT Cache
-  async getNftCache(wallet: string): Promise<NftCache | null> {
-    return (await this.ctx.storage.get<NftCache>(`nft-cache:${wallet}`)) ?? null
-  }
-
-  async setNftCache(wallet: string, nfts: CachedNft[], collections: CachedCollection[]): Promise<void> {
-    const cache: NftCache = {
-      wallet,
-      nfts,
-      collections,
-      cachedAt: Date.now(),
-    }
-    await this.ctx.storage.put(`nft-cache:${wallet}`, cache)
-  }
-
-  async clearNftCache(wallet: string): Promise<void> {
-    await this.ctx.storage.delete(`nft-cache:${wallet}`)
   }
 
   // Username
@@ -398,26 +353,6 @@ export class UserDO extends DurableObject<Env> {
       if (path === "/dandies" && request.method === "PUT") {
         const { mints } = await request.json<{ mints: string[] }>()
         await this.setDandies(mints)
-        return new Response(null, { status: 204 })
-      }
-
-      // NFT Cache
-      if (path.startsWith("/nft-cache/") && request.method === "GET") {
-        const wallet = path.split("/")[2]
-        return Response.json(await this.getNftCache(wallet))
-      }
-      if (path.startsWith("/nft-cache/") && request.method === "PUT") {
-        const wallet = path.split("/")[2]
-        const { nfts, collections } = await request.json<{
-          nfts: CachedNft[]
-          collections: CachedCollection[]
-        }>()
-        await this.setNftCache(wallet, nfts, collections)
-        return new Response(null, { status: 204 })
-      }
-      if (path.startsWith("/nft-cache/") && request.method === "DELETE") {
-        const wallet = path.split("/")[2]
-        await this.clearNftCache(wallet)
         return new Response(null, { status: 204 })
       }
 

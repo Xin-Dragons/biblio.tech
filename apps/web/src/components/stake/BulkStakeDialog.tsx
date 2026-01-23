@@ -5,8 +5,19 @@ import { Transaction, ComputeBudgetProgram, PublicKey, type TransactionInstructi
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, addStakeRecordAtom, getEmissionAddresses } from "@/stores/stake"
-import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
+import {
+  stakerAtom,
+  collectionsAtom,
+  addStakeRecordAtom,
+  getEmissionAddresses,
+  invalidateStakeRecordsCache,
+} from "@/stores/stake"
+import {
+  buildStakeInstructions,
+  buildStakeNiftyInstructions,
+  isNiftyAsset,
+  DANDIES_NIFTY_COLLECTION,
+} from "@/hooks/use-staking"
 import {
   getBlockhash,
   simulateTransaction,
@@ -51,7 +62,8 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
     let currentInstructions: ReturnType<typeof buildStakeInstructions>[] = []
 
     for (const nft of nfts) {
-      const collection = collections.find((c) => c.collectionMint === nft.collectionId)
+      const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+      const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
       if (!collection) continue
 
       if (currentCount >= MAX_STAKES_PER_TX) {
@@ -101,7 +113,8 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
 
       const nftInstructions: { nft: NFT; instructions: ReturnType<typeof buildStakeInstructions> }[] = []
       for (const nft of nfts) {
-        const collection = collections.find((c) => c.collectionMint === nft.collectionId)
+        const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+        const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
         if (!collection) {
           logger.warn(`No collection found for NFT ${nft.name}, skipping`)
           continue
@@ -199,7 +212,8 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
       await confirmMultipleTransactionsViaWebSocket(signatures)
 
       for (const nft of successfulNfts) {
-        const nftCollection = collections.find((c) => c.collectionMint === nft.collectionId)
+        const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+        const nftCollection = collections.find((c) => c.collectionMint === collectionMintToFind)
         addStakeRecord({
           nftMint: nft.mint,
           owner: account,
@@ -208,6 +222,7 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
         })
       }
 
+      invalidateStakeRecordsCache(account)
       toast.success(`Staked ${successfulNfts.length} NFTs in ${transactions.length} transactions!`)
       onSuccess()
       onClose()

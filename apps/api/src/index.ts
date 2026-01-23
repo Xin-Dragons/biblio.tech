@@ -20,6 +20,9 @@ export { TensorRateLimiterDO } from "./dos/tensor-rate-limiter"
 export { UsernamesDO } from "./dos/usernames"
 export { VotingDO } from "./dos/voting"
 export { RpcWebSocketDO } from "./dos/rpc-websocket"
+export { StakerSettingsDO } from "./dos/staker-settings"
+export { NftCacheDO } from "./dos/nft-cache"
+export { StakeRecordsDO } from "./dos/stake-records"
 
 const app = new Hono<HonoEnv>()
 

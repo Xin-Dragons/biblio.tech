@@ -10,9 +10,15 @@ import {
   collectionsAtom,
   emissionsAtom,
   removeStakeRecordAtom,
+  invalidateStakeRecordsCache,
   type StakeRecordAccount,
 } from "@/stores/stake"
-import { buildUnstakeInstructions, buildUnstakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
+import {
+  buildUnstakeInstructions,
+  buildUnstakeNiftyInstructions,
+  isNiftyAsset,
+  DANDIES_NIFTY_COLLECTION,
+} from "@/hooks/use-staking"
 import {
   getBlockhash,
   simulateTransaction,
@@ -49,10 +55,12 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
   const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
 
   const itemsNotMeetingMinPeriod = items.filter((item) => {
-    const collection = collections.find((c) => c.collectionMint === item.nft.collectionId)
+    const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : item.nft.collectionId
+    const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
     if (!collection) return false
+    const minStakePeriodSeconds = collection.minStakePeriod ? Number(collection.minStakePeriod) : 0
+    if (minStakePeriodSeconds === 0) return false
     const stakedAtSeconds = Number(item.stakeRecord.stakedAt)
-    const minStakePeriodSeconds = Number(collection.minStakePeriod)
     const currentTimeSeconds = Math.floor(Date.now() / 1000)
     const timeStakedSeconds = currentTimeSeconds - stakedAtSeconds
     return timeStakedSeconds < minStakePeriodSeconds
@@ -71,7 +79,8 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
     currentTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
 
     for (const item of items) {
-      const collection = collections.find((c) => c.collectionMint === item.nft.collectionId)
+      const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : item.nft.collectionId
+      const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
       if (!collection) continue
 
       const instructions = isNiftyAsset(item.nft)
@@ -130,7 +139,10 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       const itemInstructions: { item: BulkUnstakeItem; instructions: ReturnType<typeof buildUnstakeInstructions> }[] =
         []
       for (const item of items) {
-        const collection = collections.find((c) => c.collectionMint === item.nft.collectionId)
+        const collectionMintToFind = isNiftyAsset(item.nft)
+          ? DANDIES_NIFTY_COLLECTION.toBase58()
+          : item.nft.collectionId
+        const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
         if (!collection) {
           logger.warn(`No collection found for NFT ${item.nft.name}, skipping`)
           continue
@@ -230,6 +242,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
         removeStakeRecord(item.nft.mint)
       }
 
+      invalidateStakeRecordsCache(account)
       toast.success(`Unstaked ${successfulItems.length} NFTs in ${transactions.length} transactions!`)
       onSuccess()
       onClose()

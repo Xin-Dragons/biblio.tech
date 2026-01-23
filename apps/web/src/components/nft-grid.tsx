@@ -5,6 +5,7 @@ import { selectAtom } from "jotai/utils"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { cn } from "@/lib/utils"
+import { NiftyBadge } from "@/components/nifty-badge"
 import { starredAtom, toggleStarredAtom, junkAtom, toggleJunkAtom } from "@/stores/user"
 import { layoutSizeAtom, showInfoAtom, type LayoutSize } from "@/stores/ui"
 import { selectedNftAtom, type NFT } from "@/stores/nfts"
@@ -140,11 +141,7 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
       )}
 
       {/* Nifty Badge */}
-      {nft.tokenStandard === "Nifty" && !isStaked && (
-        <div className="absolute bottom-2.5 left-2.5 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
-          Nifty
-        </div>
-      )}
+      {nft.tokenStandard === "Nifty" && <NiftyBadge />}
     </div>
   )
 })

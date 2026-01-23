@@ -5,9 +5,10 @@ import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { NiftyBadge } from "@/components/nifty-badge"
 import { stakedMintsSetAtom, isLoadingAtom } from "@/stores/stake"
 import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
-import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
+import { layoutSizeAtom, searchQueryAtom, type LayoutSize } from "@/stores/ui"
 import { DANDIES_NIFTY_COLLECTION, isNiftyAsset } from "@/hooks/use-staking"
 
 const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
@@ -30,11 +31,7 @@ const AvailableNftCard = memo(function AvailableNftCard({ nft, onStake }: Availa
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
-        {isNifty && (
-          <div className="absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
-            Nifty
-          </div>
-        )}
+        {isNifty && <NiftyBadge />}
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
@@ -127,14 +124,33 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
   const isStakeLoading = useAtomValue(isLoadingAtom)
   const isNftsLoading = useAtomValue(nftsLoadingAtom)
   const layoutSize = useAtomValue(layoutSizeAtom)
+  const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
 
   const isLoading = isStakeLoading || isNftsLoading
 
-  const availableDandies = nfts.filter(
-    (nft) =>
-      (nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ID) &&
-      !stakedMints.has(nft.mint)
-  )
+  const availableDandies = nfts.filter((nft) => {
+    const isDandies = nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ID
+    const isStaked = stakedMints.has(nft.mint)
+    const matchesSearch =
+      !searchQuery || nft.name.toLowerCase().includes(searchQuery) || nft.mint.toLowerCase().includes(searchQuery)
+
+    // Debug: Log Nifty assets that appear unstaked but might be staked
+    if (isDandies && !isStaked && isNiftyAsset(nft)) {
+      const mintsArray = Array.from(stakedMints)
+      console.log(`[AvailableToStakeGrid] Nifty asset "${nft.name}" appears unstaked:`)
+      console.log(`  - nft.mint: "${nft.mint}" (type: ${typeof nft.mint})`)
+      console.log(`  - stakedMints size: ${stakedMints.size}`)
+      console.log(`  - stakedMints contains: ${mintsArray.slice(0, 5).join(", ")}${mintsArray.length > 5 ? "..." : ""}`)
+      console.log(`  - direct check: ${stakedMints.has(nft.mint)}`)
+      // Check for near-matches
+      const nearMatch = mintsArray.find((m) => m.includes(nft.mint.slice(0, 10)) || nft.mint.includes(m.slice(0, 10)))
+      if (nearMatch) {
+        console.log(`  - POSSIBLE MATCH: "${nearMatch}"`)
+      }
+    }
+
+    return isDandies && !isStaked && matchesSearch
+  })
 
   if (isLoading) {
     return (
@@ -142,10 +158,37 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
           <h2 className="text-lg font-semibold">Available to Stake</h2>
         </div>
-        <div className="grid gap-4 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <AvailableNftCardSkeleton key={i} />
-          ))}
+        <div className="min-h-0 flex-1 p-2">
+          <AutoSizer>
+            {({ width, height }) => {
+              const columnCount = getColumnCount(width, layoutSize)
+              const gap = gapBySize[layoutSize]
+              const infoHeight = infoHeightBySize[layoutSize]
+              const columnWidth = width / columnCount
+              const cardWidth = columnWidth - gap
+              const rowHeight = cardWidth + infoHeight + gap
+              const rowCount = Math.max(1, Math.ceil(height / rowHeight))
+              const totalSkeletons = columnCount * rowCount
+
+              return (
+                <div
+                  style={{
+                    width,
+                    height,
+                    overflow: "hidden",
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                    gap: `${gap}px`,
+                    padding: `${gap / 2}px`,
+                  }}
+                >
+                  {Array.from({ length: totalSkeletons }).map((_, i) => (
+                    <AvailableNftCardSkeleton key={i} />
+                  ))}
+                </div>
+              )
+            }}
+          </AutoSizer>
         </div>
       </div>
     )

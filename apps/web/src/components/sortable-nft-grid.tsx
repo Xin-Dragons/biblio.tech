@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
+import { NiftyBadge } from "@/components/nifty-badge"
 import {
   starredAtom,
   toggleStarredAtom,
@@ -82,6 +83,7 @@ const SortableNftCard = memo(function SortableNftCard({ nft, showInfo }: Sortabl
       <div className="aspect-square overflow-hidden">
         <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" loading="lazy" draggable={false} />
       </div>
+      {nft.tokenStandard === "Nifty" && <NiftyBadge />}
       {showInfo && (
         <div className="p-2">
           <h3 className="truncate text-sm font-medium">{nft.name}</h3>
@@ -141,10 +143,11 @@ const SortableNftCard = memo(function SortableNftCard({ nft, showInfo }: Sortabl
 
 function DragOverlayCard({ nft, showInfo }: { nft: NFT; showInfo: boolean }) {
   return (
-    <div className="cursor-grabbing overflow-hidden rounded-lg border border-primary bg-card shadow-2xl">
+    <div className="relative cursor-grabbing overflow-hidden rounded-lg border border-primary bg-card shadow-2xl">
       <div className="aspect-square overflow-hidden">
         <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" draggable={false} />
       </div>
+      {nft.tokenStandard === "Nifty" && <NiftyBadge />}
       {showInfo && (
         <div className="p-2">
           <h3 className="truncate text-sm font-medium">{nft.name}</h3>

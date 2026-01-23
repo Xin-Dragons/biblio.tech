@@ -1,14 +1,30 @@
 import { useState } from "react"
 import { Lock, X, Loader2 } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { Transaction, PublicKey } from "@solana/web3.js"
+import { PublicKey } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
-import { stakerAtom, collectionsAtom, addStakeRecordAtom, getEmissionAddresses } from "@/stores/stake"
-import { buildStakeInstructions, buildStakeNiftyInstructions, isNiftyAsset } from "@/hooks/use-staking"
-import { confirmTransactionViaWebSocket } from "@/lib/transaction"
-import { decodeSimulationError } from "@/lib/errors"
+import {
+  stakerAtom,
+  collectionsAtom,
+  addStakeRecordAtom,
+  getEmissionAddresses,
+  invalidateStakeRecordsCache,
+} from "@/stores/stake"
+import {
+  buildStakeInstructions,
+  buildStakeNiftyInstructions,
+  isNiftyAsset,
+  DANDIES_NIFTY_COLLECTION,
+} from "@/hooks/use-staking"
+import {
+  getBlockhash,
+  simulateTransaction,
+  buildTransaction,
+  sendTransaction,
+  confirmTransactionViaWebSocket,
+} from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
 
 interface StakeDialogProps {
@@ -25,7 +41,9 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
   const collections = useAtomValue(collectionsAtom)
   const addStakeRecord = useSetAtom(addStakeRecordAtom)
 
-  const collection = collections.find((c) => c.collectionMint === nft.collectionId)
+  // For nifty assets, use the nifty collection; for pNFTs use the NFT's collectionId
+  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+  const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
   const handleStake = async () => {
     if (!account || !signer || !capabilities.canSign || !staker || !collection) {
@@ -52,79 +70,17 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
             owner: account,
           })
 
-      // Get blockhash via RPC proxy
-      const blockhashResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getLatestBlockhash",
-          params: [{ commitment: "finalized" }],
-        }),
-      })
-      const blockhashData = (await blockhashResponse.json()) as {
-        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
-      }
-      const blockhash = blockhashData.result?.value.blockhash
-      if (!blockhash) throw new Error("Failed to get blockhash")
+      const blockhash = await getBlockhash()
+      const { unitsConsumed } = await simulateTransaction(instructions, ownerPubkey, blockhash)
+      const cuLimit = Math.ceil(unitsConsumed * 1.1)
 
-      const transaction = new Transaction()
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = ownerPubkey
-      transaction.add(...instructions)
+      const transaction = buildTransaction(instructions, ownerPubkey, blockhash, cuLimit, 1000)
 
-      // Simulate transaction before sending to wallet
-      const simResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "simulateTransaction",
-          params: [transaction.serialize({ requireAllSignatures: false }).toString("base64"), { encoding: "base64" }],
-        }),
-      })
-      const simData = (await simResponse.json()) as {
-        result?: { value: { err: unknown; logs: string[] } }
-      }
-
-      if (simData.result?.value.err) {
-        console.error("Stake simulation failed:", simData.result.value.err)
-        console.error("Simulation logs:", simData.result.value.logs)
-        const decodedError = decodeSimulationError(
-          simData.result.value.err as { InstructionError?: [number, { Custom?: number }] }
-        )
-        throw new Error(decodedError || `Transaction simulation failed: ${JSON.stringify(simData.result.value.err)}`)
-      }
-
-      // Sign via connector
       const txBytes = transaction.serialize({ requireAllSignatures: false })
       const signedBytes = await signer.signTransaction(txBytes)
+      const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
 
-      // Send via RPC
-      const sendResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "sendTransaction",
-          params: [
-            Buffer.from(signedBytes as Uint8Array).toString("base64"),
-            { encoding: "base64", skipPreflight: true },
-          ],
-        }),
-      })
-      const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
-
-      if (sendResult.error) {
-        throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
-      }
-
-      const signature = sendResult.result
-      if (!signature) throw new Error("No signature returned")
-
+      const signature = await sendTransaction(signedBase64)
       await confirmTransactionViaWebSocket(signature)
 
       addStakeRecord({
@@ -134,6 +90,7 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
         emissions: collection ? getEmissionAddresses(collection) : [],
       })
 
+      invalidateStakeRecordsCache(account)
       toast.success(`Staked ${nft.name} successfully!`)
       onSuccess()
       onClose()

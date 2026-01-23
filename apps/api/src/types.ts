@@ -4,6 +4,9 @@ import type { TensorRateLimiterDO } from "./dos/tensor-rate-limiter"
 import type { UsernamesDO } from "./dos/usernames"
 import type { VotingDO } from "./dos/voting"
 import type { RpcWebSocketDO } from "./dos/rpc-websocket"
+import type { StakerSettingsDO } from "./dos/staker-settings"
+import type { NftCacheDO } from "./dos/nft-cache"
+import type { StakeRecordsDO } from "./dos/stake-records"
 
 export interface Env {
   // Durable Objects
@@ -13,6 +16,9 @@ export interface Env {
   USERNAMES_DO: DurableObjectNamespace<UsernamesDO>
   VOTING_DO: DurableObjectNamespace<VotingDO>
   RPC_WEBSOCKET_DO: DurableObjectNamespace<RpcWebSocketDO>
+  STAKER_SETTINGS_DO: DurableObjectNamespace<StakerSettingsDO>
+  NFT_CACHE_DO: DurableObjectNamespace<NftCacheDO>
+  STAKE_RECORDS_DO: DurableObjectNamespace<StakeRecordsDO>
 
   // D1 Database
   DB: D1Database

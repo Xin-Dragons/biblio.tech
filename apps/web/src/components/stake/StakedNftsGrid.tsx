@@ -5,9 +5,10 @@ import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { NiftyBadge } from "@/components/nifty-badge"
 import { userStakeRecordsAtom, isLoadingAtom, type StakeRecordAccount } from "@/stores/stake"
-import { nftsAtom, type NFT } from "@/stores/nfts"
-import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
+import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
+import { layoutSizeAtom, searchQueryAtom, type LayoutSize } from "@/stores/ui"
 import { isNiftyAsset } from "@/hooks/use-staking"
 
 interface StakedNftCardProps {
@@ -28,11 +29,7 @@ const StakedNftCard = memo(function StakedNftCard({ nft, stakeRecord, onUnstake 
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
-        {isNifty && (
-          <div className="absolute bottom-2 left-2 rounded-lg bg-violet-500/90 px-2 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
-            Nifty
-          </div>
-        )}
+        {isNifty && <NiftyBadge />}
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
@@ -127,8 +124,11 @@ interface StakedNftsGridProps {
 export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps) {
   const stakeRecords = useAtomValue(userStakeRecordsAtom)
   const nfts = useAtomValue(nftsAtom)
-  const isLoading = useAtomValue(isLoadingAtom)
+  const isStakeLoading = useAtomValue(isLoadingAtom)
+  const isNftsLoading = useAtomValue(nftsLoadingAtom)
+  const isLoading = isStakeLoading || isNftsLoading
   const layoutSize = useAtomValue(layoutSizeAtom)
+  const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
 
   const nftsByMint = new Map(nfts.map((nft) => [nft.mint, nft]))
 
@@ -137,7 +137,11 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
       nft: nftsByMint.get(record.nftMint),
       record,
     }))
-    .filter((item): item is StakedNftWithRecord => item.nft !== undefined)
+    .filter((item): item is StakedNftWithRecord => {
+      if (!item.nft) return false
+      if (!searchQuery) return true
+      return item.nft.name.toLowerCase().includes(searchQuery) || item.nft.mint.toLowerCase().includes(searchQuery)
+    })
 
   if (isLoading) {
     return (
@@ -145,10 +149,37 @@ export function StakedNftsGrid({ onUnstake, onUnstakeAll }: StakedNftsGridProps)
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
           <h2 className="text-lg font-semibold">Your Staked NFTs</h2>
         </div>
-        <div className="grid gap-4 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <StakedNftCardSkeleton key={i} />
-          ))}
+        <div className="min-h-0 flex-1 p-2">
+          <AutoSizer>
+            {({ width, height }) => {
+              const columnCount = getColumnCount(width, layoutSize)
+              const gap = gapBySize[layoutSize]
+              const infoHeight = infoHeightBySize[layoutSize]
+              const columnWidth = width / columnCount
+              const cardWidth = columnWidth - gap
+              const rowHeight = cardWidth + infoHeight + gap
+              const rowCount = Math.max(1, Math.ceil(height / rowHeight))
+              const totalSkeletons = columnCount * rowCount
+
+              return (
+                <div
+                  style={{
+                    width,
+                    height,
+                    overflow: "hidden",
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                    gap: `${gap}px`,
+                    padding: `${gap / 2}px`,
+                  }}
+                >
+                  {Array.from({ length: totalSkeletons }).map((_, i) => (
+                    <StakedNftCardSkeleton key={i} />
+                  ))}
+                </div>
+              )
+            }}
+          </AutoSizer>
         </div>
       </div>
     )
