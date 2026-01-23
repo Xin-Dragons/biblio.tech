@@ -9,6 +9,7 @@ import { JunkPage } from "./routes/junk"
 import { SplPage } from "./routes/spl"
 import { ShowcasePage } from "./routes/showcase"
 import { MembershipPage } from "./routes/membership"
+import { VaultPage } from "./routes/vault"
 
 export function App() {
   return (
@@ -24,6 +25,7 @@ export function App() {
         <Route path="showcase" element={<ShowcasePage />} />
         <Route path="showcase/:username" element={<ShowcasePage />} />
         <Route path="membership" element={<MembershipPage />} />
+        <Route path="vault" element={<VaultPage />} />
       </Route>
     </Routes>
   )

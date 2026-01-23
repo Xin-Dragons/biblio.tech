@@ -1,11 +1,25 @@
 import { Link, useLocation } from "react-router"
-import { Folder, Image, Star, Coins, Trash2, Plus, X, User, Lock, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  Folder,
+  Image,
+  Star,
+  Coins,
+  Trash2,
+  Plus,
+  X,
+  User,
+  Lock,
+  Shield,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { tagsAtom, addTagAtom, removeTagAtom, type Tag as TagType } from "@/stores/user"
 import { sidebarCollapsedAtom } from "@/stores/ui"
-import { tierAtom, Tier } from "@/stores/tier"
+import { tierAtom } from "@/stores/tier"
+import { Tier, TierBadge } from "@/components/tier-badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog"
@@ -17,6 +31,7 @@ const navItems = [
   { href: "/starred", label: "Starred", icon: Star },
   { href: "/spl", label: "Tokens", icon: Coins },
   { href: "/membership", label: "Membership", icon: Lock },
+  { href: "/vault", label: "Vault", icon: Shield },
   { href: "/junk", label: "Junk", icon: Trash2 },
   { href: "/showcase", label: "Showcase", icon: User },
 ]
@@ -114,13 +129,6 @@ const tierLogoColors: Record<Exclude<Tier, Tier.Free>, string> = {
   [Tier.Diamond]: "text-cyan-400 animate-logo-breathe",
 }
 
-const tierBadgeStyles: Record<Exclude<Tier, Tier.Free>, string> = {
-  [Tier.Bronze]: "bg-amber-900/40 text-amber-400 border-amber-600/30",
-  [Tier.Silver]: "bg-slate-700/40 text-slate-300 border-slate-500/30",
-  [Tier.Gold]: "bg-yellow-900/40 text-yellow-400 border-yellow-500/30",
-  [Tier.Diamond]: "bg-cyan-900/40 text-cyan-300 border-cyan-400/30 animate-shimmer",
-}
-
 export function Sidebar() {
   const location = useLocation()
   const tags = useAtomValue(tagsAtom)
@@ -148,16 +156,7 @@ export function Sidebar() {
           {!collapsed && (
             <>
               <img src="/biblio-text.svg" alt="Biblio" className="h-4 invert" />
-              {hasTier && (
-                <span
-                  className={cn(
-                    "ml-1 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                    tierBadgeStyles[tierInfo.tier as Exclude<Tier, Tier.Free>]
-                  )}
-                >
-                  {tierInfo.tier}
-                </span>
-              )}
+              {hasTier && <TierBadge tier={tierInfo.tier} size="sm" />}
             </>
           )}
         </Link>
