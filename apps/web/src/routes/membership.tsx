@@ -19,7 +19,7 @@ const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[
   { value: "small", icon: LayoutGrid, label: "Small" },
 ]
 
-export function StakePage() {
+export function MembershipPage() {
   const { account } = useWallet()
   const [error] = useAtom(errorAtom)
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
