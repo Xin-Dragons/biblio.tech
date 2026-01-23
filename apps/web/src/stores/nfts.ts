@@ -45,6 +45,7 @@ export type TokenStandard =
   | "NonFungibleEdition"
   | "ProgrammableNonFungibleEdition"
   | "Nifty"
+  | "Core"
 
 export interface NFT {
   mint: string

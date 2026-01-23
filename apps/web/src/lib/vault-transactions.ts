@@ -6,7 +6,7 @@ import {
   type Instruction,
 } from "@solana/kit"
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
-import { tokenMetadata, asset } from "@biblio/solana-programs"
+import { tokenMetadata, asset, mplCore } from "@biblio/solana-programs"
 import type { NFT, TokenStandard } from "../stores/nfts"
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
@@ -61,6 +61,10 @@ function isNiftyAsset(tokenStandard: TokenStandard): boolean {
   return tokenStandard === "Nifty"
 }
 
+function isMplCoreAsset(tokenStandard: TokenStandard): boolean {
+  return tokenStandard === "Core"
+}
+
 export interface BuildLockInput {
   nft: NFT
   owner: Address
@@ -75,6 +79,10 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
 
   if (isNiftyAsset(nft.tokenStandard)) {
     return buildNiftyLockInstructions(mintAddress, owner, delegate, payer)
+  }
+
+  if (isMplCoreAsset(nft.tokenStandard)) {
+    return buildMplCoreLockInstructions(mintAddress, owner, delegate, payer)
   }
 
   const isPnft = isProgrammableNft(nft.tokenStandard)
@@ -192,6 +200,10 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
     return buildNiftyUnlockInstructions(mintAddress, owner, delegate)
   }
 
+  if (isMplCoreAsset(nft.tokenStandard)) {
+    return buildMplCoreUnlockInstructions(mintAddress, delegate, payer)
+  }
+
   const isPnft = isProgrammableNft(nft.tokenStandard)
 
   const [ata] = await findAssociatedTokenPda({
@@ -283,4 +295,41 @@ function buildNiftyUnlockInstructions(assetAddress: Address, owner: Address, del
   instructions.push(unlockIx, revokeIx)
 
   return instructions
+}
+
+function buildMplCoreLockInstructions(
+  assetAddress: Address,
+  owner: Address,
+  delegate: Address,
+  payer: TransactionSigner
+): Instruction[] {
+  const isBasicFreeze = owner === delegate
+  const initAuthority: mplCore.Authority = isBasicFreeze
+    ? { __kind: "Owner" }
+    : { __kind: "Address", address: delegate }
+
+  const addPluginIx = mplCore.getAddPluginV1Instruction({
+    asset: assetAddress,
+    payer: payer,
+    authority: createNoopSigner(owner),
+    plugin: { __kind: "FreezeDelegate", fields: [{ frozen: true }] },
+    initAuthority: initAuthority,
+  })
+
+  return [addPluginIx]
+}
+
+function buildMplCoreUnlockInstructions(
+  assetAddress: Address,
+  delegate: Address,
+  payer: TransactionSigner
+): Instruction[] {
+  const removePluginIx = mplCore.getRemovePluginV1Instruction({
+    asset: assetAddress,
+    payer: payer,
+    authority: createNoopSigner(delegate),
+    pluginType: mplCore.PluginType.FreezeDelegate,
+  })
+
+  return [removePluginIx]
 }
