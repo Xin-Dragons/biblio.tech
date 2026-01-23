@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
+import { MembershipStatus } from "@/components/membership/MembershipStatus"
 import { LockedDandiesGrid } from "@/components/membership/LockedDandiesGrid"
 import { AvailableToLockGrid } from "@/components/membership/AvailableToLockGrid"
 import { LockDialog } from "@/components/membership/LockDialog"
@@ -25,62 +26,62 @@ export function MembershipPage() {
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
   const [layoutSize, setLayoutSize] = useAtom(layoutSizeAtom)
-  const [stakeDialogNft, setStakeDialogNft] = useState<NFT | null>(null)
-  const [unstakeTarget, setUnstakeTarget] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null>(null)
-  const [bulkStakeNfts, setBulkStakeNfts] = useState<NFT[] | null>(null)
-  const [bulkUnstakeItems, setBulkUnstakeItems] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount }[] | null>(null)
+  const [lockDialogNft, setLockDialogNft] = useState<NFT | null>(null)
+  const [unlockTarget, setUnlockTarget] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null>(null)
+  const [bulkLockNfts, setBulkLockNfts] = useState<NFT[] | null>(null)
+  const [bulkUnlockItems, setBulkUnlockItems] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount }[] | null>(null)
 
-  const handleUnstake = (nft: NFT, stakeRecord: StakeRecordAccount) => {
-    setUnstakeTarget({ nft, stakeRecord })
+  const handleUnlock = (nft: NFT, stakeRecord: StakeRecordAccount) => {
+    setUnlockTarget({ nft, stakeRecord })
   }
 
-  const handleStake = (nft: NFT) => {
-    setStakeDialogNft(nft)
+  const handleLock = (nft: NFT) => {
+    setLockDialogNft(nft)
   }
 
-  const handleStakeAll = (nfts: NFT[]) => {
-    setBulkStakeNfts(nfts)
+  const handleLockAll = (nfts: NFT[]) => {
+    setBulkLockNfts(nfts)
   }
 
-  const handleUnstakeAll = (items: { nft: NFT; stakeRecord: StakeRecordAccount }[]) => {
-    setBulkUnstakeItems(items)
+  const handleUnlockAll = (items: { nft: NFT; stakeRecord: StakeRecordAccount }[]) => {
+    setBulkUnlockItems(items)
   }
 
-  const handleBulkStakeDialogClose = () => {
-    setBulkStakeNfts(null)
+  const handleBulkLockDialogClose = () => {
+    setBulkLockNfts(null)
   }
 
-  const handleBulkStakeSuccess = () => {
+  const handleBulkLockSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
     }
   }
 
-  const handleBulkUnstakeDialogClose = () => {
-    setBulkUnstakeItems(null)
+  const handleBulkUnlockDialogClose = () => {
+    setBulkUnlockItems(null)
   }
 
-  const handleBulkUnstakeSuccess = () => {
+  const handleBulkUnlockSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
     }
   }
 
-  const handleStakeDialogClose = () => {
-    setStakeDialogNft(null)
+  const handleLockDialogClose = () => {
+    setLockDialogNft(null)
   }
 
-  const handleStakeSuccess = () => {
+  const handleLockSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
     }
   }
 
-  const handleUnstakeDialogClose = () => {
-    setUnstakeTarget(null)
+  const handleUnlockDialogClose = () => {
+    setUnlockTarget(null)
   }
 
-  const handleUnstakeSuccess = () => {
+  const handleUnlockSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
     }
@@ -99,7 +100,7 @@ export function MembershipPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="mb-4 flex shrink-0 items-center justify-between">
-        <h1 className="text-xl font-bold">Stake</h1>
+        <h1 className="text-xl font-bold">Membership</h1>
         <div className="flex overflow-hidden rounded-md border border-border">
           {layoutOptions.map((option) => {
             const Icon = option.icon
@@ -133,40 +134,41 @@ export function MembershipPage() {
           <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-border">
             <LockKeyhole className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <p className="text-lg font-medium">Connect Wallet</p>
-            <p className="text-sm text-muted-foreground">Connect your wallet to view staking</p>
+            <p className="text-sm text-muted-foreground">Connect your wallet to view membership</p>
           </div>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <MembershipStatus />
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-            <LockedDandiesGrid onUnlock={handleUnstake} onUnlockAll={handleUnstakeAll} />
-            <AvailableToLockGrid onLock={handleStake} onLockAll={handleStakeAll} />
+            <LockedDandiesGrid onUnlock={handleUnlock} onUnlockAll={handleUnlockAll} />
+            <AvailableToLockGrid onLock={handleLock} onLockAll={handleLockAll} />
           </div>
         </div>
       )}
 
-      {stakeDialogNft && (
-        <LockDialog nft={stakeDialogNft} onClose={handleStakeDialogClose} onSuccess={handleStakeSuccess} />
+      {lockDialogNft && (
+        <LockDialog nft={lockDialogNft} onClose={handleLockDialogClose} onSuccess={handleLockSuccess} />
       )}
 
-      {unstakeTarget && (
+      {unlockTarget && (
         <UnlockDialog
-          nft={unstakeTarget.nft}
-          stakeRecord={unstakeTarget.stakeRecord}
-          onClose={handleUnstakeDialogClose}
-          onSuccess={handleUnstakeSuccess}
+          nft={unlockTarget.nft}
+          stakeRecord={unlockTarget.stakeRecord}
+          onClose={handleUnlockDialogClose}
+          onSuccess={handleUnlockSuccess}
         />
       )}
 
-      {bulkStakeNfts && (
-        <BulkLockDialog nfts={bulkStakeNfts} onClose={handleBulkStakeDialogClose} onSuccess={handleBulkStakeSuccess} />
+      {bulkLockNfts && (
+        <BulkLockDialog nfts={bulkLockNfts} onClose={handleBulkLockDialogClose} onSuccess={handleBulkLockSuccess} />
       )}
 
-      {bulkUnstakeItems && (
+      {bulkUnlockItems && (
         <BulkUnlockDialog
-          items={bulkUnstakeItems}
-          onClose={handleBulkUnstakeDialogClose}
-          onSuccess={handleBulkUnstakeSuccess}
+          items={bulkUnlockItems}
+          onClose={handleBulkUnlockDialogClose}
+          onSuccess={handleBulkUnlockSuccess}
         />
       )}
     </div>
