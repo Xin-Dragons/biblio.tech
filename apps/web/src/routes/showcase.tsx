@@ -49,6 +49,7 @@ import {
 } from "@/stores/showcase"
 import { tierAtom, fetchTierAtom } from "@/stores/tier"
 import { TierBadge, getTierFromDandyCount } from "@/components/tier-badge"
+import { TierBenefitsCard } from "@/components/tier-benefits-card"
 
 const sizeToPixels: Record<ShowcaseSizeClass, number> = {
   small: 120,
@@ -1041,6 +1042,12 @@ export function ShowcasePage() {
           <p className="mt-2 text-muted-foreground">Share your NFT collection with the world.</p>
         </div>
 
+        {tierInfo && (
+          <div className="mb-6">
+            <TierBenefitsCard stakedCount={tierInfo.stakedCount} />
+          </div>
+        )}
+
         <div className="space-y-6">
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="mb-4 flex items-center gap-2">
@@ -1113,6 +1120,17 @@ export function ShowcasePage() {
           </Link>
         </div>
       </div>
+      {tierInfo && (
+        <details className="mb-4 shrink-0">
+          <summary className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <TierBadge tier={tierInfo.tier} size="sm" />
+            <span>View membership benefits</span>
+          </summary>
+          <div className="mt-3">
+            <TierBenefitsCard stakedCount={tierInfo.stakedCount} className="max-w-sm" />
+          </div>
+        </details>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ShowcaseEditor />
       </div>
