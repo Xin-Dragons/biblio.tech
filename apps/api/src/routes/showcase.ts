@@ -2,6 +2,10 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { isValidUsername } from "../dos/usernames"
 import { authMiddleware } from "../middleware/auth"
+import { getStakeRecordsByOwner } from "../services/stake"
+import { getTierFromStakedCount, getVotesForTier } from "../lib/tiers"
+
+const DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a"
 
 export const showcaseRoutes = new Hono<HonoEnv>()
 
@@ -11,6 +15,28 @@ function getUsernamesDO(c: { env: HonoEnv["Bindings"] }) {
 
 function getVotingDO(c: { env: HonoEnv["Bindings"] }) {
   return c.env.VOTING_DO.get(c.env.VOTING_DO.idFromName("global"))
+}
+
+async function getUserMaxVotes(c: {
+  env: HonoEnv["Bindings"]
+  get: (key: string) => string | undefined
+}): Promise<number> {
+  const userId = c.get("userId")
+  if (!userId) return 1
+
+  const userDO = c.env.USER_DO.get(c.env.USER_DO.idFromName(userId))
+  const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+  const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
+
+  let stakedCount = 0
+  for (const { publicKey: wallet } of wallets) {
+    const records = await getStakeRecordsByOwner(c.env, wallet)
+    const dandiesRecords = records.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
+    stakedCount += dandiesRecords.length
+  }
+
+  const tier = getTierFromStakedCount(stakedCount)
+  return getVotesForTier(tier)
 }
 
 // Static routes MUST come before dynamic :username routes
@@ -63,8 +89,11 @@ showcaseRoutes.get("/votes/remaining", authMiddleware, async (c) => {
     return c.json({ error: "Unauthorized" }, 401)
   }
 
+  const maxVotes = await getUserMaxVotes(c)
   const votingDO = getVotingDO(c)
-  const res = await votingDO.fetch(new Request(`http://do/remaining/${encodeURIComponent(userId)}`))
+  const res = await votingDO.fetch(
+    new Request(`http://do/remaining/${encodeURIComponent(userId)}?maxVotes=${maxVotes}`)
+  )
   return c.json(await res.json())
 })
 
@@ -138,7 +167,9 @@ showcaseRoutes.get("/:identifier", async (c) => {
   }> = []
 
   if (nftMints.length > 0) {
-    const cacheRes = await userDO.fetch(new Request(`http://do/nft-cache/${owner}`))
+    const nftCacheId = c.env.NFT_CACHE_DO.idFromName(owner)
+    const nftCacheDO = c.env.NFT_CACHE_DO.get(nftCacheId)
+    const cacheRes = await nftCacheDO.fetch(new Request("http://do/cache"))
     const cache = await cacheRes.json<{
       nfts: Array<{
         mint: string
@@ -240,16 +271,19 @@ showcaseRoutes.post("/:identifier/vote", authMiddleware, async (c) => {
     return c.json({ error: "Showcase not enabled" }, 404)
   }
 
+  // Get user's tier-based max votes
+  const maxVotes = await getUserMaxVotes(c)
+
   // Cast the vote using the resolved key
   const votingDO = getVotingDO(c)
   const voteRes = await votingDO.fetch(
     new Request("http://do/vote", {
       method: "POST",
-      body: JSON.stringify({ userId, showcaseUsername: voteKey }),
+      body: JSON.stringify({ userId, showcaseUsername: voteKey, maxVotes }),
     })
   )
 
-  const result = await voteRes.json<{ success: boolean; error?: string; remaining?: number }>()
+  const result = await voteRes.json<{ success: boolean; error?: string; remaining?: number; maxVotes?: number }>()
 
   if (!result.success) {
     return c.json(result, 400)

@@ -56,15 +56,15 @@ export class VotingDO extends DurableObject<Env> {
 
   async vote(
     userId: string,
-    showcaseUsername: string
-  ): Promise<{ success: boolean; error?: string; remaining?: number }> {
+    showcaseUsername: string,
+    maxVotes: number
+  ): Promise<{ success: boolean; error?: string; remaining?: number; maxVotes?: number }> {
     await this.init()
 
     const dailyVotes = this.getUserDailyVotes(userId)
-    const maxVotes = 3
 
     if (dailyVotes.votes.length >= maxVotes) {
-      return { success: false, error: "No votes remaining today", remaining: 0 }
+      return { success: false, error: "No votes remaining today", remaining: 0, maxVotes }
     }
 
     if (dailyVotes.votes.includes(showcaseUsername)) {
@@ -72,6 +72,7 @@ export class VotingDO extends DurableObject<Env> {
         success: false,
         error: "Already voted for this showcase today",
         remaining: maxVotes - dailyVotes.votes.length,
+        maxVotes,
       }
     }
 
@@ -87,7 +88,7 @@ export class VotingDO extends DurableObject<Env> {
 
     await this.save()
 
-    return { success: true, remaining: maxVotes - dailyVotes.votes.length }
+    return { success: true, remaining: maxVotes - dailyVotes.votes.length, maxVotes }
   }
 
   async getShowcaseVotes(showcaseUsername: string): Promise<number> {
@@ -95,10 +96,13 @@ export class VotingDO extends DurableObject<Env> {
     return this.showcaseVotes.get(showcaseUsername)?.total ?? 0
   }
 
-  async getRemainingVotes(userId: string): Promise<{ remaining: number; votedFor: string[] }> {
+  async getRemainingVotes(
+    userId: string,
+    maxVotes: number
+  ): Promise<{ remaining: number; votedFor: string[]; maxVotes: number }> {
     await this.init()
     const dailyVotes = this.getUserDailyVotes(userId)
-    return { remaining: 3 - dailyVotes.votes.length, votedFor: dailyVotes.votes }
+    return { remaining: maxVotes - dailyVotes.votes.length, votedFor: dailyVotes.votes, maxVotes }
   }
 
   async getLeaderboard(limit: number = 20): Promise<Array<{ username: string; votes: number }>> {
@@ -115,8 +119,12 @@ export class VotingDO extends DurableObject<Env> {
     const path = url.pathname
 
     if (request.method === "POST" && path === "/vote") {
-      const { userId, showcaseUsername } = await request.json<{ userId: string; showcaseUsername: string }>()
-      const result = await this.vote(userId, showcaseUsername)
+      const { userId, showcaseUsername, maxVotes } = await request.json<{
+        userId: string
+        showcaseUsername: string
+        maxVotes: number
+      }>()
+      const result = await this.vote(userId, showcaseUsername, maxVotes)
       return Response.json(result, { status: result.success ? 200 : 400 })
     }
 
@@ -128,7 +136,8 @@ export class VotingDO extends DurableObject<Env> {
 
     if (request.method === "GET" && path.startsWith("/remaining/")) {
       const userId = path.replace("/remaining/", "")
-      const result = await this.getRemainingVotes(userId)
+      const maxVotes = parseInt(url.searchParams.get("maxVotes") ?? "1")
+      const result = await this.getRemainingVotes(userId, maxVotes)
       return Response.json(result)
     }
 
