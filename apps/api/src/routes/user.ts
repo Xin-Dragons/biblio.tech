@@ -1,11 +1,9 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { authMiddleware } from "../middleware/auth"
-import { heliusService } from "../services/helius"
 import { getStakeRecordsByOwner } from "../services/stake"
 import { Tier, getTierFromStakedCount, getVotesForTier, FEE_DISCOUNTS } from "../lib/tiers"
 
-const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
 const DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a"
 
 export const userRoutes = new Hono<HonoEnv>()
@@ -353,28 +351,18 @@ userRoutes.post("/username", async (c) => {
     return c.json({ error: "No wallets linked" }, 400)
   }
 
-  // Check for a Dandy locked to Biblio's wallet across all linked wallets
-  const biblioLockWallet = c.env.BIBLIO_LOCK_WALLET
-  let hasLockedDandy = false
-
+  // Count staked Dandies across all linked wallets
+  let stakedCount = 0
   for (const { publicKey: wallet } of wallets) {
-    const dandies = await heliusService.searchAssets(c.env.HELIUS_API_KEY, {
-      ownerAddress: wallet,
-      grouping: ["collection", DANDIES_COLLECTION_ID],
-    })
-
-    const lockedDandy = dandies.items.find(
-      (item) => item.ownership.frozen && item.ownership.delegate === biblioLockWallet
-    )
-
-    if (lockedDandy) {
-      hasLockedDandy = true
-      break
-    }
+    const records = await getStakeRecordsByOwner(c.env, wallet)
+    const dandiesRecords = records.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
+    stakedCount += dandiesRecords.length
   }
 
-  if (!hasLockedDandy) {
-    return c.json({ error: "Must lock a Dandy to Biblio to claim a username" }, 403)
+  // Check tier requirement (Gold = 15+ staked)
+  const tier = getTierFromStakedCount(stakedCount)
+  if (tier !== Tier.Gold && tier !== Tier.Diamond) {
+    return c.json({ error: "Requires Gold tier (15+ staked Dandies)" }, 403)
   }
 
   // Claim username mapped to userId
