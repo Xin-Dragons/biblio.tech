@@ -33,19 +33,19 @@ import {
 import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
 
-interface BulkUnstakeItem {
+interface BulkUnlockItem {
   nft: NFT
   stakeRecord: StakeRecordAccount
 }
 
-interface BulkUnstakeDialogProps {
-  items: BulkUnstakeItem[]
+interface BulkUnlockDialogProps {
+  items: BulkUnlockItem[]
   onClose: () => void
   onSuccess: () => void
 }
 
-export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDialogProps) {
-  const [unstaking, setUnstaking] = useState(false)
+export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialogProps) {
+  const [unlocking, setUnlocking] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
@@ -60,10 +60,10 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
     if (!collection) return false
     const minStakePeriodSeconds = collection.minStakePeriod ? Number(collection.minStakePeriod) : 0
     if (minStakePeriodSeconds === 0) return false
-    const stakedAtSeconds = Number(item.stakeRecord.stakedAt)
+    const lockedAtSeconds = Number(item.stakeRecord.stakedAt)
     const currentTimeSeconds = Math.floor(Date.now() / 1000)
-    const timeStakedSeconds = currentTimeSeconds - stakedAtSeconds
-    return timeStakedSeconds < minStakePeriodSeconds
+    const timeLockedSeconds = currentTimeSeconds - lockedAtSeconds
+    return timeLockedSeconds < minStakePeriodSeconds
   })
 
   const estimatedTxCount = useMemo(() => {
@@ -124,20 +124,19 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
     return txCount
   }, [items, staker, collections, emissions, account])
 
-  const handleBulkUnstake = async () => {
+  const handleBulkUnlock = async () => {
     if (!account || !signer || !capabilities.canSign || !staker) {
-      toast.error("Wallet not connected or staking not available")
+      toast.error("Wallet not connected or membership not available")
       return
     }
 
-    setUnstaking(true)
+    setUnlocking(true)
 
     try {
       const ownerPubkey = new PublicKey(account)
       const blockhash = await getBlockhash()
 
-      const itemInstructions: { item: BulkUnstakeItem; instructions: ReturnType<typeof buildUnstakeInstructions> }[] =
-        []
+      const itemInstructions: { item: BulkUnlockItem; instructions: ReturnType<typeof buildUnstakeInstructions> }[] = []
       for (const item of items) {
         const collectionMintToFind = isNiftyAsset(item.nft)
           ? DANDIES_NIFTY_COLLECTION.toBase58()
@@ -169,13 +168,13 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       }
 
       if (itemInstructions.length === 0) {
-        toast.error("No valid NFTs to unstake")
-        setUnstaking(false)
+        toast.error("No valid Dandies to unlock")
+        setUnlocking(false)
         return
       }
 
-      const batches: { items: BulkUnstakeItem[]; instructions: TransactionInstruction[][] }[] = []
-      let currentBatch: { items: BulkUnstakeItem[]; instructions: TransactionInstruction[][] } = {
+      const batches: { items: BulkUnlockItem[]; instructions: TransactionInstruction[][] }[] = []
+      let currentBatch: { items: BulkUnlockItem[]; instructions: TransactionInstruction[][] } = {
         items: [],
         instructions: [],
       }
@@ -205,7 +204,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
 
       setProgress({ current: 0, total: batches.length })
 
-      const transactions: { tx: Transaction; items: BulkUnstakeItem[] }[] = []
+      const transactions: { tx: Transaction; items: BulkUnlockItem[] }[] = []
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i]
         const flatInstructions = batch.instructions.flat() as TransactionInstruction[]
@@ -222,7 +221,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       }
 
       const signatures: string[] = []
-      const successfulItems: BulkUnstakeItem[] = []
+      const successfulItems: BulkUnlockItem[] = []
 
       for (let i = 0; i < transactions.length; i++) {
         setProgress({ current: i + 1, total: transactions.length })
@@ -243,14 +242,14 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
       }
 
       invalidateStakeRecordsCache(account)
-      toast.success(`Unstaked ${successfulItems.length} NFTs in ${transactions.length} transactions!`)
+      toast.success(`Unlocked ${successfulItems.length} Dandies in ${transactions.length} transactions!`)
       onSuccess()
       onClose()
     } catch (err) {
-      console.error("Bulk unstake failed:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to unstake NFTs")
+      console.error("Bulk unlock failed:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to unlock Dandies")
     } finally {
-      setUnstaking(false)
+      setUnlocking(false)
       setProgress({ current: 0, total: 0 })
     }
   }
@@ -261,10 +260,10 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Unstake All NFTs</h2>
+          <h2 className="text-lg font-semibold">Unlock All Dandies</h2>
           <button
             onClick={onClose}
-            disabled={unstaking}
+            disabled={unlocking}
             className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -273,7 +272,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
 
         <div className="mb-4 rounded-lg border border-border p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">NFTs to unstake</span>
+            <span className="text-sm text-muted-foreground">Dandies to unlock</span>
             <span className="font-semibold">{items.length}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -287,10 +286,10 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
             <div className="text-sm">
               <p className="font-medium text-yellow-500">
-                {itemsNotMeetingMinPeriod.length} NFT{itemsNotMeetingMinPeriod.length > 1 ? "s" : ""} haven't met
-                minimum stake period
+                {itemsNotMeetingMinPeriod.length} Dand{itemsNotMeetingMinPeriod.length > 1 ? "ies" : "y"} haven't met
+                minimum lock period
               </p>
-              <p className="text-muted-foreground">You can still unstake, but you may forfeit rewards.</p>
+              <p className="text-muted-foreground">You can still unlock, but minimum lock period not met.</p>
             </div>
           </div>
         )}
@@ -314,7 +313,7 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
         )}
 
         <p className="mb-4 text-sm text-muted-foreground">
-          This will unstake all {items.length} NFTs. You'll need to approve {estimatedTxCount} transaction
+          This will unlock all {items.length} Dandies. You'll need to approve {estimatedTxCount} transaction
           {estimatedTxCount > 1 ? "s" : ""}.
         </p>
 
@@ -336,19 +335,19 @@ export function BulkUnstakeDialog({ items, onClose, onSuccess }: BulkUnstakeDial
         )}
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={unstaking} className="flex-1">
+          <Button variant="outline" onClick={onClose} disabled={unlocking} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleBulkUnstake} disabled={!isReady || unstaking} className="flex-1">
-            {unstaking ? (
+          <Button onClick={handleBulkUnlock} disabled={!isReady || unlocking} className="flex-1">
+            {unlocking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Unstaking...
+                Unlocking...
               </>
             ) : (
               <>
                 <Unlock className="mr-2 h-4 w-4" />
-                Unstake All
+                Unlock All
               </>
             )}
           </Button>

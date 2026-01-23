@@ -6,7 +6,7 @@ import { AvailableToStakeGrid } from "@/components/membership/AvailableToStakeGr
 import { LockDialog } from "@/components/membership/LockDialog"
 import { UnlockDialog } from "@/components/membership/UnlockDialog"
 import { BulkLockDialog } from "@/components/membership/BulkLockDialog"
-import { BulkUnstakeDialog } from "@/components/membership/BulkUnstakeDialog"
+import { BulkUnlockDialog } from "@/components/membership/BulkUnlockDialog"
 import { useWallet } from "@solana/connector/react"
 import { cn } from "@/lib/utils"
 import { fetchStakeDataAtom, fetchUserStakeRecordsAtom, errorAtom, type StakeRecordAccount } from "@/stores/stake"
@@ -163,7 +163,7 @@ export function StakePage() {
       )}
 
       {bulkUnstakeItems && (
-        <BulkUnstakeDialog
+        <BulkUnlockDialog
           items={bulkUnstakeItems}
           onClose={handleBulkUnstakeDialogClose}
           onSuccess={handleBulkUnstakeSuccess}
