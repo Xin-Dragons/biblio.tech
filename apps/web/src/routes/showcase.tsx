@@ -47,6 +47,8 @@ import {
   type ShowcaseSizeClass,
   type DandyInfo,
 } from "@/stores/showcase"
+import { tierAtom, fetchTierAtom } from "@/stores/tier"
+import { TierBadge, getTierFromDandyCount } from "@/components/tier-badge"
 
 const sizeToPixels: Record<ShowcaseSizeClass, number> = {
   small: 120,
@@ -760,7 +762,10 @@ function PublicShowcaseView({ showcase, onVoteSuccess }: { showcase: PublicShowc
             <User className="h-8 w-8 text-muted-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">@{showcase.username}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">@{showcase.username}</h1>
+              <TierBadge tier={getTierFromDandyCount(showcase.dandyCount)} size="md" />
+            </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <span>{showcase.showcase.items.length} items</span>
               {showcase.dandyCount > 0 && (
@@ -885,9 +890,10 @@ function Leaderboard() {
           >
             {idx + 1}
           </span>
-          <div className="flex-1">
+          <div className="flex flex-1 items-center gap-2">
             <span className="font-medium">@{entry.username}</span>
-            {entry.dandyCount > 0 && <span className="ml-2 text-xs text-amber-500">🎩 {entry.dandyCount}</span>}
+            <TierBadge tier={getTierFromDandyCount(entry.dandyCount)} size="sm" />
+            {entry.dandyCount > 0 && <span className="text-xs text-amber-500">🎩 {entry.dandyCount}</span>}
           </div>
           <div className="flex items-center gap-1 text-sm">
             <Heart className="h-4 w-4 fill-red-500 text-red-500" />
@@ -907,10 +913,12 @@ export function ShowcasePage() {
 
   const currentUsername = useAtomValue(usernameAtom)
   const remainingVotes = useAtomValue(remainingVotesAtom)
+  const tierInfo = useAtomValue(tierAtom)
   const fetchUsername = useSetAtom(fetchUsernameAtom)
   const fetchShowcaseConfig = useSetAtom(fetchShowcaseConfigAtom)
   const fetchPublicShowcase = useSetAtom(fetchPublicShowcaseAtom)
   const fetchRemainingVotes = useSetAtom(fetchRemainingVotesAtom)
+  const fetchTier = useSetAtom(fetchTierAtom)
 
   const [publicShowcase, setPublicShowcase] = useState<PublicShowcase | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -924,8 +932,9 @@ export function ShowcasePage() {
     if (isAuthenticated) {
       fetchUsername()
       fetchRemainingVotes()
+      fetchTier()
     }
-  }, [isAuthenticated, fetchUsername, fetchRemainingVotes])
+  }, [isAuthenticated, fetchUsername, fetchRemainingVotes, fetchTier])
 
   useEffect(() => {
     if (isAuthenticated && (currentUsername || useWalletAddress)) {
@@ -1071,7 +1080,10 @@ export function ShowcasePage() {
     <div className="flex h-full flex-col">
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold">{currentUsername ? `@${currentUsername}` : displayIdentifier}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">{currentUsername ? `@${currentUsername}` : displayIdentifier}</h1>
+            {tierInfo && <TierBadge tier={tierInfo.tier} size="md" />}
+          </div>
           {!currentUsername && (
             <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">Wallet Address</span>
           )}

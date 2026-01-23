@@ -8,6 +8,22 @@ export enum Tier {
   Diamond = "Diamond",
 }
 
+const TIER_THRESHOLDS: Record<Tier, number> = {
+  [Tier.Free]: 0,
+  [Tier.Bronze]: 1,
+  [Tier.Silver]: 5,
+  [Tier.Gold]: 15,
+  [Tier.Diamond]: 50,
+}
+
+export function getTierFromDandyCount(count: number): Tier {
+  if (count >= TIER_THRESHOLDS[Tier.Diamond]) return Tier.Diamond
+  if (count >= TIER_THRESHOLDS[Tier.Gold]) return Tier.Gold
+  if (count >= TIER_THRESHOLDS[Tier.Silver]) return Tier.Silver
+  if (count >= TIER_THRESHOLDS[Tier.Bronze]) return Tier.Bronze
+  return Tier.Free
+}
+
 interface TierBadgeProps {
   tier: Tier
   size?: "sm" | "md" | "lg"
