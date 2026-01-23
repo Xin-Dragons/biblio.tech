@@ -3,7 +3,7 @@ import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
 import { StakedNftsGrid } from "@/components/membership/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/membership/AvailableToStakeGrid"
-import { StakeDialog } from "@/components/membership/StakeDialog"
+import { LockDialog } from "@/components/membership/LockDialog"
 import { UnstakeDialog } from "@/components/membership/UnstakeDialog"
 import { BulkStakeDialog } from "@/components/membership/BulkStakeDialog"
 import { BulkUnstakeDialog } from "@/components/membership/BulkUnstakeDialog"
@@ -146,7 +146,7 @@ export function StakePage() {
       )}
 
       {stakeDialogNft && (
-        <StakeDialog nft={stakeDialogNft} onClose={handleStakeDialogClose} onSuccess={handleStakeSuccess} />
+        <LockDialog nft={stakeDialogNft} onClose={handleStakeDialogClose} onSuccess={handleStakeSuccess} />
       )}
 
       {unstakeTarget && (

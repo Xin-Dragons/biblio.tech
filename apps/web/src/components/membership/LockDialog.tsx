@@ -27,14 +27,14 @@ import {
 } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
 
-interface StakeDialogProps {
+interface LockDialogProps {
   nft: NFT
   onClose: () => void
   onSuccess: () => void
 }
 
-export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
-  const [staking, setStaking] = useState(false)
+export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
+  const [locking, setLocking] = useState(false)
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
@@ -45,13 +45,13 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
   const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
-  const handleStake = async () => {
+  const handleLock = async () => {
     if (!account || !signer || !capabilities.canSign || !staker || !collection) {
-      toast.error("Wallet not connected or staking not available")
+      toast.error("Wallet not connected or locking not available")
       return
     }
 
-    setStaking(true)
+    setLocking(true)
 
     try {
       const ownerPubkey = new PublicKey(account)
@@ -91,14 +91,14 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
       })
 
       invalidateStakeRecordsCache(account)
-      toast.success(`Staked ${nft.name} successfully!`)
+      toast.success(`Locked ${nft.name} successfully!`)
       onSuccess()
       onClose()
     } catch (err) {
-      console.error("Stake failed:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to stake NFT")
+      console.error("Lock failed:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to lock Dandy")
     } finally {
-      setStaking(false)
+      setLocking(false)
     }
   }
 
@@ -108,10 +108,10 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Stake NFT</h2>
+          <h2 className="text-lg font-semibold">Lock Dandy</h2>
           <button
             onClick={onClose}
-            disabled={staking}
+            disabled={locking}
             className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -129,23 +129,23 @@ export function StakeDialog({ nft, onClose, onSuccess }: StakeDialogProps) {
         </div>
 
         <p className="mb-4 text-sm text-muted-foreground">
-          Are you sure you want to stake this NFT? You can unstake at any time.
+          Are you sure you want to lock this Dandy? You can unlock at any time.
         </p>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={staking} className="flex-1">
+          <Button variant="outline" onClick={onClose} disabled={locking} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleStake} disabled={!isReady || staking} className="flex-1">
-            {staking ? (
+          <Button onClick={handleLock} disabled={!isReady || locking} className="flex-1">
+            {locking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Staking...
+                Locking...
               </>
             ) : (
               <>
                 <Lock className="mr-2 h-4 w-4" />
-                Stake
+                Lock
               </>
             )}
           </Button>
