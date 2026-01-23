@@ -8,7 +8,7 @@ export enum Tier {
   Diamond = "Diamond",
 }
 
-const TIER_THRESHOLDS: Record<Tier, number> = {
+export const TIER_THRESHOLDS: Record<Tier, number> = {
   [Tier.Free]: 0,
   [Tier.Bronze]: 1,
   [Tier.Silver]: 5,
