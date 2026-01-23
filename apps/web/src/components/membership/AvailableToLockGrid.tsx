@@ -14,12 +14,12 @@ import { DANDIES_NIFTY_COLLECTION, isNiftyAsset } from "@/hooks/use-staking"
 const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
 const DANDIES_NIFTY_COLLECTION_ID = DANDIES_NIFTY_COLLECTION.toBase58()
 
-interface AvailableNftCardProps {
+interface AvailableDandyCardProps {
   nft: NFT
-  onStake: (nft: NFT) => void
+  onLock: (nft: NFT) => void
 }
 
-const AvailableNftCard = memo(function AvailableNftCard({ nft, onStake }: AvailableNftCardProps) {
+const AvailableDandyCard = memo(function AvailableDandyCard({ nft, onLock }: AvailableDandyCardProps) {
   const isNifty = isNiftyAsset(nft)
 
   return (
@@ -40,17 +40,17 @@ const AvailableNftCard = memo(function AvailableNftCard({ nft, onStake }: Availa
           variant="default"
           size="sm"
           className="mt-2 w-full text-[clamp(0.65rem,1.5vw,0.875rem)]"
-          onClick={() => onStake(nft)}
+          onClick={() => onLock(nft)}
         >
           <Lock className="mr-1 h-[1em] w-[1em]" />
-          Stake
+          Lock
         </Button>
       </div>
     </div>
   )
 })
 
-function AvailableNftCardSkeleton() {
+function AvailableDandyCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Skeleton className="aspect-square w-full" />
@@ -66,12 +66,12 @@ function AvailableNftCardSkeleton() {
 type CellData = {
   nfts: NFT[]
   columnCount: number
-  onStake: (nft: NFT) => void
+  onLock: (nft: NFT) => void
   gap: number
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { nfts, columnCount, onStake, gap } = data
+  const { nfts, columnCount, onLock, gap } = data
   const index = rowIndex * columnCount + columnIndex
   const nft = nfts[index]
 
@@ -81,7 +81,7 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
 
   return (
     <div style={{ ...style, padding }}>
-      <AvailableNftCard nft={nft} onStake={onStake} />
+      <AvailableDandyCard nft={nft} onLock={onLock} />
     </div>
   )
 }
@@ -113,12 +113,12 @@ function getColumnCount(width: number, layoutSize: LayoutSize): number {
   return sizes.xs
 }
 
-interface AvailableToStakeGridProps {
-  onStake: (nft: NFT) => void
-  onStakeAll: (nfts: NFT[]) => void
+interface AvailableToLockGridProps {
+  onLock: (nft: NFT) => void
+  onLockAll: (nfts: NFT[]) => void
 }
 
-export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGridProps) {
+export function AvailableToLockGrid({ onLock, onLockAll }: AvailableToLockGridProps) {
   const nfts = useAtomValue(nftsAtom)
   const stakedMints = useAtomValue(stakedMintsSetAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
@@ -130,33 +130,31 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
 
   const availableDandies = nfts.filter((nft) => {
     const isDandies = nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ID
-    const isStaked = stakedMints.has(nft.mint)
+    const isLocked = stakedMints.has(nft.mint)
     const matchesSearch =
       !searchQuery || nft.name.toLowerCase().includes(searchQuery) || nft.mint.toLowerCase().includes(searchQuery)
 
-    // Debug: Log Nifty assets that appear unstaked but might be staked
-    if (isDandies && !isStaked && isNiftyAsset(nft)) {
+    if (isDandies && !isLocked && isNiftyAsset(nft)) {
       const mintsArray = Array.from(stakedMints)
-      console.log(`[AvailableToStakeGrid] Nifty asset "${nft.name}" appears unstaked:`)
+      console.log(`[AvailableToLockGrid] Nifty asset "${nft.name}" appears unlocked:`)
       console.log(`  - nft.mint: "${nft.mint}" (type: ${typeof nft.mint})`)
       console.log(`  - stakedMints size: ${stakedMints.size}`)
       console.log(`  - stakedMints contains: ${mintsArray.slice(0, 5).join(", ")}${mintsArray.length > 5 ? "..." : ""}`)
       console.log(`  - direct check: ${stakedMints.has(nft.mint)}`)
-      // Check for near-matches
       const nearMatch = mintsArray.find((m) => m.includes(nft.mint.slice(0, 10)) || nft.mint.includes(m.slice(0, 10)))
       if (nearMatch) {
         console.log(`  - POSSIBLE MATCH: "${nearMatch}"`)
       }
     }
 
-    return isDandies && !isStaked && matchesSearch
+    return isDandies && !isLocked && matchesSearch
   })
 
   if (isLoading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
-          <h2 className="text-lg font-semibold">Available to Stake</h2>
+          <h2 className="text-lg font-semibold">Available to Lock</h2>
         </div>
         <div className="min-h-0 flex-1 p-2">
           <AutoSizer>
@@ -183,7 +181,7 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
                   }}
                 >
                   {Array.from({ length: totalSkeletons }).map((_, i) => (
-                    <AvailableNftCardSkeleton key={i} />
+                    <AvailableDandyCardSkeleton key={i} />
                   ))}
                 </div>
               )
@@ -198,10 +196,10 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
-          <h2 className="text-lg font-semibold">Available to Stake</h2>
+          <h2 className="text-lg font-semibold">Available to Lock</h2>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center p-4">
-          <p className="text-sm text-muted-foreground">No Dandies available to stake</p>
+          <p className="text-sm text-muted-foreground">No Dandies available to lock</p>
         </div>
       </div>
     )
@@ -210,10 +208,10 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/50 px-4 py-3">
-        <h2 className="text-lg font-semibold">Available to Stake ({availableDandies.length})</h2>
-        <Button variant="outline" size="sm" onClick={() => onStakeAll(availableDandies)}>
+        <h2 className="text-lg font-semibold">Available to Lock ({availableDandies.length})</h2>
+        <Button variant="outline" size="sm" onClick={() => onLockAll(availableDandies)}>
           <LockKeyhole className="mr-2 h-4 w-4" />
-          Stake All
+          Lock All
         </Button>
       </div>
       <div className="min-h-0 flex-1 p-2">
@@ -235,7 +233,7 @@ export function AvailableToStakeGrid({ onStake, onStakeAll }: AvailableToStakeGr
                 columnWidth={columnWidth}
                 rowCount={rowCount}
                 rowHeight={rowHeight}
-                itemData={{ nfts: availableDandies, columnCount, onStake, gap }}
+                itemData={{ nfts: availableDandies, columnCount, onLock, gap }}
               >
                 {Cell}
               </FixedSizeGrid>

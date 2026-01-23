@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
 import { LockedDandiesGrid } from "@/components/membership/LockedDandiesGrid"
-import { AvailableToStakeGrid } from "@/components/membership/AvailableToStakeGrid"
+import { AvailableToLockGrid } from "@/components/membership/AvailableToLockGrid"
 import { LockDialog } from "@/components/membership/LockDialog"
 import { UnlockDialog } from "@/components/membership/UnlockDialog"
 import { BulkLockDialog } from "@/components/membership/BulkLockDialog"
@@ -140,7 +140,7 @@ export function StakePage() {
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
             <LockedDandiesGrid onUnlock={handleUnstake} onUnlockAll={handleUnstakeAll} />
-            <AvailableToStakeGrid onStake={handleStake} onStakeAll={handleStakeAll} />
+            <AvailableToLockGrid onLock={handleStake} onLockAll={handleStakeAll} />
           </div>
         </div>
       )}
