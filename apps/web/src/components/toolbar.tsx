@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useLocation } from "react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
@@ -19,6 +19,7 @@ import {
   Info,
   PanelLeftClose,
   PanelLeft,
+  Shield,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -40,9 +41,12 @@ import {
   clearSelectionAtom,
 } from "@/stores/selection"
 import { filteredNftsAtom, refreshNftsAtom, isLoadingAtom } from "@/stores/nfts"
+import { vaultedMintsSetAtom } from "@/stores/vault"
 import { BulkSendDialog } from "./bulk-send-dialog"
 import { BulkBurnDialog } from "./bulk-burn-dialog"
 import { CollageExportDialog } from "./collage-export-dialog"
+import { VaultDialog } from "./vault/VaultDialog"
+import { UnvaultDialog } from "./vault/UnvaultDialog"
 import { WalletButton } from "./wallet-button"
 import { Button } from "./ui/button"
 import {
@@ -89,6 +93,7 @@ export function Toolbar() {
   const isLoading = useAtomValue(isLoadingAtom)
   const [showInfo, setShowInfo] = useAtom(showInfoAtom)
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
+  const vaultedMints = useAtomValue(vaultedMintsSetAtom)
 
   const showNftControls =
     location.pathname === "/nfts" ||
@@ -100,8 +105,38 @@ export function Toolbar() {
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const [burnDialogOpen, setBurnDialogOpen] = useState(false)
   const [collageDialogOpen, setCollageDialogOpen] = useState(false)
+  const [vaultDialogOpen, setVaultDialogOpen] = useState(false)
+  const [unvaultDialogOpen, setUnvaultDialogOpen] = useState(false)
 
   const selectedNfts = filteredNfts.filter((nft) => selectedMints.has(nft.mint))
+
+  const vaultActionState = useMemo(() => {
+    if (selectedNfts.length === 0) {
+      return { disabled: true, reason: "No NFTs selected", action: null as "vault" | "unvault" | null }
+    }
+
+    const hasCompressed = selectedNfts.some((nft) => nft.compressed)
+    if (hasCompressed) {
+      return { disabled: true, reason: "Compressed NFTs cannot be vaulted", action: null as "vault" | "unvault" | null }
+    }
+
+    const vaultedCount = selectedNfts.filter((nft) => vaultedMints.has(nft.mint)).length
+    const nonVaultedCount = selectedNfts.length - vaultedCount
+
+    if (vaultedCount > 0 && nonVaultedCount > 0) {
+      return {
+        disabled: true,
+        reason: "Selection contains both vaulted and non-vaulted NFTs",
+        action: null as "vault" | "unvault" | null,
+      }
+    }
+
+    if (vaultedCount === selectedNfts.length) {
+      return { disabled: false, reason: null, action: "unvault" as const }
+    }
+
+    return { disabled: false, reason: null, action: "vault" as const }
+  }, [selectedNfts, vaultedMints])
 
   const handleActionSuccess = () => {
     clearSelection()
@@ -172,6 +207,24 @@ export function Toolbar() {
             >
               <Flame className="h-3.5 w-3.5" />
               Burn
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (vaultActionState.action === "vault") {
+                  setVaultDialogOpen(true)
+                } else if (vaultActionState.action === "unvault") {
+                  setUnvaultDialogOpen(true)
+                }
+              }}
+              disabled={vaultActionState.disabled}
+              title={vaultActionState.reason ?? undefined}
+              className="gap-1.5"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              {vaultActionState.action === "unvault" ? "Unvault" : "Vault"}
             </Button>
 
             <div className="mx-1 h-5 w-px bg-border" />
@@ -323,6 +376,20 @@ export function Toolbar() {
       )}
 
       {collageDialogOpen && <CollageExportDialog onClose={() => setCollageDialogOpen(false)} />}
+
+      <VaultDialog
+        open={vaultDialogOpen}
+        onOpenChange={setVaultDialogOpen}
+        nfts={selectedNfts}
+        onSuccess={handleActionSuccess}
+      />
+
+      <UnvaultDialog
+        open={unvaultDialogOpen}
+        onOpenChange={setUnvaultDialogOpen}
+        nfts={selectedNfts}
+        onSuccess={handleActionSuccess}
+      />
     </>
   )
 }
