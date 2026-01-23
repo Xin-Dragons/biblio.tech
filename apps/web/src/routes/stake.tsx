@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useAtom, useSetAtom } from "jotai"
 import { LockKeyhole, Grid2X2, Grid3X3, LayoutGrid } from "lucide-react"
-import { StakeStats } from "@/components/stake/StakeStats"
 import { StakedNftsGrid } from "@/components/stake/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/stake/AvailableToStakeGrid"
 import { StakeDialog } from "@/components/stake/StakeDialog"
@@ -139,7 +138,6 @@ export function StakePage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <StakeStats />
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
             <StakedNftsGrid onUnstake={handleUnstake} onUnstakeAll={handleUnstakeAll} />
             <AvailableToStakeGrid onStake={handleStake} onStakeAll={handleStakeAll} />
