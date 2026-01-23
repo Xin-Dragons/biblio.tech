@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { Shield, AlertTriangle, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { useSetAtom } from "jotai"
 import toast from "react-hot-toast"
-import type { Address } from "@solana/kit"
+import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,6 +15,9 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { NFT } from "@/stores/nfts"
+import { removeVaultedMintsAtom } from "@/stores/vault"
+import { buildRecoverInstructions } from "@/lib/vault-transactions"
+import { prepareAndSendTransaction } from "@/lib/transaction"
 
 interface RecoverDialogProps {
   open: boolean
@@ -22,11 +26,12 @@ interface RecoverDialogProps {
   onSuccess: () => void
 }
 
-export function RecoverDialog({ open, onOpenChange, nfts, onSuccess: _onSuccess }: RecoverDialogProps) {
+export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDialogProps) {
   const [selectedDestination, setSelectedDestination] = useState<string | null>(null)
   const [isRecovering, setIsRecovering] = useState(false)
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
+  const removeVaultedMints = useSetAtom(removeVaultedMintsAtom)
 
   const connectedAddress = account as Address | undefined
 
@@ -70,39 +75,33 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess: _onSuccess 
     setIsRecovering(true)
 
     try {
-      // TODO: Implement buildRecoverTransaction in US-013/US-014
-      // For now, just show that recovery would happen
-      toast.error("Recovery transactions not yet implemented")
-      return
+      const ownerAddress = account as Address
+      const destinationAddress = selectedDestination as Address
 
-      // Once US-013 is implemented, uncomment this:
-      // const ownerAddress = account as Address
-      // const destinationAddress = selectedDestination as Address
-      //
-      // const allInstructions = await Promise.all(
-      //   nftsToRecover.map((nft) =>
-      //     buildRecoverTransaction({
-      //       nft,
-      //       owner: ownerAddress,
-      //       delegate: nft.delegate as Address,
-      //       destination: destinationAddress,
-      //       payer: signer as unknown as TransactionSigner,
-      //     })
-      //   )
-      // )
-      //
-      // const flatInstructions = allInstructions.flat()
-      //
-      // await prepareAndSendTransaction({
-      //   instructions: flatInstructions,
-      //   feePayer: signer as unknown as TransactionSigner,
-      // })
-      //
-      // removeVaultedMints(nftsToRecover.map((nft) => nft.mint))
-      //
-      // toast.success(`Recovered ${nftsToRecover.length} NFT${nftsToRecover.length === 1 ? "" : "s"}`)
-      // onSuccess()
-      // onOpenChange(false)
+      const allInstructions = await Promise.all(
+        nftsToRecover.map((nft) =>
+          buildRecoverInstructions({
+            nft,
+            owner: ownerAddress,
+            delegate: nft.delegate as Address,
+            destination: destinationAddress,
+            payer: signer as unknown as TransactionSigner,
+          })
+        )
+      )
+
+      const flatInstructions = allInstructions.flat()
+
+      await prepareAndSendTransaction({
+        instructions: flatInstructions,
+        feePayer: signer as unknown as TransactionSigner,
+      })
+
+      removeVaultedMints(nftsToRecover.map((nft) => nft.mint))
+
+      toast.success(`Recovered ${nftsToRecover.length} NFT${nftsToRecover.length === 1 ? "" : "s"}`)
+      onSuccess()
+      onOpenChange(false)
     } catch (err) {
       console.error("Recover failed:", err)
       toast.error(err instanceof Error ? err.message : "Failed to recover NFTs")
