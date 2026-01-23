@@ -1,5 +1,5 @@
 import { PublicKey, TransactionInstruction } from "@solana/web3.js"
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token"
+import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token"
 import type { Address, TransactionSigner } from "@solana/kit"
 import { stake } from "@biblio/solana-programs"
 import type { NFT } from "../stores/nfts"
@@ -10,7 +10,6 @@ import {
   type StakerAccount,
   type StakeRecordAccount,
 } from "../stores/stake"
-import { logger } from "../lib/logger"
 
 /**
  * Stake Program ID
@@ -695,117 +694,4 @@ export function getTokenAuthorityPda(staker: PublicKey): PublicKey {
     STAKE_PROGRAM_ID
   )
   return pda
-}
-
-/**
- * Input parameters for building claim instructions
- */
-export interface BuildClaimInstructionsInput {
-  stakeRecord: StakeRecordAccount
-  emission: EmissionAccount
-  staker: StakerAccount
-  collection: CollectionAccount
-  owner: string
-}
-
-/**
- * Builds the transaction instructions required to claim staking rewards
- *
- * This creates a Claim instruction that:
- * 1. Calculates pending rewards based on stake duration and emission rate
- * 2. Updates the StakeRecord with claimed amounts
- * 3. Transfers reward tokens from the stake vault to the owner's token account
- *
- * For token rewards, this will:
- * - Derive the token authority PDA from the emission
- * - Calculate the stake token vault (ATA of token authority for reward mint)
- * - Create/use the owner's ATA for the reward token
- *
- * @param input - The claim parameters including stakeRecord, emission, staker, collection, and owner
- * @returns Array of TransactionInstructions to execute the claim
- */
-export function buildClaimInstructions(input: BuildClaimInstructionsInput): TransactionInstruction[] {
-  try {
-    const { stakeRecord, emission, staker, collection, owner } = input
-
-    const ownerPubkey = new PublicKey(owner)
-
-    logger.debug("buildClaimInstructions input:", {
-      staker: staker.address,
-      stakerTokenMint: staker.tokenMint,
-      collection: collection.address,
-      emission: emission.address,
-      emissionTokenMint: emission.tokenMint,
-      emissionRewardType: emission.rewardType,
-      stakeRecord: stakeRecord.address,
-      nftMint: stakeRecord.nftMint,
-      owner: owner,
-    })
-
-    const stakerPubkey = new PublicKey(staker.address)
-    const collectionPubkey = new PublicKey(collection.address)
-    const emissionPubkey = new PublicKey(emission.address)
-    const stakeRecordPubkey = new PublicKey(stakeRecord.address)
-    const nftMint = new PublicKey(stakeRecord.nftMint)
-
-    const programConfigPda = getProgramConfigPda()
-    const tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
-
-    // nftRecord is only needed for Points emissions
-    const hasPointsEmission = emission.rewardType.__kind === "Points"
-    const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
-
-    let tokenMintPubkey: PublicKey | null = null
-    if (emission.tokenMint.__option === "Some") {
-      logger.debug("Using emission tokenMint:", emission.tokenMint.value)
-      tokenMintPubkey = new PublicKey(emission.tokenMint.value)
-    } else if (emission.rewardType.__kind === "Token" && staker.tokenMint.__option === "Some") {
-      logger.debug("Using staker tokenMint:", staker.tokenMint.value)
-      tokenMintPubkey = new PublicKey(staker.tokenMint.value)
-    } else {
-      logger.debug("No tokenMint found - emission:", emission.tokenMint, "staker:", staker.tokenMint)
-    }
-
-    let stakeTokenVault: PublicKey | null = null
-    let rewardReceiveAccount: PublicKey | null = null
-
-    if (tokenMintPubkey) {
-      stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
-      rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
-      logger.debug("Token accounts:", {
-        tokenMint: tokenMintPubkey.toBase58(),
-        stakeTokenVault: stakeTokenVault.toBase58(),
-        rewardReceiveAccount: rewardReceiveAccount.toBase58(),
-      })
-    }
-
-    logger.debug("Building claim instruction with accounts...")
-    const ix = stake.getClaimInstruction({
-      programConfig: addr(programConfigPda),
-      staker: addr(stakerPubkey),
-      collection: addr(collectionPubkey),
-      emission: addr(emissionPubkey),
-      stakeRecord: addr(stakeRecordPubkey),
-      nftRecord: nftRecordPda ? addr(nftRecordPda) : undefined,
-      feesWallet: addr(FEES_WALLET),
-      tokenMint: tokenMintPubkey ? addr(tokenMintPubkey) : undefined,
-      stakeTokenVault: stakeTokenVault ? addr(stakeTokenVault) : undefined,
-      rewardReceiveAccount: rewardReceiveAccount ? addr(rewardReceiveAccount) : undefined,
-      tokenAuthority: addr(tokenAuthorityPda),
-      owner: createSigner(ownerPubkey),
-      tokenProgram: addr(new PublicKey(TOKEN_PROGRAM_ID)),
-      associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
-    })
-
-    logger.debug("Codama instruction built:", ix)
-    logger.debug("Instruction data length:", (ix as CodamaInstruction).data?.length)
-
-    const web3ix = codamaInstructionToWeb3(ix)
-    logger.debug("Web3 instruction built successfully")
-    return [web3ix]
-  } catch (err) {
-    console.error("buildClaimInstructions error:", err)
-    console.error("Error stack:", (err as Error).stack)
-    throw err
-  }
 }
