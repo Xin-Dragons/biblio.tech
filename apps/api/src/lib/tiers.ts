@@ -30,6 +30,34 @@ export const FEE_DISCOUNTS: Record<Tier, number> = {
   [Tier.Diamond]: 1,
 }
 
+export const BASE_FEES = {
+  nftSuite: {
+    create: 0.01,
+    update: 0.002,
+    batch: 0.002,
+  },
+  tokenTool: {
+    create: 0.05,
+    update: 0.025,
+  },
+  biblio: {
+    send: 0.002,
+    burnNft: 0.002,
+    burnFt: 0.0002,
+    cleanup: 0.0002,
+    basicLock: 0.05,
+    secureLock: 0.1,
+  },
+} as const
+
+type NftSuiteOperation = keyof typeof BASE_FEES.nftSuite
+type TokenToolOperation = keyof typeof BASE_FEES.tokenTool
+type BiblioOperation = keyof typeof BASE_FEES.biblio
+export type Operation =
+  | `nftSuite.${NftSuiteOperation}`
+  | `tokenTool.${TokenToolOperation}`
+  | `biblio.${BiblioOperation}`
+
 export function getTierFromStakedCount(count: number): Tier {
   if (count >= TIER_THRESHOLDS[Tier.Diamond]) return Tier.Diamond
   if (count >= TIER_THRESHOLDS[Tier.Gold]) return Tier.Gold
@@ -40,4 +68,15 @@ export function getTierFromStakedCount(count: number): Tier {
 
 export function getVotesForTier(tier: Tier): number {
   return VOTES_PER_DAY[tier]
+}
+
+export function getFeeForOperation(operation: Operation, tier: Tier): number {
+  if (tier === Tier.Diamond) return 0
+
+  const [category, op] = operation.split(".") as [keyof typeof BASE_FEES, string]
+  const categoryFees = BASE_FEES[category]
+  const baseFee = categoryFees[op as keyof typeof categoryFees] as number
+  const discount = FEE_DISCOUNTS[tier]
+
+  return baseFee * (1 - discount)
 }
