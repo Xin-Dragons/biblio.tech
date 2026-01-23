@@ -60,3 +60,20 @@ export const removeVaultedMintsAtom = atom(null, (get, set, mints: string[]) => 
 export const setVaultedMintsAtom = atom(null, (_get, set, mints: Set<string>) => {
   set(vaultedMintsSetAtom, mints)
 })
+
+/**
+ * Action to detect vaulted NFTs from the loaded NFT data.
+ * An NFT is considered vaulted if it is frozen AND has a delegate set.
+ */
+export const detectVaultedNftsAtom = atom(null, (get, set) => {
+  const nfts = get(nftsAtom)
+  const vaultedMints = new Set<string>()
+
+  for (const nft of nfts) {
+    if (nft.frozen && nft.delegate) {
+      vaultedMints.add(nft.mint)
+    }
+  }
+
+  set(vaultedMintsSetAtom, vaultedMints)
+})

@@ -56,6 +56,7 @@ export interface NFT {
   attributes: Array<{ trait_type: string; value: string }>
   rarityRank: number | null
   frozen: boolean
+  delegate: string | null
   compressed: boolean
   tokenStandard: TokenStandard
   listing: {
@@ -93,6 +94,7 @@ function mapNftData(mint: Record<string, unknown>): NFT {
     attributes: (mint.attributes as Array<{ trait_type: string; value: string }>) ?? [],
     rarityRank: null,
     frozen: mint.frozen as boolean,
+    delegate: (mint.delegate as string) ?? null,
     compressed: mint.compressed as boolean,
     tokenStandard: (mint.tokenStandard as TokenStandard) ?? "NonFungible",
     listing: null,
@@ -254,6 +256,7 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
       attributes: (mint.attributes as Array<{ trait_type: string; value: string }>) ?? [],
       rarityRank: null,
       frozen: mint.frozen as boolean,
+      delegate: (mint.delegate as string) ?? null,
       compressed: mint.compressed as boolean,
       tokenStandard: (mint.tokenStandard as TokenStandard) ?? "NonFungible",
       listing: null,

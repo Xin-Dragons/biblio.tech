@@ -38,6 +38,7 @@ function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string
     })),
     compressed: false,
     frozen: niftyAsset.state === "Locked",
+    delegate: niftyAsset.delegate,
     tokenStandard: "Nifty",
   }
 }

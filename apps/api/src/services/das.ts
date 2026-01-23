@@ -36,6 +36,7 @@ export type DASAsset = {
   attributes: Array<{ trait_type: string; value: string }>
   compressed: boolean
   frozen: boolean
+  delegate: string | null
   tokenStandard: TokenStandard
 }
 
@@ -101,6 +102,7 @@ export async function getAssetsByOwner(
           : [],
         compressed: item.compression?.compressed ?? false,
         frozen: item.ownership?.frozen ?? false,
+        delegate: (item.ownership?.delegate as string) ?? null,
         tokenStandard,
       }
 

@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { Outlet, useLocation } from "react-router"
 import { useWallet } from "@solana/connector/react"
-import { useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
 import { Toolbar } from "../toolbar"
@@ -9,8 +9,9 @@ import { NftDetailModal } from "../nft-detail-modal"
 import { ToastContainer } from "../toast"
 import { ErrorWatcher } from "../error-watcher"
 import { WelcomeScreen } from "../welcome-screen"
-import { fetchNftsAtom } from "@/stores/nfts"
+import { fetchNftsAtom, nftsAtom } from "@/stores/nfts"
 import { fetchTierAtom } from "@/stores/tier"
+import { detectVaultedNftsAtom } from "@/stores/vault"
 
 const PAGES_WITHOUT_TOOLBAR: string[] = []
 
@@ -22,6 +23,8 @@ function DataFetcher() {
   const { isConnected, account } = useWallet()
   const fetchNfts = useSetAtom(fetchNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
+  const nfts = useAtomValue(nftsAtom)
+  const detectVaultedNfts = useSetAtom(detectVaultedNftsAtom)
 
   useEffect(() => {
     if (isConnected && account) {
@@ -29,6 +32,12 @@ function DataFetcher() {
       fetchTier()
     }
   }, [isConnected, account, fetchNfts, fetchTier])
+
+  useEffect(() => {
+    if (nfts.length > 0) {
+      detectVaultedNfts()
+    }
+  }, [nfts, detectVaultedNfts])
 
   return null
 }
