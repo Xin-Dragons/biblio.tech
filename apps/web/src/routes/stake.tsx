@@ -5,7 +5,7 @@ import { StakedNftsGrid } from "@/components/membership/StakedNftsGrid"
 import { AvailableToStakeGrid } from "@/components/membership/AvailableToStakeGrid"
 import { LockDialog } from "@/components/membership/LockDialog"
 import { UnlockDialog } from "@/components/membership/UnlockDialog"
-import { BulkStakeDialog } from "@/components/membership/BulkStakeDialog"
+import { BulkLockDialog } from "@/components/membership/BulkLockDialog"
 import { BulkUnstakeDialog } from "@/components/membership/BulkUnstakeDialog"
 import { useWallet } from "@solana/connector/react"
 import { cn } from "@/lib/utils"
@@ -159,7 +159,7 @@ export function StakePage() {
       )}
 
       {bulkStakeNfts && (
-        <BulkStakeDialog nfts={bulkStakeNfts} onClose={handleBulkStakeDialogClose} onSuccess={handleBulkStakeSuccess} />
+        <BulkLockDialog nfts={bulkStakeNfts} onClose={handleBulkStakeDialogClose} onSuccess={handleBulkStakeSuccess} />
       )}
 
       {bulkUnstakeItems && (

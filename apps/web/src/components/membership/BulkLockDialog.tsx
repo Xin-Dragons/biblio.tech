@@ -36,14 +36,14 @@ const CU_PER_STAKE = 250_000
 const MAX_CU_PER_TX = 1_400_000
 const MAX_STAKES_PER_TX = Math.floor(MAX_CU_PER_TX / CU_PER_STAKE)
 
-interface BulkStakeDialogProps {
+interface BulkLockDialogProps {
   nfts: NFT[]
   onClose: () => void
   onSuccess: () => void
 }
 
-export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogProps) {
-  const [staking, setStaking] = useState(false)
+export function BulkLockDialog({ nfts, onClose, onSuccess }: BulkLockDialogProps) {
+  const [locking, setLocking] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
@@ -99,13 +99,13 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
     return txCount
   }, [nfts, staker, collections])
 
-  const handleBulkStake = async () => {
+  const handleBulkLock = async () => {
     if (!account || !signer || !capabilities.canSign || !staker) {
-      toast.error("Wallet not connected or staking not available")
+      toast.error("Wallet not connected or locking not available")
       return
     }
 
-    setStaking(true)
+    setLocking(true)
 
     try {
       const ownerPubkey = new PublicKey(account)
@@ -137,8 +137,8 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
       }
 
       if (nftInstructions.length === 0) {
-        toast.error("No valid NFTs to stake")
-        setStaking(false)
+        toast.error("No valid Dandies to lock")
+        setLocking(false)
         return
       }
 
@@ -223,14 +223,14 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
       }
 
       invalidateStakeRecordsCache(account)
-      toast.success(`Staked ${successfulNfts.length} NFTs in ${transactions.length} transactions!`)
+      toast.success(`Locked ${successfulNfts.length} Dandies in ${transactions.length} transactions!`)
       onSuccess()
       onClose()
     } catch (err) {
-      console.error("Bulk stake failed:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to stake NFTs")
+      console.error("Bulk lock failed:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to lock Dandies")
     } finally {
-      setStaking(false)
+      setLocking(false)
       setProgress({ current: 0, total: 0 })
     }
   }
@@ -241,10 +241,10 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Stake All NFTs</h2>
+          <h2 className="text-lg font-semibold">Lock All Dandies</h2>
           <button
             onClick={onClose}
-            disabled={staking}
+            disabled={locking}
             className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -253,7 +253,7 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
 
         <div className="mb-4 rounded-lg border border-border p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">NFTs to stake</span>
+            <span className="text-sm text-muted-foreground">Dandies to lock</span>
             <span className="font-semibold">{nfts.length}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
         )}
 
         <p className="mb-4 text-sm text-muted-foreground">
-          This will stake all {nfts.length} NFTs. You'll need to approve {estimatedTxCount} transaction
+          This will lock all {nfts.length} Dandies. You'll need to approve {estimatedTxCount} transaction
           {estimatedTxCount > 1 ? "s" : ""}.
         </p>
 
@@ -303,19 +303,19 @@ export function BulkStakeDialog({ nfts, onClose, onSuccess }: BulkStakeDialogPro
         )}
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={staking} className="flex-1">
+          <Button variant="outline" onClick={onClose} disabled={locking} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleBulkStake} disabled={!isReady || staking} className="flex-1">
-            {staking ? (
+          <Button onClick={handleBulkLock} disabled={!isReady || locking} className="flex-1">
+            {locking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Staking...
+                Locking...
               </>
             ) : (
               <>
                 <Lock className="mr-2 h-4 w-4" />
-                Stake All
+                Lock All
               </>
             )}
           </Button>
