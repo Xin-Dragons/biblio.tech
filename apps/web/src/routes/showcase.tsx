@@ -1100,7 +1100,9 @@ export function ShowcasePage() {
           {remainingVotes && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Heart className="h-4 w-4" />
-              <span>{remainingVotes.remaining} votes left today</span>
+              <span>
+                {remainingVotes.maxVotes - remainingVotes.remaining}/{remainingVotes.maxVotes} votes today
+              </span>
             </div>
           )}
           <Link

@@ -214,7 +214,7 @@ export const fetchPublicShowcaseAtom = atom(
 )
 
 // Voting
-export const remainingVotesAtom = atom<{ remaining: number; votedFor: string[] } | null>(null)
+export const remainingVotesAtom = atom<{ remaining: number; votedFor: string[]; maxVotes: number } | null>(null)
 export const leaderboardAtom = atom<LeaderboardEntry[]>([])
 export const leaderboardLoadingAtom = atom(false)
 
@@ -245,8 +245,12 @@ export const voteForShowcaseAtom = atom(
       if (res.ok) {
         set(remainingVotesAtom, (prev) =>
           prev
-            ? { remaining: data.remaining ?? prev.remaining - 1, votedFor: [...prev.votedFor, username] }
-            : { remaining: data.remaining ?? 2, votedFor: [username] }
+            ? {
+                remaining: data.remaining ?? prev.remaining - 1,
+                votedFor: [...prev.votedFor, username],
+                maxVotes: data.maxVotes ?? prev.maxVotes,
+              }
+            : { remaining: data.remaining ?? 2, votedFor: [username], maxVotes: data.maxVotes ?? 3 }
         )
         return { success: true, remaining: data.remaining }
       }
