@@ -1,30 +1,71 @@
 # Ralph Progress Log
-# Feature: membership-refactor
+# Feature: vault
 # Started: 2026-01-23
 
 ## Codebase Patterns - IMPORTANT EXISTING CODE
 
-**TIER SYSTEM (from previous ralph/membership-tiers):**
-- apps/api/src/lib/tiers.ts — tier constants, thresholds, helpers
-- apps/web/src/components/tier-badge.tsx — TierBadge component, Tier enum, getTierFromDandyCount()
-- apps/web/src/stores/tier.ts — tierAtom, fetchTierAtom
-- apps/web/src/components/tier-benefits-card.tsx — TierBenefitsCard component
+**VAULT LEGACY REFERENCE:**
+- apps/legacy/src/components/Vault/index.tsx — legacy vault component with full lock/unlock/recover logic
+- apps/legacy/src/components/Actions/index.tsx — vault action integration
 
-**STAKING SYSTEM (to be refactored):**
-- apps/web/src/components/stake/ — all dialog and grid components
-- apps/web/src/routes/stake.tsx — main staking page
-- apps/web/src/stores/stake.ts — stake atoms (keep core, remove rewards)
-- apps/web/src/hooks/use-staking.ts — instruction builders (keep stake/unstake, remove claim)
+**EXISTING PATTERNS TO FOLLOW:**
+- apps/web/src/stores/stake.ts — Jotai store pattern (stakedMintsSetAtom)
+- apps/web/src/hooks/use-staking.ts — transaction building pattern
+- apps/web/src/components/nft-grid.tsx — NftCard with badges (Staked badge pattern)
+- apps/web/src/components/membership/ — dialog patterns (LockDialog, UnlockDialog)
 
-**TIER THRESHOLDS:**
-- Free: 0, Bronze: 1, Silver: 5, Gold: 15, Diamond: 50
+**ASSET TYPE DETECTION:**
+- Token Metadata: Account owner is SPL_TOKEN_PROGRAM_ID
+- Nifty Asset: Account owner is ASSET_PROGRAM_ID from @nifty-oss/asset
+- MPL Core: Account owner is MPL_CORE_PROGRAM_ID from @metaplex-foundation/mpl-core
 
-**KEY TERMINOLOGY CHANGES:**
-- Stake → Lock
-- Unstake → Unlock
-- Staked NFTs → Locked Dandies
-- Available to Stake → Available to Lock
-- /stake → /membership
+**KEY IMPORTS:**
+- @metaplex-foundation/mpl-token-metadata: lockV1, unlockV1, delegateUtilityV1, revokeUtilityV1, transferV1
+- @nifty-oss/asset: lock, unlock, approve, revoke, transfer, DelegateRole, ASSET_PROGRAM_ID
+- @metaplex-foundation/mpl-core: addPluginV1, removePluginV1, createPlugin, PluginType, MPL_CORE_PROGRAM_ID
 
+**CONSTRAINT:**
+- Must use @solana/kit for all Solana operations - NO @solana/web3.js
+
+**JOTAI SET TYPING:**
+- When creating atoms with Set, use explicit generic: `atom<Set<string>>(new Set<string>())`
+- `new Set()` alone infers `Set<unknown>` which causes type errors
+
+---
+
+## 2026-01-23 - US-003
+- Created vault transaction builder utilities for Token Metadata NFTs
+- Files changed:
+  - apps/web/src/lib/vault-transactions.ts — New file with buildLockInstructions and buildUnlockInstructions functions
+- **Learnings for future iterations:**
+  - This codebase uses @solana/kit with raw Instructions, NOT Umi TransactionBuilder
+  - Follow patterns in use-solana-actions.ts and use-staking.ts for building instructions
+  - Import types like RevokeArgs via namespace: `tokenMetadata.RevokeArgs.UtilityV1`
+  - For pNFTs: use UtilityV1 delegate type and tokenRecord PDA
+  - For regular NFTs: use StandardV1 delegate type (no tokenRecord needed)
+  - Lock flow: delegate first (UtilityV1 for pNFT, StandardV1 for regular) then lock
+  - Unlock flow: unlock first then revoke delegate
+---
+
+## 2026-01-23 - US-002
+- Created vault store for state management
+- Files changed:
+  - apps/web/src/stores/vault.ts — New Jotai store with vaultedMintsSetAtom, vaultLoadingAtom, vaultErrorAtom, vaultedNftsAtom
+- **Learnings for future iterations:**
+  - Follow stake.ts pattern for store structure
+  - Use explicit Set<string> generic to avoid type inference issues
+  - Include helper action atoms (addVaultedMintsAtom, removeVaultedMintsAtom, setVaultedMintsAtom) for easier state updates
+---
+
+## 2026-01-23 - US-001
+- Implemented Vault route and sidebar navigation
+- Files changed:
+  - apps/web/src/App.tsx — Added VaultPage import and /vault route
+  - apps/web/src/routes/vault.tsx — Created new placeholder VaultPage component
+  - apps/web/src/components/layout/sidebar.tsx — Added Shield icon import and Vault nav item
+- **Learnings for future iterations:**
+  - Follow MembershipPage pattern for Vault page structure (same layout with icon + title header)
+  - Use Shield icon from lucide-react for vault-related UI elements
+  - Sidebar navItems array determines sidebar order
 ---
 
