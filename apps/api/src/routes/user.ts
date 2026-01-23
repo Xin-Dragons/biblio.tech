@@ -2,8 +2,11 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { authMiddleware } from "../middleware/auth"
 import { heliusService } from "../services/helius"
+import { getStakeRecordsByOwner } from "../services/stake"
+import { Tier, getTierFromStakedCount, getVotesForTier, FEE_DISCOUNTS } from "../lib/tiers"
 
 const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
+const DANDIES_STAKER_PUBKEY = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a"
 
 export const userRoutes = new Hono<HonoEnv>()
 
@@ -185,6 +188,43 @@ userRoutes.put("/sizes/:context", async (c) => {
   return c.body(null, 204)
 })
 
+// Tier
+export type TierResponse = {
+  tier: Tier
+  stakedCount: number
+  votesPerDay: number
+  feeDiscount: number
+  hasVanityAccess: boolean
+}
+
+userRoutes.get("/tier", async (c) => {
+  const userDO = getUserDO(c)
+
+  const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+  const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
+
+  let stakedCount = 0
+
+  for (const { publicKey: wallet } of wallets) {
+    const records = await getStakeRecordsByOwner(c.env, wallet)
+    const dandiesRecords = records.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
+    stakedCount += dandiesRecords.length
+  }
+
+  const tier = getTierFromStakedCount(stakedCount)
+  const votesPerDay = getVotesForTier(tier)
+  const feeDiscount = FEE_DISCOUNTS[tier]
+  const hasVanityAccess = tier === Tier.Gold || tier === Tier.Diamond
+
+  return c.json<TierResponse>({
+    tier,
+    stakedCount,
+    votesPerDay,
+    feeDiscount,
+    hasVanityAccess,
+  })
+})
+
 // Collage layout
 userRoutes.get("/layout/:context", async (c) => {
   const userDO = getUserDO(c)
@@ -253,20 +293,26 @@ userRoutes.put("/dandies", async (c) => {
 })
 
 // NFT Cache
+function getNftCacheDO(c: { env: HonoEnv["Bindings"] }, wallet: string) {
+  const id = c.env.NFT_CACHE_DO.idFromName(wallet)
+  return c.env.NFT_CACHE_DO.get(id)
+}
+
 userRoutes.get("/nft-cache/:wallet", async (c) => {
-  const userDO = getUserDO(c)
   const wallet = c.req.param("wallet")
-  const res = await userDO.fetch(new Request(`http://do/nft-cache/${wallet}`))
+  const stub = getNftCacheDO(c, wallet)
+  const res = await stub.fetch(new Request("http://do/cache"))
   return c.json(await res.json())
 })
 
 userRoutes.put("/nft-cache/:wallet", async (c) => {
-  const userDO = getUserDO(c)
   const wallet = c.req.param("wallet")
   const body = await c.req.json()
-  await userDO.fetch(
-    new Request(`http://do/nft-cache/${wallet}`, {
+  const stub = getNftCacheDO(c, wallet)
+  await stub.fetch(
+    new Request("http://do/cache", {
       method: "PUT",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
   )
@@ -274,9 +320,9 @@ userRoutes.put("/nft-cache/:wallet", async (c) => {
 })
 
 userRoutes.delete("/nft-cache/:wallet", async (c) => {
-  const userDO = getUserDO(c)
   const wallet = c.req.param("wallet")
-  await userDO.fetch(new Request(`http://do/nft-cache/${wallet}`, { method: "DELETE" }))
+  const stub = getNftCacheDO(c, wallet)
+  await stub.fetch(new Request("http://do/cache", { method: "DELETE" }))
   return c.body(null, 204)
 })
 
