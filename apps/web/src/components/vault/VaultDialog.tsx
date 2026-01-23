@@ -1,6 +1,9 @@
 import { useState } from "react"
-import { Shield, Lock, Info } from "lucide-react"
-import { useWallet } from "@solana/connector/react"
+import { Shield, Lock, Info, Loader2 } from "lucide-react"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { useSetAtom } from "jotai"
+import toast from "react-hot-toast"
+import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,6 +15,9 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { NFT } from "@/stores/nfts"
+import { addVaultedMintsAtom } from "@/stores/vault"
+import { buildLockInstructions } from "@/lib/vault-transactions"
+import { prepareAndSendTransaction } from "@/lib/transaction"
 
 type FreezeType = "basic" | "secure"
 
@@ -25,12 +31,66 @@ interface VaultDialogProps {
 export function VaultDialog({ open, onOpenChange, nfts, onSuccess }: VaultDialogProps) {
   const [freezeType, setFreezeType] = useState<FreezeType>("basic")
   const [selectedDelegate, setSelectedDelegate] = useState<string | null>(null)
+  const [isVaulting, setIsVaulting] = useState(false)
   const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
+  const addVaultedMints = useSetAtom(addVaultedMintsAtom)
 
   const linkedWallets: string[] = []
   const hasLinkedWallets = linkedWallets.length > 0
   const otherWallets = linkedWallets.filter((w) => w !== account)
   const canSecureFreeze = otherWallets.length > 0
+
+  const handleVault = async () => {
+    if (!account || !signer || !capabilities.canSign) {
+      toast.error("Wallet not connected")
+      return
+    }
+
+    if (nfts.length === 0) {
+      toast.error("No NFTs selected")
+      return
+    }
+
+    setIsVaulting(true)
+
+    try {
+      const ownerAddress = account as Address
+      const delegateAddress = freezeType === "secure" && selectedDelegate ? (selectedDelegate as Address) : ownerAddress
+
+      const allInstructions = await Promise.all(
+        nfts.map((nft) =>
+          buildLockInstructions({
+            nft,
+            owner: ownerAddress,
+            delegate: delegateAddress,
+            payer: signer as unknown as TransactionSigner,
+          })
+        )
+      )
+
+      const flatInstructions = allInstructions.flat()
+
+      await prepareAndSendTransaction({
+        instructions: flatInstructions,
+        feePayer: signer as unknown as TransactionSigner,
+      })
+
+      addVaultedMints(nfts.map((nft) => nft.mint))
+
+      toast.success(`Vaulted ${nfts.length} NFT${nfts.length === 1 ? "" : "s"}`)
+      onSuccess()
+      onOpenChange(false)
+    } catch (err) {
+      console.error("Vault failed:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to vault NFTs")
+    } finally {
+      setIsVaulting(false)
+    }
+  }
+
+  const isReady = !!account && !!signer && capabilities.canSign && nfts.length > 0
+  const isVaultDisabled = !isReady || isVaulting || (freezeType === "secure" && !selectedDelegate)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,19 +208,21 @@ export function VaultDialog({ open, onOpenChange, nfts, onSuccess }: VaultDialog
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isVaulting}>
             Cancel
           </Button>
-          <Button
-            onClick={() => {
-              onSuccess()
-              onOpenChange(false)
-            }}
-            disabled={freezeType === "secure" && !selectedDelegate}
-            className="bg-teal-600 hover:bg-teal-700"
-          >
-            <Shield className="mr-2 h-4 w-4" />
-            Vault
+          <Button onClick={handleVault} disabled={isVaultDisabled} className="bg-teal-600 hover:bg-teal-700">
+            {isVaulting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Vaulting...
+              </>
+            ) : (
+              <>
+                <Shield className="mr-2 h-4 w-4" />
+                Vault
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
