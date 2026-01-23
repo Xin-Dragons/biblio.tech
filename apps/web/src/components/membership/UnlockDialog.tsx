@@ -30,7 +30,7 @@ import {
 import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
 
-interface UnstakeDialogProps {
+interface UnlockDialogProps {
   nft: NFT
   stakeRecord: StakeRecordAccount
   onClose: () => void
@@ -51,8 +51,8 @@ function formatDuration(seconds: number): string {
   return `${days} day${days !== 1 ? "s" : ""}`
 }
 
-export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeDialogProps) {
-  const [unstaking, setUnstaking] = useState(false)
+export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDialogProps) {
+  const [unlocking, setUnlocking] = useState(false)
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
@@ -63,25 +63,25 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
   const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
-  const stakedAtSeconds = Number(stakeRecord.stakedAt)
-  const minStakePeriodSeconds = collection?.minStakePeriod ? Number(collection.minStakePeriod) : 0
+  const lockedAtSeconds = Number(stakeRecord.stakedAt)
+  const minLockPeriodSeconds = collection?.minStakePeriod ? Number(collection.minStakePeriod) : 0
   const currentTimeSeconds = Math.floor(Date.now() / 1000)
-  const timeStakedSeconds = currentTimeSeconds - stakedAtSeconds
-  const remainingSeconds = minStakePeriodSeconds - timeStakedSeconds
-  const isMinPeriodMet = minStakePeriodSeconds === 0 || remainingSeconds <= 0
+  const timeLockedSeconds = currentTimeSeconds - lockedAtSeconds
+  const remainingSeconds = minLockPeriodSeconds - timeLockedSeconds
+  const isMinPeriodMet = minLockPeriodSeconds === 0 || remainingSeconds <= 0
 
-  const handleUnstake = async () => {
+  const handleUnlock = async () => {
     if (!account || !signer || !capabilities.canSign || !staker || !collection) {
-      toast.error("Wallet not connected or staking not available")
+      toast.error("Wallet not connected or membership not available")
       return
     }
 
-    setUnstaking(true)
+    setUnlocking(true)
 
     try {
       const ownerPubkey = new PublicKey(account)
 
-      logger.debug("Building unstake instruction with:", {
+      logger.debug("Building unlock instruction with:", {
         nft: { mint: nft.mint, name: nft.name, collectionId: nft.collectionId },
         stakeRecord: { address: stakeRecord.address, nftMint: stakeRecord.nftMint, owner: stakeRecord.owner },
         staker: { address: staker.address },
@@ -106,7 +106,7 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
             emissions,
             owner: account,
           })
-      logger.debug("Unstake instruction built:", instructions[0])
+      logger.debug("Unlock instruction built:", instructions[0])
 
       const blockhash = await getBlockhash()
       const { unitsConsumed } = await simulateTransaction(instructions, ownerPubkey, blockhash)
@@ -130,18 +130,18 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
       removeStakeRecord(nft.mint)
 
       invalidateStakeRecordsCache(account)
-      toast.success(`Unstaked ${nft.name} successfully!`)
+      toast.success(`Unlocked ${nft.name} successfully!`)
       onSuccess()
       onClose()
     } catch (err) {
-      console.error("Unstake failed:", err)
+      console.error("Unlock failed:", err)
       if (err && typeof err === "object") {
         console.error("Error details:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2))
         if ("logs" in err) console.error("Transaction logs:", (err as { logs: string[] }).logs)
       }
-      toast.error(err instanceof Error ? err.message : "Failed to unstake NFT")
+      toast.error(err instanceof Error ? err.message : "Failed to unlock Dandy")
     } finally {
-      setUnstaking(false)
+      setUnlocking(false)
     }
   }
 
@@ -151,10 +151,10 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Unstake NFT</h2>
+          <h2 className="text-lg font-semibold">Unlock Dandy</h2>
           <button
             onClick={onClose}
-            disabled={unstaking}
+            disabled={unlocking}
             className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -175,9 +175,9 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
             <div className="text-sm">
-              <p className="font-medium text-yellow-500">Minimum stake period not met</p>
+              <p className="font-medium text-yellow-500">Minimum lock period not met</p>
               <p className="text-muted-foreground">
-                {formatDuration(remainingSeconds)} remaining. You can still unstake, but you may forfeit rewards.
+                {formatDuration(remainingSeconds)} remaining. You can still unlock early.
               </p>
             </div>
           </div>
@@ -185,24 +185,24 @@ export function UnstakeDialog({ nft, stakeRecord, onClose, onSuccess }: UnstakeD
 
         <p className="mb-4 text-sm text-muted-foreground">
           {isMinPeriodMet
-            ? "Are you sure you want to unstake this NFT? Your staking rewards will stop accumulating."
-            : "Are you sure you want to unstake this NFT early?"}
+            ? "Are you sure you want to unlock this Dandy?"
+            : "Are you sure you want to unlock this Dandy early?"}
         </p>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={unstaking} className="flex-1">
+          <Button variant="outline" onClick={onClose} disabled={unlocking} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleUnstake} disabled={!isReady || unstaking} className="flex-1">
-            {unstaking ? (
+          <Button onClick={handleUnlock} disabled={!isReady || unlocking} className="flex-1">
+            {unlocking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Unstaking...
+                Unlocking...
               </>
             ) : (
               <>
                 <Unlock className="mr-2 h-4 w-4" />
-                Unstake
+                Unlock
               </>
             )}
           </Button>
