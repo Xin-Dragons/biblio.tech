@@ -6,7 +6,7 @@ import {
   type Instruction,
 } from "@solana/kit"
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
-import { tokenMetadata } from "@biblio/solana-programs"
+import { tokenMetadata, asset } from "@biblio/solana-programs"
 import type { NFT, TokenStandard } from "../stores/nfts"
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
@@ -57,6 +57,10 @@ function isProgrammableNft(tokenStandard: TokenStandard): boolean {
   return tokenStandard === "ProgrammableNonFungible" || tokenStandard === "ProgrammableNonFungibleEdition"
 }
 
+function isNiftyAsset(tokenStandard: TokenStandard): boolean {
+  return tokenStandard === "Nifty"
+}
+
 export interface BuildLockInput {
   nft: NFT
   owner: Address
@@ -68,6 +72,11 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
   const { nft, owner, delegate, payer } = input
 
   const mintAddress = nft.mint as Address
+
+  if (isNiftyAsset(nft.tokenStandard)) {
+    return buildNiftyLockInstructions(mintAddress, owner, delegate, payer)
+  }
+
   const isPnft = isProgrammableNft(nft.tokenStandard)
 
   const [ata] = await findAssociatedTokenPda({
@@ -142,6 +151,31 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
   return instructions
 }
 
+function buildNiftyLockInstructions(
+  assetAddress: Address,
+  owner: Address,
+  delegate: Address,
+  _payer: TransactionSigner
+): Instruction[] {
+  const instructions: Instruction[] = []
+
+  const approveIx = asset.getApproveInstruction({
+    asset: assetAddress,
+    owner: createNoopSigner(owner),
+    delegate: delegate,
+    delegateInput: asset.delegateInput("Some", { roles: [asset.DelegateRole.Lock] }),
+  })
+
+  const lockIx = asset.getLockInstruction({
+    asset: assetAddress,
+    signer: createNoopSigner(delegate),
+  })
+
+  instructions.push(approveIx, lockIx)
+
+  return instructions
+}
+
 export interface BuildUnlockInput {
   nft: NFT
   owner: Address
@@ -153,6 +187,11 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
   const { nft, owner, delegate, payer } = input
 
   const mintAddress = nft.mint as Address
+
+  if (isNiftyAsset(nft.tokenStandard)) {
+    return buildNiftyUnlockInstructions(mintAddress, owner, delegate)
+  }
+
   const isPnft = isProgrammableNft(nft.tokenStandard)
 
   const [ata] = await findAssociatedTokenPda({
@@ -223,6 +262,25 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
 
     instructions.push(unlockIx, revokeIx)
   }
+
+  return instructions
+}
+
+function buildNiftyUnlockInstructions(assetAddress: Address, owner: Address, delegate: Address): Instruction[] {
+  const instructions: Instruction[] = []
+
+  const unlockIx = asset.getUnlockInstruction({
+    asset: assetAddress,
+    signer: createNoopSigner(delegate),
+  })
+
+  const revokeIx = asset.getRevokeInstruction({
+    asset: assetAddress,
+    signer: createNoopSigner(owner),
+    delegateInput: asset.delegateInput("Some", { roles: [asset.DelegateRole.Lock] }),
+  })
+
+  instructions.push(unlockIx, revokeIx)
 
   return instructions
 }
