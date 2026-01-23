@@ -81,7 +81,7 @@ export function TierBenefitsCard({ stakedCount, className }: TierBenefitsCardPro
           <TierBadge tier={currentTier} size="lg" />
         </div>
         <p className="text-sm text-muted-foreground">
-          {stakedCount} Dandy{stakedCount !== 1 ? "s" : ""} staked
+          {stakedCount} Dandy{stakedCount !== 1 ? "s" : ""} locked
           {nextTier && (
             <>
               {" · "}
@@ -115,7 +115,7 @@ export function TierBenefitsCard({ stakedCount, className }: TierBenefitsCardPro
 
       <CardFooter>
         <Link
-          to="/stake"
+          to="/membership"
           className={cn(
             "inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium",
             "h-8 px-3 text-xs",
@@ -124,7 +124,7 @@ export function TierBenefitsCard({ stakedCount, className }: TierBenefitsCardPro
             "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground hover:border-border-hover active:bg-accent/80"
           )}
         >
-          {currentTier === Tier.Diamond ? "Manage Staking" : "Stake More Dandies"}
+          {currentTier === Tier.Diamond ? "Manage Membership" : "Lock More Dandies"}
           <ArrowRight className="h-4 w-4" />
         </Link>
       </CardFooter>
