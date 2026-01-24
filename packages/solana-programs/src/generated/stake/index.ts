@@ -12,8 +12,8 @@ export * from "./instructions"
 export {
   STAKE_PROGRAM_ADDRESS,
   StakeAccount,
-  StakeInstruction,
   identifyStakeAccount,
+  StakeInstruction as StakeInstructionType,
   identifyStakeInstruction,
 } from "./programs"
 export type { ParsedStakeInstruction as ParsedStakeProgramInstruction } from "./programs"

@@ -106,7 +106,11 @@ function decodeFixedString(data: Uint8Array, offset: number, maxLength: number):
  * Decodes a length-prefixed string from bytes
  * Format: 4 byte little-endian length prefix followed by UTF-8 bytes
  */
-function decodeLengthPrefixedString(data: Uint8Array, offset: number, maxLen: number): { value: string; bytesRead: number } {
+function decodeLengthPrefixedString(
+  data: Uint8Array,
+  offset: number,
+  maxLen: number
+): { value: string; bytesRead: number } {
   if (offset + 4 > data.length) {
     return { value: "", bytesRead: 0 }
   }

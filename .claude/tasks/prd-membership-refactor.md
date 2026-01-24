@@ -17,9 +17,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 ## User Stories
 
 ### US-001: Remove ClaimDialog component
+
 **Description:** As a developer, I need to remove the claim rewards dialog since emissions are no longer part of the system.
 
 **Acceptance Criteria:**
+
 - [ ] Delete `apps/web/src/components/stake/ClaimDialog.tsx`
 - [ ] Remove ClaimDialog import and usage from stake.tsx (membership.tsx)
 - [ ] Remove `showClaimDialog` state and handlers
@@ -27,17 +29,21 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Typecheck passes
 
 ### US-002: Remove StakeStats component
+
 **Description:** As a developer, I need to remove the stats component that displays pending rewards.
 
 **Acceptance Criteria:**
+
 - [ ] Delete `apps/web/src/components/stake/StakeStats.tsx`
 - [ ] Remove StakeStats import and usage from stake.tsx
 - [ ] Typecheck passes
 
 ### US-003: Clean up stake store (remove rewards atoms)
+
 **Description:** As a developer, I need to remove rewards-related atoms from the stake store while keeping lock/unlock functionality.
 
 **Acceptance Criteria:**
+
 - [ ] Remove `pendingRewardsAtom` (derived atom for calculating rewards)
 - [ ] Remove `totalPendingRewardsAtom` (sum of pending rewards)
 - [ ] Remove `clearPendingRewardsAtom` (reset after claim)
@@ -45,17 +51,21 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Typecheck passes
 
 ### US-004: Remove buildClaimInstructions from use-staking hook
+
 **Description:** As a developer, I need to remove the claim instruction builder since claiming is no longer supported.
 
 **Acceptance Criteria:**
+
 - [ ] Remove `buildClaimInstructions` function from `apps/web/src/hooks/use-staking.ts`
 - [ ] Remove `BuildClaimInstructionsInput` interface
 - [ ] Typecheck passes
 
 ### US-005: Create MembershipStatus component
+
 **Description:** As a user, I want to see my membership tier status prominently so I understand my current benefits and progress.
 
 **Acceptance Criteria:**
+
 - [ ] Create `apps/web/src/components/membership/MembershipStatus.tsx`
 - [ ] Display large tier badge (Bronze/Silver/Gold/Diamond)
 - [ ] Show locked Dandy count ("15 Dandies Locked")
@@ -66,9 +76,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-006: Rename route from /stake to /membership
+
 **Description:** As a user, I want to access the membership page at /membership to match the new feature name.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `apps/web/src/routes/stake.tsx` to `apps/web/src/routes/membership.tsx`
 - [ ] Update component export from `StakePage` to `MembershipPage`
 - [ ] Update `apps/web/src/App.tsx` route from `stake` to `membership`
@@ -76,9 +88,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Typecheck passes
 
 ### US-007: Update sidebar navigation
+
 **Description:** As a user, I want the sidebar to show "Membership" instead of "Staking".
 
 **Acceptance Criteria:**
+
 - [ ] Update `apps/web/src/components/layout/sidebar.tsx` nav item
 - [ ] Change href from `/stake` to `/membership`
 - [ ] Change label from "Staking" to "Membership"
@@ -87,17 +101,21 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-008: Rename stake component directory to membership
+
 **Description:** As a developer, I need to rename the component directory to match the new feature name.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `apps/web/src/components/stake/` to `apps/web/src/components/membership/`
 - [ ] Update all imports in membership.tsx
 - [ ] Typecheck passes
 
 ### US-009: Rename StakeDialog to LockDialog
+
 **Description:** As a user, I want the lock dialog to use "Lock" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `StakeDialog.tsx` to `LockDialog.tsx`
 - [ ] Update component name from `StakeDialog` to `LockDialog`
 - [ ] Change dialog title from "Stake NFT" to "Lock Dandy"
@@ -109,9 +127,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-010: Rename UnstakeDialog to UnlockDialog
+
 **Description:** As a user, I want the unlock dialog to use "Unlock" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `UnstakeDialog.tsx` to `UnlockDialog.tsx`
 - [ ] Update component name from `UnstakeDialog` to `UnlockDialog`
 - [ ] Change dialog title from "Unstake NFT" to "Unlock Dandy"
@@ -122,9 +142,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-011: Rename BulkStakeDialog to BulkLockDialog
+
 **Description:** As a user, I want the bulk lock dialog to use "Lock" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `BulkStakeDialog.tsx` to `BulkLockDialog.tsx`
 - [ ] Update component name and all internal terminology
 - [ ] Update title, buttons, loading states, and toasts
@@ -132,9 +154,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-012: Rename BulkUnstakeDialog to BulkUnlockDialog
+
 **Description:** As a user, I want the bulk unlock dialog to use "Unlock" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `BulkUnstakeDialog.tsx` to `BulkUnlockDialog.tsx`
 - [ ] Update component name and all internal terminology
 - [ ] Update title, buttons, loading states, and toasts
@@ -142,9 +166,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-013: Rename StakedNftsGrid to LockedDandiesGrid
+
 **Description:** As a user, I want the locked NFTs grid to use "Locked Dandies" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `StakedNftsGrid.tsx` to `LockedDandiesGrid.tsx`
 - [ ] Update component name from `StakedNftsGrid` to `LockedDandiesGrid`
 - [ ] Change header from "Your Staked NFTs" to "Your Locked Dandies"
@@ -156,9 +182,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-014: Rename AvailableToStakeGrid to AvailableToLockGrid
+
 **Description:** As a user, I want the available NFTs grid to use "Lock" terminology.
 
 **Acceptance Criteria:**
+
 - [ ] Rename `AvailableToStakeGrid.tsx` to `AvailableToLockGrid.tsx`
 - [ ] Update component name from `AvailableToStakeGrid` to `AvailableToLockGrid`
 - [ ] Change header from "Available to Stake" to "Available to Lock"
@@ -169,9 +197,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-015: Update membership page with new components
+
 **Description:** As a user, I want the membership page to show my tier status and use the new components.
 
 **Acceptance Criteria:**
+
 - [ ] Change page title from "Stake" to "Membership"
 - [ ] Replace StakeStats with MembershipStatus component
 - [ ] Update all handler names (handleStake → handleLock, etc.)
@@ -181,9 +211,11 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - [ ] Verify in browser using dev-browser skill
 
 ### US-016: Update tier-benefits-card link
+
 **Description:** As a user, I want the tier benefits card link to point to /membership.
 
 **Acceptance Criteria:**
+
 - [ ] Update link in `apps/web/src/components/tier-benefits-card.tsx` from `/stake` to `/membership`
 - [ ] Update button text from "Stake More Dandies" to "Lock More Dandies"
 - [ ] Update Diamond tier text from "Manage Staking" to "Manage Membership"
@@ -207,7 +239,7 @@ This refactor removes all emissions/rewards/claim functionality and reframes the
 - No redirect from /stake to /membership (clean break)
 - No renaming of internal store atoms (minimize churn)
 - No renaming of hook file (minimize churn)
-- No changes to API routes (still /api/stake/*)
+- No changes to API routes (still /api/stake/\*)
 - No changes to on-chain stake program interaction
 
 ## Technical Considerations

@@ -4,11 +4,12 @@ import { LockOpen, Unlock } from "lucide-react"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { NiftyBadge } from "@/components/nifty-badge"
+import { DandyCardSkeleton } from "@/components/membership/DandyCardSkeleton"
+import { gapBySize, infoHeightBySize, getColumnCount } from "@/components/membership/grid-utils"
 import { userStakeRecordsAtom, isLoadingAtom, type StakeRecordAccount } from "@/stores/stake"
 import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
-import { layoutSizeAtom, searchQueryAtom, type LayoutSize } from "@/stores/ui"
+import { layoutSizeAtom, searchQueryAtom } from "@/stores/ui"
 import { isNiftyAsset } from "@/hooks/use-staking"
 
 interface LockedDandyCardProps {
@@ -48,19 +49,6 @@ const LockedDandyCard = memo(function LockedDandyCard({ nft, stakeRecord, onUnlo
   )
 })
 
-function LockedDandyCardSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <Skeleton className="aspect-square w-full" />
-      <div className="p-3">
-        <Skeleton className="h-5 w-3/4" />
-        <Skeleton className="mt-1 h-4 w-1/2" />
-        <Skeleton className="mt-2 h-9 w-full" />
-      </div>
-    </div>
-  )
-}
-
 type LockedDandyWithRecord = {
   nft: NFT
   record: StakeRecordAccount
@@ -87,33 +75,6 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
       <LockedDandyCard nft={item.nft} stakeRecord={item.record} onUnlock={onUnlock} />
     </div>
   )
-}
-
-const columnCountBySize: Record<LayoutSize, Record<string, number>> = {
-  large: { xl: 3, lg: 2, md: 2, sm: 2, xs: 1 },
-  medium: { xl: 4, lg: 3, md: 3, sm: 3, xs: 2 },
-  small: { xl: 5, lg: 4, md: 4, sm: 3, xs: 2 },
-}
-
-const gapBySize: Record<LayoutSize, number> = {
-  large: 16,
-  medium: 8,
-  small: 4,
-}
-
-const infoHeightBySize: Record<LayoutSize, number> = {
-  large: 100,
-  medium: 102,
-  small: 104,
-}
-
-function getColumnCount(width: number, layoutSize: LayoutSize): number {
-  const sizes = columnCountBySize[layoutSize]
-  if (width >= 550) return sizes.xl
-  if (width >= 500) return sizes.lg
-  if (width >= 480) return sizes.md
-  if (width >= 460) return sizes.sm
-  return sizes.xs
 }
 
 interface LockedDandiesGridProps {
@@ -174,7 +135,7 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
                   }}
                 >
                   {Array.from({ length: totalSkeletons }).map((_, i) => (
-                    <LockedDandyCardSkeleton key={i} />
+                    <DandyCardSkeleton key={i} />
                   ))}
                 </div>
               )

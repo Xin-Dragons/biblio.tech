@@ -10,6 +10,19 @@ interface Session {
 
 export const sessionAtom = atomWithStorage<Session | null>("biblio-session", null)
 
+// Tracks which wallet connector is currently connected
+interface ConnectedWalletInfo {
+  id: string
+  name: string
+}
+export const connectedWalletAtom = atomWithStorage<ConnectedWalletInfo | null>("connected-wallet", null)
+
+// Tracks when user explicitly signed out (prevents auto-sign-in until reconnect)
+export const explicitlySignedOutAtom = atom(false)
+
+// Atom to signal when session changes (for clearing dependent state)
+export const sessionChangedAtom = atom(0)
+
 export const isAuthenticatedAtom = atom((get) => {
   const session = get(sessionAtom)
   if (!session) return false

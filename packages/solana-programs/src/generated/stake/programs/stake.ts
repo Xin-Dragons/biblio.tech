@@ -6,7 +6,13 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { containsBytes, fixEncoderSize, getBytesEncoder, type Address, type ReadonlyUint8Array } from "@solana/kit"
+import {
+  containsBytes,
+  fixEncoderSize,
+  getBytesEncoder,
+  type Address,
+  type ReadonlyUint8Array,
+} from "@solana/kit"
 import {
   type ParsedAddEmissionInstruction,
   type ParsedAddFundsInstruction,
@@ -32,7 +38,7 @@ import {
   type ParsedRemoveFundsInstruction,
   type ParsedResizeInstruction,
   type ParsedStakeCoreInstruction,
-  type ParsedStakeInstruction as ParsedStakeIxInstruction,
+  type ParsedStakeInstruction as ParsedStakeIx,
   type ParsedStakeNiftyInstruction,
   type ParsedToggleCollectionActiveInstruction,
   type ParsedToggleDistributionInstruction,
@@ -63,12 +69,16 @@ export enum StakeAccount {
   UserRecord,
 }
 
-export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | ReadonlyUint8Array): StakeAccount {
+export function identifyStakeAccount(
+  account: { data: ReadonlyUint8Array } | ReadonlyUint8Array
+): StakeAccount {
   const data = "data" in account ? account.data : account
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([48, 160, 232, 205, 191, 207, 26, 141])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([48, 160, 232, 205, 191, 207, 26, 141])
+      ),
       0
     )
   ) {
@@ -77,7 +87,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([176, 85, 17, 11, 13, 194, 18, 1])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([176, 85, 17, 11, 13, 194, 18, 1])
+      ),
       0
     )
   ) {
@@ -86,7 +98,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([56, 101, 133, 79, 248, 233, 131, 140])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([56, 101, 133, 79, 248, 233, 131, 140])
+      ),
       0
     )
   ) {
@@ -95,7 +109,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([174, 190, 114, 100, 177, 14, 90, 254])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([174, 190, 114, 100, 177, 14, 90, 254])
+      ),
       0
     )
   ) {
@@ -104,7 +120,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([196, 210, 90, 231, 144, 149, 140, 63])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([196, 210, 90, 231, 144, 149, 140, 63])
+      ),
       0
     )
   ) {
@@ -113,7 +131,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([246, 216, 227, 196, 246, 62, 50, 54])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([246, 216, 227, 196, 246, 62, 50, 54])
+      ),
       0
     )
   ) {
@@ -122,7 +142,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([174, 163, 11, 208, 150, 236, 11, 205])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([174, 163, 11, 208, 150, 236, 11, 205])
+      ),
       0
     )
   ) {
@@ -131,7 +153,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([171, 229, 193, 85, 67, 177, 151, 4])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([171, 229, 193, 85, 67, 177, 151, 4])
+      ),
       0
     )
   ) {
@@ -140,7 +164,9 @@ export function identifyStakeAccount(account: { data: ReadonlyUint8Array } | Rea
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([210, 252, 132, 218, 191, 85, 173, 167])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([210, 252, 132, 218, 191, 85, 173, 167])
+      ),
       0
     )
   ) {
@@ -197,7 +223,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([220, 59, 207, 236, 108, 250, 47, 100])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([220, 59, 207, 236, 108, 250, 47, 100])
+      ),
       0
     )
   ) {
@@ -206,7 +234,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([168, 53, 116, 160, 59, 55, 113, 147])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([168, 53, 116, 160, 59, 55, 113, 147])
+      ),
       0
     )
   ) {
@@ -215,7 +245,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([233, 255, 155, 39, 32, 80, 14, 39])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([233, 255, 155, 39, 32, 80, 14, 39])
+      ),
       0
     )
   ) {
@@ -224,7 +256,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([244, 242, 133, 0, 152, 187, 144, 139])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([244, 242, 133, 0, 152, 187, 144, 139])
+      ),
       0
     )
   ) {
@@ -233,7 +267,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([50, 110, 95, 179, 194, 75, 140, 246])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([50, 110, 95, 179, 194, 75, 140, 246])
+      ),
       0
     )
   ) {
@@ -242,7 +278,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([205, 14, 4, 137, 1, 250, 206, 194])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([205, 14, 4, 137, 1, 250, 206, 194])
+      ),
       0
     )
   ) {
@@ -251,7 +289,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([191, 44, 223, 207, 164, 236, 126, 61])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([191, 44, 223, 207, 164, 236, 126, 61])
+      ),
       0
     )
   ) {
@@ -260,7 +300,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([104, 92, 253, 30, 82, 155, 123, 41])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([104, 92, 253, 30, 82, 155, 123, 41])
+      ),
       0
     )
   ) {
@@ -269,7 +311,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([248, 153, 149, 167, 215, 204, 156, 149])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([248, 153, 149, 167, 215, 204, 156, 149])
+      ),
       0
     )
   ) {
@@ -278,7 +322,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([229, 46, 198, 51, 55, 14, 239, 247])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([229, 46, 198, 51, 55, 14, 239, 247])
+      ),
       0
     )
   ) {
@@ -287,7 +333,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([193, 184, 194, 37, 245, 33, 204, 101])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([193, 184, 194, 37, 245, 33, 204, 101])
+      ),
       0
     )
   ) {
@@ -296,7 +344,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([18, 123, 173, 247, 218, 117, 230, 105])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([18, 123, 173, 247, 218, 117, 230, 105])
+      ),
       0
     )
   ) {
@@ -305,7 +355,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([214, 139, 186, 253, 169, 248, 196, 11])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([214, 139, 186, 253, 169, 248, 196, 11])
+      ),
       0
     )
   ) {
@@ -314,7 +366,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([206, 176, 202, 18, 200, 209, 179, 108])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([206, 176, 202, 18, 200, 209, 179, 108])
+      ),
       0
     )
   ) {
@@ -323,7 +377,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([43, 198, 202, 193, 191, 159, 163, 52])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([43, 198, 202, 193, 191, 159, 163, 52])
+      ),
       0
     )
   ) {
@@ -332,7 +388,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([0, 41, 110, 80, 113, 147, 81, 28])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([0, 41, 110, 80, 113, 147, 81, 28])
+      ),
       0
     )
   ) {
@@ -341,7 +399,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([62, 198, 214, 193, 213, 159, 108, 210])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([62, 198, 214, 193, 213, 159, 108, 210])
+      ),
       0
     )
   ) {
@@ -350,7 +410,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([204, 156, 94, 85, 2, 125, 232, 180])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([204, 156, 94, 85, 2, 125, 232, 180])
+      ),
       0
     )
   ) {
@@ -359,7 +421,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([182, 159, 51, 236, 71, 57, 198, 55])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([182, 159, 51, 236, 71, 57, 198, 55])
+      ),
       0
     )
   ) {
@@ -368,7 +432,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([25, 115, 16, 227, 227, 167, 155, 200])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([25, 115, 16, 227, 227, 167, 155, 200])
+      ),
       0
     )
   ) {
@@ -377,7 +443,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([90, 95, 107, 42, 205, 124, 50, 225])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([90, 95, 107, 42, 205, 124, 50, 225])
+      ),
       0
     )
   ) {
@@ -386,7 +454,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([214, 115, 22, 104, 138, 82, 207, 236])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([214, 115, 22, 104, 138, 82, 207, 236])
+      ),
       0
     )
   ) {
@@ -395,7 +465,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([21, 141, 224, 67, 238, 209, 116, 102])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([21, 141, 224, 67, 238, 209, 116, 102])
+      ),
       0
     )
   ) {
@@ -404,7 +476,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([72, 185, 71, 194, 36, 60, 139, 231])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([72, 185, 71, 194, 36, 60, 139, 231])
+      ),
       0
     )
   ) {
@@ -413,7 +487,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([132, 237, 76, 57, 80, 10, 179, 138])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([132, 237, 76, 57, 80, 10, 179, 138])
+      ),
       0
     )
   ) {
@@ -422,7 +498,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([90, 144, 174, 132, 2, 126, 48, 239])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([90, 144, 174, 132, 2, 126, 48, 239])
+      ),
       0
     )
   ) {
@@ -431,7 +509,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([109, 42, 244, 71, 100, 171, 104, 104])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([109, 42, 244, 71, 100, 171, 104, 104])
+      ),
       0
     )
   ) {
@@ -440,7 +520,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([98, 165, 201, 177, 108, 65, 206, 96])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([98, 165, 201, 177, 108, 65, 206, 96])
+      ),
       0
     )
   ) {
@@ -449,7 +531,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([37, 185, 6, 222, 69, 230, 188, 68])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([37, 185, 6, 222, 69, 230, 188, 68])
+      ),
       0
     )
   ) {
@@ -458,7 +542,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([30, 143, 90, 105, 208, 226, 130, 114])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([30, 143, 90, 105, 208, 226, 130, 114])
+      ),
       0
     )
   ) {
@@ -467,7 +553,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([64, 9, 67, 101, 155, 108, 182, 232])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([64, 9, 67, 101, 155, 108, 182, 232])
+      ),
       0
     )
   ) {
@@ -476,7 +564,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([39, 4, 84, 129, 68, 15, 238, 196])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([39, 4, 84, 129, 68, 15, 238, 196])
+      ),
       0
     )
   ) {
@@ -485,7 +575,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([47, 129, 195, 106, 91, 235, 15, 82])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([47, 129, 195, 106, 91, 235, 15, 82])
+      ),
       0
     )
   ) {
@@ -494,7 +586,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([74, 27, 74, 155, 56, 134, 175, 125])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([74, 27, 74, 155, 56, 134, 175, 125])
+      ),
       0
     )
   ) {
@@ -503,7 +597,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([237, 255, 26, 54, 56, 48, 68, 52])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([237, 255, 26, 54, 56, 48, 68, 52])
+      ),
       0
     )
   ) {
@@ -512,7 +608,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([185, 54, 237, 229, 219, 179, 109, 20])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([185, 54, 237, 229, 219, 179, 109, 20])
+      ),
       0
     )
   ) {
@@ -521,7 +619,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([214, 3, 187, 98, 170, 106, 33, 45])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([214, 3, 187, 98, 170, 106, 33, 45])
+      ),
       0
     )
   ) {
@@ -530,7 +630,9 @@ export function identifyStakeInstruction(
   if (
     containsBytes(
       data,
-      fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([159, 197, 128, 32, 200, 207, 167, 18])),
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([159, 197, 128, 32, 200, 207, 167, 18])
+      ),
       0
     )
   ) {
@@ -539,7 +641,9 @@ export function identifyStakeInstruction(
   throw new Error("The provided instruction could not be identified as a stake instruction.")
 }
 
-export type ParsedStakeInstruction<TProgram extends string = "STAKEQkGBjkhCXabzB5cUbWgSSvbVJFEm2oEnyWzdKE"> =
+export type ParsedStakeInstruction<
+  TProgram extends string = "STAKEQkGBjkhCXabzB5cUbWgSSvbVJFEm2oEnyWzdKE",
+> =
   | ({ instructionType: StakeInstruction.Init } & ParsedInitInstruction<TProgram>)
   | ({
       instructionType: StakeInstruction.ToggleStakeActive
@@ -567,7 +671,7 @@ export type ParsedStakeInstruction<TProgram extends string = "STAKEQkGBjkhCXabzB
   | ({
       instructionType: StakeInstruction.PaySubscription
     } & ParsedPaySubscriptionInstruction<TProgram>)
-  | ({ instructionType: StakeInstruction.Stake } & ParsedStakeIxInstruction<TProgram>)
+  | ({ instructionType: StakeInstruction.Stake } & ParsedStakeIx<TProgram>)
   | ({ instructionType: StakeInstruction.StakeCore } & ParsedStakeCoreInstruction<TProgram>)
   | ({ instructionType: StakeInstruction.StakeNifty } & ParsedStakeNiftyInstruction<TProgram>)
   | ({ instructionType: StakeInstruction.Claim } & ParsedClaimInstruction<TProgram>)

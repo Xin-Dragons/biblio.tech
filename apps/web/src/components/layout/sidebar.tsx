@@ -10,6 +10,7 @@ import {
   User,
   Lock,
   Shield,
+  Settings,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/vault", label: "Vault", icon: Shield },
   { href: "/junk", label: "Junk", icon: Trash2 },
   { href: "/showcase", label: "Showcase", icon: User },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"]

@@ -12,6 +12,7 @@ import { WelcomeScreen } from "../welcome-screen"
 import { fetchNftsAtom, nftsAtom } from "@/stores/nfts"
 import { fetchTierAtom } from "@/stores/tier"
 import { detectVaultedNftsAtom } from "@/stores/vault"
+import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
 
 const PAGES_WITHOUT_TOOLBAR: string[] = []
 
@@ -23,21 +24,24 @@ function DataFetcher() {
   const { isConnected, account } = useWallet()
   const fetchNfts = useSetAtom(fetchNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
+  const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
   const nfts = useAtomValue(nftsAtom)
+  const linkedWallets = useAtomValue(linkedWalletsAtom)
   const detectVaultedNfts = useSetAtom(detectVaultedNftsAtom)
 
   useEffect(() => {
     if (isConnected && account) {
       fetchNfts(account)
       fetchTier()
+      fetchLinkedWallets()
     }
-  }, [isConnected, account, fetchNfts, fetchTier])
+  }, [isConnected, account, fetchNfts, fetchTier, fetchLinkedWallets])
 
   useEffect(() => {
     if (nfts.length > 0) {
-      detectVaultedNfts()
+      detectVaultedNfts(account ?? null)
     }
-  }, [nfts, detectVaultedNfts])
+  }, [nfts, linkedWallets, account, detectVaultedNfts])
 
   return null
 }

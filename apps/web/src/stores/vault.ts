@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { nftsAtom, type NFT } from "./nfts"
+import { linkedWalletsAtom } from "./linked-wallets"
 
 /**
  * Vault store for managing locked/frozen NFT state
@@ -63,14 +64,23 @@ export const setVaultedMintsAtom = atom(null, (_get, set, mints: Set<string>) =>
 
 /**
  * Action to detect vaulted NFTs from the loaded NFT data.
- * An NFT is considered vaulted if it is frozen AND has a delegate set.
+ * An NFT is considered vaulted if it is frozen AND has a delegate that is
+ * either the connected wallet or a linked wallet.
  */
-export const detectVaultedNftsAtom = atom(null, (get, set) => {
+export const detectVaultedNftsAtom = atom(null, (get, set, connectedWallet: string | null) => {
   const nfts = get(nftsAtom)
+  const linkedWallets = get(linkedWalletsAtom)
   const vaultedMints = new Set<string>()
 
+  if (!connectedWallet) {
+    set(vaultedMintsSetAtom, vaultedMints)
+    return
+  }
+
+  const validDelegates = new Set<string>([connectedWallet, ...linkedWallets.map((w) => w.publicKey)])
+
   for (const nft of nfts) {
-    if (nft.frozen && nft.delegate) {
+    if (nft.frozen && nft.delegate && validDelegates.has(nft.delegate)) {
       vaultedMints.add(nft.mint)
     }
   }

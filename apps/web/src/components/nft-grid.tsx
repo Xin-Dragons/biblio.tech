@@ -27,6 +27,7 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
   const isSelectMode = useAtomValue(isSelectModeAtom)
   const selectedMints = useAtomValue(selectedMintsAtom)
   const toggleSelected = useSetAtom(toggleSelectedAtom)
+  const layoutSize = useAtomValue(layoutSizeAtom)
 
   const isStakedAtom = useMemo(() => selectAtom(stakedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
   const isStaked = useAtomValue(isStakedAtom)
@@ -140,11 +141,11 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
       {/* Vaulted Badge */}
       {isVaulted && !isStaked && (
         <div
-          className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold backdrop-blur-sm shadow-sm"
+          className="absolute top-2.5 right-2.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold backdrop-blur-sm shadow-sm"
           style={{ backgroundColor: "rgba(166, 227, 224, 0.9)", color: "#0d3d3a" }}
         >
           <Shield className="h-3 w-3" />
-          Vaulted
+          {layoutSize !== "small" && "Vaulted"}
         </div>
       )}
 

@@ -1,93 +1,90 @@
 import { useCallback } from "react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js"
 import {
-  getAssociatedTokenAddress,
-  createAssociatedTokenAccountInstruction,
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-} from "@solana/spl-token"
-import type { Address, TransactionSigner } from "@solana/kit"
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  type Address,
+  type TransactionSigner,
+  type Instruction,
+} from "@solana/kit"
+import {
+  findAssociatedTokenPda,
+  TOKEN_PROGRAM_ADDRESS,
+  getCreateAssociatedTokenInstruction,
+} from "@solana-program/token"
 import { tokenMetadata } from "@biblio/solana-programs"
-import { confirmTransactionViaWebSocket } from "@/lib/transaction"
+import {
+  getBlockhash,
+  sendTransaction,
+  confirmTransactionViaWebSocket,
+  getEncodedTransactionSize,
+  prepareSignedTransaction,
+  MAX_TX_SIZE,
+  SIZE_BUFFER,
+} from "@/lib/transaction"
 import type { NFT, TokenStandard } from "../stores/nfts"
 
-function addr(pubkey: PublicKey): Address {
-  return pubkey.toBase58() as Address
-}
+const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
 
-const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
-
-const MAX_TX_SIZE = 1232
-const SIGNATURE_SIZE = 64
-const TX_OVERHEAD = 200
-
-const encoder = new TextEncoder()
-
-function getMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("metadata"), TOKEN_METADATA_PROGRAM_ID.toBytes(), mint.toBytes()],
-    TOKEN_METADATA_PROGRAM_ID
-  )
-  return pda
-}
-
-function getMasterEditionPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("metadata"), TOKEN_METADATA_PROGRAM_ID.toBytes(), mint.toBytes(), encoder.encode("edition")],
-    TOKEN_METADATA_PROGRAM_ID
-  )
-  return pda
-}
-
-function getTokenRecordPda(mint: PublicKey, tokenAccount: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [
-      encoder.encode("metadata"),
-      TOKEN_METADATA_PROGRAM_ID.toBytes(),
-      mint.toBytes(),
-      encoder.encode("token_record"),
-      tokenAccount.toBytes(),
-    ],
-    TOKEN_METADATA_PROGRAM_ID
-  )
-  return pda
-}
-
-type CodamaInstruction = {
-  programAddress: string
-  accounts: ReadonlyArray<{
-    address: string
-    role: number
-  }>
-  data: ArrayLike<number>
-}
-
-function codamaInstructionToWeb3(ix: unknown): TransactionInstruction {
-  const instruction = ix as CodamaInstruction
-  return new TransactionInstruction({
-    programId: new PublicKey(instruction.programAddress),
-    keys: instruction.accounts.map((acc) => ({
-      pubkey: new PublicKey(acc.address),
-      isSigner: acc.role >= 2,
-      isWritable: acc.role === 1 || acc.role === 3,
-    })),
-    data: Uint8Array.from(instruction.data) as unknown as Buffer,
-  })
-}
-
-function createSigner<T extends string = string>(pubkey: PublicKey): TransactionSigner<T> {
-  const address = pubkey.toBase58() as Address<T>
+function createNoopSigner<T extends string = string>(address: Address<T>): TransactionSigner<T> {
   return {
     address,
-    signTransactions: async <TTransaction extends { signatures: Record<string, Uint8Array | null> }>(
-      transactions: readonly TTransaction[]
-    ) => transactions as TTransaction[],
+    signTransactions: async (transactions) => transactions,
   } as TransactionSigner<T>
+}
+
+async function getMetadataPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: ["metadata", getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS), getAddressEncoder().encode(mint)],
+  })
+  return pda
+}
+
+async function getMasterEditionPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "edition",
+    ],
+  })
+  return pda
+}
+
+async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
+  })
+  return pda
 }
 
 function isProgrammableNft(tokenStandard: TokenStandard): boolean {
   return tokenStandard === "ProgrammableNonFungible" || tokenStandard === "ProgrammableNonFungibleEdition"
+}
+
+async function checkAccountExists(address: Address): Promise<boolean> {
+  const response = await fetch("/api/rpc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: crypto.randomUUID(),
+      method: "getAccountInfo",
+      params: [address, { encoding: "base64" }],
+    }),
+  })
+  const data = (await response.json()) as { result?: { value: unknown } }
+  return !!data.result?.value
 }
 
 export function useSolanaActions() {
@@ -95,85 +92,78 @@ export function useSolanaActions() {
   const { signer, capabilities } = useTransactionSigner()
 
   const buildTransferNftInstructions = useCallback(
-    async (nft: NFT, recipient: string): Promise<TransactionInstruction[]> => {
+    async (nft: NFT, recipient: string): Promise<Instruction[]> => {
       if (!account) throw new Error("Wallet not connected")
 
-      const ownerPubkey = new PublicKey(account)
-      const mintPubkey = new PublicKey(nft.mint)
-      const recipientPubkey = new PublicKey(recipient)
+      const ownerAddress = account as Address
+      const mintAddress = nft.mint as Address
+      const recipientAddress = recipient as Address
       const isPnft = isProgrammableNft(nft.tokenStandard)
 
-      const sourceAta = await getAssociatedTokenAddress(mintPubkey, ownerPubkey)
-      const destAta = await getAssociatedTokenAddress(mintPubkey, recipientPubkey)
-
-      const instructions: TransactionInstruction[] = []
-
-      // Check if destination ATA exists via RPC
-      const accountResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getAccountInfo",
-          params: [destAta.toBase58(), { encoding: "base64" }],
-        }),
+      const [sourceAta] = await findAssociatedTokenPda({
+        mint: mintAddress,
+        owner: ownerAddress,
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
       })
-      const accountData = (await accountResponse.json()) as { result?: { value: unknown } }
 
-      if (!accountData.result?.value) {
+      const [destAta] = await findAssociatedTokenPda({
+        mint: mintAddress,
+        owner: recipientAddress,
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      })
+
+      const instructions: Instruction[] = []
+
+      const destAtaExists = await checkAccountExists(destAta)
+      if (!destAtaExists) {
         instructions.push(
-          createAssociatedTokenAccountInstruction(
-            ownerPubkey,
-            destAta,
-            recipientPubkey,
-            mintPubkey,
-            TOKEN_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-          )
+          getCreateAssociatedTokenInstruction({
+            payer: createNoopSigner(ownerAddress),
+            ata: destAta,
+            owner: recipientAddress,
+            mint: mintAddress,
+          })
         )
       }
 
-      const metadata = getMetadataPda(mintPubkey)
+      const metadata = await getMetadataPda(mintAddress)
+      const edition = await getMasterEditionPda(mintAddress)
 
       if (isPnft) {
-        const edition = getMasterEditionPda(mintPubkey)
-        const ownerTokenRecord = getTokenRecordPda(mintPubkey, sourceAta)
-        const destTokenRecord = getTokenRecordPda(mintPubkey, destAta)
+        const ownerTokenRecord = await getTokenRecordPda(mintAddress, sourceAta)
+        const destTokenRecord = await getTokenRecordPda(mintAddress, destAta)
 
         const transferIx = tokenMetadata.getTransferInstruction({
-          token: addr(sourceAta),
-          tokenOwner: addr(ownerPubkey),
-          destination: addr(destAta),
-          destinationOwner: addr(recipientPubkey),
-          mint: addr(mintPubkey),
-          metadata: addr(metadata),
-          edition: addr(edition),
-          ownerTokenRecord: addr(ownerTokenRecord),
-          destinationTokenRecord: addr(destTokenRecord),
-          authority: createSigner(ownerPubkey),
-          payer: createSigner(ownerPubkey),
+          token: sourceAta,
+          tokenOwner: ownerAddress,
+          destination: destAta,
+          destinationOwner: recipientAddress,
+          mint: mintAddress,
+          metadata: metadata,
+          edition: edition,
+          ownerTokenRecord: ownerTokenRecord,
+          destinationTokenRecord: destTokenRecord,
+          authority: createNoopSigner(ownerAddress),
+          payer: createNoopSigner(ownerAddress),
           transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
         })
 
-        instructions.push(codamaInstructionToWeb3(transferIx))
+        instructions.push(transferIx)
       } else {
-        const edition = getMasterEditionPda(mintPubkey)
-
         const transferIx = tokenMetadata.getTransferInstruction({
-          token: addr(sourceAta),
-          tokenOwner: addr(ownerPubkey),
-          destination: addr(destAta),
-          destinationOwner: addr(recipientPubkey),
-          mint: addr(mintPubkey),
-          metadata: addr(metadata),
-          edition: addr(edition),
-          authority: createSigner(ownerPubkey),
-          payer: createSigner(ownerPubkey),
+          token: sourceAta,
+          tokenOwner: ownerAddress,
+          destination: destAta,
+          destinationOwner: recipientAddress,
+          mint: mintAddress,
+          metadata: metadata,
+          edition: edition,
+          authority: createNoopSigner(ownerAddress),
+          payer: createNoopSigner(ownerAddress),
           transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
         })
 
-        instructions.push(codamaInstructionToWeb3(transferIx))
+        instructions.push(transferIx)
       }
 
       return instructions
@@ -182,44 +172,49 @@ export function useSolanaActions() {
   )
 
   const buildBurnNftInstructions = useCallback(
-    async (nft: NFT): Promise<TransactionInstruction[]> => {
+    async (nft: NFT): Promise<Instruction[]> => {
       if (!account) throw new Error("Wallet not connected")
 
-      const ownerPubkey = new PublicKey(account)
-      const mintPubkey = new PublicKey(nft.mint)
+      const ownerAddress = account as Address
+      const mintAddress = nft.mint as Address
       const isPnft = isProgrammableNft(nft.tokenStandard)
 
-      const ata = await getAssociatedTokenAddress(mintPubkey, ownerPubkey)
-      const metadata = getMetadataPda(mintPubkey)
-      const edition = getMasterEditionPda(mintPubkey)
+      const [ata] = await findAssociatedTokenPda({
+        mint: mintAddress,
+        owner: ownerAddress,
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      })
 
-      const instructions: TransactionInstruction[] = []
+      const metadata = await getMetadataPda(mintAddress)
+      const edition = await getMasterEditionPda(mintAddress)
+
+      const instructions: Instruction[] = []
 
       if (isPnft) {
-        const tokenRecord = getTokenRecordPda(mintPubkey, ata)
+        const tokenRecord = await getTokenRecordPda(mintAddress, ata)
 
         const burnIx = tokenMetadata.getBurnInstruction({
-          authority: createSigner(ownerPubkey),
-          metadata: addr(metadata),
-          edition: addr(edition),
-          mint: addr(mintPubkey),
-          token: addr(ata),
-          tokenRecord: addr(tokenRecord),
+          authority: createNoopSigner(ownerAddress),
+          metadata: metadata,
+          edition: edition,
+          mint: mintAddress,
+          token: ata,
+          tokenRecord: tokenRecord,
           burnArgs: { __kind: "V1", amount: 1 },
         })
 
-        instructions.push(codamaInstructionToWeb3(burnIx))
+        instructions.push(burnIx)
       } else {
         const burnIx = tokenMetadata.getBurnInstruction({
-          authority: createSigner(ownerPubkey),
-          metadata: addr(metadata),
-          edition: addr(edition),
-          mint: addr(mintPubkey),
-          token: addr(ata),
+          authority: createNoopSigner(ownerAddress),
+          metadata: metadata,
+          edition: edition,
+          mint: mintAddress,
+          token: ata,
           burnArgs: { __kind: "V1", amount: 1 },
         })
 
-        instructions.push(codamaInstructionToWeb3(burnIx))
+        instructions.push(burnIx)
       }
 
       return instructions
@@ -227,39 +222,15 @@ export function useSolanaActions() {
     [account]
   )
 
-  const chunkInstructions = useCallback((instructions: TransactionInstruction[][]): TransactionInstruction[][][] => {
-    const chunks: TransactionInstruction[][][] = []
-    let currentChunk: TransactionInstruction[][] = []
-    let currentSize = TX_OVERHEAD + SIGNATURE_SIZE
-
-    for (const ixGroup of instructions) {
-      const groupSize = ixGroup.reduce((acc, ix) => acc + ix.data.length + 32 * ix.keys.length, 0)
-
-      if (currentSize + groupSize > MAX_TX_SIZE && currentChunk.length > 0) {
-        chunks.push(currentChunk)
-        currentChunk = []
-        currentSize = TX_OVERHEAD + SIGNATURE_SIZE
-      }
-
-      currentChunk.push(ixGroup)
-      currentSize += groupSize
-    }
-
-    if (currentChunk.length > 0) {
-      chunks.push(currentChunk)
-    }
-
-    return chunks
-  }, [])
-
   const sendNfts = useCallback(
     async (nfts: NFT[], recipient: string, onProgress?: (completed: number, total: number) => void) => {
       if (!account || !signer || !capabilities.canSign) {
         throw new Error("Wallet not connected")
       }
 
-      const ownerPubkey = new PublicKey(account)
-      const allInstructions: TransactionInstruction[][] = []
+      const typedSigner = signer as unknown as TransactionSigner
+
+      const allInstructions: { nft: NFT; instructions: Instruction[] }[] = []
 
       for (const nft of nfts) {
         if (nft.compressed) {
@@ -269,7 +240,7 @@ export function useSolanaActions() {
 
         try {
           const ixs = await buildTransferNftInstructions(nft, recipient)
-          allInstructions.push(ixs)
+          allInstructions.push({ nft, instructions: ixs })
         } catch (err) {
           console.error(`Failed to build transfer for ${nft.mint}:`, err)
         }
@@ -279,79 +250,49 @@ export function useSolanaActions() {
         throw new Error("No valid transfers to send")
       }
 
-      const chunks = chunkInstructions(allInstructions)
+      const { blockhash, lastValidBlockHeight } = await getBlockhash()
 
-      // Get blockhash via RPC proxy
-      const blockhashResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getLatestBlockhash",
-          params: [{ commitment: "finalized" }],
-        }),
-      })
-      const blockhashData = (await blockhashResponse.json()) as {
-        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
-      }
-      const blockhash = blockhashData.result?.value.blockhash
-      if (!blockhash) throw new Error("Failed to get blockhash")
+      const batches: { nfts: NFT[]; instructions: Instruction[] }[] = []
+      let currentBatch: { nfts: NFT[]; instructions: Instruction[] } = { nfts: [], instructions: [] }
 
-      const transactions = chunks.map((chunk) => {
-        const tx = new Transaction()
-        tx.recentBlockhash = blockhash
-        tx.feePayer = ownerPubkey
-        for (const ixGroup of chunk) {
-          tx.add(...ixGroup)
+      for (const { nft, instructions } of allInstructions) {
+        const testInstructions = [...currentBatch.instructions, ...instructions]
+        const size = await getEncodedTransactionSize(testInstructions, typedSigner, blockhash, lastValidBlockHeight)
+
+        if (size > MAX_TX_SIZE - SIZE_BUFFER && currentBatch.nfts.length > 0) {
+          batches.push(currentBatch)
+          currentBatch = { nfts: [], instructions: [] }
         }
-        return tx
-      })
+
+        currentBatch.nfts.push(nft)
+        currentBatch.instructions.push(...instructions)
+      }
+
+      if (currentBatch.nfts.length > 0) {
+        batches.push(currentBatch)
+      }
 
       let completed = 0
       const total = nfts.filter((n) => !n.compressed).length
 
-      for (let i = 0; i < transactions.length; i++) {
-        const tx = transactions[i]
-        try {
-          const txBytes = tx.serialize({ requireAllSignatures: false })
-          const signedBytes = await signer.signTransaction(txBytes)
+      for (const batch of batches) {
+        const signedBase64 = await prepareSignedTransaction({
+          instructions: batch.instructions,
+          feePayer: typedSigner,
+          blockhash,
+          lastValidBlockHeight,
+        })
 
-          const sendResponse = await fetch("/api/rpc", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: crypto.randomUUID(),
-              method: "sendTransaction",
-              params: [
-                Buffer.from(signedBytes as Uint8Array).toString("base64"),
-                { encoding: "base64", skipPreflight: true },
-              ],
-            }),
-          })
-          const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
+        const signature = await sendTransaction(signedBase64)
+        await confirmTransactionViaWebSocket(signature)
 
-          if (sendResult.error) {
-            throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
-          }
-
-          const sig = sendResult.result
-          if (!sig) throw new Error("No signature returned")
-
-          await confirmTransactionViaWebSocket(sig)
-
-          completed += chunks[i].length
-          onProgress?.(completed, total)
-        } catch (err) {
-          console.error("Transaction failed:", err)
-          throw err
-        }
+        completed += batch.nfts.length
+        onProgress?.(completed, total)
       }
 
       return { success: true, count: completed }
     },
-    [account, signer, capabilities.canSign, buildTransferNftInstructions, chunkInstructions]
+    [account, signer, capabilities.canSign, buildTransferNftInstructions]
   )
 
   const burnNfts = useCallback(
@@ -360,8 +301,9 @@ export function useSolanaActions() {
         throw new Error("Wallet not connected")
       }
 
-      const ownerPubkey = new PublicKey(account)
-      const allInstructions: TransactionInstruction[][] = []
+      const typedSigner = signer as unknown as TransactionSigner
+
+      const allInstructions: { nft: NFT; instructions: Instruction[] }[] = []
 
       for (const nft of nfts) {
         if (nft.compressed) {
@@ -371,7 +313,7 @@ export function useSolanaActions() {
 
         try {
           const ixs = await buildBurnNftInstructions(nft)
-          allInstructions.push(ixs)
+          allInstructions.push({ nft, instructions: ixs })
         } catch (err) {
           console.error(`Failed to build burn for ${nft.mint}:`, err)
         }
@@ -381,79 +323,49 @@ export function useSolanaActions() {
         throw new Error("No valid burns to execute")
       }
 
-      const chunks = chunkInstructions(allInstructions)
+      const { blockhash, lastValidBlockHeight } = await getBlockhash()
 
-      // Get blockhash via RPC proxy
-      const blockhashResponse = await fetch("/api/rpc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "getLatestBlockhash",
-          params: [{ commitment: "finalized" }],
-        }),
-      })
-      const blockhashData = (await blockhashResponse.json()) as {
-        result?: { value: { blockhash: string; lastValidBlockHeight: number } }
-      }
-      const blockhash = blockhashData.result?.value.blockhash
-      if (!blockhash) throw new Error("Failed to get blockhash")
+      const batches: { nfts: NFT[]; instructions: Instruction[] }[] = []
+      let currentBatch: { nfts: NFT[]; instructions: Instruction[] } = { nfts: [], instructions: [] }
 
-      const transactions = chunks.map((chunk) => {
-        const tx = new Transaction()
-        tx.recentBlockhash = blockhash
-        tx.feePayer = ownerPubkey
-        for (const ixGroup of chunk) {
-          tx.add(...ixGroup)
+      for (const { nft, instructions } of allInstructions) {
+        const testInstructions = [...currentBatch.instructions, ...instructions]
+        const size = await getEncodedTransactionSize(testInstructions, typedSigner, blockhash, lastValidBlockHeight)
+
+        if (size > MAX_TX_SIZE - SIZE_BUFFER && currentBatch.nfts.length > 0) {
+          batches.push(currentBatch)
+          currentBatch = { nfts: [], instructions: [] }
         }
-        return tx
-      })
+
+        currentBatch.nfts.push(nft)
+        currentBatch.instructions.push(...instructions)
+      }
+
+      if (currentBatch.nfts.length > 0) {
+        batches.push(currentBatch)
+      }
 
       let completed = 0
       const total = nfts.filter((n) => !n.compressed).length
 
-      for (let i = 0; i < transactions.length; i++) {
-        const tx = transactions[i]
-        try {
-          const txBytes = tx.serialize({ requireAllSignatures: false })
-          const signedBytes = await signer.signTransaction(txBytes)
+      for (const batch of batches) {
+        const signedBase64 = await prepareSignedTransaction({
+          instructions: batch.instructions,
+          feePayer: typedSigner,
+          blockhash,
+          lastValidBlockHeight,
+        })
 
-          const sendResponse = await fetch("/api/rpc", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: crypto.randomUUID(),
-              method: "sendTransaction",
-              params: [
-                Buffer.from(signedBytes as Uint8Array).toString("base64"),
-                { encoding: "base64", skipPreflight: true },
-              ],
-            }),
-          })
-          const sendResult = (await sendResponse.json()) as { result?: string; error?: { message: string } }
+        const signature = await sendTransaction(signedBase64)
+        await confirmTransactionViaWebSocket(signature)
 
-          if (sendResult.error) {
-            throw new Error(sendResult.error.message || JSON.stringify(sendResult.error))
-          }
-
-          const sig = sendResult.result
-          if (!sig) throw new Error("No signature returned")
-
-          await confirmTransactionViaWebSocket(sig)
-
-          completed += chunks[i].length
-          onProgress?.(completed, total)
-        } catch (err) {
-          console.error("Transaction failed:", err)
-          throw err
-        }
+        completed += batch.nfts.length
+        onProgress?.(completed, total)
       }
 
       return { success: true, count: completed }
     },
-    [account, signer, capabilities.canSign, buildBurnNftInstructions, chunkInstructions]
+    [account, signer, capabilities.canSign, buildBurnNftInstructions]
   )
 
   return {

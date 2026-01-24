@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Shield, AlertTriangle, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { useSetAtom } from "jotai"
+import { useSetAtom, useAtomValue } from "jotai"
 import toast from "react-hot-toast"
 import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { NFT } from "@/stores/nfts"
 import { removeVaultedMintsAtom } from "@/stores/vault"
+import { linkedWalletsAtom } from "@/stores/linked-wallets"
 import { buildRecoverInstructions } from "@/lib/vault-transactions"
 import { prepareAndSendTransaction } from "@/lib/transaction"
 
@@ -32,12 +33,13 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
   const removeVaultedMints = useSetAtom(removeVaultedMintsAtom)
+  const linkedWallets = useAtomValue(linkedWalletsAtom)
 
   const connectedAddress = account as Address | undefined
 
-  const linkedWallets: string[] = []
+  const linkedWalletAddresses = linkedWallets.map((w) => w.publicKey)
   const hasLinkedWallets = linkedWallets.length > 0
-  const otherWallets = linkedWallets.filter((w) => w !== account)
+  const otherWallets = linkedWalletAddresses.filter((w) => w !== account)
 
   const nftsWithAuthority = nfts.map((nft) => ({
     nft,

@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Lock, X, Loader2 } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { PublicKey } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
@@ -16,16 +15,11 @@ import {
   buildStakeInstructions,
   buildStakeNiftyInstructions,
   isNiftyAsset,
-  DANDIES_NIFTY_COLLECTION,
+  DANDIES_NIFTY_COLLECTION_ADDRESS,
 } from "@/hooks/use-staking"
-import {
-  getBlockhash,
-  simulateTransaction,
-  buildTransaction,
-  sendTransaction,
-  confirmTransactionViaWebSocket,
-} from "@/lib/transaction"
+import { prepareAndSendTransaction } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
+import type { Address, TransactionSigner } from "@solana/kit"
 
 interface LockDialogProps {
   nft: NFT
@@ -41,8 +35,7 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
   const collections = useAtomValue(collectionsAtom)
   const addStakeRecord = useSetAtom(addStakeRecordAtom)
 
-  // For nifty assets, use the nifty collection; for pNFTs use the NFT's collectionId
-  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
   const handleLock = async () => {
@@ -54,34 +47,26 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
     setLocking(true)
 
     try {
-      const ownerPubkey = new PublicKey(account)
+      const ownerAddress = account as Address
 
       const instructions = isNiftyAsset(nft)
-        ? buildStakeNiftyInstructions({
+        ? await buildStakeNiftyInstructions({
             nft,
             staker,
             collection,
-            owner: account,
+            owner: ownerAddress,
           })
-        : buildStakeInstructions({
+        : await buildStakeInstructions({
             nft,
             staker,
             collection,
-            owner: account,
+            owner: ownerAddress,
           })
 
-      const blockhash = await getBlockhash()
-      const { unitsConsumed } = await simulateTransaction(instructions, ownerPubkey, blockhash)
-      const cuLimit = Math.ceil(unitsConsumed * 1.1)
-
-      const transaction = buildTransaction(instructions, ownerPubkey, blockhash, cuLimit, 1000)
-
-      const txBytes = transaction.serialize({ requireAllSignatures: false })
-      const signedBytes = await signer.signTransaction(txBytes)
-      const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
-
-      const signature = await sendTransaction(signedBase64)
-      await confirmTransactionViaWebSocket(signature)
+      await prepareAndSendTransaction({
+        instructions,
+        feePayer: signer as unknown as TransactionSigner,
+      })
 
       addStakeRecord({
         nftMint: nft.mint,

@@ -324,10 +324,10 @@
 /* Keyframe animations */
 @keyframes shimmer {
   0% {
-    background-position: -200% 0;
+    background-position: 200% 0;
   }
   100% {
-    background-position: 200% 0;
+    background-position: -200% 0;
   }
 }
 
@@ -472,6 +472,23 @@
 
 .animate-shimmer {
   animation: tier-shimmer 2s ease-in-out infinite;
+}
+
+.animate-bar-sweep {
+  animation: shimmer 4s linear infinite;
+}
+
+.animate-ring-pulse {
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+  }
 }
 
 .animate-logo-breathe {

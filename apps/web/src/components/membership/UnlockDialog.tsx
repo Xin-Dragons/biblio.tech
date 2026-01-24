@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { PublicKey } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
@@ -17,18 +16,11 @@ import {
   buildUnstakeInstructions,
   buildUnstakeNiftyInstructions,
   isNiftyAsset,
-  DANDIES_NIFTY_COLLECTION,
+  DANDIES_NIFTY_COLLECTION_ADDRESS,
 } from "@/hooks/use-staking"
-import {
-  getBlockhash,
-  simulateTransaction,
-  getPriorityFee,
-  buildTransaction,
-  sendTransaction,
-  confirmTransactionViaWebSocket,
-} from "@/lib/transaction"
-import { logger } from "@/lib/logger"
+import { prepareAndSendTransaction } from "@/lib/transaction"
 import type { NFT } from "@/stores/nfts"
+import type { Address, TransactionSigner } from "@solana/kit"
 
 interface UnlockDialogProps {
   nft: NFT
@@ -60,7 +52,7 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
   const emissions = useAtomValue(emissionsAtom)
   const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
 
-  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : nft.collectionId
+  const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
   const lockedAtSeconds = Number(stakeRecord.stakedAt)
@@ -79,53 +71,30 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
     setUnlocking(true)
 
     try {
-      const ownerPubkey = new PublicKey(account)
-
-      logger.debug("Building unlock instruction with:", {
-        nft: { mint: nft.mint, name: nft.name, collectionId: nft.collectionId },
-        stakeRecord: { address: stakeRecord.address, nftMint: stakeRecord.nftMint, owner: stakeRecord.owner },
-        staker: { address: staker.address },
-        collection: { address: collection.address, collectionMint: collection.collectionMint },
-        owner: account,
-      })
+      const ownerAddress = account as Address
 
       const instructions = isNiftyAsset(nft)
-        ? buildUnstakeNiftyInstructions({
+        ? await buildUnstakeNiftyInstructions({
             nft,
             stakeRecord,
             staker,
             collection,
             emissions,
-            owner: account,
+            owner: ownerAddress,
           })
-        : buildUnstakeInstructions({
+        : await buildUnstakeInstructions({
             nft,
             stakeRecord,
             staker,
             collection,
             emissions,
-            owner: account,
+            owner: ownerAddress,
           })
-      logger.debug("Unlock instruction built:", instructions[0])
 
-      const blockhash = await getBlockhash()
-      const { unitsConsumed } = await simulateTransaction(instructions, ownerPubkey, blockhash)
-      const cuLimit = Math.ceil(unitsConsumed * 1.1)
-      logger.debug(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
-
-      const priorityFee = await getPriorityFee(instructions, ownerPubkey, blockhash, cuLimit)
-      logger.debug(`Priority fee estimate: ${priorityFee} microLamports`)
-
-      const transaction = buildTransaction(instructions, ownerPubkey, blockhash, cuLimit, priorityFee)
-
-      const txBytes = transaction.serialize({ requireAllSignatures: false })
-      const signedBytes = await signer.signTransaction(txBytes)
-      const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
-
-      const signature = await sendTransaction(signedBase64)
-      logger.debug("Transaction sent:", signature)
-
-      await confirmTransactionViaWebSocket(signature)
+      await prepareAndSendTransaction({
+        instructions,
+        feePayer: signer as unknown as TransactionSigner,
+      })
 
       removeStakeRecord(nft.mint)
 

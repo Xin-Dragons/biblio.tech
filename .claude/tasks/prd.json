@@ -65,8 +65,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses @biblio/solana-programs asset module (generated from nifty-oss IDL). Nifty detection via tokenStandard='Nifty' since it's already mapped in the API."
     },
     {
       "id": "US-005",
@@ -80,8 +80,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses @biblio/solana-programs mplCore module. MPL Core detection via tokenStandard='Core'. Lock uses addPluginV1 with FreezeDelegate plugin (frozen: true), initAuthority set to Owner for basic freeze or Address for secure freeze. Unlock uses removePluginV1 with PluginType.FreezeDelegate."
     },
     {
       "id": "US-006",
@@ -98,8 +98,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses selectAtom pattern like isStaked. Vaulted badge only shows if not staked (avoiding overlap). Badge color: rgba(166, 227, 224, 0.9) with dark teal text #0d3d3a."
     },
     {
       "id": "US-007",
@@ -115,8 +115,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Detection wired into DataFetcher component in layout/index.tsx via useEffect watching nftsAtom changes."
     },
     {
       "id": "US-008",
@@ -136,8 +136,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses custom button-based selection instead of RadioGroup (follows existing patterns). Secure freeze disabled with info message when no linked wallets available. NFT preview shows first 5 with +X more indicator."
     },
     {
       "id": "US-009",
@@ -157,8 +157,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses prepareAndSendTransaction from lib/transaction.ts, useTransactionSigner hook, and addVaultedMintsAtom action. Shows loading state with Loader2 icon during transaction."
     },
     {
       "id": "US-010",
@@ -176,8 +176,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Also includes handleUnvault transaction execution (US-011 functionality). Shows authority status per NFT with teal/amber indicators. NFTs without authority shown disabled but still visible."
     },
     {
       "id": "US-011",
@@ -196,8 +196,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented together with US-010. Only unvaults NFTs where connected wallet has authority. Uses Promise.all for parallel instruction building."
     },
     {
       "id": "US-012",
@@ -215,8 +215,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Dialog UI complete with destination wallet selection, warning message, per-NFT authority display. Transaction execution placeholder until US-013/US-014 implements buildRecoverTransaction. Uses amber color scheme for destructive action styling."
     },
     {
       "id": "US-013",
@@ -232,8 +232,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented as buildRecoverInstructions returning Instruction[] (following @solana/kit patterns). Uses getCloseAccountInstruction from @solana-program/token. Token Metadata handles both pNFT and regular NFTs with appropriate token records."
     },
     {
       "id": "US-014",
@@ -252,8 +252,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses buildRecoverInstructions from vault-transactions.ts. Follows same pattern as VaultDialog/UnvaultDialog with Promise.all for parallel instruction building and prepareAndSendTransaction for execution."
     },
     {
       "id": "US-015",
@@ -271,8 +271,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented with teal-themed styling, layout size toggle, Select/Cancel toggle for selection mode, Unvault and Recover buttons with selection counts. Uses NftGrid with vaultedNftsAtom and selection filtering from selectedMintsAtom."
     },
     {
       "id": "US-016",
@@ -288,8 +288,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented together with US-015. VaultPage includes unvaultDialogOpen/recoverDialogOpen state, Unvault/Recover buttons wired to dialogs with selectedNfts, and clearSelection() in success handlers."
     },
     {
       "id": "US-017",
@@ -306,8 +306,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added to toolbar.tsx. Uses vaultActionState useMemo to compute disabled state with reason tooltip. Shield button between Burn and separator. Opens VaultDialog for non-vaulted NFTs, UnvaultDialog for vaulted NFTs."
     },
     {
       "id": "US-018",
@@ -321,8 +321,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Already implemented via useEffect in DataFetcher (layout/index.tsx) that watches nftsAtom and calls detectVaultedNfts. All refresh paths update nftsAtom which triggers detection automatically."
     }
   ]
 }

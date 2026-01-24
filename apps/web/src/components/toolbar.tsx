@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { useLocation } from "react-router"
+import { useLocation, Link } from "react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   Search,
@@ -17,8 +17,6 @@ import {
   RefreshCw,
   Settings,
   Info,
-  PanelLeftClose,
-  PanelLeft,
   Shield,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -28,7 +26,6 @@ import {
   searchQueryAtom,
   sortOptionAtom,
   showInfoAtom,
-  sidebarCollapsedAtom,
   type LayoutSize,
   type LayoutType,
   type SortOption,
@@ -49,14 +46,6 @@ import { VaultDialog } from "./vault/VaultDialog"
 import { UnvaultDialog } from "./vault/UnvaultDialog"
 import { WalletButton } from "./wallet-button"
 import { Button } from "./ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
 
 const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[] = [
   { value: "large", icon: Grid2X2, label: "Large" },
@@ -92,7 +81,6 @@ export function Toolbar() {
   const refreshNfts = useSetAtom(refreshNftsAtom)
   const isLoading = useAtomValue(isLoadingAtom)
   const [showInfo, setShowInfo] = useAtom(showInfoAtom)
-  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
   const vaultedMints = useAtomValue(vaultedMintsSetAtom)
 
   const showNftControls =
@@ -100,6 +88,7 @@ export function Toolbar() {
     location.pathname.startsWith("/collection/") ||
     location.pathname === "/starred" ||
     location.pathname === "/junk" ||
+    location.pathname === "/vault" ||
     (location.pathname.startsWith("/showcase/") && location.pathname !== "/showcase")
 
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
@@ -330,39 +319,23 @@ export function Toolbar() {
           </div>
         )}
 
-        {/* Far Right - Settings & Wallet */}
+        {/* Far Right - Info Toggle, Settings & Wallet */}
         <div className="flex items-center gap-2 ml-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="group">
-                <Settings className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Settings</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem
-                checked={showInfo}
-                onCheckedChange={setShowInfo}
-                onSelect={(e) => e.preventDefault()}
-              >
-                <Info className="mr-2 h-4 w-4" />
-                Show NFT Info
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={!sidebarCollapsed}
-                onCheckedChange={(checked) => setSidebarCollapsed(!checked)}
-                onSelect={(e) => e.preventDefault()}
-              >
-                {sidebarCollapsed ? (
-                  <PanelLeft className="mr-2 h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="mr-2 h-4 w-4" />
-                )}
-                Show Sidebar
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {showNftControls && (
+            <Button
+              variant={showInfo ? "default" : "ghost"}
+              size="icon-sm"
+              onClick={() => setShowInfo(!showInfo)}
+              title={showInfo ? "Hide NFT Info" : "Show NFT Info"}
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          )}
+          <Link to="/settings">
+            <Button variant="ghost" size="icon-sm" className="group" title="Settings">
+              <Settings className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+            </Button>
+          </Link>
           <WalletButton />
         </div>
       </div>

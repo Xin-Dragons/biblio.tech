@@ -5,8 +5,12 @@ import {
   useConnectWallet,
   useDisconnectWallet,
   useWalletConnectors,
+  useTransactionSigner,
 } from "@solana/connector/react"
-import { Wallet, LogOut, ChevronDown, Copy, Check, ExternalLink } from "lucide-react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { Wallet, LogOut, LogIn, ChevronDown, Copy, Check, ExternalLink } from "lucide-react"
+import { sessionAtom, signInAtom, signOutAtom, explicitlySignedOutAtom, connectedWalletAtom } from "@/stores/auth"
+import { clearLinkedWalletsAtom } from "@/stores/linked-wallets"
 import { Button } from "./ui/button"
 import {
   DropdownMenu,
@@ -23,10 +27,41 @@ export function WalletButton() {
   const { address, formatted, copy, copied } = useAccount()
   const { connect } = useConnectWallet()
   const { disconnect } = useDisconnectWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const connectors = useWalletConnectors()
   const [showWalletModal, setShowWalletModal] = useState(false)
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
+  const session = useAtomValue(sessionAtom)
+  const signIn = useSetAtom(signInAtom)
+  const signOut = useSetAtom(signOutAtom)
+  const setExplicitlySignedOut = useSetAtom(explicitlySignedOutAtom)
+  const setConnectedWallet = useSetAtom(connectedWalletAtom)
+  const clearLinkedWallets = useSetAtom(clearLinkedWalletsAtom)
+
+  const isSessionValid = session && session.wallet === address && session.expiresAt > Date.now()
   const installedWallets = connectors.filter((c) => c.ready)
+
+  const handleSignIn = async () => {
+    if (!address || !signer || !capabilities.canSignMessage) return
+    setExplicitlySignedOut(false)
+    setIsSigningIn(true)
+    try {
+      const signMessage = async (message: Uint8Array) => {
+        if (!signer.signMessage) throw new Error("Wallet does not support message signing")
+        return signer.signMessage(message)
+      }
+      await signIn({ publicKey: address, signMessage })
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    setExplicitlySignedOut(true)
+    clearLinkedWallets()
+    await signOut()
+  }
 
   if (isConnected && address) {
     return (
@@ -57,7 +92,28 @@ export function WalletButton() {
             </a>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => disconnect()} className="gap-2 text-destructive focus:text-destructive">
+          {isSessionValid ? (
+            <DropdownMenuItem onClick={handleSignOut} className="gap-2">
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              onClick={handleSignIn}
+              disabled={isSigningIn || !capabilities.canSignMessage}
+              className="gap-2"
+            >
+              <LogIn className="h-4 w-4" />
+              {isSigningIn ? "Signing In..." : "Sign In"}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onClick={() => {
+              setConnectedWallet(null)
+              disconnect()
+            }}
+            className="gap-2 text-destructive focus:text-destructive"
+          >
             <LogOut className="h-4 w-4" />
             Disconnect
           </DropdownMenuItem>
@@ -102,6 +158,7 @@ export function WalletButton() {
                   style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
                   onClick={async () => {
                     await connect(wallet.id)
+                    setConnectedWallet({ id: wallet.id, name: wallet.name })
                     setShowWalletModal(false)
                   }}
                 >

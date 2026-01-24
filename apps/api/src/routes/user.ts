@@ -1,8 +1,25 @@
 import { Hono } from "hono"
+import { PublicKey } from "@solana/web3.js"
+import bs58 from "bs58"
 import type { HonoEnv } from "../types"
 import { authMiddleware } from "../middleware/auth"
 import { Tier, getTierFromStakedCount, getVotesForTier, FEE_DISCOUNTS } from "../lib/tiers"
 import { getCachedStakeRecords } from "./stake"
+
+async function verifySignature(publicKey: string, signature: string, message: string): Promise<boolean> {
+  try {
+    const pubKeyBytes = bs58.decode(publicKey)
+    const signatureBytes = Buffer.from(signature, "base64")
+    const messageBytes = new TextEncoder().encode(message)
+
+    const cryptoKey = await crypto.subtle.importKey("raw", pubKeyBytes, { name: "Ed25519" }, false, ["verify"])
+
+    return await crypto.subtle.verify("Ed25519", cryptoKey, signatureBytes, messageBytes)
+  } catch (err) {
+    console.error("Signature verification error:", err)
+    return false
+  }
+}
 
 export const userRoutes = new Hono<HonoEnv>()
 
@@ -247,23 +264,136 @@ userRoutes.get("/wallets", async (c) => {
   return c.json(await res.json())
 })
 
-userRoutes.post("/wallets", async (c) => {
+// Link a new wallet with signature verification
+userRoutes.post("/wallets/link", async (c) => {
+  const { publicKey, signature, message, isLedger } = await c.req.json<{
+    publicKey: string
+    signature: string
+    message: string
+    isLedger: boolean
+    rawTransaction?: string
+  }>()
+
+  if (!publicKey || !signature || !message) {
+    return c.json({ error: "Missing required fields" }, 400)
+  }
+
+  // Validate public key format
+  try {
+    new PublicKey(publicKey)
+  } catch {
+    return c.json({ error: "Invalid public key format" }, 400)
+  }
+
+  // Check if wallet is already linked to another user
+  const { results: existingWallet } = await c.env.DB.prepare("SELECT user_id FROM wallet_users WHERE wallet = ?")
+    .bind(publicKey)
+    .all()
+
+  const userId = c.get("userId")
+
+  if (existingWallet.length > 0) {
+    const existingUserId = existingWallet[0].user_id as string
+
+    if (existingUserId === userId) {
+      // Check if wallet actually exists in UserDO (may be stale entry from previous bug)
+      const userDO = getUserDO(c)
+      const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+      const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
+      const existsInUserDO = wallets.some((w) => w.publicKey === publicKey)
+
+      if (existsInUserDO) {
+        return c.json({ error: "Wallet is already linked to your account" }, 400)
+      }
+
+      // Stale entry - clean up wallet_users and proceed with fresh link
+      await c.env.DB.prepare("DELETE FROM wallet_users WHERE wallet = ? AND user_id = ?").bind(publicKey, userId).run()
+    } else {
+      // Check if the other user is an "orphan" (only has this one wallet)
+      const { results: otherUserWallets } = await c.env.DB.prepare("SELECT wallet FROM wallet_users WHERE user_id = ?")
+        .bind(existingUserId)
+        .all()
+
+      if (otherUserWallets.length === 1) {
+        // Orphan user - take over the wallet
+        // Delete from old user's wallet_users
+        await c.env.DB.prepare("DELETE FROM wallet_users WHERE wallet = ? AND user_id = ?")
+          .bind(publicKey, existingUserId)
+          .run()
+
+        // Clean up orphan user's UserDO
+        const orphanDO = c.env.USER_DO.get(c.env.USER_DO.idFromName(existingUserId))
+        await orphanDO.fetch(new Request(`http://do/wallets/${publicKey}`, { method: "DELETE" }))
+      } else {
+        // Not an orphan - wallet is genuinely linked to another active account
+        return c.json({ error: "Wallet is already linked to another account" }, 400)
+      }
+    }
+  }
+
+  // Verify the signature
+  const isValid = await verifySignature(publicKey, signature, message)
+  if (!isValid) {
+    return c.json({ error: "Invalid signature" }, 401)
+  }
+
+  // Add wallet to database
+  if (!userId) {
+    return c.json({ error: "Not authenticated" }, 401)
+  }
+
+  await c.env.DB.prepare("INSERT INTO wallet_users (wallet, user_id) VALUES (?, ?)").bind(publicKey, userId).run()
+
+  // Add to UserDO
   const userDO = getUserDO(c)
-  const body = await c.req.json()
   const res = await userDO.fetch(
     new Request("http://do/wallets", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ publicKey, isMain: false }),
     })
   )
+
+  if (!res.ok) {
+    // Rollback database insert
+    await c.env.DB.prepare("DELETE FROM wallet_users WHERE wallet = ? AND user_id = ?").bind(publicKey, userId).run()
+    return c.json({ error: "Failed to link wallet" }, 500)
+  }
+
   return c.json(await res.json())
 })
 
+// Unlink a wallet (no signature required - session auth is sufficient)
 userRoutes.delete("/wallets/:publicKey", async (c) => {
+  const walletToUnlink = c.req.param("publicKey")
+
   const userDO = getUserDO(c)
-  const publicKey = c.req.param("publicKey")
-  const res = await userDO.fetch(new Request(`http://do/wallets/${publicKey}`, { method: "DELETE" }))
-  if (!res.ok) return c.json({ error: "Not found" }, 404)
+  const userId = c.get("userId")
+  if (!userId) {
+    return c.json({ error: "Not authenticated" }, 401)
+  }
+
+  // Get all user wallets to check if this is the main wallet
+  const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+  const wallets = await walletsRes.json<Array<{ publicKey: string; isMain: boolean }>>()
+
+  const walletToRemove = wallets.find((w) => w.publicKey === walletToUnlink)
+  if (!walletToRemove) {
+    return c.json({ error: "Wallet not found" }, 404)
+  }
+
+  if (walletToRemove.isMain) {
+    return c.json({ error: "Cannot unlink main wallet" }, 400)
+  }
+
+  // Remove from UserDO
+  const res = await userDO.fetch(new Request(`http://do/wallets/${walletToUnlink}`, { method: "DELETE" }))
+  if (!res.ok) {
+    return c.json({ error: "Failed to unlink wallet" }, 500)
+  }
+
+  // Remove from database
+  await c.env.DB.prepare("DELETE FROM wallet_users WHERE wallet = ? AND user_id = ?").bind(walletToUnlink, userId).run()
+
   return c.body(null, 204)
 })
 

@@ -1,0 +1,257 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/membership-refactor",
+  "description": "Membership Refactor - Rebrand staking to membership, remove emissions/rewards, add tier-focused UI",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove ClaimDialog component",
+      "description": "As a developer, I need to remove the claim rewards dialog since emissions are no longer part of the system.",
+      "acceptanceCriteria": [
+        "Delete apps/web/src/components/stake/ClaimDialog.tsx",
+        "Remove ClaimDialog import from apps/web/src/routes/stake.tsx",
+        "Remove showClaimDialog state and all claim-related handlers",
+        "Remove 'Claim Rewards' button from page header",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Remove StakeStats component",
+      "description": "As a developer, I need to remove the stats component that displays pending rewards.",
+      "acceptanceCriteria": [
+        "Delete apps/web/src/components/stake/StakeStats.tsx",
+        "Remove StakeStats import and usage from apps/web/src/routes/stake.tsx",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Clean up stake store - remove rewards atoms",
+      "description": "As a developer, I need to remove rewards-related atoms from the stake store.",
+      "acceptanceCriteria": [
+        "Remove pendingRewardsAtom from apps/web/src/stores/stake.ts",
+        "Remove totalPendingRewardsAtom from apps/web/src/stores/stake.ts",
+        "Remove clearPendingRewardsAtom from apps/web/src/stores/stake.ts",
+        "Keep all atoms needed for lock/unlock operations (stakerAtom, collectionsAtom, emissionsAtom, userStakeRecordsAtom, etc.)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Remove buildClaimInstructions from use-staking hook",
+      "description": "As a developer, I need to remove the claim instruction builder since claiming is no longer supported.",
+      "acceptanceCriteria": [
+        "Remove buildClaimInstructions function from apps/web/src/hooks/use-staking.ts",
+        "Remove BuildClaimInstructionsInput interface",
+        "Keep all stake/unstake instruction building functions",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Rename stake component directory to membership",
+      "description": "As a developer, I need to rename the component directory to match the new feature name.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/stake/ to apps/web/src/components/membership/",
+        "Update all imports in apps/web/src/routes/stake.tsx to use @/components/membership/",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Rename StakeDialog to LockDialog",
+      "description": "As a user, I want the lock dialog to use Lock terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/StakeDialog.tsx to LockDialog.tsx",
+        "Update component name from StakeDialog to LockDialog",
+        "Change dialog title from 'Stake NFT' to 'Lock Dandy'",
+        "Change button text from 'Stake' to 'Lock'",
+        "Change loading text from 'Staking...' to 'Locking...'",
+        "Update confirmation copy to 'Are you sure you want to lock this Dandy? You can unlock at any time.'",
+        "Update success toast to 'Locked {name} successfully!'",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Rename UnstakeDialog to UnlockDialog",
+      "description": "As a user, I want the unlock dialog to use Unlock terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/UnstakeDialog.tsx to UnlockDialog.tsx",
+        "Update component name from UnstakeDialog to UnlockDialog",
+        "Change dialog title from 'Unstake NFT' to 'Unlock Dandy'",
+        "Change button text from 'Unstake' to 'Unlock'",
+        "Change loading text from 'Unstaking...' to 'Unlocking...'",
+        "Update success toast to 'Unlocked {name} successfully!'",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Rename BulkStakeDialog to BulkLockDialog",
+      "description": "As a user, I want the bulk lock dialog to use Lock terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/BulkStakeDialog.tsx to BulkLockDialog.tsx",
+        "Update component name and all internal terminology to use Lock",
+        "Update title, buttons, loading states, and toasts",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Rename BulkUnstakeDialog to BulkUnlockDialog",
+      "description": "As a user, I want the bulk unlock dialog to use Unlock terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/BulkUnstakeDialog.tsx to BulkUnlockDialog.tsx",
+        "Update component name and all internal terminology to use Unlock",
+        "Update title, buttons, loading states, and toasts",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Rename StakedNftsGrid to LockedDandiesGrid",
+      "description": "As a user, I want the locked NFTs grid to use Locked Dandies terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/StakedNftsGrid.tsx to LockedDandiesGrid.tsx",
+        "Update component name from StakedNftsGrid to LockedDandiesGrid",
+        "Change header from 'Your Staked NFTs' to 'Your Locked Dandies'",
+        "Change button from 'Unstake All' to 'Unlock All'",
+        "Change empty state from 'No NFTs staked yet' to 'No Dandies locked yet'",
+        "Change card button from 'Unstake' to 'Unlock'",
+        "Keep 'Locked X ago' timestamp format (change from 'Staked X ago')",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Rename AvailableToStakeGrid to AvailableToLockGrid",
+      "description": "As a user, I want the available NFTs grid to use Lock terminology.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/components/membership/AvailableToStakeGrid.tsx to AvailableToLockGrid.tsx",
+        "Update component name from AvailableToStakeGrid to AvailableToLockGrid",
+        "Change header from 'Available to Stake' to 'Available to Lock'",
+        "Change button from 'Stake All' to 'Lock All'",
+        "Change empty state from 'No Dandies available to stake' to 'No Dandies available to lock'",
+        "Change card button from 'Stake' to 'Lock'",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Create MembershipStatus component",
+      "description": "As a user, I want to see my membership tier status prominently so I understand my current benefits and progress.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/membership/MembershipStatus.tsx",
+        "Display large tier badge using existing TierBadge component",
+        "Show locked Dandy count (e.g., '15 Dandies Locked')",
+        "Show progress bar to next tier with percentage fill",
+        "Show 'X more for [NextTier]' text (or 'Max tier reached' for Diamond)",
+        "Show tier progression indicator: checkmarks for achieved tiers, dot for current, circles for locked",
+        "Use stakedNftCountAtom from stake store for locked count",
+        "Use TIER_THRESHOLDS from tier-badge.tsx for calculations",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Rename route from /stake to /membership",
+      "description": "As a user, I want to access the membership page at /membership.",
+      "acceptanceCriteria": [
+        "Rename apps/web/src/routes/stake.tsx to apps/web/src/routes/membership.tsx",
+        "Update component export from StakePage to MembershipPage",
+        "Update apps/web/src/App.tsx route from 'stake' to 'membership'",
+        "Update import to use MembershipPage from routes/membership",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Update membership page with new components",
+      "description": "As a user, I want the membership page to show my tier status and use the renamed components.",
+      "acceptanceCriteria": [
+        "Change page title from 'Stake' to 'Membership'",
+        "Replace StakeStats with MembershipStatus component",
+        "Update all handler names: handleStake to handleLock, handleUnstake to handleUnlock, etc.",
+        "Update all state variable names: stakeDialogNft to lockDialogNft, unstakeTarget to unlockTarget, etc.",
+        "Update component imports to use renamed components (LockDialog, UnlockDialog, etc.)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Update sidebar navigation",
+      "description": "As a user, I want the sidebar to show Membership instead of Staking.",
+      "acceptanceCriteria": [
+        "Update apps/web/src/components/layout/sidebar.tsx nav item",
+        "Change href from '/stake' to '/membership'",
+        "Change label from 'Staking' to 'Membership'",
+        "Keep Lock icon (already appropriate)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Update tier-benefits-card link",
+      "description": "As a user, I want the tier benefits card link to point to /membership.",
+      "acceptanceCriteria": [
+        "Update link in apps/web/src/components/tier-benefits-card.tsx from '/stake' to '/membership'",
+        "Update button text from 'Stake More Dandies' to 'Lock More Dandies'",
+        "Update Diamond tier text from 'Manage Staking' to 'Manage Membership'",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

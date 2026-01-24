@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { fetchStakeDataAtom, fetchUserStakeRecordsAtom, errorAtom, type StakeRecordAccount } from "@/stores/stake"
 import { type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, type LayoutSize } from "@/stores/ui"
+import { useStakeSubscription } from "@/hooks/use-stake-subscription"
 
 const layoutOptions: { value: LayoutSize; icon: typeof Grid2X2; label: string }[] = [
   { value: "large", icon: Grid2X2, label: "Large" },
@@ -26,6 +27,9 @@ export function MembershipPage() {
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
   const fetchUserStakeRecords = useSetAtom(fetchUserStakeRecordsAtom)
   const [layoutSize, setLayoutSize] = useAtom(layoutSizeAtom)
+
+  // Subscribe to real-time stake record changes via WebSocket
+  useStakeSubscription()
   const [lockDialogNft, setLockDialogNft] = useState<NFT | null>(null)
   const [unlockTarget, setUnlockTarget] = useState<{ nft: NFT; stakeRecord: StakeRecordAccount } | null>(null)
   const [bulkLockNfts, setBulkLockNfts] = useState<NFT[] | null>(null)
@@ -51,37 +55,19 @@ export function MembershipPage() {
     setBulkLockNfts(null)
   }
 
-  const handleBulkLockSuccess = () => {
-    if (account) {
-      fetchUserStakeRecords({ wallet: account, silent: true })
-    }
-  }
-
   const handleBulkUnlockDialogClose = () => {
     setBulkUnlockItems(null)
-  }
-
-  const handleBulkUnlockSuccess = () => {
-    if (account) {
-      fetchUserStakeRecords({ wallet: account, silent: true })
-    }
   }
 
   const handleLockDialogClose = () => {
     setLockDialogNft(null)
   }
 
-  const handleLockSuccess = () => {
-    if (account) {
-      fetchUserStakeRecords({ wallet: account, silent: true })
-    }
-  }
-
   const handleUnlockDialogClose = () => {
     setUnlockTarget(null)
   }
 
-  const handleUnlockSuccess = () => {
+  const handleSuccess = () => {
     if (account) {
       fetchUserStakeRecords({ wallet: account, silent: true })
     }
@@ -147,29 +133,23 @@ export function MembershipPage() {
         </div>
       )}
 
-      {lockDialogNft && (
-        <LockDialog nft={lockDialogNft} onClose={handleLockDialogClose} onSuccess={handleLockSuccess} />
-      )}
+      {lockDialogNft && <LockDialog nft={lockDialogNft} onClose={handleLockDialogClose} onSuccess={handleSuccess} />}
 
       {unlockTarget && (
         <UnlockDialog
           nft={unlockTarget.nft}
           stakeRecord={unlockTarget.stakeRecord}
           onClose={handleUnlockDialogClose}
-          onSuccess={handleUnlockSuccess}
+          onSuccess={handleSuccess}
         />
       )}
 
       {bulkLockNfts && (
-        <BulkLockDialog nfts={bulkLockNfts} onClose={handleBulkLockDialogClose} onSuccess={handleBulkLockSuccess} />
+        <BulkLockDialog nfts={bulkLockNfts} onClose={handleBulkLockDialogClose} onSuccess={handleSuccess} />
       )}
 
       {bulkUnlockItems && (
-        <BulkUnlockDialog
-          items={bulkUnlockItems}
-          onClose={handleBulkUnlockDialogClose}
-          onSuccess={handleBulkUnlockSuccess}
-        />
+        <BulkUnlockDialog items={bulkUnlockItems} onClose={handleBulkUnlockDialogClose} onSuccess={handleSuccess} />
       )}
     </div>
   )

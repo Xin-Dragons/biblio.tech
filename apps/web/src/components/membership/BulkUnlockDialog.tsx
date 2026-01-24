@@ -1,7 +1,6 @@
-import { useState, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { Transaction, ComputeBudgetProgram, PublicKey, type TransactionInstruction } from "@solana/web3.js"
 import { useAtomValue, useSetAtom } from "jotai"
 import toast from "react-hot-toast"
 import { Button } from "@/components/ui/button"
@@ -17,21 +16,20 @@ import {
   buildUnstakeInstructions,
   buildUnstakeNiftyInstructions,
   isNiftyAsset,
-  DANDIES_NIFTY_COLLECTION,
+  DANDIES_NIFTY_COLLECTION_ADDRESS,
 } from "@/hooks/use-staking"
 import {
   getBlockhash,
-  simulateTransaction,
-  getPriorityFee,
-  buildTransaction,
   sendTransaction,
   confirmMultipleTransactionsViaWebSocket,
+  getEncodedTransactionSize,
+  prepareSignedTransaction,
   MAX_TX_SIZE,
   SIZE_BUFFER,
-  getTransactionSize,
 } from "@/lib/transaction"
 import { logger } from "@/lib/logger"
 import type { NFT } from "@/stores/nfts"
+import type { Address, Instruction, TransactionSigner } from "@solana/kit"
 
 interface BulkUnlockItem {
   nft: NFT
@@ -47,6 +45,7 @@ interface BulkUnlockDialogProps {
 export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialogProps) {
   const [unlocking, setUnlocking] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [estimatedTxCount, setEstimatedTxCount] = useState(1)
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
   const staker = useAtomValue(stakerAtom)
@@ -55,7 +54,7 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
   const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
 
   const itemsNotMeetingMinPeriod = items.filter((item) => {
-    const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : item.nft.collectionId
+    const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
     const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
     if (!collection) return false
     const minStakePeriodSeconds = collection.minStakePeriod ? Number(collection.minStakePeriod) : 0
@@ -66,63 +65,64 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
     return timeLockedSeconds < minStakePeriodSeconds
   })
 
-  const estimatedTxCount = useMemo(() => {
-    if (!staker || !account || items.length === 0) return 1
-
-    const dummyBlockhash = "11111111111111111111111111111111"
-    const ownerPubkey = new PublicKey(account)
-
-    let txCount = 0
-    let currentTx = new Transaction()
-    currentTx.recentBlockhash = dummyBlockhash
-    currentTx.feePayer = ownerPubkey
-    currentTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-
-    for (const item of items) {
-      const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION.toBase58() : item.nft.collectionId
-      const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
-      if (!collection) continue
-
-      const instructions = isNiftyAsset(item.nft)
-        ? buildUnstakeNiftyInstructions({
-            nft: item.nft,
-            stakeRecord: item.stakeRecord,
-            staker,
-            collection,
-            emissions,
-            owner: account,
-          })
-        : buildUnstakeInstructions({
-            nft: item.nft,
-            stakeRecord: item.stakeRecord,
-            staker,
-            collection,
-            emissions,
-            owner: account,
-          })
-
-      const testTx = new Transaction()
-      testTx.recentBlockhash = dummyBlockhash
-      testTx.feePayer = ownerPubkey
-      testTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-      testTx.instructions = [...currentTx.instructions, ...instructions]
-
-      const size = getTransactionSize(testTx)
-
-      if (size > MAX_TX_SIZE - SIZE_BUFFER && currentTx.instructions.length > 1) {
-        txCount++
-        currentTx = new Transaction()
-        currentTx.recentBlockhash = dummyBlockhash
-        currentTx.feePayer = ownerPubkey
-        currentTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-      }
-
-      currentTx.add(...instructions)
+  useEffect(() => {
+    if (!staker || !account || !signer || items.length === 0) {
+      setEstimatedTxCount(1)
+      return
     }
 
-    if (currentTx.instructions.length > 1) txCount++
-    return txCount
-  }, [items, staker, collections, emissions, account])
+    const estimateTxCount = async () => {
+      const ownerAddress = account as Address
+      const { blockhash, lastValidBlockHeight } = await getBlockhash()
+
+      let txCount = 0
+      let currentInstructions: Instruction[] = []
+
+      for (const item of items) {
+        const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
+        const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
+        if (!collection) continue
+
+        const instructions = isNiftyAsset(item.nft)
+          ? await buildUnstakeNiftyInstructions({
+              nft: item.nft,
+              stakeRecord: item.stakeRecord,
+              staker,
+              collection,
+              emissions,
+              owner: ownerAddress,
+            })
+          : await buildUnstakeInstructions({
+              nft: item.nft,
+              stakeRecord: item.stakeRecord,
+              staker,
+              collection,
+              emissions,
+              owner: ownerAddress,
+            })
+
+        const testInstructions = [...currentInstructions, ...instructions]
+        const size = await getEncodedTransactionSize(
+          testInstructions,
+          signer as unknown as TransactionSigner,
+          blockhash,
+          lastValidBlockHeight
+        )
+
+        if (size > MAX_TX_SIZE - SIZE_BUFFER && currentInstructions.length > 0) {
+          txCount++
+          currentInstructions = []
+        }
+
+        currentInstructions.push(...instructions)
+      }
+
+      if (currentInstructions.length > 0) txCount++
+      setEstimatedTxCount(txCount)
+    }
+
+    estimateTxCount().catch(console.error)
+  }, [items, staker, collections, emissions, account, signer])
 
   const handleBulkUnlock = async () => {
     if (!account || !signer || !capabilities.canSign || !staker) {
@@ -133,14 +133,12 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
     setUnlocking(true)
 
     try {
-      const ownerPubkey = new PublicKey(account)
-      const blockhash = await getBlockhash()
+      const ownerAddress = account as Address
+      const { blockhash, lastValidBlockHeight } = await getBlockhash()
 
-      const itemInstructions: { item: BulkUnlockItem; instructions: ReturnType<typeof buildUnstakeInstructions> }[] = []
+      const itemInstructions: { item: BulkUnlockItem; instructions: Instruction[] }[] = []
       for (const item of items) {
-        const collectionMintToFind = isNiftyAsset(item.nft)
-          ? DANDIES_NIFTY_COLLECTION.toBase58()
-          : item.nft.collectionId
+        const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
         const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
         if (!collection) {
           logger.warn(`No collection found for NFT ${item.nft.name}, skipping`)
@@ -148,21 +146,21 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
         }
 
         const instructions = isNiftyAsset(item.nft)
-          ? buildUnstakeNiftyInstructions({
+          ? await buildUnstakeNiftyInstructions({
               nft: item.nft,
               stakeRecord: item.stakeRecord,
               staker,
               collection,
               emissions,
-              owner: account,
+              owner: ownerAddress,
             })
-          : buildUnstakeInstructions({
+          : await buildUnstakeInstructions({
               nft: item.nft,
               stakeRecord: item.stakeRecord,
               staker,
               collection,
               emissions,
-              owner: account,
+              owner: ownerAddress,
             })
         itemInstructions.push({ item, instructions })
       }
@@ -173,21 +171,20 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
         return
       }
 
-      const batches: { items: BulkUnlockItem[]; instructions: TransactionInstruction[][] }[] = []
-      let currentBatch: { items: BulkUnlockItem[]; instructions: TransactionInstruction[][] } = {
+      const batches: { items: BulkUnlockItem[]; instructions: Instruction[] }[] = []
+      let currentBatch: { items: BulkUnlockItem[]; instructions: Instruction[] } = {
         items: [],
         instructions: [],
       }
 
       for (const { item, instructions } of itemInstructions) {
-        const testTx = new Transaction()
-        testTx.recentBlockhash = blockhash
-        testTx.feePayer = ownerPubkey
-        testTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-        for (const ix of currentBatch.instructions) testTx.add(...ix)
-        testTx.add(...instructions)
-
-        const size = getTransactionSize(testTx)
+        const testInstructions = [...currentBatch.instructions, ...instructions]
+        const size = await getEncodedTransactionSize(
+          testInstructions,
+          signer as unknown as TransactionSigner,
+          blockhash,
+          lastValidBlockHeight
+        )
 
         if (size > MAX_TX_SIZE - SIZE_BUFFER && currentBatch.items.length > 0) {
           batches.push(currentBatch)
@@ -195,7 +192,7 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
         }
 
         currentBatch.items.push(item)
-        currentBatch.instructions.push(instructions)
+        currentBatch.instructions.push(...instructions)
       }
 
       if (currentBatch.items.length > 0) {
@@ -204,20 +201,20 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
 
       setProgress({ current: 0, total: batches.length })
 
-      const transactions: { tx: Transaction; items: BulkUnlockItem[] }[] = []
+      const transactions: { signedBase64: string; items: BulkUnlockItem[] }[] = []
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i]
-        const flatInstructions = batch.instructions.flat() as TransactionInstruction[]
 
-        const { unitsConsumed } = await simulateTransaction(flatInstructions, ownerPubkey, blockhash)
-        const cuLimit = Math.ceil(unitsConsumed * 1.1)
-        logger.debug(`Batch ${i + 1}: Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
+        logger.debug(`Batch ${i + 1}: Preparing transaction with ${batch.instructions.length} instructions`)
 
-        const priorityFee = await getPriorityFee(flatInstructions, ownerPubkey, blockhash, cuLimit)
-        logger.debug(`Batch ${i + 1}: Priority fee estimate: ${priorityFee} microLamports`)
+        const signedBase64 = await prepareSignedTransaction({
+          instructions: batch.instructions,
+          feePayer: signer as unknown as TransactionSigner,
+          blockhash,
+          lastValidBlockHeight,
+        })
 
-        const tx = buildTransaction(flatInstructions, ownerPubkey, blockhash, cuLimit, priorityFee)
-        transactions.push({ tx, items: batch.items })
+        transactions.push({ signedBase64, items: batch.items })
       }
 
       const signatures: string[] = []
@@ -225,10 +222,7 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
 
       for (let i = 0; i < transactions.length; i++) {
         setProgress({ current: i + 1, total: transactions.length })
-        const { tx, items: batchItems } = transactions[i]
-        const txBytes = tx.serialize({ requireAllSignatures: false })
-        const signedBytes = await signer.signTransaction(txBytes)
-        const signedBase64 = Buffer.from(signedBytes as Uint8Array).toString("base64")
+        const { signedBase64, items: batchItems } = transactions[i]
 
         const signature = await sendTransaction(signedBase64)
         signatures.push(signature)

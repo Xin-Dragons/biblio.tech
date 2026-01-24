@@ -25,6 +25,7 @@ export type TokenStandard =
   | "ProgrammableNonFungible"
   | "NonFungibleEdition"
   | "ProgrammableNonFungibleEdition"
+  | "Core"
   | "Nifty"
 
 export type DASAsset = {
@@ -76,7 +77,10 @@ export async function getAssetsByOwner(
       .send()
 
     for (const item of response.items) {
-      if (item.interface !== "V1_NFT" && item.interface !== "ProgrammableNFT") {
+      const isLegacyNft = item.interface === "V1_NFT" || item.interface === "ProgrammableNFT"
+      const isCore = item.interface === "MplCoreAsset"
+
+      if (!isLegacyNft && !isCore) {
         continue
       }
 
@@ -85,8 +89,28 @@ export async function getAssetsByOwner(
 
       const rawImage = item.content?.links?.image ?? item.content?.files?.[0]?.uri ?? ""
 
-      const tokenStandard: TokenStandard =
-        item.interface === "ProgrammableNFT" ? "ProgrammableNonFungible" : "NonFungible"
+      let tokenStandard: TokenStandard = "NonFungible"
+      if (item.interface === "ProgrammableNFT") {
+        tokenStandard = "ProgrammableNonFungible"
+      } else if (isCore) {
+        tokenStandard = "Core"
+      }
+
+      // Core assets use different structure for frozen/delegate
+      let frozen = false
+      let delegate: string | null = null
+
+      if (isCore) {
+        // Core assets: check plugins for freeze delegate
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const plugins = (item as any).plugins
+        const freezeDelegate = plugins?.find((p: { type: string }) => p.type === "FreezeDelegate")
+        frozen = freezeDelegate?.data?.frozen ?? false
+        delegate = freezeDelegate?.authority?.address ?? null
+      } else {
+        frozen = item.ownership?.frozen ?? false
+        delegate = (item.ownership?.delegate as string) ?? null
+      }
 
       const asset: DASAsset = {
         mint: item.id,
@@ -101,8 +125,8 @@ export async function getAssetsByOwner(
             }))
           : [],
         compressed: item.compression?.compressed ?? false,
-        frozen: item.ownership?.frozen ?? false,
-        delegate: (item.ownership?.delegate as string) ?? null,
+        frozen,
+        delegate,
         tokenStandard,
       }
 

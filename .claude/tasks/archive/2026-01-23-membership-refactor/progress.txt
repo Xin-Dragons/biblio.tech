@@ -1,0 +1,272 @@
+# Ralph Progress Log
+# Feature: membership-refactor
+# Started: 2026-01-23
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**TIER SYSTEM (from previous ralph/membership-tiers):**
+- apps/api/src/lib/tiers.ts — tier constants, thresholds, helpers
+- apps/web/src/components/tier-badge.tsx — TierBadge component, Tier enum, getTierFromDandyCount()
+- apps/web/src/stores/tier.ts — tierAtom, fetchTierAtom
+- apps/web/src/components/tier-benefits-card.tsx — TierBenefitsCard component
+
+**STAKING SYSTEM (to be refactored):**
+- apps/web/src/components/stake/ — all dialog and grid components
+- apps/web/src/routes/stake.tsx — main staking page
+- apps/web/src/stores/stake.ts — stake atoms (keep core, remove rewards)
+- apps/web/src/hooks/use-staking.ts — instruction builders (keep stake/unstake, remove claim)
+
+**TIER THRESHOLDS:**
+- Free: 0, Bronze: 1, Silver: 5, Gold: 15, Diamond: 50
+
+**KEY TERMINOLOGY CHANGES:**
+- Stake → Lock
+- Unstake → Unlock
+- Staked NFTs → Locked Dandies
+- Available to Stake → Available to Lock
+- /stake → /membership
+
+---
+
+## 2026-01-23 - US-001
+- Removed ClaimDialog component (deleted ClaimDialog.tsx)
+- Removed ClaimDialog import from stake.tsx
+- Removed showClaimDialog state and handleClaimDialogClose/handleClaimSuccess handlers
+- Removed 'Claim Rewards' button from page header
+- Removed totalPendingRewardsAtom import and usage
+- Removed unused imports: useAtomValue, Gift, Button
+- Files changed: apps/web/src/routes/stake.tsx, apps/web/src/components/stake/ClaimDialog.tsx (deleted)
+- **Learnings for future iterations:**
+  - The stake.tsx file uses a pattern of [dialogState, setDialogState] pairs with handlers for close/success
+  - The Claim Rewards button was disabled when totalPending === 0n
+---
+
+## 2026-01-23 - US-002
+- Deleted apps/web/src/components/stake/StakeStats.tsx
+- Removed StakeStats import and usage from apps/web/src/routes/stake.tsx
+- Files changed: apps/web/src/routes/stake.tsx, apps/web/src/components/stake/StakeStats.tsx (deleted)
+- **Learnings for future iterations:**
+  - StakeStats used totalPendingRewardsAtom for pending rewards display - this atom can now be removed in US-003
+  - The layout in stake.tsx has two grids side by side (StakedNftsGrid and AvailableToStakeGrid) after removing StakeStats
+---
+
+## 2026-01-23 - US-003
+- Removed PendingReward interface from apps/web/src/stores/stake.ts
+- Removed pendingRewardsAtom (derived atom calculating pending rewards)
+- Removed totalPendingRewardsAtom (sum of all pending rewards)
+- Removed clearPendingRewardsAtom (optimistic update for claim success)
+- Kept isSome import as it's still used by getEmissionAddresses()
+- Files changed: apps/web/src/stores/stake.ts
+- **Learnings for future iterations:**
+  - getEmissionAddresses() helper extracts emission addresses from CollectionAccount using isSome checks
+  - Remaining stake atoms: stakerAtom, collectionsAtom, emissionsAtom, userStakeRecordsAtom, stakedMintsSetAtom, stakedNftCountAtom
+  - Remaining action atoms: fetchStakeDataAtom, fetchUserStakeRecordsAtom, addStakeRecordAtom, removeStakeRecordAtom
+---
+
+## 2026-01-23 - US-004
+- Removed BuildClaimInstructionsInput interface from apps/web/src/hooks/use-staking.ts
+- Removed buildClaimInstructions function (115 lines of claim instruction building code)
+- Removed unused TOKEN_PROGRAM_ID import from @solana/spl-token
+- Removed unused logger import from ../lib/logger
+- Files changed: apps/web/src/hooks/use-staking.ts
+- **Learnings for future iterations:**
+  - use-staking.ts now only has stake/unstake instruction builders (no claim)
+  - Remaining functions: buildStakeInstructions, buildStakeNiftyInstructions, buildUnstakeInstructions, buildUnstakeNiftyInstructions
+  - Helper functions retained: getTokenAuthorityPda, resolveTokenEmissionAccounts, various PDA derivation functions
+---
+
+## 2026-01-23 - US-005
+- Renamed apps/web/src/components/stake/ to apps/web/src/components/membership/
+- Updated all 6 imports in apps/web/src/routes/stake.tsx to use @/components/membership/ path
+- Git properly tracked this as a rename operation (6 files renamed with 100% content match)
+- Files changed: apps/web/src/routes/stake.tsx, all 6 components moved to new directory
+- **Learnings for future iterations:**
+  - All component files are now in apps/web/src/components/membership/ directory
+  - Components not yet renamed: StakeDialog, UnstakeDialog, BulkStakeDialog, BulkUnstakeDialog, StakedNftsGrid, AvailableToStakeGrid
+  - Future stories will rename these individual components to use Lock/Unlock terminology
+---
+
+## 2026-01-23 - US-006
+- Renamed StakeDialog.tsx to LockDialog.tsx
+- Updated component name from StakeDialog to LockDialog
+- Changed dialog title from 'Stake NFT' to 'Lock Dandy'
+- Changed button text from 'Stake' to 'Lock'
+- Changed loading text from 'Staking...' to 'Locking...'
+- Updated confirmation copy to 'Are you sure you want to lock this Dandy? You can unlock at any time.'
+- Updated success toast to 'Locked {name} successfully!'
+- Updated error messages to use 'lock' terminology
+- Updated handler name from handleStake to handleLock
+- Updated state variable from staking to locking
+- Updated import in stake.tsx to use LockDialog
+- Files changed: apps/web/src/components/membership/LockDialog.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - The underlying stake instruction builders are NOT renamed (buildStakeInstructions etc.) - only UI terminology changes
+  - Internal state variables and handlers can be renamed without affecting props interfaces
+  - The remaining dialogs follow the same pattern and can use the same approach
+---
+
+## 2026-01-23 - US-007
+- Renamed UnstakeDialog.tsx to UnlockDialog.tsx
+- Updated component name from UnstakeDialog to UnlockDialog
+- Changed dialog title from 'Unstake NFT' to 'Unlock Dandy'
+- Changed button text from 'Unstake' to 'Unlock'
+- Changed loading text from 'Unstaking...' to 'Unlocking...'
+- Updated success toast to 'Unlocked {name} successfully!'
+- Updated error message to use 'unlock' terminology
+- Updated internal variable names: unstaking → unlocking, stakedAtSeconds → lockedAtSeconds, etc.
+- Updated confirmation copy to remove rewards references
+- Updated import in stake.tsx to use UnlockDialog
+- Files changed: apps/web/src/components/membership/UnlockDialog.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - Dialog props interface remained the same (UnlockDialogProps has same shape as UnstakeDialogProps)
+  - The minimum period warning text was updated to remove rewards forfeit reference since rewards are removed
+  - Git tracked this as 81% similar rename operation
+---
+
+## 2026-01-23 - US-008
+- Renamed BulkStakeDialog.tsx to BulkLockDialog.tsx
+- Updated component name from BulkStakeDialog to BulkLockDialog
+- Changed dialog title from 'Stake All NFTs' to 'Lock All Dandies'
+- Changed button text from 'Stake All' to 'Lock All'
+- Changed loading text from 'Staking...' to 'Locking...'
+- Updated all labels: 'NFTs to stake' → 'Dandies to lock'
+- Updated confirmation copy to use 'lock' and 'Dandies' terminology
+- Updated success toast to 'Locked {count} Dandies in {count} transactions!'
+- Updated error messages to use 'lock' terminology
+- Updated internal variable names: staking → locking, handleBulkStake → handleBulkLock
+- Updated import in stake.tsx to use BulkLockDialog
+- Files changed: apps/web/src/components/membership/BulkLockDialog.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - The underlying stake instruction builders remain unchanged (buildStakeInstructions etc.) - only UI terminology changes
+  - Git tracked this as 91% similar rename operation
+  - The BulkUnstakeDialog will follow the same pattern for US-009
+---
+
+## 2026-01-23 - US-009
+- Renamed BulkUnstakeDialog.tsx to BulkUnlockDialog.tsx
+- Updated component name from BulkUnstakeDialog to BulkUnlockDialog
+- Changed dialog title from 'Unstake All NFTs' to 'Unlock All Dandies'
+- Changed button text from 'Unstake All' to 'Unlock All'
+- Changed loading text from 'Unstaking...' to 'Unlocking...'
+- Updated all labels: 'NFTs to unstake' → 'Dandies to unlock'
+- Updated warning text to use 'lock' terminology and 'Dandies'
+- Updated success toast to 'Unlocked {count} Dandies in {count} transactions!'
+- Updated error messages to use 'unlock' and 'Dandies' terminology
+- Updated internal variable names: unstaking → unlocking, BulkUnstakeItem → BulkUnlockItem
+- Updated import in stake.tsx to use BulkUnlockDialog
+- Files changed: apps/web/src/components/membership/BulkUnlockDialog.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - Git tracked this as 85% similar rename operation
+  - Interface names (BulkUnlockItem, BulkUnlockDialogProps) updated for consistency
+  - All four dialog components are now renamed: LockDialog, UnlockDialog, BulkLockDialog, BulkUnlockDialog
+  - Next stories will rename the grid components (StakedNftsGrid, AvailableToStakeGrid)
+---
+
+## 2026-01-23 - US-010
+- Renamed StakedNftsGrid.tsx to LockedDandiesGrid.tsx
+- Updated component name from StakedNftsGrid to LockedDandiesGrid
+- Updated internal type names: StakedNftCardProps → LockedDandyCardProps, StakedNftCard → LockedDandyCard, etc.
+- Changed header from 'Your Staked NFTs' to 'Your Locked Dandies'
+- Changed button from 'Unstake All' to 'Unlock All'
+- Changed empty state from 'No NFTs staked yet' to 'No Dandies locked yet'
+- Changed card button from 'Unstake' to 'Unlock'
+- Changed timestamp from 'Staked X ago' to 'Locked X ago'
+- Updated props interface: onUnstake → onUnlock, onUnstakeAll → onUnlockAll
+- Updated import in stake.tsx to use LockedDandiesGrid
+- Files changed: apps/web/src/components/membership/LockedDandiesGrid.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - Git tracked this as 80% similar rename operation
+  - Props renamed from onUnstake/onUnstakeAll to onUnlock/onUnlockAll - the stake.tsx handlers still use old names (handleUnstake etc.) but pass them to the new prop names
+  - Internal variable stakedNftsWithRecords → lockedDandiesWithRecords
+  - Next story US-011 will rename AvailableToStakeGrid to AvailableToLockGrid
+---
+
+## 2026-01-23 - US-011
+- Renamed AvailableToStakeGrid.tsx to AvailableToLockGrid.tsx
+- Updated component name from AvailableToStakeGrid to AvailableToLockGrid
+- Updated internal type names: AvailableNftCardProps → AvailableDandyCardProps, AvailableNftCard → AvailableDandyCard, etc.
+- Changed header from 'Available to Stake' to 'Available to Lock'
+- Changed button from 'Stake All' to 'Lock All'
+- Changed empty state from 'No Dandies available to stake' to 'No Dandies available to lock'
+- Changed card button from 'Stake' to 'Lock'
+- Updated props interface: onStake → onLock, onStakeAll → onLockAll
+- Updated internal variable: isStaked → isLocked (in filter logic)
+- Updated debug log message to use AvailableToLockGrid and 'unlocked' terminology
+- Updated import in stake.tsx to use AvailableToLockGrid with new prop names
+- Files changed: apps/web/src/components/membership/AvailableToLockGrid.tsx (renamed), apps/web/src/routes/stake.tsx
+- **Learnings for future iterations:**
+  - Git tracked this as 84% similar rename operation
+  - All grid components are now renamed: LockedDandiesGrid, AvailableToLockGrid
+  - All dialog components are renamed: LockDialog, UnlockDialog, BulkLockDialog, BulkUnlockDialog
+  - The stake.tsx handlers still use old naming (handleStake, handleUnstake etc.) - these will be updated in US-014
+  - Next story US-012 will create the MembershipStatus component
+---
+
+## 2026-01-23 - US-012
+- Created apps/web/src/components/membership/MembershipStatus.tsx
+- Displays large TierBadge using existing component with size="lg"
+- Shows locked Dandy count with proper singular/plural handling ("X Dandy/Dandies Locked")
+- Shows progress bar to next tier with percentage fill
+- Shows "X more for [NextTier]" text or "Max tier reached" for Diamond tier
+- Shows tier progression indicator with checkmarks for achieved, dot for current, circles for locked
+- Uses stakedNftCountAtom from stake store for locked count
+- Exported TIER_THRESHOLDS from tier-badge.tsx for calculations
+- Files changed: apps/web/src/components/membership/MembershipStatus.tsx (created), apps/web/src/components/tier-badge.tsx (export added)
+- **Learnings for future iterations:**
+  - TIER_THRESHOLDS is now exported from tier-badge.tsx for use by other components
+  - Helper functions: getNextTier, getProgressToNextTier, getDandiesNeededForNextTier
+  - TierProgression sub-component renders the visual tier indicator
+  - The component is standalone and ready to be integrated into the membership page (US-014)
+---
+
+## 2026-01-23 - US-013
+- Renamed apps/web/src/routes/stake.tsx to apps/web/src/routes/membership.tsx
+- Updated component export from StakePage to MembershipPage
+- Updated apps/web/src/App.tsx route from 'stake' to 'membership'
+- Updated import to use MembershipPage from routes/membership
+- Git tracked this as 99% similar rename operation
+- Files changed: apps/web/src/routes/membership.tsx (renamed), apps/web/src/App.tsx
+- **Learnings for future iterations:**
+  - The route is now at /membership but page title and handler names still use old terminology
+  - US-014 will update the page internals (title, handlers, state variables)
+  - The MembershipStatus component created in US-012 is ready to be integrated in US-014
+---
+
+## 2026-01-23 - US-014
+- Changed page title from 'Stake' to 'Membership'
+- Added MembershipStatus component import and placed it above the grids
+- Updated connect wallet message from "view staking" to "view membership"
+- Renamed all state variables: stakeDialogNft → lockDialogNft, unstakeTarget → unlockTarget, bulkStakeNfts → bulkLockNfts, bulkUnstakeItems → bulkUnlockItems
+- Renamed all handlers: handleStake → handleLock, handleUnstake → handleUnlock, handleStakeAll → handleLockAll, handleUnstakeAll → handleUnlockAll
+- Renamed all dialog handlers: handleStakeDialogClose → handleLockDialogClose, handleStakeSuccess → handleLockSuccess, etc.
+- Updated all JSX references to use the new handler and state variable names
+- Files changed: apps/web/src/routes/membership.tsx
+- **Learnings for future iterations:**
+  - The membership page now fully uses Lock/Unlock terminology internally
+  - MembershipStatus is displayed above the two grids (LockedDandiesGrid, AvailableToLockGrid)
+  - Next stories US-015 and US-016 will update navigation links (sidebar and tier-benefits-card)
+---
+
+## 2026-01-23 - US-015
+- Updated sidebar navigation nav item from '/stake' to '/membership'
+- Changed label from 'Staking' to 'Membership'
+- Kept Lock icon (already appropriate for membership/locking)
+- Files changed: apps/web/src/components/layout/sidebar.tsx
+- **Learnings for future iterations:**
+  - navItems array is a simple static array at the top of sidebar.tsx
+  - Icon imports are from lucide-react
+  - Next story US-016 will update tier-benefits-card link
+---
+
+## 2026-01-23 - US-016
+- Updated link in tier-benefits-card from '/stake' to '/membership'
+- Updated button text from 'Stake More Dandies' to 'Lock More Dandies'
+- Updated Diamond tier text from 'Manage Staking' to 'Manage Membership'
+- Also updated description text from 'staked' to 'locked' for consistency
+- Files changed: apps/web/src/components/tier-benefits-card.tsx
+- **Learnings for future iterations:**
+  - This was the FINAL story in the membership-refactor PRD
+  - All /stake references should now be updated to /membership across the codebase
+  - All 'stake/unstake' UI terminology should now be 'lock/unlock'
+---
+

@@ -1,10 +1,58 @@
+import { useState, type ComponentType } from "react"
+import { User, Medal, Shield, Crown, Gem, Info, type LucideProps } from "lucide-react"
 import { useAtomValue } from "jotai"
-import { Check, Circle, Dot } from "lucide-react"
-import { TierBadge, Tier, TIER_THRESHOLDS, getTierFromDandyCount } from "@/components/tier-badge"
-import { stakedNftCountAtom } from "@/stores/stake"
+import { Tier, TIER_THRESHOLDS, TierBadge } from "@/components/tier-badge"
+import { tierAtom } from "@/stores/tier"
+import { MembershipInfoModal } from "./MembershipInfoModal"
 import { cn } from "@/lib/utils"
 
 const TIER_ORDER: Tier[] = [Tier.Free, Tier.Bronze, Tier.Silver, Tier.Gold, Tier.Diamond]
+
+const tierColors: Record<
+  Tier,
+  { bg: string; border: string; text: string; glow: string; fill: string; icon: ComponentType<LucideProps> }
+> = {
+  [Tier.Free]: {
+    bg: "bg-card",
+    border: "border-border",
+    text: "text-white/70",
+    glow: "",
+    fill: "bg-muted-foreground",
+    icon: User,
+  },
+  [Tier.Bronze]: {
+    bg: "bg-[linear-gradient(to_right,#5c3d1e,#cd7f32,#8b5a2b,#cd7f32,#5c3d1e)]",
+    border: "border-[#cd7f32]/60",
+    text: "text-[#ffd699]",
+    glow: "shadow-[0_0_20px_-5px_rgba(205,127,50,0.4)]",
+    fill: "bg-[#dea15e]",
+    icon: Shield,
+  },
+  [Tier.Silver]: {
+    bg: "bg-[linear-gradient(to_right,#4a5568,#a0aec0,#718096,#a0aec0,#4a5568)]",
+    border: "border-[#c0c0c0]/60",
+    text: "text-[#f0f0f0]",
+    glow: "shadow-[0_0_20px_-5px_rgba(192,192,192,0.5)]",
+    fill: "bg-[#d0d0d0]",
+    icon: Medal,
+  },
+  [Tier.Gold]: {
+    bg: "bg-[linear-gradient(to_right,#7a5c1a,#d4a84b,#b8942b,#d4a84b,#7a5c1a)]",
+    border: "border-[#d4a84b]/60",
+    text: "text-[#ffe082]",
+    glow: "shadow-[0_0_20px_-5px_rgba(212,168,75,0.5)]",
+    fill: "bg-[#e8c252]",
+    icon: Crown,
+  },
+  [Tier.Diamond]: {
+    bg: "bg-gradient-to-r from-cyan-900/80 to-blue-900/60",
+    border: "border-cyan-400/50",
+    text: "text-cyan-300",
+    glow: "shadow-[0_0_25px_-5px_rgba(34,211,238,0.4)]",
+    fill: "bg-cyan-300",
+    icon: Gem,
+  },
+}
 
 function getNextTier(currentTier: Tier): Tier | null {
   const currentIndex = TIER_ORDER.indexOf(currentTier)
@@ -33,81 +81,110 @@ function getDandiesNeededForNextTier(count: number, currentTier: Tier): number {
   return TIER_THRESHOLDS[nextTier] - count
 }
 
-interface TierProgressionProps {
-  currentTier: Tier
-}
-
-function TierProgression({ currentTier }: TierProgressionProps) {
-  const currentIndex = TIER_ORDER.indexOf(currentTier)
-
-  return (
-    <div className="flex items-center justify-center gap-2">
-      {TIER_ORDER.map((tier, index) => {
-        const isAchieved = index < currentIndex
-        const isCurrent = index === currentIndex
-        const isLocked = index > currentIndex
-
-        return (
-          <div key={tier} className="flex flex-col items-center gap-1">
-            <div
-              className={cn(
-                "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all",
-                isAchieved && "border-primary bg-primary text-primary-foreground",
-                isCurrent && "border-primary bg-primary/20",
-                isLocked && "border-muted-foreground/30 bg-transparent"
-              )}
-            >
-              {isAchieved && <Check className="h-3 w-3" />}
-              {isCurrent && <Dot className="h-4 w-4 text-primary" />}
-              {isLocked && <Circle className="h-2 w-2 text-muted-foreground/30" />}
-            </div>
-            <span
-              className={cn(
-                "text-[10px]",
-                isAchieved && "text-muted-foreground",
-                isCurrent && "font-medium text-foreground",
-                isLocked && "text-muted-foreground/50"
-              )}
-            >
-              {tier}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 export function MembershipStatus() {
-  const lockedCount = useAtomValue(stakedNftCountAtom)
-  const currentTier = getTierFromDandyCount(lockedCount)
+  const [showInfoModal, setShowInfoModal] = useState(false)
+  const tierInfo = useAtomValue(tierAtom)
+  const currentTier = tierInfo?.tier ?? Tier.Free
+  const lockedCount = tierInfo?.stakedCount ?? 0
   const nextTier = getNextTier(currentTier)
   const progress = getProgressToNextTier(lockedCount, currentTier)
   const dandiesNeeded = getDandiesNeededForNextTier(lockedCount, currentTier)
+  const colors = tierColors[currentTier]
+  const currentIndex = TIER_ORDER.indexOf(currentTier)
+  const TierIcon = colors.icon
 
   return (
-    <div className="flex flex-col items-center gap-6 rounded-lg border border-border bg-card p-6">
-      <TierBadge tier={currentTier} size="lg" />
-
-      <div className="text-center">
-        <p className="text-2xl font-bold">
-          {lockedCount} {lockedCount === 1 ? "Dandy" : "Dandies"} Locked
-        </p>
-      </div>
-
-      <div className="w-full max-w-xs">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all duration-300"
-            style={{ width: `${progress}%` }}
+    <>
+      <MembershipInfoModal open={showInfoModal} onOpenChange={setShowInfoModal} />
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border px-4 py-3",
+          colors.bg,
+          colors.border,
+          colors.glow
+        )}
+      >
+        {/* Tier with info icon - clickable */}
+        <button
+          type="button"
+          onClick={() => setShowInfoModal(true)}
+          className="flex items-center gap-1.5 transition-opacity hover:opacity-80"
+          title="View membership benefits"
+        >
+          <TierIcon
+            className={cn("h-4 w-4", colors.text)}
+            style={
+              currentTier !== Tier.Free && currentTier !== Tier.Diamond
+                ? {
+                    filter:
+                      "drop-shadow(0 -1px 0 rgba(0,0,0,0.3)) drop-shadow(-1px 0 0 rgba(0,0,0,0.3)) drop-shadow(0 1px 0 rgba(255,255,255,0.3))",
+                  }
+                : undefined
+            }
           />
-        </div>
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          {nextTier ? `${dandiesNeeded} more for ${nextTier}` : "Max tier reached"}
-        </p>
-      </div>
+          <span
+            className={cn("text-sm font-semibold uppercase tracking-wider", colors.text)}
+            style={
+              currentTier !== Tier.Free && currentTier !== Tier.Diamond
+                ? { textShadow: "0 -1px 0 rgba(0,0,0,0.3), -1px 0 0 rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.3)" }
+                : undefined
+            }
+          >
+            {currentTier}
+          </span>
+          <Info className={cn("h-3.5 w-3.5 opacity-60", colors.text)} />
+        </button>
 
-      <TierProgression currentTier={currentTier} />
-    </div>
+        <div className="h-4 w-px bg-white/20" />
+
+        {/* Dandy count */}
+        <span className={cn("text-sm", colors.text)}>
+          <span className="font-bold tabular-nums">{lockedCount}</span>
+          <span className="ml-1">{lockedCount === 1 ? "Dandy" : "Dandies"}</span>
+        </span>
+
+        {/* Progress bar */}
+        <div className="flex min-w-[140px] flex-1 items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/40">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                nextTier
+                  ? colors.fill
+                  : "animate-bar-sweep bg-gradient-to-r from-cyan-400 via-white to-cyan-400 bg-[length:200%_100%]"
+              )}
+              style={{ width: nextTier ? `${progress}%` : "100%" }}
+            />
+          </div>
+          {nextTier ? (
+            <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-xs", colors.text)}>
+              <span className="font-medium">{dandiesNeeded}</span> to <TierBadge tier={nextTier} size="sm" />
+            </span>
+          ) : (
+            <span className={cn("whitespace-nowrap text-xs font-medium", colors.text)}>MAX</span>
+          )}
+        </div>
+
+        {/* Tier dots - always visible */}
+        <div className="flex items-center gap-1.5">
+          {TIER_ORDER.map((tier, index) => {
+            const isAchieved = index <= currentIndex
+            const isCurrent = index === currentIndex
+
+            return (
+              <div
+                key={tier}
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  isAchieved ? "bg-white" : "bg-white/20",
+                  isCurrent && "animate-ring-pulse"
+                )}
+                title={`${tier}: ${TIER_THRESHOLDS[tier]}+ Dandies`}
+              />
+            )
+          })}
+        </div>
+      </div>
+    </>
   )
 }

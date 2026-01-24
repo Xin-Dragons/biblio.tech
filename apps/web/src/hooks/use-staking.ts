@@ -1,7 +1,15 @@
-import { PublicKey, TransactionInstruction } from "@solana/web3.js"
-import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token"
-import type { Address, TransactionSigner } from "@solana/kit"
+import {
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  type Address,
+  type TransactionSigner,
+  type Instruction,
+  type AccountMeta,
+} from "@solana/kit"
+import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
 import { stake } from "@biblio/solana-programs"
+
+export const STAKE_PROGRAM_ADDRESS = "stakeU1kxrpYvLXFBLEk6cBtvzr8fmJiLzuVyMSgPo4" as Address
 import type { NFT } from "../stores/nfts"
 import {
   getEmissionAddresses,
@@ -11,108 +19,44 @@ import {
   type StakeRecordAccount,
 } from "../stores/stake"
 
-/**
- * Stake Program ID
- * The deployed stake program on Solana mainnet
- */
-export const STAKE_PROGRAM_ID = new PublicKey("STAKEQkGBjkhCXabzB5cUbWgSSvbVJFEm2oEnyWzdKE")
+export const MPL_CORE_PROGRAM_ADDRESS = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" as Address
+export const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+export const TOKEN_AUTH_RULES_PROGRAM_ADDRESS = "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg" as Address
+export const FEES_WALLET_ADDRESS = "2NkHMEEKymjrjjd9DSEprVV4E7nBr6aHzwFeusHxL2Q6" as Address
+export const DANDIES_AUTH_RULES_ADDRESS = "eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9" as Address
+export const DANDIES_STAKER_ADDRESS = "6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a" as Address
+export const DANDIES_NFT_AUTHORITY_ADDRESS = "HSRNyULArR9zpyPfncYMezYrfBvPNUzvLYzJPppCxgYM" as Address
+export const NIFTY_PROGRAM_ADDRESS = "AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73" as Address
+export const DANDIES_NIFTY_COLLECTION_ADDRESS = "BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF" as Address
+export const ASSOCIATED_TOKEN_PROGRAM_ADDRESS = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" as Address
 
-/**
- * Metaplex Core Program ID
- */
-export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d")
-
-/**
- * Metaplex Token Metadata Program ID
- */
-export const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
-
-/**
- * Token Auth Rules Program ID
- */
-export const TOKEN_AUTH_RULES_PROGRAM_ID = new PublicKey("auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg")
-
-/**
- * Fees wallet that receives stake/unstake/claim fees
- */
-export const FEES_WALLET = new PublicKey("2NkHMEEKymjrjjd9DSEprVV4E7nBr6aHzwFeusHxL2Q6")
-
-/**
- * Default auth rules for pNFT delegation (Dandies collection)
- */
-export const DANDIES_AUTH_RULES = new PublicKey("eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9")
-
-/**
- * Dandies staker address
- */
-export const DANDIES_STAKER = new PublicKey("6FEajGRvukmZyLxoUrpCXzMbSHeiSHWBhRqN5mTj4T8a")
-
-/**
- * Dandies NFT Authority PDA
- * This is the delegate authority for staked Dandies pNFTs
- * Cannot be derived via standard PDA derivation - obtained from working transaction
- */
-export const DANDIES_NFT_AUTHORITY = new PublicKey("HSRNyULArR9zpyPfncYMezYrfBvPNUzvLYzJPppCxgYM")
-
-/**
- * Nifty-OSS Asset Program ID
- */
-export const NIFTY_PROGRAM_ID = new PublicKey("AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73")
-
-/**
- * Dandies Nifty Collection address (for nifty-oss Dandies)
- */
-export const DANDIES_NIFTY_COLLECTION = new PublicKey("BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF")
-
-/**
- * Checks if an NFT is a nifty-oss asset
- */
 export function isNiftyAsset(nft: NFT): boolean {
   return nft.tokenStandard === "Nifty"
 }
 
-/**
- * Checks if an NFT is a nifty-oss Dandies asset
- */
 export function isNiftyDandy(nft: NFT): boolean {
-  return isNiftyAsset(nft) && nft.collectionId === DANDIES_NIFTY_COLLECTION.toBase58()
+  return isNiftyAsset(nft) && nft.collectionId === DANDIES_NIFTY_COLLECTION_ADDRESS
 }
 
-const encoder = new TextEncoder()
-
-/**
- * Result from resolving token emission accounts for unstake operations
- */
 interface TokenEmissionAccounts {
-  tokenMintPubkey: PublicKey | undefined
-  stakeTokenVault: PublicKey | undefined
-  rewardReceiveAccount: PublicKey | undefined
-  tokenAuthorityPda: PublicKey | undefined
+  tokenMint: Address | undefined
+  stakeTokenVault: Address | undefined
+  rewardReceiveAccount: Address | undefined
+  tokenAuthority: Address | undefined
   hasPointsEmission: boolean
 }
 
-/**
- * Resolves token emission accounts for unstake operations.
- * Iterates through stake record emissions to find token mint, vault, and reward accounts.
- *
- * @param stakeRecord - The stake record containing emission addresses
- * @param emissions - Available emission accounts to search
- * @param staker - The staker account (fallback for token mint)
- * @param stakerPubkey - The staker's public key for PDA derivation
- * @param ownerPubkey - The owner's public key for reward account derivation
- * @returns Resolved token emission accounts
- */
-function resolveTokenEmissionAccounts(
+async function resolveTokenEmissionAccounts(
   stakeRecord: StakeRecordAccount,
   emissions: EmissionAccount[],
   staker: StakerAccount,
-  stakerPubkey: PublicKey,
-  ownerPubkey: PublicKey
-): TokenEmissionAccounts {
-  let tokenMintPubkey: PublicKey | undefined
-  let stakeTokenVault: PublicKey | undefined
-  let rewardReceiveAccount: PublicKey | undefined
-  let tokenAuthorityPda: PublicKey | undefined
+  stakerAddress: Address,
+  ownerAddress: Address
+): Promise<TokenEmissionAccounts> {
+  let tokenMint: Address | undefined
+  let stakeTokenVault: Address | undefined
+  let rewardReceiveAccount: Address | undefined
+  let tokenAuthority: Address | undefined
   let hasPointsEmission = false
 
   for (const emissionAddress of stakeRecord.emissions) {
@@ -123,575 +67,380 @@ function resolveTokenEmissionAccounts(
       }
       if (emission.rewardType.__kind === "Token") {
         if (emission.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(emission.tokenMint.value)
+          tokenMint = emission.tokenMint.value as Address
         } else if (staker.tokenMint.__option === "Some") {
-          tokenMintPubkey = new PublicKey(staker.tokenMint.value)
+          tokenMint = staker.tokenMint.value as Address
         }
-        if (tokenMintPubkey) {
-          tokenAuthorityPda = getTokenAuthorityPda(stakerPubkey)
-          stakeTokenVault = getAssociatedTokenAddressSync(tokenMintPubkey, tokenAuthorityPda, true)
-          rewardReceiveAccount = getAssociatedTokenAddressSync(tokenMintPubkey, ownerPubkey)
+        if (tokenMint) {
+          tokenAuthority = await getTokenAuthorityPda(stakerAddress)
+          const [vaultPda] = await findAssociatedTokenPda({
+            mint: tokenMint,
+            owner: tokenAuthority,
+            tokenProgram: TOKEN_PROGRAM_ADDRESS,
+          })
+          stakeTokenVault = vaultPda
+          const [rewardPda] = await findAssociatedTokenPda({
+            mint: tokenMint,
+            owner: ownerAddress,
+            tokenProgram: TOKEN_PROGRAM_ADDRESS,
+          })
+          rewardReceiveAccount = rewardPda
         }
       }
     }
   }
 
   return {
-    tokenMintPubkey,
+    tokenMint,
     stakeTokenVault,
     rewardReceiveAccount,
-    tokenAuthorityPda,
+    tokenAuthority,
     hasPointsEmission,
   }
 }
 
-/**
- * Converts a web3.js PublicKey to Codama Address type
- */
-function addr(pubkey: PublicKey): Address {
-  return pubkey.toBase58() as Address
-}
-
-/**
- * Creates a TransactionSigner from a PublicKey
- * Used for Codama instructions that require signer accounts
- */
-function createSigner<T extends string = string>(pubkey: PublicKey): TransactionSigner<T> {
-  const address = pubkey.toBase58() as Address<T>
+function createNoopSigner<T extends string = string>(address: Address<T>): TransactionSigner<T> {
   return {
     address,
-    signTransactions: async <TTransaction extends { signatures: Record<string, Uint8Array | null> }>(
-      transactions: readonly TTransaction[]
-    ) => transactions as TTransaction[],
+    signTransactions: async (transactions) => transactions,
   } as TransactionSigner<T>
 }
 
-/**
- * Instruction format from Codama-generated SDK
- */
-type CodamaInstruction = {
-  programAddress: string
-  accounts: ReadonlyArray<{
-    address: string
-    role: number
-  }>
-  data: ArrayLike<number>
-}
-
-/**
- * Converts a Codama instruction to web3.js TransactionInstruction
- * Role values: 0 = readonly, 1 = writable, 2 = readonly signer, 3 = writable signer
- */
-function codamaInstructionToWeb3(ix: unknown): TransactionInstruction {
-  const instruction = ix as CodamaInstruction
-
-  try {
-    const programId = new PublicKey(instruction.programAddress)
-
-    const keys = instruction.accounts.map((acc) => ({
-      pubkey: new PublicKey(acc.address),
-      isSigner: acc.role >= 2,
-      isWritable: acc.role === 1 || acc.role === 3,
-    }))
-
-    const dataArray = instruction.data as Uint8Array
-    return new TransactionInstruction({
-      programId,
-      keys,
-      data: Buffer.from(dataArray.buffer, dataArray.byteOffset, dataArray.byteLength),
-    })
-  } catch (err) {
-    console.error("codamaInstructionToWeb3 error:", err)
-    console.error(
-      "instruction:",
-      JSON.stringify(instruction, (_, v) =>
-        typeof v === "bigint" ? v.toString() : v instanceof Uint8Array ? Array.from(v) : v
-      )
-    )
-    throw err
-  }
-}
-
-/**
- * Derives the StakeRecord PDA for a given staker and NFT mint
- *
- * StakeRecord accounts track individual stake positions and store:
- * - staker: the staker this record belongs to
- * - owner: the wallet that staked the NFT
- * - nftMint: the mint address of the staked NFT
- * - stakedAt: timestamp when staked
- * - pendingClaim: accumulated rewards
- * - emissions: linked emission accounts
- *
- * Seeds: ["STAKE", staker_pubkey, nft_mint_pubkey, "stake-record"]
- */
-export function getStakeRecordPda(staker: PublicKey, nftMint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("STAKE"), staker.toBytes(), nftMint.toBytes(), encoder.encode("stake-record")],
-    STAKE_PROGRAM_ID
-  )
+export async function getStakeRecordPda(staker: Address, nftMint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["STAKE", getAddressEncoder().encode(staker), getAddressEncoder().encode(nftMint), "stake-record"],
+  })
   return pda
 }
 
-/**
- * Derives the NftRecord PDA for a given staker and NFT mint
- *
- * NftRecord accounts store persistent data about individual NFTs:
- * - nftMint: the mint address
- * - points: accumulated points from staking
- *
- * This is optional and only used when points emissions are enabled
- *
- * Seeds: ["STAKE", staker_pubkey, nft_mint_pubkey, "nft-record"]
- */
-export function getNftRecordPda(staker: PublicKey, nftMint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("STAKE"), staker.toBytes(), nftMint.toBytes(), encoder.encode("nft-record")],
-    STAKE_PROGRAM_ID
-  )
+export async function getNftRecordPda(staker: Address, nftMint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["STAKE", getAddressEncoder().encode(staker), getAddressEncoder().encode(nftMint), "nft-record"],
+  })
   return pda
 }
 
-/**
- * Derives the Collection PDA for a given staker and collection mint
- *
- * Collection accounts define which NFT collections can be staked:
- * - staker: the staker this collection belongs to
- * - collectionMint: the collection's verified mint address
- * - emissions: linked token/selection/points/distribution emissions
- * - isActive: whether staking is currently enabled
- * - maxStakersCount: maximum NFTs that can be staked
- *
- * Seeds: ["STAKE", staker_pubkey, collection_mint_pubkey, "collection"]
- */
-export function getCollectionPda(staker: PublicKey, collectionMint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("STAKE"), staker.toBytes(), collectionMint.toBytes(), encoder.encode("collection")],
-    STAKE_PROGRAM_ID
-  )
+export async function getCollectionPda(staker: Address, collectionMint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["STAKE", getAddressEncoder().encode(staker), getAddressEncoder().encode(collectionMint), "collection"],
+  })
   return pda
 }
 
-/**
- * Derives the ProgramConfig PDA
- *
- * ProgramConfig is a global singleton that stores program-wide configuration:
- * - stakeFee: transaction fee for staking
- * - unstakeFee: transaction fee for unstaking
- * - claimFee: transaction fee for claiming
- * - subscription fees for various tiers
- *
- * Seeds: ["program-config"]
- */
-export function getProgramConfigPda(): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync([encoder.encode("program-config")], STAKE_PROGRAM_ID)
+export async function getProgramConfigPda(): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["program-config"],
+  })
   return pda
 }
 
-/**
- * Derives the NftAuthority PDA for a given staker
- *
- * NftAuthority is a PDA that acts as the delegate for staked pNFTs
- * This allows the stake program to control the NFT on behalf of the staker
- *
- * Seeds: ["STAKE", staker_pubkey, "nft-authority"]
- * The bump is stored in the staker account as nftAuthBump
- */
-export function getNftAuthorityPda(staker: PublicKey, bump?: number): PublicKey {
-  if (bump !== undefined) {
-    return PublicKey.createProgramAddressSync(
-      [encoder.encode("STAKE"), staker.toBytes(), encoder.encode("nft-authority"), Buffer.from([bump])],
-      STAKE_PROGRAM_ID
-    )
-  }
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("STAKE"), staker.toBytes(), encoder.encode("nft-authority")],
-    STAKE_PROGRAM_ID
-  )
+export async function getNftAuthorityPda(staker: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["STAKE", getAddressEncoder().encode(staker), "nft-authority"],
+  })
   return pda
 }
 
-/**
- * Derives the Metadata PDA for a given NFT mint (Token Metadata program)
- * Seeds: ["metadata", metadata_program_id, mint]
- */
-export function getMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("metadata"), TOKEN_METADATA_PROGRAM_ID.toBytes(), mint.toBytes()],
-    TOKEN_METADATA_PROGRAM_ID
-  )
+export async function getMetadataPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: ["metadata", getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS), getAddressEncoder().encode(mint)],
+  })
   return pda
 }
 
-/**
- * Derives the Master Edition PDA for a given NFT mint (Token Metadata program)
- * Seeds: ["metadata", metadata_program_id, mint, "edition"]
- */
-export function getMasterEditionPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("metadata"), TOKEN_METADATA_PROGRAM_ID.toBytes(), mint.toBytes(), encoder.encode("edition")],
-    TOKEN_METADATA_PROGRAM_ID
-  )
-  return pda
-}
-
-/**
- * Derives the Token Record PDA for a pNFT (Token Metadata program)
- * Seeds: ["metadata", metadata_program_id, mint, "token_record", token_account]
- */
-export function getTokenRecordPda(mint: PublicKey, tokenAccount: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [
-      encoder.encode("metadata"),
-      TOKEN_METADATA_PROGRAM_ID.toBytes(),
-      mint.toBytes(),
-      encoder.encode("token_record"),
-      tokenAccount.toBytes(),
+export async function getMasterEditionPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "edition",
     ],
-    TOKEN_METADATA_PROGRAM_ID
-  )
+  })
   return pda
 }
 
-/**
- * Derives the NFT Custody PDA for the stake program
- * This is where the NFT is held during staking
- * Seeds: ["nft_custody", staker, nft_mint]
- */
-export function getNftCustodyPda(staker: PublicKey, nftMint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("nft_custody"), staker.toBytes(), nftMint.toBytes()],
-    STAKE_PROGRAM_ID
-  )
+export async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
+  })
   return pda
 }
 
-/**
- * Input parameters for building stake instructions (pNFT)
- */
+export async function getNftCustodyPda(staker: Address, nftMint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["nft_custody", getAddressEncoder().encode(staker), getAddressEncoder().encode(nftMint)],
+  })
+  return pda
+}
+
+export async function getTokenAuthorityPda(staker: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: STAKE_PROGRAM_ADDRESS,
+    seeds: ["STAKE", getAddressEncoder().encode(staker), "token-authority"],
+  })
+  return pda
+}
+
 export interface BuildStakeInstructionsInput {
   nft: NFT
   staker: StakerAccount
   collection: CollectionAccount
-  owner: string
+  owner: Address
 }
 
-/**
- * Builds the transaction instructions required to stake a pNFT (Programmable NFT)
- *
- * This creates a Stake instruction that:
- * 1. Creates a StakeRecord PDA to track the stake position
- * 2. Optionally creates an NftRecord PDA for points tracking
- * 3. Transfers the NFT to custody and updates token records
- *
- * @param input - The stake parameters including NFT, staker, collection, and owner
- * @returns Array of TransactionInstructions to execute the stake
- */
-export function buildStakeInstructions(input: BuildStakeInstructionsInput): TransactionInstruction[] {
+export async function buildStakeInstructions(input: BuildStakeInstructionsInput): Promise<Instruction[]> {
   const { nft, staker, collection, owner } = input
 
-  const ownerPubkey = new PublicKey(owner)
-  const stakerPubkey = new PublicKey(staker.address)
-  const collectionPubkey = new PublicKey(collection.address)
-  const nftMint = new PublicKey(nft.mint)
+  const stakerAddress = staker.address as Address
+  const collectionAddress = collection.address as Address
+  const nftMint = nft.mint as Address
 
-  const stakeRecordPda = getStakeRecordPda(stakerPubkey, nftMint)
-  const nftRecordPda = getNftRecordPda(stakerPubkey, nftMint)
-  const programConfigPda = getProgramConfigPda()
+  const stakeRecordPda = await getStakeRecordPda(stakerAddress, nftMint)
+  const nftRecordPda = await getNftRecordPda(stakerAddress, nftMint)
+  const programConfigPda = await getProgramConfigPda()
 
-  // Use hardcoded nftAuthority for Dandies since PDA derivation doesn't match
-  const nftAuthorityPda = stakerPubkey.equals(DANDIES_STAKER)
-    ? DANDIES_NFT_AUTHORITY
-    : getNftAuthorityPda(stakerPubkey, staker.nftAuthBump)
+  const nftAuthorityPda =
+    stakerAddress === DANDIES_STAKER_ADDRESS ? DANDIES_NFT_AUTHORITY_ADDRESS : await getNftAuthorityPda(stakerAddress)
 
-  // pNFT specific accounts
-  const nftMetadataPda = getMetadataPda(nftMint)
-  const masterEditionPda = getMasterEditionPda(nftMint)
+  const nftMetadataPda = await getMetadataPda(nftMint)
+  const masterEditionPda = await getMasterEditionPda(nftMint)
 
-  // User's NFT token account
-  const nftToken = getAssociatedTokenAddressSync(nftMint, ownerPubkey)
+  const [nftToken] = await findAssociatedTokenPda({
+    mint: nftMint,
+    owner: owner,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
+  })
 
-  // Token record PDAs for pNFT delegation model
-  // For delegation: NFT stays in owner's wallet, destinationTokenRecord is derived from nftToken
-  const ownerTokenRecordPda = getTokenRecordPda(nftMint, nftToken)
-  const destinationTokenRecordPda = getTokenRecordPda(nftMint, nftToken)
+  const ownerTokenRecordPda = await getTokenRecordPda(nftMint, nftToken)
+  const destinationTokenRecordPda = await getTokenRecordPda(nftMint, nftToken)
 
   const ix = stake.getStakeInstruction({
-    staker: addr(stakerPubkey),
-    collection: addr(collectionPubkey),
-    nftRecord: addr(nftRecordPda),
-    stakeRecord: addr(stakeRecordPda),
-    programConfig: addr(programConfigPda),
-    nftMint: addr(nftMint),
-    nftToken: addr(nftToken),
-    nftMetadata: addr(nftMetadataPda),
-    nftEdition: addr(masterEditionPda),
-    ownerTokenRecord: addr(ownerTokenRecordPda),
-    destinationTokenRecord: addr(destinationTokenRecordPda),
-    nftAuthority: addr(nftAuthorityPda),
-    signer: createSigner(ownerPubkey),
-    feesWallet: addr(FEES_WALLET),
-    associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
-    metadataProgram: addr(TOKEN_METADATA_PROGRAM_ID),
-    authRules: addr(DANDIES_AUTH_RULES),
-    authRulesProgram: addr(TOKEN_AUTH_RULES_PROGRAM_ID),
+    staker: stakerAddress,
+    collection: collectionAddress,
+    nftRecord: nftRecordPda,
+    stakeRecord: stakeRecordPda,
+    programConfig: programConfigPda,
+    nftMint: nftMint,
+    nftToken: nftToken,
+    nftMetadata: nftMetadataPda,
+    nftEdition: masterEditionPda,
+    ownerTokenRecord: ownerTokenRecordPda,
+    destinationTokenRecord: destinationTokenRecordPda,
+    nftAuthority: nftAuthorityPda,
+    signer: createNoopSigner(owner),
+    feesWallet: FEES_WALLET_ADDRESS,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+    metadataProgram: TOKEN_METADATA_PROGRAM_ADDRESS,
+    authRules: DANDIES_AUTH_RULES_ADDRESS,
+    authRulesProgram: TOKEN_AUTH_RULES_PROGRAM_ADDRESS,
     selection: null,
   })
 
-  const web3Ix = codamaInstructionToWeb3(ix)
+  const emissionAccounts: AccountMeta[] = getEmissionAddresses(collection).map((addr) => ({
+    address: addr as Address,
+    role: 1,
+  }))
 
-  for (const emissionAddress of getEmissionAddresses(collection)) {
-    web3Ix.keys.push({
-      pubkey: new PublicKey(emissionAddress),
-      isSigner: false,
-      isWritable: true,
-    })
-  }
-
-  return [web3Ix]
+  return [
+    {
+      ...ix,
+      accounts: [...ix.accounts, ...emissionAccounts],
+    },
+  ]
 }
 
-/**
- * Input parameters for building stake nifty instructions
- */
 export interface BuildStakeNiftyInstructionsInput {
   nft: NFT
   staker: StakerAccount
   collection: CollectionAccount
-  owner: string
+  owner: Address
 }
 
-/**
- * Builds the transaction instructions required to stake a Nifty NFT (nifty-oss)
- *
- * This creates a StakeNifty instruction that:
- * 1. Creates a StakeRecord PDA to track the stake position
- * 2. Optionally creates an NftRecord PDA for points tracking
- * 3. Delegates the NFT to the stake program's nftAuthority via nifty-oss
- *
- * @param input - The stake parameters including NFT, staker, collection, and owner
- * @returns Array of TransactionInstructions to execute the stake
- */
-export function buildStakeNiftyInstructions(input: BuildStakeNiftyInstructionsInput): TransactionInstruction[] {
+export async function buildStakeNiftyInstructions(input: BuildStakeNiftyInstructionsInput): Promise<Instruction[]> {
   const { nft, staker, collection, owner } = input
 
-  const ownerPubkey = new PublicKey(owner)
-  const stakerPubkey = new PublicKey(staker.address)
-  const collectionPubkey = new PublicKey(collection.address)
-  const nftMint = new PublicKey(nft.mint)
+  const stakerAddress = staker.address as Address
+  const collectionAddress = collection.address as Address
+  const nftMint = nft.mint as Address
 
-  const stakeRecordPda = getStakeRecordPda(stakerPubkey, nftMint)
-  const nftRecordPda = getNftRecordPda(stakerPubkey, nftMint)
-  const programConfigPda = getProgramConfigPda()
-  const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
+  const stakeRecordPda = await getStakeRecordPda(stakerAddress, nftMint)
+  const nftRecordPda = await getNftRecordPda(stakerAddress, nftMint)
+  const programConfigPda = await getProgramConfigPda()
+  const nftAuthorityPda = await getNftAuthorityPda(stakerAddress)
 
   const ix = stake.getStakeNiftyInstruction({
-    staker: addr(stakerPubkey),
-    collection: addr(collectionPubkey),
-    nftRecord: addr(nftRecordPda),
-    stakeRecord: addr(stakeRecordPda),
-    programConfig: addr(programConfigPda),
-    asset: addr(nftMint),
-    nftAuthority: addr(nftAuthorityPda),
-    signer: createSigner(ownerPubkey),
-    feesWallet: addr(FEES_WALLET),
-    niftyProgram: addr(NIFTY_PROGRAM_ID),
+    staker: stakerAddress,
+    collection: collectionAddress,
+    nftRecord: nftRecordPda,
+    stakeRecord: stakeRecordPda,
+    programConfig: programConfigPda,
+    asset: nftMint,
+    nftAuthority: nftAuthorityPda,
+    signer: createNoopSigner(owner),
+    feesWallet: FEES_WALLET_ADDRESS,
+    niftyProgram: NIFTY_PROGRAM_ADDRESS,
     selection: null,
   })
 
-  const web3Ix = codamaInstructionToWeb3(ix)
+  const emissionAccounts: AccountMeta[] = getEmissionAddresses(collection).map((addr) => ({
+    address: addr as Address,
+    role: 1,
+  }))
 
-  for (const emissionAddress of getEmissionAddresses(collection)) {
-    web3Ix.keys.push({
-      pubkey: new PublicKey(emissionAddress),
-      isSigner: false,
-      isWritable: true,
-    })
-  }
-
-  return [web3Ix]
+  return [
+    {
+      ...ix,
+      accounts: [...ix.accounts, ...emissionAccounts],
+    },
+  ]
 }
 
-/**
- * Input parameters for building unstake nifty instructions
- */
 export interface BuildUnstakeNiftyInstructionsInput {
   nft: NFT
   stakeRecord: StakeRecordAccount
   staker: StakerAccount
   collection: CollectionAccount
   emissions: EmissionAccount[]
-  owner: string
+  owner: Address
 }
 
-/**
- * Builds the transaction instructions required to unstake a Nifty NFT (nifty-oss)
- *
- * This creates an UnstakeNifty instruction that:
- * 1. Closes the StakeRecord PDA and returns rent to owner
- * 2. Optionally updates the NftRecord PDA with final points
- * 3. Revokes the NFT delegation from the stake program's nftAuthority
- *
- * @param input - The unstake parameters including NFT, stakeRecord, staker, collection, emissions, and owner
- * @returns Array of TransactionInstructions to execute the unstake
- */
-export function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInstructionsInput): TransactionInstruction[] {
+export async function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInstructionsInput): Promise<Instruction[]> {
   const { nft, stakeRecord, staker, collection, emissions, owner } = input
 
-  const ownerPubkey = new PublicKey(owner)
-  const stakerPubkey = new PublicKey(staker.address)
-  const collectionPubkey = new PublicKey(collection.address)
-  const nftMint = new PublicKey(nft.mint)
-  const collectionMintPubkey = new PublicKey(collection.collectionMint)
-  const stakeRecordPubkey = new PublicKey(stakeRecord.address)
+  const stakerAddress = staker.address as Address
+  const collectionAddress = collection.address as Address
+  const nftMint = nft.mint as Address
+  const collectionMint = collection.collectionMint as Address
+  const stakeRecordAddress = stakeRecord.address as Address
 
-  const programConfigPda = getProgramConfigPda()
-  const nftAuthorityPda = getNftAuthorityPda(stakerPubkey)
+  const programConfigPda = await getProgramConfigPda()
+  const nftAuthorityPda = await getNftAuthorityPda(stakerAddress)
 
-  const { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission } =
-    resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerPubkey, ownerPubkey)
+  const { tokenMint, stakeTokenVault, rewardReceiveAccount, tokenAuthority, hasPointsEmission } =
+    await resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerAddress, owner)
 
-  const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
+  const nftRecordPda = hasPointsEmission ? await getNftRecordPda(stakerAddress, nftMint) : undefined
 
   const ix = stake.getUnstakeNiftyInstruction({
-    programConfig: addr(programConfigPda),
-    staker: addr(stakerPubkey),
-    collection: addr(collectionPubkey),
-    stakeRecord: addr(stakeRecordPubkey),
-    nftRecord: nftRecordPda ? addr(nftRecordPda) : undefined,
-    rewardMint: tokenMintPubkey ? addr(tokenMintPubkey) : undefined,
-    stakeTokenVault: stakeTokenVault ? addr(stakeTokenVault) : undefined,
-    rewardReceiveAccount: rewardReceiveAccount ? addr(rewardReceiveAccount) : undefined,
-    nftMint: addr(nftMint),
-    collectionMint: addr(collectionMintPubkey),
-    feesWallet: addr(FEES_WALLET),
-    tokenAuthority: tokenAuthorityPda ? addr(tokenAuthorityPda) : undefined,
-    nftAuthority: addr(nftAuthorityPda),
-    owner: createSigner(ownerPubkey),
-    associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
-    niftyProgram: addr(NIFTY_PROGRAM_ID),
+    programConfig: programConfigPda,
+    staker: stakerAddress,
+    collection: collectionAddress,
+    stakeRecord: stakeRecordAddress,
+    nftRecord: nftRecordPda,
+    rewardMint: tokenMint,
+    stakeTokenVault: stakeTokenVault,
+    rewardReceiveAccount: rewardReceiveAccount,
+    nftMint: nftMint,
+    collectionMint: collectionMint,
+    feesWallet: FEES_WALLET_ADDRESS,
+    tokenAuthority: tokenAuthority,
+    nftAuthority: nftAuthorityPda,
+    owner: createNoopSigner(owner),
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+    niftyProgram: NIFTY_PROGRAM_ADDRESS,
   })
 
-  const web3Ix = codamaInstructionToWeb3(ix)
+  const emissionAccounts: AccountMeta[] = stakeRecord.emissions.map((addr) => ({
+    address: addr as Address,
+    role: 1,
+  }))
 
-  // Add emissions as remaining accounts (required by program)
-  for (const emissionAddress of stakeRecord.emissions) {
-    web3Ix.keys.push({
-      pubkey: new PublicKey(emissionAddress),
-      isSigner: false,
-      isWritable: true,
-    })
-  }
-
-  return [web3Ix]
+  return [
+    {
+      ...ix,
+      accounts: [...ix.accounts, ...emissionAccounts],
+    },
+  ]
 }
 
-/**
- * Input parameters for building unstake instructions (pNFT)
- */
 export interface BuildUnstakeInstructionsInput {
   nft: NFT
   stakeRecord: StakeRecordAccount
   staker: StakerAccount
   collection: CollectionAccount
   emissions: EmissionAccount[]
-  owner: string
+  owner: Address
 }
 
-/**
- * Builds the transaction instructions required to unstake a pNFT (Programmable NFT)
- *
- * This creates an Unstake instruction that:
- * 1. Closes the StakeRecord PDA and returns rent to owner
- * 2. Transfers the NFT from custody back to the owner
- * 3. Updates token records for pNFT delegation
- *
- * @param input - The unstake parameters including NFT, stakeRecord, staker, collection, emissions, and owner
- * @returns Array of TransactionInstructions to execute the unstake
- */
-export function buildUnstakeInstructions(input: BuildUnstakeInstructionsInput): TransactionInstruction[] {
+export async function buildUnstakeInstructions(input: BuildUnstakeInstructionsInput): Promise<Instruction[]> {
   const { nft, stakeRecord, staker, collection, emissions, owner } = input
 
-  const ownerPubkey = new PublicKey(owner)
-  const stakerPubkey = new PublicKey(staker.address)
-  const collectionPubkey = new PublicKey(collection.address)
-  const nftMint = new PublicKey(nft.mint)
-  const stakeRecordPubkey = new PublicKey(stakeRecord.address)
+  const stakerAddress = staker.address as Address
+  const collectionAddress = collection.address as Address
+  const nftMint = nft.mint as Address
+  const stakeRecordAddress = stakeRecord.address as Address
 
-  const programConfigPda = getProgramConfigPda()
+  const programConfigPda = await getProgramConfigPda()
 
-  // Use hardcoded nftAuthority for Dandies since PDA derivation doesn't match
-  const nftAuthorityPda = stakerPubkey.equals(DANDIES_STAKER)
-    ? DANDIES_NFT_AUTHORITY
-    : getNftAuthorityPda(stakerPubkey, staker.nftAuthBump)
+  const nftAuthorityPda =
+    stakerAddress === DANDIES_STAKER_ADDRESS ? DANDIES_NFT_AUTHORITY_ADDRESS : await getNftAuthorityPda(stakerAddress)
 
-  // pNFT specific accounts
-  const nftMetadataPda = getMetadataPda(nftMint)
-  const masterEditionPda = getMasterEditionPda(nftMint)
+  const nftMetadataPda = await getMetadataPda(nftMint)
+  const masterEditionPda = await getMasterEditionPda(nftMint)
 
-  // User's NFT token account
-  const nftToken = getAssociatedTokenAddressSync(nftMint, ownerPubkey)
-
-  // Token record PDA for pNFT delegation model
-  // For delegation: NFT stays in owner's wallet, both token records are the same
-  const tokenRecordPda = getTokenRecordPda(nftMint, nftToken)
-
-  const { tokenMintPubkey, stakeTokenVault, rewardReceiveAccount, tokenAuthorityPda, hasPointsEmission } =
-    resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerPubkey, ownerPubkey)
-
-  const nftRecordPda = hasPointsEmission ? getNftRecordPda(stakerPubkey, nftMint) : undefined
-
-  const ix = stake.getUnstakeInstruction({
-    programConfig: addr(programConfigPda),
-    staker: addr(stakerPubkey),
-    collection: addr(collectionPubkey),
-    stakeRecord: addr(stakeRecordPubkey),
-    nftRecord: nftRecordPda ? addr(nftRecordPda) : undefined,
-    rewardMint: tokenMintPubkey ? addr(tokenMintPubkey) : undefined,
-    stakeTokenVault: stakeTokenVault ? addr(stakeTokenVault) : undefined,
-    rewardReceiveAccount: rewardReceiveAccount ? addr(rewardReceiveAccount) : undefined,
-    nftMint: addr(nftMint),
-    nftToken: addr(nftToken),
-    feesWallet: addr(FEES_WALLET),
-    nftMetadata: addr(nftMetadataPda),
-    tokenRecord: addr(tokenRecordPda),
-    custodyTokenRecord: addr(tokenRecordPda),
-    masterEdition: addr(masterEditionPda),
-    tokenAuthority: tokenAuthorityPda ? addr(tokenAuthorityPda) : undefined,
-    nftAuthority: addr(nftAuthorityPda),
-    owner: createSigner(ownerPubkey),
-    associatedTokenProgram: addr(new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID)),
-    metadataProgram: addr(TOKEN_METADATA_PROGRAM_ID),
-    authRules: addr(DANDIES_AUTH_RULES),
-    authRulesProgram: addr(TOKEN_AUTH_RULES_PROGRAM_ID),
+  const [nftToken] = await findAssociatedTokenPda({
+    mint: nftMint,
+    owner: owner,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
   })
 
-  const web3Ix = codamaInstructionToWeb3(ix)
+  const tokenRecordPda = await getTokenRecordPda(nftMint, nftToken)
 
-  // Add emissions as remaining accounts (required by program)
-  for (const emissionAddress of stakeRecord.emissions) {
-    web3Ix.keys.push({
-      pubkey: new PublicKey(emissionAddress),
-      isSigner: false,
-      isWritable: true,
-    })
-  }
+  const { tokenMint, stakeTokenVault, rewardReceiveAccount, tokenAuthority, hasPointsEmission } =
+    await resolveTokenEmissionAccounts(stakeRecord, emissions, staker, stakerAddress, owner)
 
-  return [web3Ix]
-}
+  const nftRecordPda = hasPointsEmission ? await getNftRecordPda(stakerAddress, nftMint) : undefined
 
-/**
- * Derives the TokenAuthority PDA for a given staker
- *
- * TokenAuthority is a PDA that controls the stake token vault holding reward tokens.
- * It acts as the mint authority for distributing token rewards to stakers.
- *
- * Seeds: ["STAKE", staker_pubkey, "token-authority"]
- */
-export function getTokenAuthorityPda(staker: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [encoder.encode("STAKE"), staker.toBytes(), encoder.encode("token-authority")],
-    STAKE_PROGRAM_ID
-  )
-  return pda
+  const ix = stake.getUnstakeInstruction({
+    programConfig: programConfigPda,
+    staker: stakerAddress,
+    collection: collectionAddress,
+    stakeRecord: stakeRecordAddress,
+    nftRecord: nftRecordPda,
+    rewardMint: tokenMint,
+    stakeTokenVault: stakeTokenVault,
+    rewardReceiveAccount: rewardReceiveAccount,
+    nftMint: nftMint,
+    nftToken: nftToken,
+    feesWallet: FEES_WALLET_ADDRESS,
+    nftMetadata: nftMetadataPda,
+    tokenRecord: tokenRecordPda,
+    custodyTokenRecord: tokenRecordPda,
+    masterEdition: masterEditionPda,
+    tokenAuthority: tokenAuthority,
+    nftAuthority: nftAuthorityPda,
+    owner: createNoopSigner(owner),
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+    metadataProgram: TOKEN_METADATA_PROGRAM_ADDRESS,
+    authRules: DANDIES_AUTH_RULES_ADDRESS,
+    authRulesProgram: TOKEN_AUTH_RULES_PROGRAM_ADDRESS,
+  })
+
+  const emissionAccounts: AccountMeta[] = stakeRecord.emissions.map((addr) => ({
+    address: addr as Address,
+    role: 1,
+  }))
+
+  return [
+    {
+      ...ix,
+      accounts: [...ix.accounts, ...emissionAccounts],
+    },
+  ]
 }

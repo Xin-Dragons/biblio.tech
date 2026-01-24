@@ -1,6 +1,17 @@
-import { createSolanaRpcSubscriptions } from "@solana/kit"
-import type { Signature } from "@solana/kit"
-import { Transaction, ComputeBudgetProgram, PublicKey, TransactionInstruction } from "@solana/web3.js"
+import {
+  createSolanaRpcSubscriptions,
+  createTransactionMessage,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  appendTransactionMessageInstructions,
+  signTransactionMessageWithSigners,
+  getBase64EncodedWireTransaction,
+  pipe,
+  type Signature,
+  type Instruction,
+  type TransactionSigner,
+} from "@solana/kit"
+import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from "@solana-program/compute-budget"
 import { decodeSimulationError } from "./errors"
 
 const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
@@ -8,15 +19,7 @@ const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}/
 export const MAX_TX_SIZE = 1232
 export const SIZE_BUFFER = 100
 
-export function getTransactionSize(tx: Transaction): number {
-  try {
-    return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length
-  } catch {
-    return Infinity
-  }
-}
-
-export async function getBlockhash(): Promise<string> {
+export async function getBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: bigint }> {
   const response = await fetch("/api/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -30,22 +33,17 @@ export async function getBlockhash(): Promise<string> {
   const data = (await response.json()) as {
     result?: { value: { blockhash: string; lastValidBlockHeight: number } }
   }
-  const blockhash = data.result?.value.blockhash
-  if (!blockhash) throw new Error("Failed to get blockhash")
-  return blockhash
+  const result = data.result?.value
+  if (!result?.blockhash) throw new Error("Failed to get blockhash")
+  return {
+    blockhash: result.blockhash,
+    lastValidBlockHeight: BigInt(result.lastValidBlockHeight),
+  }
 }
 
 export async function simulateTransaction(
-  instructions: TransactionInstruction[],
-  feePayer: PublicKey,
-  blockhash: string
+  encodedTransaction: string
 ): Promise<{ unitsConsumed: number; logs: string[] }> {
-  const tx = new Transaction()
-  tx.recentBlockhash = blockhash
-  tx.feePayer = feePayer
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }))
-  tx.add(...instructions)
-
   const response = await fetch("/api/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -53,7 +51,7 @@ export async function simulateTransaction(
       jsonrpc: "2.0",
       id: crypto.randomUUID(),
       method: "simulateTransaction",
-      params: [tx.serialize({ requireAllSignatures: false }).toString("base64"), { encoding: "base64" }],
+      params: [encodedTransaction, { encoding: "base64" }],
     }),
   })
   const data = (await response.json()) as {
@@ -75,18 +73,7 @@ export async function simulateTransaction(
   }
 }
 
-export async function getPriorityFee(
-  instructions: TransactionInstruction[],
-  feePayer: PublicKey,
-  blockhash: string,
-  cuLimit: number
-): Promise<number> {
-  const tx = new Transaction()
-  tx.recentBlockhash = blockhash
-  tx.feePayer = feePayer
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
-  tx.add(...instructions)
-
+export async function getPriorityFee(encodedTransaction: string): Promise<number> {
   const response = await fetch("/api/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -96,7 +83,7 @@ export async function getPriorityFee(
       method: "getPriorityFeeEstimate",
       params: [
         {
-          transaction: tx.serialize({ requireAllSignatures: false }).toString("base64"),
+          transaction: encodedTransaction,
           options: { priorityLevel: "Medium" },
         },
       ],
@@ -104,22 +91,6 @@ export async function getPriorityFee(
   })
   const data = (await response.json()) as { result?: number }
   return data.result ?? 1000
-}
-
-export function buildTransaction(
-  instructions: TransactionInstruction[],
-  feePayer: PublicKey,
-  blockhash: string,
-  cuLimit: number,
-  priorityFee: number
-): Transaction {
-  const tx = new Transaction()
-  tx.recentBlockhash = blockhash
-  tx.feePayer = feePayer
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: cuLimit }))
-  tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFee }))
-  tx.add(...instructions)
-  return tx
 }
 
 export async function sendTransaction(signedTxBase64: string): Promise<string> {
@@ -144,29 +115,67 @@ export async function sendTransaction(signedTxBase64: string): Promise<string> {
   return data.result
 }
 
-interface TransactionSigner {
-  signTransaction: (txBytes: Uint8Array) => Promise<Uint8Array>
+interface PrepareAndSendOptions {
+  instructions: Instruction[]
+  feePayer: TransactionSigner
 }
 
-export async function prepareAndSendTransaction(
-  instructions: TransactionInstruction[],
-  feePayer: PublicKey,
-  signer: TransactionSigner
-): Promise<string> {
-  const blockhash = await getBlockhash()
+export async function prepareAndSendTransaction({ instructions, feePayer }: PrepareAndSendOptions): Promise<string> {
+  const { blockhash, lastValidBlockHeight } = await getBlockhash()
 
-  const { unitsConsumed } = await simulateTransaction(instructions, feePayer, blockhash)
+  // Build initial transaction for simulation (with high CU limit)
+  const simulationMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayerSigner(feePayer, tx),
+    (tx) =>
+      setTransactionMessageLifetimeUsingBlockhash(
+        {
+          blockhash: blockhash as Parameters<typeof setTransactionMessageLifetimeUsingBlockhash>[0]["blockhash"],
+          lastValidBlockHeight,
+        },
+        tx
+      ),
+    (tx) =>
+      appendTransactionMessageInstructions(
+        [getSetComputeUnitLimitInstruction({ units: 1_400_000 }), ...instructions],
+        tx
+      )
+  )
+
+  const simulationTx = await signTransactionMessageWithSigners(simulationMessage)
+  const simulationEncoded = getBase64EncodedWireTransaction(simulationTx)
+  const { unitsConsumed } = await simulateTransaction(simulationEncoded)
   const cuLimit = Math.ceil(unitsConsumed * 1.1)
   console.log(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
 
-  const priorityFee = await getPriorityFee(instructions, feePayer, blockhash, cuLimit)
+  const priorityFee = await getPriorityFee(simulationEncoded)
   console.log(`Priority fee estimate: ${priorityFee} microLamports`)
 
-  const tx = buildTransaction(instructions, feePayer, blockhash, cuLimit, priorityFee)
+  // Build final transaction with proper CU limit and priority fee
+  const finalMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayerSigner(feePayer, tx),
+    (tx) =>
+      setTransactionMessageLifetimeUsingBlockhash(
+        {
+          blockhash: blockhash as Parameters<typeof setTransactionMessageLifetimeUsingBlockhash>[0]["blockhash"],
+          lastValidBlockHeight,
+        },
+        tx
+      ),
+    (tx) =>
+      appendTransactionMessageInstructions(
+        [
+          getSetComputeUnitLimitInstruction({ units: cuLimit }),
+          getSetComputeUnitPriceInstruction({ microLamports: BigInt(priorityFee) }),
+          ...instructions,
+        ],
+        tx
+      )
+  )
 
-  const txBytes = new Uint8Array(tx.serialize({ requireAllSignatures: false }))
-  const signedBytes = await signer.signTransaction(txBytes)
-  const signedBase64 = Buffer.from(signedBytes).toString("base64")
+  const signedTx = await signTransactionMessageWithSigners(finalMessage)
+  const signedBase64 = getBase64EncodedWireTransaction(signedTx)
 
   const signature = await sendTransaction(signedBase64)
   console.log(`Transaction sent: ${signature}`)
@@ -228,4 +237,100 @@ export async function confirmMultipleTransactionsViaWebSocket(
   options: { timeout?: number; commitment?: "confirmed" | "finalized" } = {}
 ): Promise<void> {
   await Promise.all(signatures.map((sig) => confirmTransactionViaWebSocket(sig, options)))
+}
+
+interface BuildTransactionOptions {
+  instructions: Instruction[]
+  feePayer: TransactionSigner
+  blockhash: string
+  lastValidBlockHeight: bigint
+  cuLimit?: number
+  priorityFee?: number
+}
+
+export function buildTransactionMessage({
+  instructions,
+  feePayer,
+  blockhash,
+  lastValidBlockHeight,
+  cuLimit = 1_400_000,
+  priorityFee,
+}: BuildTransactionOptions) {
+  const cuInstructions: Instruction[] = [getSetComputeUnitLimitInstruction({ units: cuLimit })]
+  if (priorityFee !== undefined) {
+    cuInstructions.push(getSetComputeUnitPriceInstruction({ microLamports: BigInt(priorityFee) }))
+  }
+
+  return pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayerSigner(feePayer, tx),
+    (tx) =>
+      setTransactionMessageLifetimeUsingBlockhash(
+        {
+          blockhash: blockhash as Parameters<typeof setTransactionMessageLifetimeUsingBlockhash>[0]["blockhash"],
+          lastValidBlockHeight,
+        },
+        tx
+      ),
+    (tx) => appendTransactionMessageInstructions([...cuInstructions, ...instructions], tx)
+  )
+}
+
+export async function getEncodedTransactionSize(
+  instructions: Instruction[],
+  feePayer: TransactionSigner,
+  blockhash: string,
+  lastValidBlockHeight: bigint
+): Promise<number> {
+  const message = buildTransactionMessage({
+    instructions,
+    feePayer,
+    blockhash,
+    lastValidBlockHeight,
+    cuLimit: 400_000,
+  })
+  const signedTx = await signTransactionMessageWithSigners(message)
+  const encoded = getBase64EncodedWireTransaction(signedTx)
+  return Math.ceil((encoded.length * 3) / 4)
+}
+
+interface PrepareSignedTransactionOptions {
+  instructions: Instruction[]
+  feePayer: TransactionSigner
+  blockhash: string
+  lastValidBlockHeight: bigint
+}
+
+export async function prepareSignedTransaction({
+  instructions,
+  feePayer,
+  blockhash,
+  lastValidBlockHeight,
+}: PrepareSignedTransactionOptions): Promise<string> {
+  const simulationMessage = buildTransactionMessage({
+    instructions,
+    feePayer,
+    blockhash,
+    lastValidBlockHeight,
+    cuLimit: 1_400_000,
+  })
+
+  const simulationTx = await signTransactionMessageWithSigners(simulationMessage)
+  const simulationEncoded = getBase64EncodedWireTransaction(simulationTx)
+  const { unitsConsumed } = await simulateTransaction(simulationEncoded)
+  const cuLimit = Math.ceil(unitsConsumed * 1.1)
+
+  const priorityFee = await getPriorityFee(simulationEncoded)
+
+  const finalMessage = buildTransactionMessage({
+    instructions,
+    feePayer,
+    blockhash,
+    lastValidBlockHeight,
+    cuLimit,
+    priorityFee,
+  })
+
+  const signedTx = await signTransactionMessageWithSigners(finalMessage)
+  return getBase64EncodedWireTransaction(signedTx)
 }
