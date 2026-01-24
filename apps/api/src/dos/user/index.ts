@@ -14,6 +14,30 @@ export interface TagResponse {
   createdAt: number
 }
 
+export interface Preferences {
+  layoutSize: "small" | "medium" | "large" | "collage"
+  showInfo: boolean
+  sort: string
+  lightMode: boolean
+  payRoyalties: boolean
+  showAllWallets: boolean
+}
+
+export interface Wallet {
+  publicKey: string
+  nickname?: string
+  isMain: boolean
+  addedAt: number
+}
+
+export interface ShowcaseConfig {
+  enabled: boolean
+  items: string[]
+  order: string[]
+  sizes: Record<string, "small" | "medium" | "large" | "xlarge">
+  updatedAt: number
+}
+
 export class UserDO extends DurableObject<Env> {
   private db: UserDB
 
@@ -201,6 +225,167 @@ export class UserDO extends DurableObject<Env> {
     }
   }
 
+  // Preferences
+  async getPreferences(context: string = "defaults"): Promise<Preferences | null> {
+    const row = await this.db.query.preferences.findFirst({
+      where: eq(schema.preferences.context, context),
+    })
+    if (!row) return null
+    return {
+      layoutSize: (row.layoutSize as Preferences["layoutSize"]) ?? "medium",
+      showInfo: row.showInfo ?? false,
+      sort: row.sort ?? "default",
+      lightMode: row.lightMode ?? false,
+      payRoyalties: row.payRoyalties ?? true,
+      showAllWallets: row.showAllWallets ?? false,
+    }
+  }
+
+  async setPreferences(context: string, prefs: Partial<Preferences>): Promise<void> {
+    const existing = await this.db.query.preferences.findFirst({
+      where: eq(schema.preferences.context, context),
+    })
+    if (existing) {
+      await this.db
+        .update(schema.preferences)
+        .set({
+          ...(prefs.layoutSize !== undefined ? { layoutSize: prefs.layoutSize } : {}),
+          ...(prefs.showInfo !== undefined ? { showInfo: prefs.showInfo } : {}),
+          ...(prefs.sort !== undefined ? { sort: prefs.sort } : {}),
+          ...(prefs.lightMode !== undefined ? { lightMode: prefs.lightMode } : {}),
+          ...(prefs.payRoyalties !== undefined ? { payRoyalties: prefs.payRoyalties } : {}),
+          ...(prefs.showAllWallets !== undefined ? { showAllWallets: prefs.showAllWallets } : {}),
+        })
+        .where(eq(schema.preferences.context, context))
+    } else {
+      await this.db.insert(schema.preferences).values({
+        context,
+        layoutSize: prefs.layoutSize,
+        showInfo: prefs.showInfo,
+        sort: prefs.sort,
+        lightMode: prefs.lightMode,
+        payRoyalties: prefs.payRoyalties,
+        showAllWallets: prefs.showAllWallets,
+      })
+    }
+  }
+
+  // Wallets
+  async getWallets(): Promise<Wallet[]> {
+    const rows = await this.db.query.wallets.findMany()
+    return rows.map((row) => ({
+      publicKey: row.publicKey,
+      nickname: row.nickname ?? undefined,
+      isMain: row.isMain,
+      addedAt: row.addedAt,
+    }))
+  }
+
+  async addWallet(wallet: Omit<Wallet, "addedAt">): Promise<Wallet> {
+    const newWallet = {
+      publicKey: wallet.publicKey,
+      nickname: wallet.nickname ?? null,
+      isMain: wallet.isMain,
+      addedAt: Date.now(),
+    }
+    await this.db.insert(schema.wallets).values(newWallet)
+    return {
+      publicKey: newWallet.publicKey,
+      nickname: newWallet.nickname ?? undefined,
+      isMain: newWallet.isMain,
+      addedAt: newWallet.addedAt,
+    }
+  }
+
+  async removeWallet(publicKey: string): Promise<boolean> {
+    const existing = await this.db.query.wallets.findFirst({
+      where: eq(schema.wallets.publicKey, publicKey),
+    })
+    if (!existing) return false
+    await this.db.delete(schema.wallets).where(eq(schema.wallets.publicKey, publicKey))
+    return true
+  }
+
+  // Dandies (stored as JSON in meta table)
+  async getDandies(): Promise<{ mints: string[]; verifiedAt: number } | null> {
+    const row = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "dandies"),
+    })
+    if (!row) return null
+    return JSON.parse(row.value) as { mints: string[]; verifiedAt: number }
+  }
+
+  async setDandies(mints: string[]): Promise<void> {
+    const value = JSON.stringify({ mints, verifiedAt: Date.now() })
+    const existing = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "dandies"),
+    })
+    if (existing) {
+      await this.db.update(schema.meta).set({ value }).where(eq(schema.meta.key, "dandies"))
+    } else {
+      await this.db.insert(schema.meta).values({ key: "dandies", value })
+    }
+  }
+
+  // Username
+  async getUsername(): Promise<string | null> {
+    const row = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "username"),
+    })
+    if (!row) return null
+    return row.value
+  }
+
+  async setUsername(username: string): Promise<void> {
+    const value = username.toLowerCase()
+    const existing = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "username"),
+    })
+    if (existing) {
+      await this.db.update(schema.meta).set({ value }).where(eq(schema.meta.key, "username"))
+    } else {
+      await this.db.insert(schema.meta).values({ key: "username", value })
+    }
+  }
+
+  async clearUsername(): Promise<void> {
+    await this.db.delete(schema.meta).where(eq(schema.meta.key, "username"))
+  }
+
+  // Showcase (stored as JSON in meta table)
+  async getShowcase(): Promise<ShowcaseConfig | null> {
+    const row = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "showcase"),
+    })
+    if (!row) return null
+    return JSON.parse(row.value) as ShowcaseConfig
+  }
+
+  async setShowcase(config: Partial<ShowcaseConfig>): Promise<ShowcaseConfig> {
+    const current = (await this.getShowcase()) ?? {
+      enabled: false,
+      items: [],
+      order: [],
+      sizes: {},
+      updatedAt: Date.now(),
+    }
+    const updated: ShowcaseConfig = {
+      ...current,
+      ...config,
+      updatedAt: Date.now(),
+    }
+    const value = JSON.stringify(updated)
+    const existing = await this.db.query.meta.findFirst({
+      where: eq(schema.meta.key, "showcase"),
+    })
+    if (existing) {
+      await this.db.update(schema.meta).set({ value }).where(eq(schema.meta.key, "showcase"))
+    } else {
+      await this.db.insert(schema.meta).values({ key: "showcase", value })
+    }
+    return updated
+  }
+
   // HTTP handler for the DO
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
@@ -295,6 +480,67 @@ export class UserDO extends DurableObject<Env> {
         const layout = await request.json<Array<{ i: string; x: number; y: number; w: number; h: number }>>()
         await this.setLayout(context, layout)
         return new Response(null, { status: 204 })
+      }
+
+      // Preferences
+      if (path.startsWith("/preferences") && request.method === "GET") {
+        const context = url.searchParams.get("context") ?? "defaults"
+        return Response.json(await this.getPreferences(context))
+      }
+      if (path.startsWith("/preferences") && request.method === "PUT") {
+        const context = url.searchParams.get("context") ?? "defaults"
+        const prefs = await request.json<Partial<Preferences>>()
+        await this.setPreferences(context, prefs)
+        return new Response(null, { status: 204 })
+      }
+
+      // Wallets
+      if (path === "/wallets" && request.method === "GET") {
+        return Response.json(await this.getWallets())
+      }
+      if (path === "/wallets" && request.method === "POST") {
+        const wallet = await request.json<Omit<Wallet, "addedAt">>()
+        return Response.json(await this.addWallet(wallet))
+      }
+      if (path.startsWith("/wallets/") && request.method === "DELETE") {
+        const publicKey = path.split("/")[2]
+        const deleted = await this.removeWallet(publicKey)
+        if (!deleted) return new Response("Not found", { status: 404 })
+        return new Response(null, { status: 204 })
+      }
+
+      // Dandies
+      if (path === "/dandies" && request.method === "GET") {
+        return Response.json(await this.getDandies())
+      }
+      if (path === "/dandies" && request.method === "PUT") {
+        const { mints } = await request.json<{ mints: string[] }>()
+        await this.setDandies(mints)
+        return new Response(null, { status: 204 })
+      }
+
+      // Username
+      if (path === "/username" && request.method === "GET") {
+        return Response.json({ username: await this.getUsername() })
+      }
+      if (path === "/username" && request.method === "PUT") {
+        const { username } = await request.json<{ username: string }>()
+        await this.setUsername(username)
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/username" && request.method === "DELETE") {
+        await this.clearUsername()
+        return new Response(null, { status: 204 })
+      }
+
+      // Showcase
+      if (path === "/showcase" && request.method === "GET") {
+        return Response.json(await this.getShowcase())
+      }
+      if (path === "/showcase" && request.method === "PUT") {
+        const config = await request.json<Partial<ShowcaseConfig>>()
+        const updated = await this.setShowcase(config)
+        return Response.json(updated)
       }
 
       return new Response("Not found", { status: 404 })
