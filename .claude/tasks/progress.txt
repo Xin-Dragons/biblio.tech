@@ -1,292 +1,50 @@
 # Ralph Progress Log
-# Feature: vault
-# Started: 2026-01-23
+# Feature: do-storage-optimization
+# Started: 2026-01-24
 
 ## Codebase Patterns - IMPORTANT EXISTING CODE
 
-**VAULT LEGACY REFERENCE:**
-- apps/legacy/src/components/Vault/index.tsx — legacy vault component with full lock/unlock/recover logic
-- apps/legacy/src/components/Actions/index.tsx — vault action integration
+**DRIZZLE DO PATTERNS TO FOLLOW:**
+- apps/api/src/dos/nft-cache/ — Complete example of Drizzle-based DO
+- apps/api/src/dos/stake-records/ — Another Drizzle-based DO example
+- apps/api/src/dos/staker-settings/ — Simpler Drizzle-based DO example
 
-**EXISTING PATTERNS TO FOLLOW:**
-- apps/web/src/stores/stake.ts — Jotai store pattern (stakedMintsSetAtom)
-- apps/web/src/hooks/use-staking.ts — transaction building pattern
-- apps/web/src/components/nft-grid.tsx — NftCard with badges (Staked badge pattern)
-- apps/web/src/components/membership/ — dialog patterns (LockDialog, UnlockDialog)
+**KEY FILES:**
+- db/schema.ts — Drizzle schema with sqliteTable, text, integer, index, primaryKey
+- db/types.ts — Inferred types using $inferSelect and $inferInsert
+- db/drizzle.config.ts — Config for drizzle-kit generate
+- db/index.ts — Exports for schema and types
+- db/migrations/migrations.js — Migration bundle for runtime
+- index.ts — DO class with Drizzle setup
 
-**ASSET TYPE DETECTION:**
-- Token Metadata: Account owner is SPL_TOKEN_PROGRAM_ID
-- Nifty Asset: Account owner is ASSET_PROGRAM_ID from @nifty-oss/asset
-- MPL Core: Account owner is MPL_CORE_PROGRAM_ID from @metaplex-foundation/mpl-core
+**DO CONSTRUCTOR PATTERN:**
+```typescript
+constructor(ctx: DurableObjectState, env: Env) {
+  super(ctx, env)
+  this.db = drizzle(ctx.storage, { schema })
 
-**KEY IMPORTS:**
-- @metaplex-foundation/mpl-token-metadata: lockV1, unlockV1, delegateUtilityV1, revokeUtilityV1, transferV1
-- @nifty-oss/asset: lock, unlock, approve, revoke, transfer, DelegateRole, ASSET_PROGRAM_ID
-- @metaplex-foundation/mpl-core: addPluginV1, removePluginV1, createPlugin, PluginType, MPL_CORE_PROGRAM_ID
+  void this.ctx.blockConcurrencyWhile(async () => {
+    try {
+      await migrate(this.db, migrations)
+    } catch (err) {
+      console.error("[DOName] Migration failed:", err)
+    }
+  })
+}
+```
 
-**CONSTRAINT:**
-- Must use @solana/kit for all Solana operations - NO @solana/web3.js
+**EXISTING USER.TS API (must maintain):**
+- GET/POST /tags, PATCH/DELETE /tags/:id
+- GET /tagged, PUT/DELETE /tagged/:tagId
+- GET /starred, PUT/DELETE /starred
+- GET/PUT /preferences
+- GET/PUT /order/:context
+- GET/PUT /sizes/:context
+- GET/PUT /layout/:context
+- GET/POST /wallets, DELETE /wallets/:publicKey
+- GET/PUT /dandies
+- GET/PUT/DELETE /username
+- GET/PUT /showcase
 
-**JOTAI SET TYPING:**
-- When creating atoms with Set, use explicit generic: `atom<Set<string>>(new Set<string>())`
-- `new Set()` alone infers `Set<unknown>` which causes type errors
-
-**VAULT DETECTION:**
-- NFT is vaulted when: `nft.frozen === true && nft.delegate !== null`
-- Detection runs via DataFetcher component in layout/index.tsx when nftsAtom changes
-- detectVaultedNftsAtom in vault.ts scans nftsAtom and populates vaultedMintsSetAtom
-
-**VAULT DIALOG PATTERNS:**
-- VaultDialog component at apps/web/src/components/vault/VaultDialog.tsx
-- Uses button-based selection instead of RadioGroup for freeze type options
-- Linked wallets feature not yet implemented in new app — secure freeze disabled by default
-- NFT preview shows first 5 images with +X more indicator
-
-**VAULT TRANSACTION EXECUTION:**
-- prepareAndSendTransaction from lib/transaction.ts handles simulation, CU limit, priority fees, signing, and confirmation
-- useTransactionSigner hook provides signer with capabilities.canSign check
-- addVaultedMintsAtom action atom adds mints to vaultedMintsSetAtom after successful transaction
-- Use Promise.all to build instructions for multiple NFTs in parallel, then flatten
-
-**UNVAULT DIALOG PATTERNS:**
-- UnvaultDialog component at apps/web/src/components/vault/UnvaultDialog.tsx
-- Shows per-NFT authority status with teal checkmark (has authority) or amber warning (no authority)
-- Only processes NFTs where connected wallet === delegate
-- NFTs without authority shown but disabled/dimmed
-- removeVaultedMintsAtom action atom removes mints from vaultedMintsSetAtom after successful transaction
-
-**RECOVER DIALOG PATTERNS:**
-- RecoverDialog component at apps/web/src/components/vault/RecoverDialog.tsx
-- Requires linked wallets feature to select destination wallet (currently empty array placeholder)
-- Uses amber color scheme (bg-amber-600, hover:bg-amber-700) for destructive action
-- ArrowRightLeft icon from lucide-react for recover action
-- Same authority checking pattern as UnvaultDialog
-- buildRecoverInstructions in vault-transactions.ts handles unlock + transfer + closeAccount
-
-**RECOVER TRANSACTION PATTERNS:**
-- buildRecoverInstructions accepts: nft, owner, delegate, destination, payer
-- Token Metadata (pNFT/regular): unlock → transfer → closeAccount (to reclaim rent to destination)
-- Nifty Assets: unlock → transfer
-- MPL Core: removePluginV1 → transferV1
-- Uses getCloseAccountInstruction from @solana-program/token for closing source ATA
-- For pNFTs: need both source and destination token records
-
-**VAULT PAGE PATTERNS:**
-- VaultPage at apps/web/src/routes/vault.tsx
-- Uses vaultedNftsAtom from vault store for data
-- Selection mode via isSelectModeAtom, selectedMintsAtom, toggleSelectModeAtom, clearSelectionAtom
-- Filter selectedMints through vaultedNfts to get selectedNfts for dialogs
-- Layout size toggle follows MembershipPage pattern
-- Teal-400 color for vault-themed UI elements
-- Select/Cancel toggle button for selection mode
-- Shows count badge (e.g., "12 NFTs Protected") next to title
-
----
-
-## 2026-01-23 - US-018
-- Verified vault state persistence through NFT refresh
-- No code changes needed — already implemented in US-007
-- **Implementation details:**
-  - DataFetcher in layout/index.tsx has useEffect watching nftsAtom
-  - When nftsAtom changes (from any refresh path), detectVaultedNfts() runs automatically
-  - This covers: fetchNftsAtom initial/background refresh, refreshNftsAtom force refresh
-  - External vault/unvault reflected when fresh API data contains updated frozen/delegate fields
-  - Vault state persists through navigation because Jotai atoms persist in memory
----
-
-## 2026-01-23 - US-017
-- Added vault action to collection selection toolbar
-- Files changed:
-  - apps/web/src/components/toolbar.tsx — Added Shield import, vaultedMintsSetAtom import, VaultDialog/UnvaultDialog imports, vaultActionState useMemo, Vault/Unvault button in selection actions
-- **Learnings for future iterations:**
-  - Use useMemo for computing disabled states with complex logic
-  - vaultActionState pattern: { disabled: boolean, reason: string | null, action: "vault" | "unvault" | null }
-  - Check compressed NFTs: `selectedNfts.some((nft) => nft.compressed)`
-  - Check vault mix: compare vaultedCount vs selectedNfts.length
-  - Title attribute for disabled reason tooltip
-  - Dynamic button text based on action state
----
-
-## 2026-01-23 - US-015 & US-016
-- Implemented VaultPage with grid and selection functionality (US-015)
-- Wired VaultPage to dialogs (US-016 - implemented together)
-- Files changed:
-  - apps/web/src/routes/vault.tsx — Full implementation with NftGrid, selection mode, Unvault/Recover buttons, layout toggle, dialog state management
-- **Learnings for future iterations:**
-  - Filter selectedMints through vaultedNfts to only get NFTs relevant to current page context
-  - Use teal-400 for vault-themed accents (icon, badge, buttons)
-  - CheckSquare/XSquare icons for select mode toggle
-  - Follow MembershipPage for layout size toggle pattern
-  - clearSelection in onSuccess callbacks to reset selection after operations
-  - Dialog state: unvaultDialogOpen, recoverDialogOpen with setters
-  - Dialog callbacks: handleUnvaultSuccess, handleRecoverSuccess close dialog and clear selection
----
-
-## 2026-01-23 - US-014
-- Implemented recover transaction execution in RecoverDialog
-- Files changed:
-  - apps/web/src/components/vault/RecoverDialog.tsx — Wired handleRecover to buildRecoverInstructions, added imports, transaction execution
-- **Learnings for future iterations:**
-  - signer from @solana/connector needs double cast: `signer as unknown as TransactionSigner` for @solana/kit compatibility
-  - Follow VaultDialog/UnvaultDialog patterns for transaction execution
-  - Use Promise.all to build instructions in parallel, then flatten with allInstructions.flat()
-  - removeVaultedMintsAtom removes mints from vault tracking after successful transaction
----
-
-## 2026-01-23 - US-013
-- Created buildRecoverInstructions utility for unlock + transfer + close operations
-- Files changed:
-  - apps/web/src/lib/vault-transactions.ts — Added BuildRecoverInput interface, buildRecoverInstructions function, buildTokenMetadataRecoverInstructions, buildNiftyRecoverInstructions, buildMplCoreRecoverInstructions
-- **Learnings for future iterations:**
-  - Import getCloseAccountInstruction from @solana-program/token
-  - Token Metadata recover: unlock (delegate authority) → transfer (owner authority) → closeAccount (owner authority)
-  - closeAccount sends rent-exempt SOL to destination wallet
-  - For pNFTs: both source and destination token records needed for transfer
-  - Nifty recover: unlock (delegate) → transfer (owner)
-  - MPL Core recover: removePluginV1 (delegate) → transferV1 (owner)
-  - compressionProof: null for non-compressed MPL Core assets
----
-
-## 2026-01-23 - US-012
-- Created RecoverDialog component for emergency NFT recovery
-- Files changed:
-  - apps/web/src/components/vault/RecoverDialog.tsx — New dialog with destination wallet selection, warning message, per-NFT authority display
-- **Learnings for future iterations:**
-  - RecoverDialog follows same pattern as UnvaultDialog for authority checking
-  - Amber color scheme for destructive/warning actions: bg-amber-600, border-amber-500/50, text-amber-500
-  - ArrowRightLeft icon represents transfer/move action
-  - Empty state when no linked wallets shows message about linking wallets
-  - Transaction logic placeholder (TODO) until US-013/US-014 implements buildRecoverTransaction
-  - onSuccess callback prefixed with underscore (_onSuccess) when not yet used to satisfy TypeScript
----
-
-## 2026-01-23 - US-010/US-011
-- Created UnvaultDialog component with full transaction execution
-- Files changed:
-  - apps/web/src/components/vault/UnvaultDialog.tsx — New dialog showing per-NFT authority status with unvault functionality
-- **Learnings for future iterations:**
-  - Check nft.delegate against connected wallet to determine unlock authority
-  - Show all selected NFTs but only process ones with authority
-  - Use amber color (border-amber-500/50, bg-amber-500/10, text-amber-500) for warnings
-  - AlertTriangle icon from lucide-react for authority warnings
-  - Filter NFTs by hasAuthority before building transaction instructions
-  - Button text can show count of processable NFTs when some lack authority
----
-
-## 2026-01-23 - US-009
-- Implemented vault transaction execution in VaultDialog
-- Files changed:
-  - apps/web/src/components/vault/VaultDialog.tsx — Added handleVault function, loading state, error handling
-- **Learnings for future iterations:**
-  - Use prepareAndSendTransaction from lib/transaction.ts for full transaction flow (simulate, set CU, priority fee, sign, send, confirm)
-  - useTransactionSigner hook from @solana/connector/react provides signer and capabilities.canSign
-  - Build instructions for all NFTs in parallel with Promise.all, then flatten
-  - For basic freeze: delegate === owner
-  - For secure freeze: delegate === selectedDelegate (from linked wallets)
-  - Add mints to vaultedMintsSetAtom only AFTER successful transaction
-  - Use Loader2 from lucide-react with animate-spin for loading indicator
----
-
-## 2026-01-23 - US-008
-- Created VaultDialog component for adding NFTs to vault
-- Files changed:
-  - apps/web/src/components/vault/VaultDialog.tsx — New dialog with basic/secure freeze options
-- **Learnings for future iterations:**
-  - No RadioGroup component in codebase — use styled buttons for selection UI
-  - No Label component — use plain span elements with className
-  - Legacy app used user.wallets from useAccess context for linked wallets
-  - New app doesn't have linked wallets feature yet — secure freeze option is disabled
-  - Dialog follows shadcn pattern: Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
-  - Teal vault theme: border-teal-500, bg-teal-500/10 for selected state, bg-teal-600 for button
----
-
-## 2026-01-23 - US-007
-- Implemented vaulted NFT detection on wallet connect
-- Files changed:
-  - apps/api/src/services/das.ts — Added delegate field to DASAsset type and included in asset mapping
-  - apps/api/src/routes/nfts.ts — Added delegate field to mapNiftyAssetToDASFormat
-  - apps/web/src/stores/nfts.ts — Added delegate field to NFT interface and mapNftData function
-  - apps/web/src/stores/vault.ts — Added detectVaultedNftsAtom action
-  - apps/web/src/components/layout/index.tsx — Wired detection into DataFetcher via useEffect
-- **Learnings for future iterations:**
-  - Helius DAS API provides `ownership.delegate` field for delegate addresses
-  - NFT is considered vaulted when `frozen === true && delegate !== null`
-  - To avoid circular imports between nfts.ts and vault.ts, wire detection at component level
-  - Use useEffect watching nftsAtom to trigger detectVaultedNftsAtom when data loads
-  - Nifty assets already have delegate decoded in nifty.ts service
----
-
-## 2026-01-23 - US-006
-- Added vault badge to NFT cards
-- Files changed:
-  - apps/web/src/components/nft-grid.tsx — Added Shield icon import, vaultedMintsSetAtom import, isVaultedAtom with selectAtom pattern, Vaulted badge with teal styling
-- **Learnings for future iterations:**
-  - Follow the isStaked pattern: use selectAtom with useMemo for efficient per-NFT state checks
-  - Vaulted badge only shows when `!isStaked` to avoid overlapping badges at bottom-left position
-  - Teal vault color: rgba(166, 227, 224, 0.9) for background, #0d3d3a for dark text contrast
----
-
-## 2026-01-23 - US-005
-- Added MPL Core support to vault transaction builders
-- Files changed:
-  - apps/web/src/lib/vault-transactions.ts — Added buildMplCoreLockInstructions and buildMplCoreUnlockInstructions functions, added isMplCoreAsset detection
-  - apps/web/src/stores/nfts.ts — Added "Core" to TokenStandard type
-- **Learnings for future iterations:**
-  - MPL Core uses tokenStandard='Core' (added to TokenStandard type)
-  - @biblio/solana-programs has `mplCore` module with generated MPL Core instructions
-  - MPL Core lock: use addPluginV1 with plugin: `{ __kind: "FreezeDelegate", fields: [{ frozen: true }] }`
-  - For basic freeze: initAuthority is `{ __kind: "Owner" }`
-  - For secure freeze: initAuthority is `{ __kind: "Address", address: delegate }`
-  - MPL Core unlock: use removePluginV1 with pluginType: `mplCore.PluginType.FreezeDelegate`
-  - No separate delegate step needed for MPL Core - the initAuthority on addPluginV1 sets who can remove the plugin
----
-
-## 2026-01-23 - US-004
-- Added Nifty Asset support to vault transaction builders
-- Files changed:
-  - apps/web/src/lib/vault-transactions.ts — Added buildNiftyLockInstructions and buildNiftyUnlockInstructions functions
-- **Learnings for future iterations:**
-  - Nifty Assets already have tokenStandard='Nifty' mapped from the API, no need for on-chain detection
-  - @biblio/solana-programs has `asset` module with generated Nifty Asset instructions (from nifty-oss IDL)
-  - Nifty lock flow: approve with DelegateRole.Lock, then lock
-  - Nifty unlock flow: unlock first, then revoke with DelegateRole.Lock
-  - DelegateRole enum: None=0, Transfer=1, Lock=2, Burn=3
-  - Helper function: `asset.delegateInput("Some", { roles: [asset.DelegateRole.Lock] })`
----
-
-## 2026-01-23 - US-003
-- Created vault transaction builder utilities for Token Metadata NFTs
-- Files changed:
-  - apps/web/src/lib/vault-transactions.ts — New file with buildLockInstructions and buildUnlockInstructions functions
-- **Learnings for future iterations:**
-  - This codebase uses @solana/kit with raw Instructions, NOT Umi TransactionBuilder
-  - Follow patterns in use-solana-actions.ts and use-staking.ts for building instructions
-  - Import types like RevokeArgs via namespace: `tokenMetadata.RevokeArgs.UtilityV1`
-  - For pNFTs: use UtilityV1 delegate type and tokenRecord PDA
-  - For regular NFTs: use StandardV1 delegate type (no tokenRecord needed)
-  - Lock flow: delegate first (UtilityV1 for pNFT, StandardV1 for regular) then lock
-  - Unlock flow: unlock first then revoke delegate
----
-
-## 2026-01-23 - US-002
-- Created vault store for state management
-- Files changed:
-  - apps/web/src/stores/vault.ts — New Jotai store with vaultedMintsSetAtom, vaultLoadingAtom, vaultErrorAtom, vaultedNftsAtom
-- **Learnings for future iterations:**
-  - Follow stake.ts pattern for store structure
-  - Use explicit Set<string> generic to avoid type inference issues
-  - Include helper action atoms (addVaultedMintsAtom, removeVaultedMintsAtom, setVaultedMintsAtom) for easier state updates
----
-
-## 2026-01-23 - US-001
-- Implemented Vault route and sidebar navigation
-- Files changed:
-  - apps/web/src/App.tsx — Added VaultPage import and /vault route
-  - apps/web/src/routes/vault.tsx — Created new placeholder VaultPage component
-  - apps/web/src/components/layout/sidebar.tsx — Added Shield icon import and Vault nav item
-- **Learnings for future iterations:**
-  - Follow MembershipPage pattern for Vault page structure (same layout with icon + title header)
-  - Use Shield icon from lucide-react for vault-related UI elements
-  - Sidebar navItems array determines sidebar order
 ---
 

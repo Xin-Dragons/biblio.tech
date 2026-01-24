@@ -1,328 +1,138 @@
 {
   "project": "Biblio",
-  "branchName": "ralph/vault",
-  "description": "Vault Feature - Freeze/lock NFTs to protect them from unauthorized transfers with basic and secure freeze modes plus emergency recovery",
+  "branchName": "ralph/do-storage-optimization",
+  "description": "Durable Object Storage Optimization - Migrate UserDO to SQL, fix VotingDO unbounded growth, add input validation",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add Vault route and sidebar navigation",
-      "description": "As a user, I want to access the Vault from the sidebar so I can manage my protected assets.",
+      "title": "Create user/db directory with Drizzle schema",
+      "description": "As a developer, I need the database schema structure for the new UserDO.",
       "acceptanceCriteria": [
-        "Add /vault route in apps/web/src/App.tsx",
-        "Create apps/web/src/routes/vault.tsx with placeholder content",
-        "Add Vault entry in apps/web/src/components/layout/sidebar.tsx with Shield or Lock icon",
-        "Route displays 'Vault' title and placeholder text",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create apps/api/src/dos/user/db/schema.ts with all tables: tags, taggedNfts, starred, nftOrder, nftSizes, nftLayout, preferences, wallets, meta",
+        "Each table has proper primary keys and indexes as specified in PRD",
+        "Create apps/api/src/dos/user/db/types.ts with inferred types for all tables",
+        "Create apps/api/src/dos/user/db/drizzle.config.ts following nft-cache pattern",
+        "Create apps/api/src/dos/user/db/index.ts exporting schema and types",
+        "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Create vault store for state management",
-      "description": "As a developer, I need a Jotai store to manage vault state including vaulted NFTs and UI state.",
+      "title": "Generate user migration",
+      "description": "As a developer, I need the SQL migration for the user schema.",
       "acceptanceCriteria": [
-        "Create apps/web/src/stores/vault.ts",
-        "Define vaultedMintsSetAtom as atom<Set<string>>(new Set())",
-        "Define vaultLoadingAtom as atom<boolean>(false)",
-        "Define vaultErrorAtom as atom<string | null>(null)",
-        "Define vaultedNftsAtom as derived atom filtering nftsAtom by vaultedMintsSetAtom",
-        "Export all atoms",
+        "Run drizzle-kit generate for user schema",
+        "Migration file created at apps/api/src/dos/user/db/migrations/0000_initial.sql",
+        "Create migrations.js and migrations.d.ts following nft-cache pattern",
+        "Migration creates all 9 tables with correct columns and indexes",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Create vault transaction builder utilities",
-      "description": "As a developer, I need reusable utilities for building vault transactions that work with @solana/kit.",
+      "title": "Create UserDO with tags and tagged endpoints",
+      "description": "As a developer, I need the UserDO class with Drizzle and tags/tagged functionality.",
       "acceptanceCriteria": [
-        "Create apps/web/src/lib/vault-transactions.ts",
-        "Create buildLockTransaction function that handles Token Metadata NFTs using lockV1/delegateUtilityV1",
-        "Create buildUnlockTransaction function that handles Token Metadata NFTs using unlockV1/revokeUtilityV1",
-        "Functions accept NFT data and delegate address as parameters",
-        "Functions return Umi TransactionBuilder",
-        "Use existing patterns from apps/web/src/hooks/use-staking.ts as reference",
+        "Create apps/api/src/dos/user/index.ts",
+        "UserDO class extends DurableObject with Drizzle setup in constructor",
+        "Run migration in blockConcurrencyWhile following existing patterns",
+        "Implement getTags, addTag, updateTag, deleteTag methods using Drizzle",
+        "Implement getTaggedNfts, getAllTaggedNfts, addNftsToTag, removeNftsFromTag methods",
+        "Implement HTTP handlers for /tags and /tagged/* routes",
+        "Same API signatures as existing user.ts",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Functions return Instruction[] following @solana/kit patterns (not Umi TransactionBuilder) since this codebase uses @solana/kit."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Add Nifty Asset support to vault transactions",
-      "description": "As a developer, I need vault transaction builders to support Nifty Assets.",
+      "title": "Add starred and custom display endpoints to UserDO",
+      "description": "As a developer, I need starred, order, sizes, and layout functionality in UserDO.",
       "acceptanceCriteria": [
-        "Update buildLockTransaction to detect Nifty Assets by account owner (ASSET_PROGRAM_ID)",
-        "For Nifty lock: use approve with DelegateRole.Lock, then lock from @nifty-oss/asset",
-        "Update buildUnlockTransaction to handle Nifty Assets",
-        "For Nifty unlock: use unlock then revoke from @nifty-oss/asset",
+        "Implement getStarred, addToStarred, removeFromStarred methods using starred table",
+        "Implement getOrder, setOrder methods using nftOrder table",
+        "Implement getSizes, setSizes methods using nftSizes table",
+        "Implement getLayout, setLayout methods using nftLayout table",
+        "Implement HTTP handlers for /starred, /order/*, /sizes/*, /layout/* routes",
+        "Same API signatures as existing user.ts",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Uses @biblio/solana-programs asset module (generated from nifty-oss IDL). Nifty detection via tokenStandard='Nifty' since it's already mapped in the API."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add MPL Core support to vault transactions",
-      "description": "As a developer, I need vault transaction builders to support MPL Core assets.",
+      "title": "Add preferences, wallets, and meta endpoints to UserDO",
+      "description": "As a developer, I need remaining UserDO functionality and cleanup of old file.",
       "acceptanceCriteria": [
-        "Update buildLockTransaction to detect MPL Core assets by account owner (MPL_CORE_PROGRAM_ID)",
-        "For MPL Core lock: use addPluginV1 with createPlugin FreezeDelegate frozen:true",
-        "Update buildUnlockTransaction to handle MPL Core assets",
-        "For MPL Core unlock: use removePluginV1 with PluginType.FreezeDelegate",
+        "Implement getPreferences, setPreferences methods using preferences table",
+        "Implement getWallets, addWallet, removeWallet methods using wallets table",
+        "Implement getDandies, setDandies methods using meta table (JSON value)",
+        "Implement getUsername, setUsername, clearUsername methods using meta table",
+        "Implement getShowcase, setShowcase methods using meta table (JSON value)",
+        "Implement HTTP handlers for /preferences, /wallets, /dandies, /username, /showcase routes",
+        "Delete apps/api/src/dos/user.ts (old file)",
+        "Same API signatures as existing user.ts",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Uses @biblio/solana-programs mplCore module. MPL Core detection via tokenStandard='Core'. Lock uses addPluginV1 with FreezeDelegate plugin (frozen: true), initAuthority set to Owner for basic freeze or Address for secure freeze. Unlock uses removePluginV1 with PluginType.FreezeDelegate."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add vault badge to NFT cards",
-      "description": "As a user, I want to see which NFTs are vaulted when viewing my collection.",
+      "title": "Add input validation to UserDO",
+      "description": "As a developer, I need input validation to prevent data pollution and abuse.",
       "acceptanceCriteria": [
-        "Update apps/web/src/components/nft-grid.tsx NftCard component",
-        "Import vaultedMintsSetAtom from vault store",
-        "Add isVaulted check similar to existing isStaked pattern using selectAtom",
-        "Display 'Vaulted' badge with Shield icon when NFT is vaulted",
-        "Badge styled with teal color (#a6e3e0) matching vault theme",
-        "Badge positioned at bottom-left like existing Staked badge",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add LIMITS constant with MAX_TAGS=100, MAX_TAG_NAME=50, MAX_CONTEXT=100, MAX_STARRED=5000, MAX_TAGGED_PER_TAG=5000, MAX_WALLETS=20",
+        "Add CONTEXT_REGEX for validating context strings",
+        "Validate tag name and color length in addTag/updateTag",
+        "Validate context format in all context-based operations",
+        "Enforce limits: return 400 error when limit exceeded",
+        "All validation errors return Response with status 400 and error message",
+        "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Uses selectAtom pattern like isStaked. Vaulted badge only shows if not staked (avoiding overlap). Badge color: rgba(166, 227, 224, 0.9) with dark teal text #0d3d3a."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Detect vaulted NFTs on wallet connect",
-      "description": "As a user, I want vaulted NFTs to be detected automatically when I connect my wallet.",
+      "title": "Fix VotingDO unbounded growth",
+      "description": "As a developer, I need to remove the votes array that grows forever.",
       "acceptanceCriteria": [
-        "NFT type in apps/web/src/stores/nfts.ts already has 'frozen' boolean field",
-        "Add delegate field to NFT type if not present",
-        "Update mapNftData to include delegate from API response",
-        "Create detectVaultedNftsAtom action that scans nftsAtom for frozen NFTs with delegate set",
-        "Call detectVaultedNfts after NFTs are loaded in fetchNftsAtom",
-        "Populate vaultedMintsSetAtom with detected vaulted mint addresses",
+        "In apps/api/src/dos/voting.ts, remove VoteRecord interface",
+        "Change ShowcaseVotes interface to only have total: number",
+        "Update vote() method to only increment total, not push to votes array",
+        "Remove votes array from storage operations",
+        "All existing endpoints still work (vote, getShowcaseVotes, getRemainingVotes, getLeaderboard)",
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Detection wired into DataFetcher component in layout/index.tsx via useEffect watching nftsAtom changes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Create VaultDialog component",
-      "description": "As a user, I want a dialog to add NFTs to the vault so I can protect my assets.",
+      "title": "Remove debug logging from RpcWebSocketDO",
+      "description": "As a developer, I want clean production logs without debug noise.",
       "acceptanceCriteria": [
-        "Create apps/web/src/components/vault/VaultDialog.tsx",
-        "Use shadcn Dialog component",
-        "Props: open, onOpenChange, nfts (array of NFTs to vault), onSuccess callback",
-        "Show count of NFTs being vaulted",
-        "Two options: Basic Freeze and Secure Freeze with RadioGroup",
-        "Basic Freeze description: Owner wallet retains unlock authority",
-        "Secure Freeze description: Select a different linked wallet as unlock authority",
-        "Secure Freeze shows Select dropdown for linked wallets (disabled if only one wallet)",
-        "Cancel and Vault buttons",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Remove all console.log calls from apps/api/src/dos/rpc-websocket.ts",
+        "Keep console.error calls for actual errors",
+        "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Uses custom button-based selection instead of RadioGroup (follows existing patterns). Secure freeze disabled with info message when no linked wallets available. NFT preview shows first 5 with +X more indicator."
-    },
-    {
-      "id": "US-009",
-      "title": "Implement vault transaction execution",
-      "description": "As a user, I want to execute vault transactions from the VaultDialog.",
-      "acceptanceCriteria": [
-        "Add handleVault function to VaultDialog",
-        "For basic freeze: call buildLockTransaction with owner as delegate",
-        "For secure freeze: call buildLockTransaction with selected delegate wallet",
-        "Build transaction using Umi from useUmi hook",
-        "Sign and send transaction",
-        "Show loading state during transaction",
-        "Show success toast on completion",
-        "Show error toast on failure",
-        "Add vaulted mints to vaultedMintsSetAtom on success",
-        "Call onSuccess callback and close dialog",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Uses prepareAndSendTransaction from lib/transaction.ts, useTransactionSigner hook, and addVaultedMintsAtom action. Shows loading state with Loader2 icon during transaction."
-    },
-    {
-      "id": "US-010",
-      "title": "Create UnvaultDialog component",
-      "description": "As a user, I want a dialog to remove NFTs from the vault so I can transfer them again.",
-      "acceptanceCriteria": [
-        "Create apps/web/src/components/vault/UnvaultDialog.tsx",
-        "Use shadcn Dialog component",
-        "Props: open, onOpenChange, nfts (array of NFTs to unvault), onSuccess callback",
-        "Show count of NFTs being unvaulted",
-        "Display which wallet address has unlock authority for each NFT",
-        "Show warning if connected wallet does not have authority",
-        "Cancel and Unvault buttons",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Also includes handleUnvault transaction execution (US-011 functionality). Shows authority status per NFT with teal/amber indicators. NFTs without authority shown disabled but still visible."
-    },
-    {
-      "id": "US-011",
-      "title": "Implement unvault transaction execution",
-      "description": "As a user, I want to execute unvault transactions from the UnvaultDialog.",
-      "acceptanceCriteria": [
-        "Add handleUnvault function to UnvaultDialog",
-        "Call buildUnlockTransaction for each selected NFT",
-        "Build combined transaction using Umi",
-        "Sign and send transaction",
-        "Show loading state during transaction",
-        "Show success toast on completion",
-        "Show error toast on failure",
-        "Remove unvaulted mints from vaultedMintsSetAtom on success",
-        "Call onSuccess callback and close dialog",
-        "Typecheck passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Implemented together with US-010. Only unvaults NFTs where connected wallet has authority. Uses Promise.all for parallel instruction building."
-    },
-    {
-      "id": "US-012",
-      "title": "Create RecoverDialog component",
-      "description": "As a user, I want a dialog to recover vaulted NFTs to a safe wallet in an emergency.",
-      "acceptanceCriteria": [
-        "Create apps/web/src/components/vault/RecoverDialog.tsx",
-        "Use shadcn Dialog component",
-        "Props: open, onOpenChange, nfts (array of NFTs to recover), onSuccess callback",
-        "Show count of NFTs being recovered",
-        "Select dropdown for destination wallet from user's linked wallets",
-        "Warning text: This will unlock AND transfer your NFTs in one transaction",
-        "Cancel and Recover buttons (Recover button in warning/destructive style)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Dialog UI complete with destination wallet selection, warning message, per-NFT authority display. Transaction execution placeholder until US-013/US-014 implements buildRecoverTransaction. Uses amber color scheme for destructive action styling."
-    },
-    {
-      "id": "US-013",
-      "title": "Create buildRecoverTransaction utility",
-      "description": "As a developer, I need a transaction builder for the recover operation.",
-      "acceptanceCriteria": [
-        "Add buildRecoverTransaction to apps/web/src/lib/vault-transactions.ts",
-        "Function accepts NFT and destination wallet address",
-        "For Token Metadata: unlockV1 + transferV1 + closeToken",
-        "For Nifty Assets: unlock + transfer",
-        "For MPL Core: removePluginV1 + transferV1",
-        "Return Umi TransactionBuilder",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Implemented as buildRecoverInstructions returning Instruction[] (following @solana/kit patterns). Uses getCloseAccountInstruction from @solana-program/token. Token Metadata handles both pNFT and regular NFTs with appropriate token records."
-    },
-    {
-      "id": "US-014",
-      "title": "Implement recover transaction execution",
-      "description": "As a user, I want to execute recover transactions from the RecoverDialog.",
-      "acceptanceCriteria": [
-        "Add handleRecover function to RecoverDialog",
-        "Call buildRecoverTransaction for each selected NFT with destination wallet",
-        "Build combined transaction using Umi",
-        "Sign and send transaction",
-        "Show loading state during transaction",
-        "Show success toast on completion",
-        "Show error toast on failure",
-        "Remove recovered mints from vaultedMintsSetAtom on success",
-        "Call onSuccess callback and close dialog",
-        "Typecheck passes"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "Uses buildRecoverInstructions from vault-transactions.ts. Follows same pattern as VaultDialog/UnvaultDialog with Promise.all for parallel instruction building and prepareAndSendTransaction for execution."
-    },
-    {
-      "id": "US-015",
-      "title": "Create VaultPage with grid and selection",
-      "description": "As a user, I want to view and manage my vaulted NFTs from a dedicated page.",
-      "acceptanceCriteria": [
-        "Update apps/web/src/routes/vault.tsx with full implementation",
-        "Page header with Shield icon and 'Vault' title",
-        "Show count of vaulted NFTs (e.g., '12 NFTs Protected')",
-        "Use NftGrid component with vaultedNftsAtom data",
-        "Selection mode works for selecting vaulted NFTs",
-        "Show Unvault and Recover buttons when NFTs are selected",
-        "Empty state when no vaulted NFTs with message about protection",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Implemented with teal-themed styling, layout size toggle, Select/Cancel toggle for selection mode, Unvault and Recover buttons with selection counts. Uses NftGrid with vaultedNftsAtom and selection filtering from selectedMintsAtom."
-    },
-    {
-      "id": "US-016",
-      "title": "Wire VaultPage to dialogs",
-      "description": "As a user, I want the Vault page action buttons to open the appropriate dialogs.",
-      "acceptanceCriteria": [
-        "Add state for UnvaultDialog and RecoverDialog open states",
-        "Wire Unvault button to open UnvaultDialog with selected NFTs",
-        "Wire Recover button to open RecoverDialog with selected NFTs",
-        "Clear selection after successful vault/unvault/recover operations",
-        "Dialogs receive correct NFT data based on selection",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Implemented together with US-015. VaultPage includes unvaultDialogOpen/recoverDialogOpen state, Unvault/Recover buttons wired to dialogs with selectedNfts, and clearSelection() in success handlers."
-    },
-    {
-      "id": "US-017",
-      "title": "Add vault action to collection selection toolbar",
-      "description": "As a user, I want to vault NFTs directly from the collection view.",
-      "acceptanceCriteria": [
-        "Locate selection toolbar component (search for isSelectMode usage)",
-        "Add Shield icon button for vault action when NFTs selected",
-        "Button disabled if any selected NFT is compressed (not supported)",
-        "Button disabled if selection contains mix of vaulted and non-vaulted",
-        "Tooltip shows reason when disabled",
-        "Clicking opens VaultDialog (if none vaulted) or UnvaultDialog (if all vaulted)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "Added to toolbar.tsx. Uses vaultActionState useMemo to compute disabled state with reason tooltip. Shield button between Burn and separator. Opens VaultDialog for non-vaulted NFTs, UnvaultDialog for vaulted NFTs."
-    },
-    {
-      "id": "US-018",
-      "title": "Update NFT refresh to maintain vault state",
-      "description": "As a user, I want vault status to persist correctly when NFT data refreshes.",
-      "acceptanceCriteria": [
-        "In fetchNftsAtom background refresh, re-detect vaulted NFTs after data loads",
-        "In refreshNftsAtom, re-detect vaulted NFTs after data loads",
-        "Vault status correctly updates if NFT was vaulted/unvaulted externally",
-        "Vault state persists through page navigation",
-        "Typecheck passes"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "Already implemented via useEffect in DataFetcher (layout/index.tsx) that watches nftsAtom and calls detectVaultedNfts. All refresh paths update nftsAtom which triggers detection automatically."
+      "passes": false,
+      "notes": ""
     }
   ]
 }
