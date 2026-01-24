@@ -1,14 +1,8 @@
 import { DurableObject } from "cloudflare:workers"
 import type { Env } from "../types"
 
-interface VoteRecord {
-  visupporterId: string
-  timestamp: number
-}
-
 interface ShowcaseVotes {
   total: number
-  votes: VoteRecord[]
 }
 
 interface DailyVotes {
@@ -81,9 +75,8 @@ export class VotingDO extends DurableObject<Env> {
     this.userDailyVotes.set(userId, dailyVotes)
 
     // Update showcase vote count
-    const showcaseData = this.showcaseVotes.get(showcaseUsername) ?? { total: 0, votes: [] }
+    const showcaseData = this.showcaseVotes.get(showcaseUsername) ?? { total: 0 }
     showcaseData.total += 1
-    showcaseData.votes.push({ visupporterId: userId, timestamp: Date.now() })
     this.showcaseVotes.set(showcaseUsername, showcaseData)
 
     await this.save()
