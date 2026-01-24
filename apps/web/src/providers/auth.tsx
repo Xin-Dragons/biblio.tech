@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react"
 import { useWallet, useTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { getWallets } from "@wallet-standard/app"
 import { useAtomValue, useSetAtom } from "jotai"
-import { sessionAtom, signInAtom, signOutAtom, explicitlySignedOutAtom } from "@/stores/auth"
+import { sessionAtom, signInAtom, signOutAtom, explicitlySignedOutAtom, connectedWalletAtom } from "@/stores/auth"
 import { clearLinkedWalletsAtom, linkedWalletsAtom } from "@/stores/linked-wallets"
 import { isLinkingWalletAtom } from "@/hooks/use-wallet-linking"
 
@@ -42,6 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const session = useAtomValue(sessionAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const isLinkingWallet = useAtomValue(isLinkingWalletAtom)
+  const connectedWallet = useAtomValue(connectedWalletAtom)
   const explicitlySignedOut = useAtomValue(explicitlySignedOutAtom)
   const setExplicitlySignedOut = useSetAtom(explicitlySignedOutAtom)
   const signIn = useSetAtom(signInAtom)
@@ -110,7 +111,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Polling fallback for Phantom (doesn't properly emit Wallet Standard change events)
   useEffect(() => {
-    if (!session?.wallet || isLinkingWallet) return
+    if (!session?.wallet) return
 
     const { get } = getWallets()
     const wallets = get()
@@ -122,16 +123,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const checkPhantomAccount = async () => {
       const phantomAccount = await getPhantomAccount()
       if (phantomAccount && phantomAccount !== session.wallet) {
-        clearLinkedWallets()
-        signOut()
-        await disconnect()
-        await connect("wallet-standard:phantom" as WalletConnectorId)
+        // Only action if current wallet is Phantom AND not in linking mode
+        const isCurrentWalletPhantom = connectedWallet?.name?.toLowerCase() === "phantom"
+        if (isCurrentWalletPhantom && !isLinkingWallet) {
+          clearLinkedWallets()
+          signOut()
+          await disconnect()
+          await connect("wallet-standard:phantom" as WalletConnectorId)
+        }
       }
     }
 
     const interval = setInterval(checkPhantomAccount, 2000)
     return () => clearInterval(interval)
-  }, [session?.wallet, isLinkingWallet, clearLinkedWallets, signOut, disconnect, connect])
+  }, [session?.wallet, isLinkingWallet, connectedWallet, clearLinkedWallets, signOut, disconnect, connect])
 
   // Main auth flow
   useEffect(() => {

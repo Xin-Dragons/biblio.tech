@@ -62,11 +62,23 @@ function getAddressFromProvider(provider: WalletProvider["provider"]): string | 
   return provider.publicKey.toBase58?.() ?? provider.publicKey.toString?.() ?? null
 }
 
-function detectAccountChange(
+async function getPhantomAccount(): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phantom = (window as any).phantom?.solana
+  if (!phantom?.request) return null
+  try {
+    const resp = await phantom.request({ method: "connect", params: { onlyIfTrusted: true } })
+    return resp?.publicKey?.toString() ?? null
+  } catch {
+    return null
+  }
+}
+
+async function detectAccountChange(
   connectedWalletName: string | null,
   sessionWallet: string,
   linkedWallets: string[]
-): { address: string; providerName: string } | null {
+): Promise<{ address: string; providerName: string } | null> {
   if (!connectedWalletName) return null
 
   const providers = getWalletProviders()
@@ -74,7 +86,10 @@ function detectAccountChange(
 
   if (!connectedProvider) return null
 
-  const address = getAddressFromProvider(connectedProvider.provider)
+  // Use reliable connect method for Phantom (publicKey property doesn't update on account switch)
+  const isPhantom = connectedProvider.name.toLowerCase() === "phantom"
+  const address = isPhantom ? await getPhantomAccount() : getAddressFromProvider(connectedProvider.provider)
+
   if (address && address !== sessionWallet && !linkedWallets.includes(address)) {
     return { address, providerName: connectedProvider.name }
   }
@@ -138,7 +153,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
     const poll = async () => {
       while (!signal.aborted) {
-        const detected = detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
+        const detected = await detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
         if (detected) {
           setDetectedWallet(detected)
           return
