@@ -1,11 +1,30 @@
 import { DurableObject } from "cloudflare:workers"
 import { drizzle } from "drizzle-orm/durable-sqlite"
 import { migrate } from "drizzle-orm/durable-sqlite/migrator"
-import { eq, and } from "drizzle-orm"
+import { eq, and, count } from "drizzle-orm"
 import type { Env } from "../../types"
 import * as schema from "./db/schema"
 import type { UserDB, Tag } from "./db/types"
 import migrations from "./db/migrations/migrations"
+
+const LIMITS = {
+  MAX_TAGS: 100,
+  MAX_TAG_NAME: 50,
+  MAX_COLOR: 20,
+  MAX_CONTEXT: 100,
+  MAX_STARRED: 5000,
+  MAX_TAGGED_PER_TAG: 5000,
+  MAX_WALLETS: 20,
+} as const
+
+const CONTEXT_REGEX = /^[a-zA-Z0-9_-]+$/
+
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "ValidationError"
+  }
+}
 
 export interface TagResponse {
   id: string
@@ -66,6 +85,18 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async addTag(tag: { id: string; name: string; color: string }): Promise<TagResponse> {
+    if (tag.name.length > LIMITS.MAX_TAG_NAME) {
+      throw new ValidationError(`Tag name exceeds maximum length of ${LIMITS.MAX_TAG_NAME}`)
+    }
+    if (tag.color.length > LIMITS.MAX_COLOR) {
+      throw new ValidationError(`Tag color exceeds maximum length of ${LIMITS.MAX_COLOR}`)
+    }
+
+    const [tagCount] = await this.db.select({ count: count() }).from(schema.tags)
+    if (tagCount.count >= LIMITS.MAX_TAGS) {
+      throw new ValidationError(`Maximum number of tags (${LIMITS.MAX_TAGS}) reached`)
+    }
+
     const newTag: Tag = {
       id: tag.id,
       name: tag.name,
@@ -77,6 +108,13 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async updateTag(id: string, updates: Partial<{ name: string; color: string }>): Promise<TagResponse | null> {
+    if (updates.name !== undefined && updates.name.length > LIMITS.MAX_TAG_NAME) {
+      throw new ValidationError(`Tag name exceeds maximum length of ${LIMITS.MAX_TAG_NAME}`)
+    }
+    if (updates.color !== undefined && updates.color.length > LIMITS.MAX_COLOR) {
+      throw new ValidationError(`Tag color exceeds maximum length of ${LIMITS.MAX_COLOR}`)
+    }
+
     const existing = await this.db.query.tags.findFirst({
       where: eq(schema.tags.id, id),
     })
@@ -127,6 +165,17 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async addNftsToTag(tagId: string, mints: string[]): Promise<void> {
+    const [taggedCount] = await this.db
+      .select({ count: count() })
+      .from(schema.taggedNfts)
+      .where(eq(schema.taggedNfts.tagId, tagId))
+
+    if (taggedCount.count + mints.length > LIMITS.MAX_TAGGED_PER_TAG) {
+      throw new ValidationError(
+        `Adding ${mints.length} NFTs would exceed maximum of ${LIMITS.MAX_TAGGED_PER_TAG} per tag`
+      )
+    }
+
     for (const mint of mints) {
       await this.db.insert(schema.taggedNfts).values({ tagId, mint }).onConflictDoNothing()
     }
@@ -147,6 +196,11 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async addToStarred(mint: string): Promise<void> {
+    const [starredCount] = await this.db.select({ count: count() }).from(schema.starred)
+    if (starredCount.count >= LIMITS.MAX_STARRED) {
+      throw new ValidationError(`Maximum number of starred items (${LIMITS.MAX_STARRED}) reached`)
+    }
+
     await this.db.insert(schema.starred).values({ mint, addedAt: Date.now() }).onConflictDoNothing()
   }
 
@@ -154,8 +208,18 @@ export class UserDO extends DurableObject<Env> {
     await this.db.delete(schema.starred).where(eq(schema.starred.mint, mint))
   }
 
+  private validateContext(context: string): void {
+    if (context.length > LIMITS.MAX_CONTEXT) {
+      throw new ValidationError(`Context exceeds maximum length of ${LIMITS.MAX_CONTEXT}`)
+    }
+    if (!CONTEXT_REGEX.test(context)) {
+      throw new ValidationError("Context must contain only alphanumeric characters, underscores, and hyphens")
+    }
+  }
+
   // Custom order
   async getOrder(context: string): Promise<Record<string, number>> {
+    this.validateContext(context)
     const rows = await this.db.query.nftOrder.findMany({
       where: eq(schema.nftOrder.context, context),
     })
@@ -167,6 +231,7 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async setOrder(context: string, order: Record<string, number>): Promise<void> {
+    this.validateContext(context)
     await this.db.delete(schema.nftOrder).where(eq(schema.nftOrder.context, context))
     const entries = Object.entries(order)
     for (const [mint, position] of entries) {
@@ -176,6 +241,7 @@ export class UserDO extends DurableObject<Env> {
 
   // Collage sizes
   async getSizes(context: string): Promise<Record<string, string>> {
+    this.validateContext(context)
     const rows = await this.db.query.nftSizes.findMany({
       where: eq(schema.nftSizes.context, context),
     })
@@ -187,6 +253,7 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async setSizes(context: string, sizes: Record<string, string>): Promise<void> {
+    this.validateContext(context)
     await this.db.delete(schema.nftSizes).where(eq(schema.nftSizes.context, context))
     const entries = Object.entries(sizes)
     for (const [mint, size] of entries) {
@@ -196,6 +263,7 @@ export class UserDO extends DurableObject<Env> {
 
   // Collage layout
   async getLayout(context: string): Promise<Array<{ i: string; x: number; y: number; w: number; h: number }>> {
+    this.validateContext(context)
     const rows = await this.db.query.nftLayout.findMany({
       where: eq(schema.nftLayout.context, context),
     })
@@ -212,6 +280,7 @@ export class UserDO extends DurableObject<Env> {
     context: string,
     layout: Array<{ i: string; x: number; y: number; w: number; h: number }>
   ): Promise<void> {
+    this.validateContext(context)
     await this.db.delete(schema.nftLayout).where(eq(schema.nftLayout.context, context))
     for (const item of layout) {
       await this.db.insert(schema.nftLayout).values({
@@ -227,6 +296,7 @@ export class UserDO extends DurableObject<Env> {
 
   // Preferences
   async getPreferences(context: string = "defaults"): Promise<Preferences | null> {
+    this.validateContext(context)
     const row = await this.db.query.preferences.findFirst({
       where: eq(schema.preferences.context, context),
     })
@@ -242,6 +312,7 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async setPreferences(context: string, prefs: Partial<Preferences>): Promise<void> {
+    this.validateContext(context)
     const existing = await this.db.query.preferences.findFirst({
       where: eq(schema.preferences.context, context),
     })
@@ -282,6 +353,11 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async addWallet(wallet: Omit<Wallet, "addedAt">): Promise<Wallet> {
+    const [walletCount] = await this.db.select({ count: count() }).from(schema.wallets)
+    if (walletCount.count >= LIMITS.MAX_WALLETS) {
+      throw new ValidationError(`Maximum number of wallets (${LIMITS.MAX_WALLETS}) reached`)
+    }
+
     const newWallet = {
       publicKey: wallet.publicKey,
       nickname: wallet.nickname ?? null,
@@ -545,6 +621,9 @@ export class UserDO extends DurableObject<Env> {
 
       return new Response("Not found", { status: 404 })
     } catch (err) {
+      if (err instanceof ValidationError) {
+        return new Response(err.message, { status: 400 })
+      }
       console.error("UserDO error:", err)
       return new Response("Internal error", { status: 500 })
     }
