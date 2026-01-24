@@ -116,6 +116,91 @@ export class UserDO extends DurableObject<Env> {
     }
   }
 
+  // Starred NFTs
+  async getStarred(): Promise<string[]> {
+    const rows = await this.db.query.starred.findMany()
+    return rows.map((row) => row.mint)
+  }
+
+  async addToStarred(mint: string): Promise<void> {
+    await this.db.insert(schema.starred).values({ mint, addedAt: Date.now() }).onConflictDoNothing()
+  }
+
+  async removeFromStarred(mint: string): Promise<void> {
+    await this.db.delete(schema.starred).where(eq(schema.starred.mint, mint))
+  }
+
+  // Custom order
+  async getOrder(context: string): Promise<Record<string, number>> {
+    const rows = await this.db.query.nftOrder.findMany({
+      where: eq(schema.nftOrder.context, context),
+    })
+    const result: Record<string, number> = {}
+    for (const row of rows) {
+      result[row.mint] = row.position
+    }
+    return result
+  }
+
+  async setOrder(context: string, order: Record<string, number>): Promise<void> {
+    await this.db.delete(schema.nftOrder).where(eq(schema.nftOrder.context, context))
+    const entries = Object.entries(order)
+    for (const [mint, position] of entries) {
+      await this.db.insert(schema.nftOrder).values({ context, mint, position })
+    }
+  }
+
+  // Collage sizes
+  async getSizes(context: string): Promise<Record<string, string>> {
+    const rows = await this.db.query.nftSizes.findMany({
+      where: eq(schema.nftSizes.context, context),
+    })
+    const result: Record<string, string> = {}
+    for (const row of rows) {
+      result[row.mint] = row.size
+    }
+    return result
+  }
+
+  async setSizes(context: string, sizes: Record<string, string>): Promise<void> {
+    await this.db.delete(schema.nftSizes).where(eq(schema.nftSizes.context, context))
+    const entries = Object.entries(sizes)
+    for (const [mint, size] of entries) {
+      await this.db.insert(schema.nftSizes).values({ context, mint, size })
+    }
+  }
+
+  // Collage layout
+  async getLayout(context: string): Promise<Array<{ i: string; x: number; y: number; w: number; h: number }>> {
+    const rows = await this.db.query.nftLayout.findMany({
+      where: eq(schema.nftLayout.context, context),
+    })
+    return rows.map((row) => ({
+      i: row.mint,
+      x: row.x,
+      y: row.y,
+      w: row.w,
+      h: row.h,
+    }))
+  }
+
+  async setLayout(
+    context: string,
+    layout: Array<{ i: string; x: number; y: number; w: number; h: number }>
+  ): Promise<void> {
+    await this.db.delete(schema.nftLayout).where(eq(schema.nftLayout.context, context))
+    for (const item of layout) {
+      await this.db.insert(schema.nftLayout).values({
+        context,
+        mint: item.i,
+        x: item.x,
+        y: item.y,
+        w: item.w,
+        h: item.h,
+      })
+    }
+  }
+
   // HTTP handler for the DO
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
@@ -158,6 +243,57 @@ export class UserDO extends DurableObject<Env> {
         const tagId = path.split("/")[2]
         const { mints } = await request.json<{ mints: string[] }>()
         await this.removeNftsFromTag(tagId, mints)
+        return new Response(null, { status: 204 })
+      }
+
+      // Starred
+      if (path === "/starred" && request.method === "GET") {
+        return Response.json(await this.getStarred())
+      }
+      if (path === "/starred" && request.method === "PUT") {
+        const { mint } = await request.json<{ mint: string }>()
+        await this.addToStarred(mint)
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/starred" && request.method === "DELETE") {
+        const { mint } = await request.json<{ mint: string }>()
+        await this.removeFromStarred(mint)
+        return new Response(null, { status: 204 })
+      }
+
+      // Order
+      if (path.startsWith("/order/") && request.method === "GET") {
+        const context = path.split("/")[2]
+        return Response.json(await this.getOrder(context))
+      }
+      if (path.startsWith("/order/") && request.method === "PUT") {
+        const context = path.split("/")[2]
+        const order = await request.json<Record<string, number>>()
+        await this.setOrder(context, order)
+        return new Response(null, { status: 204 })
+      }
+
+      // Sizes
+      if (path.startsWith("/sizes/") && request.method === "GET") {
+        const context = path.split("/")[2]
+        return Response.json(await this.getSizes(context))
+      }
+      if (path.startsWith("/sizes/") && request.method === "PUT") {
+        const context = path.split("/")[2]
+        const sizes = await request.json<Record<string, string>>()
+        await this.setSizes(context, sizes)
+        return new Response(null, { status: 204 })
+      }
+
+      // Layout
+      if (path.startsWith("/layout/") && request.method === "GET") {
+        const context = path.split("/")[2]
+        return Response.json(await this.getLayout(context))
+      }
+      if (path.startsWith("/layout/") && request.method === "PUT") {
+        const context = path.split("/")[2]
+        const layout = await request.json<Array<{ i: string; x: number; y: number; w: number; h: number }>>()
+        await this.setLayout(context, layout)
         return new Response(null, { status: 204 })
       }
 
