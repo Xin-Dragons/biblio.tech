@@ -3,8 +3,20 @@
  * Uses Helius RPC with @solana/kit for fetching NFTs
  */
 
+import type { Asset, GetAssetResponseList, Grouping } from "helius-sdk/types/das"
 import { getRpc, type SolanaClient } from "../lib/solana-client"
 import type { Env } from "../types"
+
+// Helius SDK doesn't include plugins type for Core assets - extend it
+type CorePlugin = {
+  type: string
+  data?: { frozen?: boolean }
+  authority?: { address?: string }
+}
+
+type CoreAsset = Asset & {
+  plugins?: CorePlugin[] | Record<string, CorePlugin>
+}
 
 function mapImageToCdn(imageUrl: string, slug?: string): string {
   if (!imageUrl) return ""
@@ -39,6 +51,7 @@ export type DASAsset = {
   frozen: boolean
   delegate: string | null
   tokenStandard: TokenStandard
+  owner?: string
 }
 
 export type DASCollection = {
@@ -46,6 +59,81 @@ export type DASCollection = {
   name: string
   image: string | null
   count: number
+}
+
+function processItem(item: CoreAsset, collectionsMap: Map<string, DASCollection>): DASAsset | null {
+  const isLegacyNft = item.interface === "V1_NFT" || item.interface === "ProgrammableNFT"
+  const isCore = item.interface === "MplCoreAsset"
+
+  if (!isLegacyNft && !isCore) {
+    return null
+  }
+
+  const collectionGrouping = item.grouping?.find((g: Grouping) => g.group_key === "collection")
+  const collectionId = collectionGrouping?.group_value ?? null
+  const collectionMeta = collectionGrouping?.collection_metadata
+
+  const rawImage = item.content?.links?.image ?? item.content?.files?.[0]?.uri ?? ""
+
+  let tokenStandard: TokenStandard = "NonFungible"
+  if (item.interface === "ProgrammableNFT") {
+    tokenStandard = "ProgrammableNonFungible"
+  } else if (isCore) {
+    tokenStandard = "Core"
+  }
+
+  let frozen = false
+  let delegate: string | null = null
+
+  if (isCore) {
+    const plugins = item.plugins
+    let freezeDelegate: CorePlugin | undefined
+    if (Array.isArray(plugins)) {
+      freezeDelegate = plugins.find((p: CorePlugin) => p.type === "FreezeDelegate")
+    } else if (plugins && typeof plugins === "object") {
+      freezeDelegate =
+        (plugins as Record<string, CorePlugin>).FreezeDelegate ?? (plugins as Record<string, CorePlugin>).freezeDelegate
+    }
+    frozen = freezeDelegate?.data?.frozen ?? false
+    delegate = freezeDelegate?.authority?.address ?? null
+  } else {
+    frozen = item.ownership?.frozen ?? false
+    delegate = item.ownership?.delegate ?? null
+  }
+
+  const result: DASAsset = {
+    mint: item.id,
+    name: item.content?.metadata?.name ?? "Unknown",
+    image: mapImageToCdn(rawImage, collectionId ?? undefined),
+    collectionId,
+    collectionName: collectionMeta?.name ?? null,
+    attributes: Array.isArray(item.content?.metadata?.attributes)
+      ? item.content.metadata.attributes.map((a) => ({
+          trait_type: String(a.trait_type ?? ""),
+          value: String(a.value ?? ""),
+        }))
+      : [],
+    compressed: item.compression?.compressed ?? false,
+    frozen,
+    delegate,
+    tokenStandard,
+  }
+
+  if (collectionId) {
+    const existing = collectionsMap.get(collectionId)
+    if (existing) {
+      existing.count++
+    } else {
+      collectionsMap.set(collectionId, {
+        id: collectionId,
+        name: collectionMeta?.name ?? collectionId,
+        image: collectionMeta?.image ?? null,
+        count: 1,
+      })
+    }
+  }
+
+  return result
 }
 
 export async function getAssetsByOwner(
@@ -58,101 +146,68 @@ export async function getAssetsByOwner(
   const rpc = getClient(env)
   const allAssets: DASAsset[] = []
   const collectionsMap = new Map<string, DASCollection>()
+  const PAGE_SIZE = 1000
 
-  let page = 1
-  let hasMore = true
+  // Fetch first page to get total count
+  const firstResponse: GetAssetResponseList = await rpc
+    .getAssetsByOwner({
+      ownerAddress: wallet,
+      page: 1,
+      limit: PAGE_SIZE,
+      displayOptions: {
+        showCollectionMetadata: true,
+        showFungible: false,
+        showNativeBalance: false,
+        showGrandTotal: true,
+      },
+    })
+    .send()
 
-  while (hasMore) {
-    const response = await rpc
-      .getAssetsByOwner({
-        ownerAddress: wallet,
-        page,
-        limit: 1000,
-        displayOptions: {
-          showCollectionMetadata: true,
-          showFungible: false,
-          showNativeBalance: false,
-        },
-      })
-      .send()
+  const grandTotal = firstResponse.grand_total ?? firstResponse.total
+  console.log(
+    `[DAS] First page: ${firstResponse.items.length} items, total: ${firstResponse.total}, grandTotal: ${grandTotal}`
+  )
 
-    for (const item of response.items) {
-      const isLegacyNft = item.interface === "V1_NFT" || item.interface === "ProgrammableNFT"
-      const isCore = item.interface === "MplCoreAsset"
-
-      if (!isLegacyNft && !isCore) {
-        continue
-      }
-
-      const collectionId = item.grouping?.find((g) => g.group_key === "collection")?.group_value ?? null
-      const collectionMeta = item.grouping?.find((g) => g.group_key === "collection")?.collection_metadata
-
-      const rawImage = item.content?.links?.image ?? item.content?.files?.[0]?.uri ?? ""
-
-      let tokenStandard: TokenStandard = "NonFungible"
-      if (item.interface === "ProgrammableNFT") {
-        tokenStandard = "ProgrammableNonFungible"
-      } else if (isCore) {
-        tokenStandard = "Core"
-      }
-
-      // Core assets use different structure for frozen/delegate
-      let frozen = false
-      let delegate: string | null = null
-
-      if (isCore) {
-        // Core assets: check plugins for freeze delegate
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const plugins = (item as any).plugins
-        const freezeDelegate = plugins?.find((p: { type: string }) => p.type === "FreezeDelegate")
-        frozen = freezeDelegate?.data?.frozen ?? false
-        delegate = freezeDelegate?.authority?.address ?? null
-      } else {
-        frozen = item.ownership?.frozen ?? false
-        delegate = (item.ownership?.delegate as string) ?? null
-      }
-
-      const asset: DASAsset = {
-        mint: item.id,
-        name: item.content?.metadata?.name ?? "Unknown",
-        image: mapImageToCdn(rawImage, collectionId ?? undefined),
-        collectionId,
-        collectionName: collectionMeta?.name ?? null,
-        attributes: Array.isArray(item.content?.metadata?.attributes)
-          ? item.content.metadata.attributes.map((a) => ({
-              trait_type: String(a.trait_type ?? ""),
-              value: String(a.value ?? ""),
-            }))
-          : [],
-        compressed: item.compression?.compressed ?? false,
-        frozen,
-        delegate,
-        tokenStandard,
-      }
-
-      allAssets.push(asset)
-
-      if (collectionId) {
-        const existing = collectionsMap.get(collectionId)
-        if (existing) {
-          existing.count++
-        } else {
-          collectionsMap.set(collectionId, {
-            id: collectionId,
-            name: collectionMeta?.name ?? collectionId,
-            image: collectionMeta?.image ?? null,
-            count: 1,
-          })
-        }
-      }
-    }
-
-    hasMore = response.items.length === 1000
-    page++
-
-    if (page > 10) break
+  // Process first page
+  for (const item of firstResponse.items) {
+    const asset = processItem(item as CoreAsset, collectionsMap)
+    if (asset) allAssets.push(asset)
   }
 
+  // Calculate remaining pages and fetch in parallel
+  const totalPages = Math.ceil(grandTotal / PAGE_SIZE)
+
+  if (totalPages > 1) {
+    console.log(`[DAS] Fetching pages 2-${totalPages} in parallel`)
+    const pagePromises: Promise<GetAssetResponseList>[] = []
+    for (let page = 2; page <= totalPages; page++) {
+      pagePromises.push(
+        rpc
+          .getAssetsByOwner({
+            ownerAddress: wallet,
+            page,
+            limit: PAGE_SIZE,
+            displayOptions: {
+              showCollectionMetadata: true,
+              showFungible: false,
+              showNativeBalance: false,
+              showGrandTotal: true,
+            },
+          })
+          .send()
+      )
+    }
+
+    const responses = await Promise.all(pagePromises)
+    for (const response of responses) {
+      for (const item of response.items) {
+        const asset = processItem(item as CoreAsset, collectionsMap)
+        if (asset) allAssets.push(asset)
+      }
+    }
+  }
+
+  console.log(`[DAS] Final: ${allAssets.length} NFTs, ${collectionsMap.size} collections`)
   return {
     assets: allAssets,
     collections: Array.from(collectionsMap.values()),

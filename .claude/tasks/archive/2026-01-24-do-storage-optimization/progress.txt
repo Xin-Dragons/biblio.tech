@@ -1,0 +1,153 @@
+# Ralph Progress Log
+# Feature: do-storage-optimization
+# Started: 2026-01-24
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**DRIZZLE DO PATTERNS TO FOLLOW:**
+- apps/api/src/dos/nft-cache/ — Complete example of Drizzle-based DO
+- apps/api/src/dos/stake-records/ — Another Drizzle-based DO example
+- apps/api/src/dos/staker-settings/ — Simpler Drizzle-based DO example
+
+**KEY FILES:**
+- db/schema.ts — Drizzle schema with sqliteTable, text, integer, index, primaryKey
+- db/types.ts — Inferred types using $inferSelect and $inferInsert
+- db/drizzle.config.ts — Config for drizzle-kit generate
+- db/index.ts — Exports for schema and types
+- db/migrations/migrations.js — Migration bundle for runtime
+- index.ts — DO class with Drizzle setup
+
+**DO CONSTRUCTOR PATTERN:**
+```typescript
+constructor(ctx: DurableObjectState, env: Env) {
+  super(ctx, env)
+  this.db = drizzle(ctx.storage, { schema })
+
+  void this.ctx.blockConcurrencyWhile(async () => {
+    try {
+      await migrate(this.db, migrations)
+    } catch (err) {
+      console.error("[DOName] Migration failed:", err)
+    }
+  })
+}
+```
+
+**EXISTING USER.TS API (must maintain):**
+- GET/POST /tags, PATCH/DELETE /tags/:id
+- GET /tagged, PUT/DELETE /tagged/:tagId
+- GET /starred, PUT/DELETE /starred
+- GET/PUT /preferences
+- GET/PUT /order/:context
+- GET/PUT /sizes/:context
+- GET/PUT /layout/:context
+- GET/POST /wallets, DELETE /wallets/:publicKey
+- GET/PUT /dandies
+- GET/PUT/DELETE /username
+- GET/PUT /showcase
+
+**VALIDATION PATTERN:**
+- Use `count()` from drizzle-orm for row counting
+- Create ValidationError class for validation failures
+- Return 400 status with error message for validation errors
+- Validate BEFORE operations to prevent partial writes
+
+---
+
+## 2026-01-24 - US-001
+- Implemented: Created user/db directory with complete Drizzle schema
+- Files changed:
+  - apps/api/src/dos/user/db/schema.ts (new) - 9 tables: tags, taggedNfts, starred, nftOrder, nftSizes, nftLayout, preferences, wallets, meta
+  - apps/api/src/dos/user/db/types.ts (new) - Inferred types for all tables
+  - apps/api/src/dos/user/db/drizzle.config.ts (new) - drizzle-kit config
+  - apps/api/src/dos/user/db/index.ts (new) - Exports
+- **Learnings for future iterations:**
+  - Schema follows nft-cache pattern exactly
+  - Tables with composite keys use primaryKey({ columns: [...] }) syntax
+  - Index creation uses array return from table callback: (table) => [index(...)]
+  - Boolean columns use integer with { mode: "boolean" }
+  - JSON data stored in meta table as text value (serialized)
+---
+
+## 2026-01-24 - US-002
+- Implemented: Generated SQL migration for user schema using drizzle-kit
+- Files changed:
+  - apps/api/src/dos/user/db/migrations/0000_initial.sql (new) - Creates all 9 tables with proper indexes
+  - apps/api/src/dos/user/db/migrations/migrations.js (new) - Migration bundle for runtime
+  - apps/api/src/dos/user/db/migrations/migrations.d.ts (new) - Type declarations
+  - apps/api/src/dos/user/db/migrations/meta/_journal.json (new) - Migration journal
+  - apps/api/src/dos/user/db/migrations/meta/0000_snapshot.json (new) - Schema snapshot
+- **Learnings for future iterations:**
+  - drizzle-kit generates migration with random name (e.g., 0000_cloudy_boomerang.sql), rename to 0000_initial.sql
+  - Must update both _journal.json tag field AND migrations.js import to match the renamed file
+  - Migration creates: meta, nft_layout, nft_order, nft_sizes, preferences, starred, tagged_nfts, tags, wallets
+  - Indexes created for composite key tables: idx_nft_layout_context, idx_nft_order_context, idx_nft_sizes_context, idx_tagged_nfts_tag
+---
+
+## 2026-01-24 - US-003
+- Implemented: Created UserDO class with Drizzle and tags/tagged functionality
+- Files changed:
+  - apps/api/src/dos/user/index.ts (new) - UserDO class with Drizzle setup and tag/tagged endpoints
+- **Learnings for future iterations:**
+  - Use `eq` and `and` from drizzle-orm for WHERE clauses
+  - Use `onConflictDoNothing()` for upsert-like behavior on composite primary keys
+  - Return mapped response objects, not raw database rows, to maintain API compatibility
+  - Delete related records (taggedNfts) before deleting parent (tags) to maintain referential integrity
+---
+
+## 2026-01-24 - US-004
+- Implemented: Added starred and custom display endpoints (order, sizes, layout) to UserDO
+- Files changed:
+  - apps/api/src/dos/user/index.ts (modified) - Added starred, order, sizes, layout methods and HTTP handlers
+- **Learnings for future iterations:**
+  - For context-based tables (order, sizes, layout), delete all existing rows for context before inserting new ones
+  - Layout items use `i` field for mint in API but `mint` column in database - map between them
+  - Order is stored as Record<string, number> in API but as individual rows (context, mint, position) in DB
+  - Sizes is stored as Record<string, string> in API but as individual rows (context, mint, size) in DB
+---
+
+## 2026-01-24 - US-005
+- Implemented: Added preferences, wallets, and meta endpoints to UserDO, deleted old user.ts
+- Files changed:
+  - apps/api/src/dos/user/index.ts (modified) - Added Preferences, Wallet, ShowcaseConfig interfaces; preferences/wallets/dandies/username/showcase methods and HTTP handlers
+  - apps/api/src/dos/user.ts (deleted) - Old non-Drizzle UserDO implementation removed
+- **Learnings for future iterations:**
+  - Preferences table uses context as primary key with individual columns for each preference field
+  - Wallets table uses publicKey as primary key, nickname is nullable (map null to undefined in API response)
+  - Meta table is a simple key-value store - store JSON strings for complex values (dandies, showcase)
+  - For upsert pattern on single primary key, check if exists then update or insert (no onConflictDoNothing since we want to update)
+  - Import paths resolve automatically: `./dos/user` now resolves to `./dos/user/index.ts` after deleting old file
+---
+
+## 2026-01-24 - US-006
+- Implemented: Added input validation to UserDO to prevent data pollution and abuse
+- Files changed:
+  - apps/api/src/dos/user/index.ts (modified) - Added LIMITS constant, CONTEXT_REGEX, ValidationError class, and validation logic
+- **Learnings for future iterations:**
+  - Use `count()` from drizzle-orm for counting rows: `const [result] = await db.select({ count: count() }).from(table)`
+  - Create a custom ValidationError class to distinguish validation errors from other errors
+  - Check for ValidationError in fetch handler and return 400 status with error message
+  - Context validation: use regex `/^[a-zA-Z0-9_-]+$/` to allow only safe characters
+  - Validate limits BEFORE the operation to prevent partial writes (e.g., check tag count before inserting new tag)
+---
+
+## 2026-01-24 - US-007
+- Implemented: Fixed VotingDO unbounded growth by removing votes array
+- Files changed:
+  - apps/api/src/dos/voting.ts (modified) - Removed VoteRecord interface, simplified ShowcaseVotes to only have total
+- **Learnings for future iterations:**
+  - Unbounded growth in DOs is a common anti-pattern - arrays that grow forever with every operation
+  - If you only need a count, store only the count - don't store individual records
+  - The fix was simple: change `{ total: 0, votes: [] }` to `{ total: 0 }` and remove the push
+---
+
+## 2026-01-24 - US-008
+- Implemented: Removed debug logging from RpcWebSocketDO for clean production logs
+- Files changed:
+  - apps/api/src/dos/rpc-websocket.ts (modified) - Removed all console.log calls, kept console.error for actual errors
+- **Learnings for future iterations:**
+  - Debug logging is useful during development but creates noise in production
+  - Keep console.error for actual error conditions that need attention
+  - WebSocket proxy code doesn't need verbose logging once it's working correctly
+---
+

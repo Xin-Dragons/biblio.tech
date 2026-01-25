@@ -1,12 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSetAtom, useAtomValue } from "jotai"
-import { atom } from "jotai"
 import { getWallets } from "@wallet-standard/app"
 import toast from "react-hot-toast"
 import { linkWalletAtom, fetchLinkedWalletsAtom, linkedWalletsAtom } from "@/stores/linked-wallets"
 import { sessionAtom, connectedWalletAtom } from "@/stores/auth"
-
-export const isLinkingWalletAtom = atom<boolean>(false)
+import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 
 const POLL_INTERVAL = 500
 const LINK_TIMEOUT = 120000 // 2 minutes
@@ -83,10 +81,8 @@ async function detectAccountChange(
 
   const providers = getWalletProviders()
   const connectedProvider = providers.find((p) => p.name.toLowerCase() === connectedWalletName.toLowerCase())
-
   if (!connectedProvider) return null
 
-  // Use reliable connect method for Phantom (publicKey property doesn't update on account switch)
   const isPhantom = connectedProvider.name.toLowerCase() === "phantom"
   const address = isPhantom ? await getPhantomAccount() : getAddressFromProvider(connectedProvider.provider)
 
@@ -118,6 +114,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const linkWallet = useSetAtom(linkWalletAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
+  const setSkipAuthWalletSwitch = useSetAtom(skipAuthWalletSwitchAtom)
 
   const linkedAddresses = linkedWallets.map((w) => w.publicKey)
   const connectedWalletName = connectedWallet?.name ?? null
@@ -128,7 +125,8 @@ export function useWalletLinking(): UseWalletLinkingResult {
     abortControllerRef.current = null
     setIsWatching(false)
     setDetectedWallet(null)
-  }, [])
+    setSkipAuthWalletSwitch(false)
+  }, [setSkipAuthWalletSwitch])
 
   useEffect(() => {
     return () => {
@@ -147,6 +145,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
     setIsWatching(true)
     setDetectedWallet(null)
+    setSkipAuthWalletSwitch(true)
 
     const signal = abortControllerRef.current.signal
     const startTime = Date.now()
@@ -170,7 +169,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
     }
 
     poll()
-  }, [session?.wallet, connectedWalletName, linkedAddresses, cancelWatching])
+  }, [session?.wallet, connectedWalletName, linkedAddresses, cancelWatching, setSkipAuthWalletSwitch])
 
   const connectOtherWallet = useCallback(
     async (wallet: InstalledWallet) => {
@@ -275,9 +274,10 @@ export function useWalletLinking(): UseWalletLinkingResult {
         setIsWatching(false)
         setDetectedWallet(null)
         abortControllerRef.current = null
+        setSkipAuthWalletSwitch(false)
       }
     },
-    [session?.token, detectedWallet, linkWallet, fetchLinkedWallets]
+    [session?.token, detectedWallet, linkWallet, fetchLinkedWallets, setSkipAuthWalletSwitch]
   )
 
   return {

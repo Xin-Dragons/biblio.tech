@@ -1,0 +1,138 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/do-storage-optimization",
+  "description": "Durable Object Storage Optimization - Migrate UserDO to SQL, fix VotingDO unbounded growth, add input validation",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create user/db directory with Drizzle schema",
+      "description": "As a developer, I need the database schema structure for the new UserDO.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/dos/user/db/schema.ts with all tables: tags, taggedNfts, starred, nftOrder, nftSizes, nftLayout, preferences, wallets, meta",
+        "Each table has proper primary keys and indexes as specified in PRD",
+        "Create apps/api/src/dos/user/db/types.ts with inferred types for all tables",
+        "Create apps/api/src/dos/user/db/drizzle.config.ts following nft-cache pattern",
+        "Create apps/api/src/dos/user/db/index.ts exporting schema and types",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Generate user migration",
+      "description": "As a developer, I need the SQL migration for the user schema.",
+      "acceptanceCriteria": [
+        "Run drizzle-kit generate for user schema",
+        "Migration file created at apps/api/src/dos/user/db/migrations/0000_initial.sql",
+        "Create migrations.js and migrations.d.ts following nft-cache pattern",
+        "Migration creates all 9 tables with correct columns and indexes",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Create UserDO with tags and tagged endpoints",
+      "description": "As a developer, I need the UserDO class with Drizzle and tags/tagged functionality.",
+      "acceptanceCriteria": [
+        "Create apps/api/src/dos/user/index.ts",
+        "UserDO class extends DurableObject with Drizzle setup in constructor",
+        "Run migration in blockConcurrencyWhile following existing patterns",
+        "Implement getTags, addTag, updateTag, deleteTag methods using Drizzle",
+        "Implement getTaggedNfts, getAllTaggedNfts, addNftsToTag, removeNftsFromTag methods",
+        "Implement HTTP handlers for /tags and /tagged/* routes",
+        "Same API signatures as existing user.ts",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add starred and custom display endpoints to UserDO",
+      "description": "As a developer, I need starred, order, sizes, and layout functionality in UserDO.",
+      "acceptanceCriteria": [
+        "Implement getStarred, addToStarred, removeFromStarred methods using starred table",
+        "Implement getOrder, setOrder methods using nftOrder table",
+        "Implement getSizes, setSizes methods using nftSizes table",
+        "Implement getLayout, setLayout methods using nftLayout table",
+        "Implement HTTP handlers for /starred, /order/*, /sizes/*, /layout/* routes",
+        "Same API signatures as existing user.ts",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add preferences, wallets, and meta endpoints to UserDO",
+      "description": "As a developer, I need remaining UserDO functionality and cleanup of old file.",
+      "acceptanceCriteria": [
+        "Implement getPreferences, setPreferences methods using preferences table",
+        "Implement getWallets, addWallet, removeWallet methods using wallets table",
+        "Implement getDandies, setDandies methods using meta table (JSON value)",
+        "Implement getUsername, setUsername, clearUsername methods using meta table",
+        "Implement getShowcase, setShowcase methods using meta table (JSON value)",
+        "Implement HTTP handlers for /preferences, /wallets, /dandies, /username, /showcase routes",
+        "Delete apps/api/src/dos/user.ts (old file)",
+        "Same API signatures as existing user.ts",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add input validation to UserDO",
+      "description": "As a developer, I need input validation to prevent data pollution and abuse.",
+      "acceptanceCriteria": [
+        "Add LIMITS constant with MAX_TAGS=100, MAX_TAG_NAME=50, MAX_CONTEXT=100, MAX_STARRED=5000, MAX_TAGGED_PER_TAG=5000, MAX_WALLETS=20",
+        "Add CONTEXT_REGEX for validating context strings",
+        "Validate tag name and color length in addTag/updateTag",
+        "Validate context format in all context-based operations",
+        "Enforce limits: return 400 error when limit exceeded",
+        "All validation errors return Response with status 400 and error message",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Fix VotingDO unbounded growth",
+      "description": "As a developer, I need to remove the votes array that grows forever.",
+      "acceptanceCriteria": [
+        "In apps/api/src/dos/voting.ts, remove VoteRecord interface",
+        "Change ShowcaseVotes interface to only have total: number",
+        "Update vote() method to only increment total, not push to votes array",
+        "Remove votes array from storage operations",
+        "All existing endpoints still work (vote, getShowcaseVotes, getRemainingVotes, getLeaderboard)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Remove debug logging from RpcWebSocketDO",
+      "description": "As a developer, I want clean production logs without debug noise.",
+      "acceptanceCriteria": [
+        "Remove all console.log calls from apps/api/src/dos/rpc-websocket.ts",
+        "Keep console.error calls for actual errors",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

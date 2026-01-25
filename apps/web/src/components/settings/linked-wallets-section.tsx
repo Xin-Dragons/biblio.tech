@@ -5,7 +5,7 @@ import { Wallet, Plus, Trash2, Crown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LinkWalletDialog } from "./link-wallet-dialog"
 import { UnlinkWalletDialog } from "./unlink-wallet-dialog"
-import { isLinkingWalletAtom } from "@/hooks/use-wallet-linking"
+import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 import type { LinkedWallet } from "@/stores/linked-wallets"
 
 interface LinkedWalletsSectionProps {
@@ -21,16 +21,16 @@ export function LinkedWalletsSection({ wallets, isLoading }: LinkedWalletsSectio
   const { account } = useWallet()
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [unlinkWallet, setUnlinkWallet] = useState<LinkedWallet | null>(null)
-  const setIsLinkingWallet = useSetAtom(isLinkingWalletAtom)
+  const setSkipAuthWalletSwitch = useSetAtom(skipAuthWalletSwitchAtom)
 
   const handleOpenLinkDialog = () => {
-    setIsLinkingWallet(true)
+    setSkipAuthWalletSwitch(true)
     setLinkDialogOpen(true)
   }
 
   const handleCloseLinkDialog = (open: boolean) => {
     if (!open) {
-      setIsLinkingWallet(false)
+      setSkipAuthWalletSwitch(false)
     }
     setLinkDialogOpen(open)
   }

@@ -51,7 +51,7 @@ export async function simulateTransaction(
       jsonrpc: "2.0",
       id: crypto.randomUUID(),
       method: "simulateTransaction",
-      params: [encodedTransaction, { encoding: "base64" }],
+      params: [encodedTransaction, { encoding: "base64", sigVerify: false }],
     }),
   })
   const data = (await response.json()) as {
@@ -219,7 +219,7 @@ export async function confirmTransactionViaWebSocket(
       return
     }
 
-    console.log("[WS] Notification iterator ended without confirmation")
+    throw new Error("Transaction confirmation failed: no confirmation received")
   } catch (err) {
     console.error("[WS] Error:", err)
     if (abortController.signal.aborted) {

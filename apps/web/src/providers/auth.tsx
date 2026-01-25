@@ -1,10 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useRef, useCallback, type ReactNode } from "react"
 import { useWallet, useTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { getWallets } from "@wallet-standard/app"
 import { useAtomValue, useSetAtom } from "jotai"
 import { sessionAtom, signInAtom, signOutAtom, explicitlySignedOutAtom, connectedWalletAtom } from "@/stores/auth"
 import { clearLinkedWalletsAtom, linkedWalletsAtom } from "@/stores/linked-wallets"
-import { isLinkingWalletAtom } from "@/hooks/use-wallet-linking"
+import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 
 interface AuthProviderProps {
   children: ReactNode
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const { signer, capabilities } = useTransactionSigner()
   const session = useAtomValue(sessionAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
-  const isLinkingWallet = useAtomValue(isLinkingWalletAtom)
+  const skipWalletSwitch = useAtomValue(skipAuthWalletSwitchAtom)
   const connectedWallet = useAtomValue(connectedWalletAtom)
   const explicitlySignedOut = useAtomValue(explicitlySignedOutAtom)
   const setExplicitlySignedOut = useSetAtom(explicitlySignedOutAtom)
@@ -52,15 +52,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const { connect } = useConnectWallet()
   const signingInRef = useRef(false)
   const wasConnectedRef = useRef(false)
+  const switchingToLinkedWalletRef = useRef(false)
+
+  const handleWalletSwitch = useCallback(
+    async (newAccount: string, walletId: WalletConnectorId) => {
+      const isLinked = linkedWallets.some((w) => w.publicKey === newAccount)
+
+      if (isLinked) {
+        switchingToLinkedWalletRef.current = true
+        await disconnect()
+        await connect(walletId)
+      } else {
+        clearLinkedWallets()
+        signOut()
+        await disconnect()
+        await connect(walletId)
+      }
+    },
+    [linkedWallets, disconnect, connect, clearLinkedWallets, signOut]
+  )
 
   // Listen to Wallet Standard events for account changes (only for connected wallet)
   useEffect(() => {
-    if (!session?.wallet || isLinkingWallet || !isConnected) return
+    if (!session?.wallet || skipWalletSwitch || !isConnected) return
 
     const { get } = getWallets()
     const wallets = get()
 
-    // Find the wallet that contains the session wallet
     const connectedWallet = wallets.find((w) => w.accounts.some((a) => a.address === session.wallet))
     if (!connectedWallet) return
 
@@ -70,28 +88,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const accounts = freshWallet?.accounts ?? []
       const walletId = `wallet-standard:${connectedWallet.name.toLowerCase().replace(/\s+/g, "-")}` as WalletConnectorId
 
-      // If accounts is empty, check injected provider directly (Solflare clears accounts on switch)
       if (accounts.length === 0) {
         if (connectedWallet.name.toLowerCase() === "solflare") {
           const solflareAccount = await getSolflareAccount()
           if (solflareAccount && solflareAccount !== session.wallet) {
-            clearLinkedWallets()
-            signOut()
-            await disconnect()
-            await connect(walletId)
+            await handleWalletSwitch(solflareAccount, walletId)
             return
           }
         }
-        // No fallback available - sign out
         clearLinkedWallets()
         signOut()
         await disconnect()
         return
       }
 
-      // Check if session wallet is still in this wallet's accounts
       const hasSessionWallet = accounts.some((a) => a.address === session.wallet)
-      if (!hasSessionWallet) {
+      const linkedAccount = accounts.find((a) => linkedWallets.some((w) => w.publicKey === a.address))
+
+      if (hasSessionWallet) return
+
+      if (linkedAccount) {
+        await handleWalletSwitch(linkedAccount.address, walletId)
+      } else {
         clearLinkedWallets()
         signOut()
         await disconnect()
@@ -107,40 +125,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const unsub = eventsFeature.on("change", handleAccountChange)
     return () => unsub()
-  }, [session?.wallet, isLinkingWallet, isConnected, clearLinkedWallets, signOut, disconnect, connect])
+  }, [
+    session?.wallet,
+    skipWalletSwitch,
+    isConnected,
+    linkedWallets,
+    clearLinkedWallets,
+    signOut,
+    disconnect,
+    connect,
+    handleWalletSwitch,
+  ])
 
   // Polling fallback for Phantom (doesn't properly emit Wallet Standard change events)
+  // When signed in: detect switches to handle linked wallet logic
+  // When signed out: detect account changes to trigger sign-in prompt
   useEffect(() => {
-    if (!session?.wallet) return
-
-    const { get } = getWallets()
-    const wallets = get()
-    const phantomWallet = wallets.find((w) => w.name.toLowerCase() === "phantom")
-    const isPhantomSession = phantomWallet?.accounts.some((a) => a.address === session.wallet) ?? false
-
-    if (!isPhantomSession) return
+    if (skipWalletSwitch) return
+    const isPhantomConnected = connectedWallet?.name?.toLowerCase() === "phantom"
+    if (!isPhantomConnected) return
 
     const checkPhantomAccount = async () => {
       const phantomAccount = await getPhantomAccount()
-      if (phantomAccount && phantomAccount !== session.wallet) {
-        // Only action if current wallet is Phantom AND not in linking mode
-        const isCurrentWalletPhantom = connectedWallet?.name?.toLowerCase() === "phantom"
-        if (isCurrentWalletPhantom && !isLinkingWallet) {
-          clearLinkedWallets()
-          signOut()
-          await disconnect()
-          await connect("wallet-standard:phantom" as WalletConnectorId)
-        }
+      if (!phantomAccount || phantomAccount === account) return
+
+      if (session?.wallet) {
+        // Signed in - use wallet switch logic
+        await handleWalletSwitch(phantomAccount, "wallet-standard:phantom" as WalletConnectorId)
+      } else {
+        // Not signed in - just reconnect to trigger sign-in flow
+        await disconnect()
+        await connect("wallet-standard:phantom" as WalletConnectorId)
       }
     }
 
     const interval = setInterval(checkPhantomAccount, 2000)
     return () => clearInterval(interval)
-  }, [session?.wallet, isLinkingWallet, connectedWallet, clearLinkedWallets, signOut, disconnect, connect])
+  }, [session?.wallet, account, skipWalletSwitch, connectedWallet, handleWalletSwitch, disconnect, connect])
 
   // Main auth flow
   useEffect(() => {
-    if (isLinkingWallet) return
+    if (skipWalletSwitch) return
 
     if (isConnected) {
       wasConnectedRef.current = true
@@ -149,6 +174,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Handle disconnect - clear explicit sign out flag
     if (status === "disconnected" && wasConnectedRef.current) {
       wasConnectedRef.current = false
+      // Don't sign out if we're just switching to a linked wallet
+      if (switchingToLinkedWalletRef.current) {
+        switchingToLinkedWalletRef.current = false
+        return
+      }
       setExplicitlySignedOut(false)
       clearLinkedWallets()
       signOut()
@@ -201,7 +231,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     status,
     session,
     linkedWallets,
-    isLinkingWallet,
+    skipWalletSwitch,
     explicitlySignedOut,
     signIn,
     signOut,

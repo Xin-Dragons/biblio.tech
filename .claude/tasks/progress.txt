@@ -1,50 +1,70 @@
 # Ralph Progress Log
-# Feature: do-storage-optimization
-# Started: 2026-01-24
+# Feature: nft-lock-state-detection
+# Started: 2026-01-25
 
 ## Codebase Patterns - IMPORTANT EXISTING CODE
 
-**DRIZZLE DO PATTERNS TO FOLLOW:**
-- apps/api/src/dos/nft-cache/ — Complete example of Drizzle-based DO
-- apps/api/src/dos/stake-records/ — Another Drizzle-based DO example
-- apps/api/src/dos/staker-settings/ — Simpler Drizzle-based DO example
+**EXISTING PATTERNS TO REUSE:**
+- apps/web/src/lib/vault-transactions.ts — Has getTokenRecordPda() implementation
+- apps/api/src/services/nifty.ts — Uses getMultipleAccounts batch pattern (chunks of 100)
+- apps/api/src/services/das.ts — Main DAS service, processItem() function
+- packages/solana-programs/src/generated/token-metadata/accounts/tokenRecord.ts — Generated decoder
 
-**KEY FILES:**
-- db/schema.ts — Drizzle schema with sqliteTable, text, integer, index, primaryKey
-- db/types.ts — Inferred types using $inferSelect and $inferInsert
-- db/drizzle.config.ts — Config for drizzle-kit generate
-- db/index.ts — Exports for schema and types
-- db/migrations/migrations.js — Migration bundle for runtime
-- index.ts — DO class with Drizzle setup
-
-**DO CONSTRUCTOR PATTERN:**
+**PDA DERIVATION PATTERN (from vault-transactions.ts):**
 ```typescript
-constructor(ctx: DurableObjectState, env: Env) {
-  super(ctx, env)
-  this.db = drizzle(ctx.storage, { schema })
+import { getProgramDerivedAddress, getAddressEncoder } from "@solana/kit"
 
-  void this.ctx.blockConcurrencyWhile(async () => {
-    try {
-      await migrate(this.db, migrations)
-    } catch (err) {
-      console.error("[DOName] Migration failed:", err)
-    }
+const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+
+async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
   })
+  return pda
 }
 ```
 
-**EXISTING USER.TS API (must maintain):**
-- GET/POST /tags, PATCH/DELETE /tags/:id
-- GET /tagged, PUT/DELETE /tagged/:tagId
-- GET /starred, PUT/DELETE /starred
-- GET/PUT /preferences
-- GET/PUT /order/:context
-- GET/PUT /sizes/:context
-- GET/PUT /layout/:context
-- GET/POST /wallets, DELETE /wallets/:publicKey
-- GET/PUT /dandies
-- GET/PUT/DELETE /username
-- GET/PUT /showcase
+**BATCH FETCH PATTERN (from nifty.ts:464-467):**
+```typescript
+const BATCH_SIZE = 1000
+for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
+  const batch = addresses.slice(i, i + BATCH_SIZE) as Address[]
+  const response = await rpc.getMultipleAccounts(batch, { encoding: "base64" }).send()
+  // Process response.value
+}
+```
+
+**TOKEN RECORD DECODING (from generated SDK):**
+```typescript
+import { decodeTokenRecord, TokenState } from "@biblio/solana-programs"
+import { getBase64Encoder } from "@solana/kit"
+
+const base64Encoder = getBase64Encoder()
+// For each account in response.value:
+const [dataBase64] = accountInfo.data
+const rawData = base64Encoder.encode(dataBase64)
+const decoded = decodeTokenRecord({ data: new Uint8Array(rawData), address, ... })
+const frozen = decoded.data.state === TokenState.Locked
+```
+
+**ATA DERIVATION:**
+```typescript
+import { getAssociatedTokenAddressSync } from "@solana/spl-token"
+// Or use @solana/kit pattern with getProgramDerivedAddress
+```
+
+**KEY FILES:**
+- apps/api/src/services/das.ts — Add enrichment here
+- apps/api/src/routes/nfts.ts — Add single NFT endpoint
+- apps/web/src/stores/nfts.ts — Add refetchNftAtom
+- apps/web/src/components/vault/UnvaultDialog.tsx — Call refetch after unvault
 
 ---
 

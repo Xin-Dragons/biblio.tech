@@ -4,7 +4,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { useEffect } from "react"
 import { Settings, Wallet, Shield, Link2, LogIn, Loader2 } from "lucide-react"
 import { sessionAtom, signInAtom, explicitlySignedOutAtom } from "@/stores/auth"
-import { isLinkingWalletAtom } from "@/hooks/use-wallet-linking"
+import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 import { fetchLinkedWalletsAtom, linkedWalletsAtom, linkedWalletsLoadingAtom } from "@/stores/linked-wallets"
 import { LinkedWalletsSection } from "@/components/settings/linked-wallets-section"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,7 @@ export function SettingsPage() {
   const session = useAtomValue(sessionAtom)
   const signIn = useSetAtom(signInAtom)
   const setExplicitlySignedOut = useSetAtom(explicitlySignedOutAtom)
-  const isLinkingWallet = useAtomValue(isLinkingWalletAtom)
+  const skipWalletSwitch = useAtomValue(skipAuthWalletSwitchAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const isLoading = useAtomValue(linkedWalletsLoadingAtom)
@@ -46,7 +46,7 @@ export function SettingsPage() {
     }
   }, [isSessionValid, fetchLinkedWallets])
 
-  if ((!isConnected || !isSessionValid) && !isLinkingWallet) {
+  if ((!isConnected || !isSessionValid) && !skipWalletSwitch) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center animate-fade-up">

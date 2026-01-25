@@ -1,18 +1,17 @@
 {
   "project": "Biblio",
-  "branchName": "ralph/do-storage-optimization",
-  "description": "Durable Object Storage Optimization - Migrate UserDO to SQL, fix VotingDO unbounded growth, add input validation",
+  "branchName": "ralph/nft-lock-state-detection",
+  "description": "NFT Lock State Detection - Fix inaccurate lock state for pNFTs by fetching Token Record accounts on backend",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create user/db directory with Drizzle schema",
-      "description": "As a developer, I need the database schema structure for the new UserDO.",
+      "title": "Add Token Record PDA derivation to DAS service",
+      "description": "As a developer, I need Token Record PDA derivation on the backend to fetch pNFT lock state.",
       "acceptanceCriteria": [
-        "Create apps/api/src/dos/user/db/schema.ts with all tables: tags, taggedNfts, starred, nftOrder, nftSizes, nftLayout, preferences, wallets, meta",
-        "Each table has proper primary keys and indexes as specified in PRD",
-        "Create apps/api/src/dos/user/db/types.ts with inferred types for all tables",
-        "Create apps/api/src/dos/user/db/drizzle.config.ts following nft-cache pattern",
-        "Create apps/api/src/dos/user/db/index.ts exporting schema and types",
+        "Add TOKEN_METADATA_PROGRAM_ADDRESS constant to das.ts (reuse from vault-transactions.ts pattern)",
+        "Add getTokenRecordPda(mint, tokenAccount) function using getProgramDerivedAddress from @solana/kit",
+        "Add getAssociatedTokenAddress(mint, owner) helper to derive ATA for token account",
+        "Seeds for Token Record: ['metadata', programId, mint, 'token_record', tokenAccount]",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -21,13 +20,16 @@
     },
     {
       "id": "US-002",
-      "title": "Generate user migration",
-      "description": "As a developer, I need the SQL migration for the user schema.",
+      "title": "Implement pNFT lock state enrichment",
+      "description": "As a user, I want pNFTs to show accurate lock state based on Token Record.",
       "acceptanceCriteria": [
-        "Run drizzle-kit generate for user schema",
-        "Migration file created at apps/api/src/dos/user/db/migrations/0000_initial.sql",
-        "Create migrations.js and migrations.d.ts following nft-cache pattern",
-        "Migration creates all 9 tables with correct columns and indexes",
+        "After processItem loop, collect all pNFTs (tokenStandard === 'ProgrammableNonFungible')",
+        "For each pNFT, derive Token Record PDA using getTokenRecordPda(mint, ata)",
+        "Batch fetch Token Records using rpc.getMultipleAccounts with chunks of 1000",
+        "Import decodeTokenRecord from @biblio/solana-programs and TokenState enum",
+        "Decode each account and check state: frozen = (tokenRecord.state === TokenState.Locked)",
+        "Update the asset's frozen field with the decoded value",
+        "Handle missing Token Records gracefully (account may not exist for unlocked pNFTs)",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -36,16 +38,15 @@
     },
     {
       "id": "US-003",
-      "title": "Create UserDO with tags and tagged endpoints",
-      "description": "As a developer, I need the UserDO class with Drizzle and tags/tagged functionality.",
+      "title": "Create single NFT fetch endpoint",
+      "description": "As a developer, I need an endpoint to refetch a single NFT with updated lock state.",
       "acceptanceCriteria": [
-        "Create apps/api/src/dos/user/index.ts",
-        "UserDO class extends DurableObject with Drizzle setup in constructor",
-        "Run migration in blockConcurrencyWhile following existing patterns",
-        "Implement getTags, addTag, updateTag, deleteTag methods using Drizzle",
-        "Implement getTaggedNfts, getAllTaggedNfts, addNftsToTag, removeNftsFromTag methods",
-        "Implement HTTP handlers for /tags and /tagged/* routes",
-        "Same API signatures as existing user.ts",
+        "Add GET /nfts/:mint route to apps/api/src/routes/nfts.ts",
+        "Use rpc.getAsset({ id: mint }) to fetch single asset from Helius DAS",
+        "Process with processItem() to get DASAsset shape",
+        "For pNFTs, fetch Token Record and enrich lock state (extract shared helper from getAssetsByOwner)",
+        "Return same DASAsset shape as bulk fetch endpoints",
+        "Return 404 if asset not found",
         "Typecheck passes"
       ],
       "priority": 3,
@@ -54,15 +55,14 @@
     },
     {
       "id": "US-004",
-      "title": "Add starred and custom display endpoints to UserDO",
-      "description": "As a developer, I need starred, order, sizes, and layout functionality in UserDO.",
+      "title": "Add refetch action to NFT store",
+      "description": "As a developer, I need a store action to refetch and update a single NFT.",
       "acceptanceCriteria": [
-        "Implement getStarred, addToStarred, removeFromStarred methods using starred table",
-        "Implement getOrder, setOrder methods using nftOrder table",
-        "Implement getSizes, setSizes methods using nftSizes table",
-        "Implement getLayout, setLayout methods using nftLayout table",
-        "Implement HTTP handlers for /starred, /order/*, /sizes/*, /layout/* routes",
-        "Same API signatures as existing user.ts",
+        "Add refetchNftAtom write atom to apps/web/src/stores/nfts.ts",
+        "Action takes mint address as parameter",
+        "Calls GET /api/nfts/:mint endpoint",
+        "Updates the NFT in nftsAtom array with fresh data",
+        "If NFT not found in local array, ignore (don't add)",
         "Typecheck passes"
       ],
       "priority": 4,
@@ -71,17 +71,13 @@
     },
     {
       "id": "US-005",
-      "title": "Add preferences, wallets, and meta endpoints to UserDO",
-      "description": "As a developer, I need remaining UserDO functionality and cleanup of old file.",
+      "title": "Call refetch after successful unvault",
+      "description": "As a user, when I unvault an NFT, it should stay removed from vault view.",
       "acceptanceCriteria": [
-        "Implement getPreferences, setPreferences methods using preferences table",
-        "Implement getWallets, addWallet, removeWallet methods using wallets table",
-        "Implement getDandies, setDandies methods using meta table (JSON value)",
-        "Implement getUsername, setUsername, clearUsername methods using meta table",
-        "Implement getShowcase, setShowcase methods using meta table (JSON value)",
-        "Implement HTTP handlers for /preferences, /wallets, /dandies, /username, /showcase routes",
-        "Delete apps/api/src/dos/user.ts (old file)",
-        "Same API signatures as existing user.ts",
+        "In UnvaultDialog.tsx after successful signWithMultipleWallets, call refetchNft for each unvaulted mint",
+        "Refetch happens after removeVaultedMints call",
+        "Refetched NFT data has frozen: false, preventing re-detection as vaulted",
+        "NFT no longer reappears in vault view after unvault",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -90,47 +86,17 @@
     },
     {
       "id": "US-006",
-      "title": "Add input validation to UserDO",
-      "description": "As a developer, I need input validation to prevent data pollution and abuse.",
+      "title": "Extract enrichLockState helper for reuse",
+      "description": "As a developer, I want lock state enrichment logic shared between bulk and single fetch.",
       "acceptanceCriteria": [
-        "Add LIMITS constant with MAX_TAGS=100, MAX_TAG_NAME=50, MAX_CONTEXT=100, MAX_STARRED=5000, MAX_TAGGED_PER_TAG=5000, MAX_WALLETS=20",
-        "Add CONTEXT_REGEX for validating context strings",
-        "Validate tag name and color length in addTag/updateTag",
-        "Validate context format in all context-based operations",
-        "Enforce limits: return 400 error when limit exceeded",
-        "All validation errors return Response with status 400 and error message",
+        "Create enrichPnftLockState(rpc, assets) helper function in das.ts",
+        "Takes RPC client and array of DASAssets",
+        "Filters to pNFTs, fetches Token Records, updates frozen field in place",
+        "Use this helper in both getAssetsByOwner and single NFT endpoint",
+        "Avoids code duplication",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-007",
-      "title": "Fix VotingDO unbounded growth",
-      "description": "As a developer, I need to remove the votes array that grows forever.",
-      "acceptanceCriteria": [
-        "In apps/api/src/dos/voting.ts, remove VoteRecord interface",
-        "Change ShowcaseVotes interface to only have total: number",
-        "Update vote() method to only increment total, not push to votes array",
-        "Remove votes array from storage operations",
-        "All existing endpoints still work (vote, getShowcaseVotes, getRemainingVotes, getLeaderboard)",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-008",
-      "title": "Remove debug logging from RpcWebSocketDO",
-      "description": "As a developer, I want clean production logs without debug noise.",
-      "acceptanceCriteria": [
-        "Remove all console.log calls from apps/api/src/dos/rpc-websocket.ts",
-        "Keep console.error calls for actual errors",
-        "Typecheck passes"
-      ],
-      "priority": 8,
       "passes": false,
       "notes": ""
     }

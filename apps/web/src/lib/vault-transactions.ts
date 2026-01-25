@@ -11,7 +11,7 @@ import type { NFT, TokenStandard } from "../stores/nfts"
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
 
-function createNoopSigner<T extends string = string>(address: Address<T>): TransactionSigner<T> {
+export function createNoopSigner<T extends string = string>(address: Address<T>): TransactionSigner<T> {
   return {
     address,
     signTransactions: async (transactions) => transactions,
@@ -188,20 +188,31 @@ export interface BuildUnlockInput {
   nft: NFT
   owner: Address
   delegate: Address
-  payer: TransactionSigner
+  signers: Map<string, TransactionSigner>
+}
+
+function getOrCreateSigner(signers: Map<string, TransactionSigner>, address: Address): TransactionSigner {
+  const existing = signers.get(address)
+  if (existing) return existing
+  const signer = createNoopSigner(address)
+  signers.set(address, signer)
+  return signer
 }
 
 export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<Instruction[]> {
-  const { nft, owner, delegate, payer } = input
+  const { nft, owner, delegate, signers } = input
 
   const mintAddress = nft.mint as Address
 
+  const ownerSigner = getOrCreateSigner(signers, owner)
+  const delegateSigner = getOrCreateSigner(signers, delegate)
+
   if (isNiftyAsset(nft.tokenStandard)) {
-    return buildNiftyUnlockInstructions(mintAddress, owner, delegate)
+    return buildNiftyUnlockInstructionsWithSigners(mintAddress, ownerSigner, delegateSigner)
   }
 
   if (isMplCoreAsset(nft.tokenStandard)) {
-    return buildMplCoreUnlockInstructions(mintAddress, delegate, payer)
+    return buildMplCoreUnlockInstructionsWithSigners(mintAddress, delegateSigner, ownerSigner)
   }
 
   const isPnft = isProgrammableNft(nft.tokenStandard)
@@ -221,14 +232,14 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
     const tokenRecord = await getTokenRecordPda(mintAddress, ata)
 
     const unlockIx = tokenMetadata.getUnlockInstruction({
-      authority: createNoopSigner(delegate),
+      authority: delegateSigner,
       tokenOwner: owner,
       token: ata,
       mint: mintAddress,
       metadata: metadata,
       edition: edition,
       tokenRecord: tokenRecord,
-      payer: payer,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       unlockArgs: { __kind: "V1", authorizationData: null },
     })
@@ -240,8 +251,8 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
       tokenRecord: tokenRecord,
       mint: mintAddress,
       token: ata,
-      authority: createNoopSigner(owner),
-      payer: payer,
+      authority: ownerSigner,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       revokeArgs: tokenMetadata.RevokeArgs.UtilityV1,
     })
@@ -249,13 +260,13 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
     instructions.push(unlockIx, revokeIx)
   } else {
     const unlockIx = tokenMetadata.getUnlockInstruction({
-      authority: createNoopSigner(delegate),
+      authority: delegateSigner,
       tokenOwner: owner,
       token: ata,
       mint: mintAddress,
       metadata: metadata,
       edition: edition,
-      payer: payer,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       unlockArgs: { __kind: "V1", authorizationData: null },
     })
@@ -266,8 +277,8 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
       masterEdition: edition,
       mint: mintAddress,
       token: ata,
-      authority: createNoopSigner(owner),
-      payer: payer,
+      authority: ownerSigner,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       revokeArgs: tokenMetadata.RevokeArgs.StandardV1,
     })
@@ -278,23 +289,23 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
   return instructions
 }
 
-function buildNiftyUnlockInstructions(assetAddress: Address, owner: Address, delegate: Address): Instruction[] {
-  const instructions: Instruction[] = []
-
+function buildNiftyUnlockInstructionsWithSigners(
+  assetAddress: Address,
+  ownerSigner: TransactionSigner,
+  delegateSigner: TransactionSigner
+): Instruction[] {
   const unlockIx = asset.getUnlockInstruction({
     asset: assetAddress,
-    signer: createNoopSigner(delegate),
+    signer: delegateSigner,
   })
 
   const revokeIx = asset.getRevokeInstruction({
     asset: assetAddress,
-    signer: createNoopSigner(owner),
+    signer: ownerSigner,
     delegateInput: asset.delegateInput("Some", { roles: [asset.DelegateRole.Lock] }),
   })
 
-  instructions.push(unlockIx, revokeIx)
-
-  return instructions
+  return [unlockIx, revokeIx]
 }
 
 function buildMplCoreLockInstructions(
@@ -319,15 +330,15 @@ function buildMplCoreLockInstructions(
   return [addPluginIx]
 }
 
-function buildMplCoreUnlockInstructions(
+function buildMplCoreUnlockInstructionsWithSigners(
   assetAddress: Address,
-  delegate: Address,
-  payer: TransactionSigner
+  delegateSigner: TransactionSigner,
+  payerSigner: TransactionSigner
 ): Instruction[] {
   const removePluginIx = mplCore.getRemovePluginV1Instruction({
     asset: assetAddress,
-    payer: payer,
-    authority: createNoopSigner(delegate),
+    payer: payerSigner,
+    authority: delegateSigner,
     pluginType: mplCore.PluginType.FreezeDelegate,
   })
 

@@ -5,6 +5,8 @@ import type { HonoEnv } from "../types"
 import { authMiddleware } from "../middleware/auth"
 import { Tier, getTierFromStakedCount, getVotesForTier, FEE_DISCOUNTS } from "../lib/tiers"
 import { getCachedStakeRecords } from "./stake"
+import { getAssetsByOwner, type DASAsset, type DASCollection } from "../services/das"
+import { getNiftyAssetsByOwner, fetchNiftyCollections, type NiftyAsset } from "../services/nifty"
 
 async function verifySignature(publicKey: string, signature: string, message: string): Promise<boolean> {
   try {
@@ -550,4 +552,128 @@ userRoutes.put("/showcase", async (c) => {
     })
   )
   return c.json(await res.json())
+})
+
+// Dandies collection IDs - nifty Dandies should be merged into pNFT Dandies collection
+const DANDIES_PNFT_COLLECTION = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
+const DANDIES_NIFTY_COLLECTION = "BBrZYucnUXEbizXh2XqtHzqZ6ZHCfvmxKb7H5uJ6pWAF"
+
+function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string | null, owner: string): DASAsset {
+  const groupMatches = niftyAsset.group === DANDIES_NIFTY_COLLECTION
+  const collectionId = groupMatches ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+
+  return {
+    mint: niftyAsset.address,
+    name: niftyAsset.name,
+    image: niftyAsset.image ?? "",
+    collectionId,
+    collectionName,
+    attributes: niftyAsset.attributes.map((attr) => ({
+      trait_type: attr.name,
+      value: attr.value,
+    })),
+    compressed: false,
+    frozen: niftyAsset.state === "Locked",
+    delegate: niftyAsset.delegate,
+    tokenStandard: "Nifty",
+    owner,
+  }
+}
+
+// NFTs - fetches NFTs for all linked wallets and merges them
+userRoutes.get("/nfts", async (c) => {
+  const userDO = getUserDO(c)
+
+  // Get all linked wallets
+  const walletsRes = await userDO.fetch(new Request("http://do/wallets"))
+  const wallets = await walletsRes.json<Array<{ publicKey: string }>>()
+
+  if (wallets.length === 0) {
+    return c.json({ mints: [], collections: [], total: 0 })
+  }
+
+  // Fetch NFTs for all wallets in parallel
+  const walletAddresses = wallets.map((w) => w.publicKey)
+
+  const results = await Promise.all(
+    walletAddresses.map(async (wallet) => {
+      const [dasResult, niftyAssets] = await Promise.all([
+        getAssetsByOwner(c.env, wallet),
+        getNiftyAssetsByOwner(c.env, wallet),
+      ])
+
+      const { assets: dasAssets, collections: dasCollections } = dasResult
+
+      // Add owner to DAS assets
+      for (const asset of dasAssets) {
+        asset.owner = wallet
+      }
+
+      // Fetch nifty collections
+      const niftyCollectionIds = niftyAssets.map((a) => a.group).filter((g): g is string => g !== null)
+      const niftyCollections = await fetchNiftyCollections(c.env, niftyCollectionIds)
+
+      // Map nifty assets with owner
+      const mappedNiftyAssets: DASAsset[] = niftyAssets.map((niftyAsset) => {
+        const collection = niftyAsset.group ? niftyCollections.get(niftyAsset.group) : null
+        return mapNiftyAssetToDASFormat(niftyAsset, collection?.name ?? null, wallet)
+      })
+
+      return {
+        assets: [...dasAssets, ...mappedNiftyAssets],
+        collections: dasCollections,
+        niftyAssets,
+        niftyCollections,
+      }
+    })
+  )
+
+  // Merge all assets, dedupe by mint (keep first occurrence)
+  const seenMints = new Set<string>()
+  const allAssets: DASAsset[] = []
+  const collectionsMap = new Map<string, DASCollection>()
+
+  for (const result of results) {
+    for (const asset of result.assets) {
+      if (!seenMints.has(asset.mint)) {
+        seenMints.add(asset.mint)
+        allAssets.push(asset)
+      }
+    }
+
+    // Merge collections
+    for (const col of result.collections) {
+      const existing = collectionsMap.get(col.id)
+      if (existing) {
+        existing.count += col.count
+      } else {
+        collectionsMap.set(col.id, { ...col })
+      }
+    }
+
+    // Merge nifty collections
+    for (const niftyAsset of result.niftyAssets) {
+      if (niftyAsset.group) {
+        const collectionId = niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+        const existing = collectionsMap.get(collectionId)
+        if (existing) {
+          existing.count++
+        } else {
+          const collectionData = result.niftyCollections.get(niftyAsset.group)
+          collectionsMap.set(collectionId, {
+            id: collectionId,
+            name: collectionData?.name ?? niftyAsset.group,
+            image: collectionData?.image ?? null,
+            count: 1,
+          })
+        }
+      }
+    }
+  }
+
+  return c.json({
+    mints: allAssets,
+    collections: Array.from(collectionsMap.values()),
+    total: allAssets.length,
+  })
 })

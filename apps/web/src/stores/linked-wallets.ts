@@ -1,4 +1,5 @@
 import { atom } from "jotai"
+import { atomWithStorage } from "jotai/utils"
 import { sessionAtom } from "./auth"
 
 export interface LinkedWallet {
@@ -15,7 +16,7 @@ function getAuthHeaders(token: string | undefined): HeadersInit {
   return {}
 }
 
-export const linkedWalletsAtom = atom<LinkedWallet[]>([])
+export const linkedWalletsAtom = atomWithStorage<LinkedWallet[]>("biblio-linked-wallets", [])
 
 export const linkedWalletsLoadingAtom = atom<boolean>(false)
 

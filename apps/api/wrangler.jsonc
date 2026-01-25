@@ -56,35 +56,17 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["UserDO", "RateLimiterDO"],
-    },
-    {
-      "tag": "v2",
-      "new_classes": ["TensorRateLimiterDO"],
-    },
-    {
-      "tag": "v3",
-      "new_classes": ["UsernamesDO"],
-    },
-    {
-      "tag": "v4",
-      "new_classes": ["VotingDO"],
-    },
-    {
-      "tag": "v5",
-      "new_classes": ["RpcWebSocketDO"],
-    },
-    {
-      "tag": "v6",
-      "new_sqlite_classes": ["StakerSettingsDO"],
-    },
-    {
-      "tag": "v7",
-      "new_sqlite_classes": ["NftCacheDO"],
-    },
-    {
-      "tag": "v8",
-      "new_sqlite_classes": ["StakeRecordsDO"],
+      "new_sqlite_classes": [
+        "UserDO",
+        "RateLimiterDO",
+        "TensorRateLimiterDO",
+        "UsernamesDO",
+        "VotingDO",
+        "RpcWebSocketDO",
+        "StakerSettingsDO",
+        "NftCacheDO",
+        "StakeRecordsDO"
+      ],
     },
   ],
 

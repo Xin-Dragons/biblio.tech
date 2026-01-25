@@ -1,4 +1,4 @@
-import { useMemo, memo } from "react"
+import { useMemo, memo, useState } from "react"
 import { Star, Trash2, Check, Lock, Shield } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { selectAtom } from "jotai/utils"
@@ -6,12 +6,14 @@ import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { cn } from "@/lib/utils"
 import { NiftyBadge } from "@/components/nifty-badge"
+import { UnvaultDialog } from "@/components/vault/UnvaultDialog"
 import { starredAtom, toggleStarredAtom, junkAtom, toggleJunkAtom } from "@/stores/user"
 import { layoutSizeAtom, showInfoAtom, type LayoutSize } from "@/stores/ui"
 import { selectedNftAtom, type NFT } from "@/stores/nfts"
 import { isSelectModeAtom, selectedMintsAtom, toggleSelectedAtom } from "@/stores/selection"
 import { stakedMintsSetAtom } from "@/stores/stake"
 import { vaultedMintsSetAtom } from "@/stores/vault"
+import { refreshNftsAtom } from "@/stores/nfts"
 
 interface NftCardProps {
   nft: NFT
@@ -19,6 +21,7 @@ interface NftCardProps {
 }
 
 const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
+  const [unvaultDialogOpen, setUnvaultDialogOpen] = useState(false)
   const starred = useAtomValue(starredAtom)
   const junk = useAtomValue(junkAtom)
   const toggleStarred = useSetAtom(toggleStarredAtom)
@@ -28,6 +31,7 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
   const selectedMints = useAtomValue(selectedMintsAtom)
   const toggleSelected = useSetAtom(toggleSelectedAtom)
   const layoutSize = useAtomValue(layoutSizeAtom)
+  const refreshNfts = useSetAtom(refreshNftsAtom)
 
   const isStakedAtom = useMemo(() => selectAtom(stakedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
   const isStaked = useAtomValue(isStakedAtom)
@@ -140,13 +144,26 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
 
       {/* Vaulted Badge */}
       {isVaulted && !isStaked && (
-        <div
-          className="absolute top-2.5 right-2.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold backdrop-blur-sm shadow-sm"
-          style={{ backgroundColor: "rgba(166, 227, 224, 0.9)", color: "#0d3d3a" }}
-        >
-          <Shield className="h-3 w-3" />
-          {layoutSize !== "small" && "Vaulted"}
-        </div>
+        <>
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setUnvaultDialogOpen(true)
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-gradient-to-r from-teal-500 to-cyan-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg shadow-teal-500/25 transition-all hover:from-teal-400 hover:to-cyan-400 hover:shadow-teal-500/40 hover:scale-105"
+          >
+            <Shield className="h-3 w-3" />
+            {layoutSize !== "small" && <span>Vault</span>}
+          </button>
+          <UnvaultDialog
+            open={unvaultDialogOpen}
+            onOpenChange={setUnvaultDialogOpen}
+            nfts={[nft]}
+            onSuccess={refreshNfts}
+          />
+        </>
       )}
 
       {/* Listed Badge */}

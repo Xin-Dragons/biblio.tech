@@ -1,14 +1,14 @@
 import { useAtomValue } from "jotai"
 import { Shield } from "lucide-react"
-import { useWallet } from "@solana/connector/react"
 import { vaultedNftsAtom } from "@/stores/vault"
+import { isConnectedAtom } from "@/stores/wallet"
 import { CollectionView } from "@/components/collection-view"
 
 export function VaultPage() {
-  const { account } = useWallet()
+  const isConnected = useAtomValue(isConnectedAtom)
   const vaultedNfts = useAtomValue(vaultedNftsAtom)
 
-  if (!account) {
+  if (!isConnected) {
     return (
       <div className="flex h-full flex-col">
         <div className="mb-4 flex shrink-0 items-center justify-between">
