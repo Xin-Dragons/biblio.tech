@@ -7,6 +7,7 @@ import type { Asset, GetAssetResponseList, Grouping } from "helius-sdk/types/das
 import { type Address, getProgramDerivedAddress, getAddressEncoder } from "@solana/kit"
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
 import { PublicKey } from "@solana/web3.js"
+import { tokenMetadata } from "@biblio/solana-programs"
 import { getRpc, type SolanaClient } from "../lib/solana-client"
 import type { Env } from "../types"
 
@@ -234,6 +235,36 @@ export async function getAssetsByOwner(
       for (const item of response.items) {
         const asset = processItem(item as CoreAsset, collectionsMap)
         if (asset) allAssets.push(asset)
+      }
+    }
+  }
+
+  // Enrich pNFT lock state from Token Records
+  const pnfts = allAssets.filter((a) => a.tokenStandard === "ProgrammableNonFungible")
+  if (pnfts.length > 0) {
+    console.log(`[DAS] Enriching lock state for ${pnfts.length} pNFTs`)
+
+    // Derive Token Record PDAs for all pNFTs
+    const tokenRecordPdas = await Promise.all(
+      pnfts.map(async (pnft) => {
+        const ata = getAssociatedTokenAddress(pnft.mint as Address, wallet as Address)
+        return getTokenRecordPda(pnft.mint as Address, ata)
+      })
+    )
+
+    // Batch fetch Token Records
+    const BATCH_SIZE = 1000
+    for (let i = 0; i < tokenRecordPdas.length; i += BATCH_SIZE) {
+      const batchPdas = tokenRecordPdas.slice(i, i + BATCH_SIZE)
+      const batchPnfts = pnfts.slice(i, i + BATCH_SIZE)
+
+      const tokenRecords = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, batchPdas)
+
+      for (let j = 0; j < tokenRecords.length; j++) {
+        const tokenRecord = tokenRecords[j]
+        if (tokenRecord.exists) {
+          batchPnfts[j].frozen = tokenRecord.data.state === tokenMetadata.TokenState.Locked
+        }
       }
     }
   }
