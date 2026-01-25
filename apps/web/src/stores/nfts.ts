@@ -435,6 +435,33 @@ export const tokensAtom = atom<Token[]>([])
 export const tokensLoadingAtom = atom(false)
 export const tokensFetchedWalletAtom = atom<string | null>(null)
 
+// Refetch a single NFT by mint address and update in local array
+export const refetchNftAtom = atom(null, async (get, set, mint: string) => {
+  const currentNfts = get(nftsAtom)
+
+  // Only proceed if the NFT exists in local array
+  const existingIndex = currentNfts.findIndex((nft) => nft.mint === mint)
+  if (existingIndex === -1) {
+    return
+  }
+
+  try {
+    const response = await authFetch(`/api/nfts/${mint}`)
+    if (!response.ok) {
+      return
+    }
+
+    const data = await response.json()
+    const updatedNft = mapNftData(data, currentNfts[existingIndex].owner)
+
+    // Create new array with updated NFT
+    const newNfts = currentNfts.map((nft, index) => (index === existingIndex ? updatedNft : nft))
+    set(nftsAtom, newNfts)
+  } catch {
+    // Ignore refetch errors silently
+  }
+})
+
 export const fetchTokensAtom = atom(null, async (get, set, wallet: string) => {
   const fetchedWallet = get(tokensFetchedWalletAtom)
   const existingTokens = get(tokensAtom)
