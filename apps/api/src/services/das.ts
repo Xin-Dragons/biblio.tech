@@ -94,6 +94,44 @@ export type DASCollection = {
 }
 
 /**
+ * Enriches pNFT lock state by fetching Token Record accounts
+ * Updates the frozen field in place for any pNFTs in the array
+ */
+export async function enrichPnftLockState(rpc: SolanaClient, assets: DASAsset[]): Promise<void> {
+  const pnfts = assets.filter((a) => a.tokenStandard === "ProgrammableNonFungible" && a.owner)
+
+  if (pnfts.length === 0) {
+    return
+  }
+
+  console.log(`[DAS] Enriching lock state for ${pnfts.length} pNFTs`)
+
+  // Derive Token Record PDAs for all pNFTs
+  const tokenRecordPdas = await Promise.all(
+    pnfts.map(async (pnft) => {
+      const ata = getAssociatedTokenAddress(pnft.mint as Address, pnft.owner as Address)
+      return getTokenRecordPda(pnft.mint as Address, ata)
+    })
+  )
+
+  // Batch fetch Token Records
+  const BATCH_SIZE = 1000
+  for (let i = 0; i < tokenRecordPdas.length; i += BATCH_SIZE) {
+    const batchPdas = tokenRecordPdas.slice(i, i + BATCH_SIZE)
+    const batchPnfts = pnfts.slice(i, i + BATCH_SIZE)
+
+    const tokenRecords = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, batchPdas)
+
+    for (let j = 0; j < tokenRecords.length; j++) {
+      const tokenRecord = tokenRecords[j]
+      if (tokenRecord.exists) {
+        batchPnfts[j].frozen = tokenRecord.data.state === tokenMetadata.TokenState.Locked
+      }
+    }
+  }
+}
+
+/**
  * Processes a raw Helius DAS asset into our DASAsset format
  * Also updates collectionsMap as a side effect for bulk operations
  */
@@ -243,35 +281,13 @@ export async function getAssetsByOwner(
     }
   }
 
-  // Enrich pNFT lock state from Token Records
-  const pnfts = allAssets.filter((a) => a.tokenStandard === "ProgrammableNonFungible")
-  if (pnfts.length > 0) {
-    console.log(`[DAS] Enriching lock state for ${pnfts.length} pNFTs`)
-
-    // Derive Token Record PDAs for all pNFTs
-    const tokenRecordPdas = await Promise.all(
-      pnfts.map(async (pnft) => {
-        const ata = getAssociatedTokenAddress(pnft.mint as Address, wallet as Address)
-        return getTokenRecordPda(pnft.mint as Address, ata)
-      })
-    )
-
-    // Batch fetch Token Records
-    const BATCH_SIZE = 1000
-    for (let i = 0; i < tokenRecordPdas.length; i += BATCH_SIZE) {
-      const batchPdas = tokenRecordPdas.slice(i, i + BATCH_SIZE)
-      const batchPnfts = pnfts.slice(i, i + BATCH_SIZE)
-
-      const tokenRecords = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, batchPdas)
-
-      for (let j = 0; j < tokenRecords.length; j++) {
-        const tokenRecord = tokenRecords[j]
-        if (tokenRecord.exists) {
-          batchPnfts[j].frozen = tokenRecord.data.state === tokenMetadata.TokenState.Locked
-        }
-      }
-    }
+  // Set owner for all assets (needed for pNFT lock state enrichment)
+  for (const asset of allAssets) {
+    asset.owner = wallet
   }
+
+  // Enrich pNFT lock state from Token Records
+  await enrichPnftLockState(rpc, allAssets)
 
   console.log(`[DAS] Final: ${allAssets.length} NFTs, ${collectionsMap.size} collections`)
   return {
@@ -307,15 +323,7 @@ export async function getAsset(env: Env, mint: string): Promise<DASAsset | null>
     }
 
     // Enrich pNFT lock state from Token Record
-    if (dasAsset.tokenStandard === "ProgrammableNonFungible" && dasAsset.owner) {
-      const ata = getAssociatedTokenAddress(dasAsset.mint as Address, dasAsset.owner as Address)
-      const tokenRecordPda = await getTokenRecordPda(dasAsset.mint as Address, ata)
-
-      const [tokenRecord] = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, [tokenRecordPda])
-      if (tokenRecord.exists) {
-        dasAsset.frozen = tokenRecord.data.state === tokenMetadata.TokenState.Locked
-      }
-    }
+    await enrichPnftLockState(rpc, [dasAsset])
 
     return dasAsset
   } catch (error) {
