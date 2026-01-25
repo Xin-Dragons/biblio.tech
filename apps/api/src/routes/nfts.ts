@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { rateLimiterMiddleware } from "../middleware/rate-limiter"
 import { heliusService } from "../services/helius"
-import { getAssetsByOwner, type DASAsset, type DASCollection } from "../services/das"
+import { getAssetsByOwner, getAsset, type DASAsset, type DASCollection } from "../services/das"
 import { getNiftyAssetsByOwner, fetchNiftyCollections, type NiftyAsset } from "../services/nifty"
 
 export const nftsRoutes = new Hono<HonoEnv>()
@@ -100,6 +100,24 @@ nftsRoutes.get("/by-owner/:wallet", async (c) => {
   } catch (err) {
     console.error("Error fetching NFTs:", err)
     return c.json({ error: "Failed to fetch NFTs" }, 500)
+  }
+})
+
+// Get single NFT by mint address with enriched lock state
+nftsRoutes.get("/:mint", async (c) => {
+  const mint = c.req.param("mint")
+
+  try {
+    const asset = await getAsset(c.env, mint)
+
+    if (!asset) {
+      return c.json({ error: "Asset not found" }, 404)
+    }
+
+    return c.json(asset)
+  } catch (err) {
+    console.error("Error fetching NFT:", err)
+    return c.json({ error: "Failed to fetch NFT" }, 500)
   }
 })
 

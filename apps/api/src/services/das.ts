@@ -93,7 +93,11 @@ export type DASCollection = {
   count: number
 }
 
-function processItem(item: CoreAsset, collectionsMap: Map<string, DASCollection>): DASAsset | null {
+/**
+ * Processes a raw Helius DAS asset into our DASAsset format
+ * Also updates collectionsMap as a side effect for bulk operations
+ */
+export function processItem(item: CoreAsset, collectionsMap: Map<string, DASCollection>): DASAsset | null {
   const isLegacyNft = item.interface === "V1_NFT" || item.interface === "ProgrammableNFT"
   const isCore = item.interface === "MplCoreAsset"
 
@@ -273,5 +277,49 @@ export async function getAssetsByOwner(
   return {
     assets: allAssets,
     collections: Array.from(collectionsMap.values()),
+  }
+}
+
+/**
+ * Fetches a single asset by mint address and enriches pNFT lock state
+ * Returns null if asset not found or not a valid NFT type
+ */
+export async function getAsset(env: Env, mint: string): Promise<DASAsset | null> {
+  const rpc = getClient(env)
+
+  try {
+    const asset = await rpc.getAsset({ id: mint }).send()
+
+    if (!asset) {
+      return null
+    }
+
+    const collectionsMap = new Map<string, DASCollection>()
+    const dasAsset = processItem(asset as CoreAsset, collectionsMap)
+
+    if (!dasAsset) {
+      return null
+    }
+
+    // Add owner from raw asset
+    if (asset.ownership?.owner) {
+      dasAsset.owner = asset.ownership.owner
+    }
+
+    // Enrich pNFT lock state from Token Record
+    if (dasAsset.tokenStandard === "ProgrammableNonFungible" && dasAsset.owner) {
+      const ata = getAssociatedTokenAddress(dasAsset.mint as Address, dasAsset.owner as Address)
+      const tokenRecordPda = await getTokenRecordPda(dasAsset.mint as Address, ata)
+
+      const [tokenRecord] = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, [tokenRecordPda])
+      if (tokenRecord.exists) {
+        dasAsset.frozen = tokenRecord.data.state === tokenMetadata.TokenState.Locked
+      }
+    }
+
+    return dasAsset
+  } catch (error) {
+    console.error(`[DAS] Error fetching asset ${mint}:`, error)
+    return null
   }
 }
