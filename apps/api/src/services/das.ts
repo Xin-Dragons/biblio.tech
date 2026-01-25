@@ -4,8 +4,39 @@
  */
 
 import type { Asset, GetAssetResponseList, Grouping } from "helius-sdk/types/das"
+import { type Address, getProgramDerivedAddress, getAddressEncoder } from "@solana/kit"
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
+import { PublicKey } from "@solana/web3.js"
 import { getRpc, type SolanaClient } from "../lib/solana-client"
 import type { Env } from "../types"
+
+const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+
+/**
+ * Derives the Token Record PDA for a pNFT
+ * Token Record accounts track the state (locked/unlocked) of programmable NFTs
+ */
+export async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
+  })
+  return pda
+}
+
+/**
+ * Derives the Associated Token Address for a mint and owner
+ */
+export function getAssociatedTokenAddress(mint: Address, owner: Address): Address {
+  const ata = getAssociatedTokenAddressSync(new PublicKey(mint), new PublicKey(owner), false, TOKEN_PROGRAM_ID)
+  return ata.toBase58() as Address
+}
 
 // Helius SDK doesn't include plugins type for Core assets - extend it
 type CorePlugin = {
