@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import type { NFT } from "@/stores/nfts"
+import { refetchNftAtom, type NFT } from "@/stores/nfts"
 import { linkedWalletsAtom } from "@/stores/linked-wallets"
 import { removeVaultedMintsAtom } from "@/stores/vault"
 import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
@@ -49,6 +49,7 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
   }, [signer])
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const removeVaultedMints = useSetAtom(removeVaultedMintsAtom)
+  const refetchNft = useSetAtom(refetchNftAtom)
   const setSkipAuthWalletSwitch = useSetAtom(skipAuthWalletSwitchAtom)
 
   const linkedAddresses = useMemo(() => {
@@ -185,6 +186,9 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
         signal: abortControllerRef.current.signal,
       })
       removeVaultedMints(nftsToUnvaultWithSigners.map(({ nft }) => nft.mint))
+
+      // Refetch each unvaulted NFT to get updated lock state (frozen: false)
+      await Promise.all(nftsToUnvaultWithSigners.map(({ nft }) => refetchNft(nft.mint)))
 
       toast.success(
         `Unvaulted ${nftsToUnvaultWithSigners.length} NFT${nftsToUnvaultWithSigners.length === 1 ? "" : "s"}`
