@@ -36,6 +36,7 @@ export function TagFilterDropdown() {
     if (untaggedParam === "true") {
       setShowUntagged(true)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount, setters are stable
   }, [])
 
   // Sync state to URL params

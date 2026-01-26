@@ -1,26 +1,26 @@
 import { memo } from "react"
 import { useAtomValue } from "jotai"
-import { Lock, LockKeyhole } from "lucide-react"
+import { Lock, LockKeyhole, Loader2 } from "lucide-react"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
 import { NiftyBadge } from "@/components/nifty-badge"
 import { DandyCardSkeleton } from "@/components/membership/DandyCardSkeleton"
 import { gapBySize, infoHeightBySize, getColumnCount } from "@/components/membership/grid-utils"
-import { stakedMintsSetAtom, isLoadingAtom } from "@/stores/stake"
+import { isLoadingAtom } from "@/stores/stake"
 import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, searchQueryAtom } from "@/stores/ui"
 import { DANDIES_NIFTY_COLLECTION_ADDRESS, isNiftyAsset } from "@/hooks/use-staking"
 
 const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
-const DANDIES_NIFTY_COLLECTION_ID = DANDIES_NIFTY_COLLECTION_ADDRESS
 
 interface AvailableDandyCardProps {
   nft: NFT
   onLock: (nft: NFT) => void
+  isLocking: boolean
 }
 
-const AvailableDandyCard = memo(function AvailableDandyCard({ nft, onLock }: AvailableDandyCardProps) {
+const AvailableDandyCard = memo(function AvailableDandyCard({ nft, onLock, isLocking }: AvailableDandyCardProps) {
   const isNifty = isNiftyAsset(nft)
 
   return (
@@ -42,9 +42,14 @@ const AvailableDandyCard = memo(function AvailableDandyCard({ nft, onLock }: Ava
           size="sm"
           className="mt-2 w-full text-[clamp(0.65rem,1.5vw,0.875rem)]"
           onClick={() => onLock(nft)}
+          disabled={isLocking}
         >
-          <Lock className="mr-1 h-[1em] w-[1em]" />
-          Lock
+          {isLocking ? (
+            <Loader2 className="mr-1 h-[1em] w-[1em] animate-spin" />
+          ) : (
+            <Lock className="mr-1 h-[1em] w-[1em]" />
+          )}
+          {isLocking ? "Locking..." : "Lock"}
         </Button>
       </div>
     </div>
@@ -55,11 +60,12 @@ type CellData = {
   nfts: NFT[]
   columnCount: number
   onLock: (nft: NFT) => void
+  lockingMint: string | null
   gap: number
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { nfts, columnCount, onLock, gap } = data
+  const { nfts, columnCount, onLock, lockingMint, gap } = data
   const index = rowIndex * columnCount + columnIndex
   const nft = nfts[index]
 
@@ -69,19 +75,19 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
 
   return (
     <div style={{ ...style, padding }}>
-      <AvailableDandyCard nft={nft} onLock={onLock} />
+      <AvailableDandyCard nft={nft} onLock={onLock} isLocking={lockingMint === nft.mint} />
     </div>
   )
 }
 
 interface AvailableToLockGridProps {
   onLock: (nft: NFT) => void
+  lockingMint: string | null
   onLockAll: (nfts: NFT[]) => void
 }
 
-export function AvailableToLockGrid({ onLock, onLockAll }: AvailableToLockGridProps) {
+export function AvailableToLockGrid({ onLock, lockingMint, onLockAll }: AvailableToLockGridProps) {
   const nfts = useAtomValue(nftsAtom)
-  const stakedMints = useAtomValue(stakedMintsSetAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
   const isNftsLoading = useAtomValue(nftsLoadingAtom)
   const layoutSize = useAtomValue(layoutSizeAtom)
@@ -90,8 +96,9 @@ export function AvailableToLockGrid({ onLock, onLockAll }: AvailableToLockGridPr
   const isLoading = isStakeLoading || isNftsLoading
 
   const availableDandies = nfts.filter((nft) => {
-    const isDandies = nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ID
-    const isLocked = stakedMints.has(nft.mint)
+    const isDandies =
+      nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ADDRESS
+    const isLocked = nft.staked
     const matchesSearch =
       !searchQuery || nft.name.toLowerCase().includes(searchQuery) || nft.mint.toLowerCase().includes(searchQuery)
 
@@ -181,7 +188,13 @@ export function AvailableToLockGrid({ onLock, onLockAll }: AvailableToLockGridPr
                 columnWidth={columnWidth}
                 rowCount={rowCount}
                 rowHeight={rowHeight}
-                itemData={{ nfts: availableDandies, columnCount, onLock, gap }}
+                itemData={{
+                  nfts: availableDandies,
+                  columnCount,
+                  onLock,
+                  lockingMint,
+                  gap,
+                }}
               >
                 {Cell}
               </FixedSizeGrid>

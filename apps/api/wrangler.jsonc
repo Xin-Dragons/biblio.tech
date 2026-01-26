@@ -45,10 +45,6 @@
         "name": "NFT_CACHE_DO",
         "class_name": "NftCacheDO",
       },
-      {
-        "name": "STAKE_RECORDS_DO",
-        "class_name": "StakeRecordsDO",
-      },
     ],
   },
 
@@ -64,8 +60,7 @@
         "VotingDO",
         "RpcWebSocketDO",
         "StakerSettingsDO",
-        "NftCacheDO",
-        "StakeRecordsDO"
+        "NftCacheDO"
       ],
     },
   ],

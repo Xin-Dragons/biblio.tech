@@ -125,6 +125,30 @@ export class NftCacheDO extends DurableObject<Env> {
     await this.db.delete(schema.meta).where(eq(schema.meta.key, "cached_at"))
   }
 
+  private async updateNft(nft: CachedNft): Promise<boolean> {
+    const existing = await this.db.query.nfts.findFirst({
+      where: eq(schema.nfts.mint, nft.mint),
+    })
+    if (!existing) {
+      return false
+    }
+    await this.db
+      .update(schema.nfts)
+      .set({
+        name: nft.name,
+        image: nft.image,
+        collectionId: nft.collectionId,
+        collectionName: nft.collectionName,
+        attributes: JSON.stringify(nft.attributes),
+        frozen: nft.frozen,
+        delegate: nft.delegate,
+        compressed: nft.compressed,
+        tokenStandard: nft.tokenStandard,
+      })
+      .where(eq(schema.nfts.mint, nft.mint))
+    return true
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
@@ -157,6 +181,12 @@ export class NftCacheDO extends DurableObject<Env> {
       if (path === "/cache" && request.method === "DELETE") {
         await this.clearCache()
         return new Response(null, { status: 204 })
+      }
+
+      if (path === "/cache" && request.method === "PATCH") {
+        const nft = await request.json<CachedNft>()
+        const updated = await this.updateNft(nft)
+        return Response.json({ updated })
       }
 
       return new Response("Not found", { status: 404 })

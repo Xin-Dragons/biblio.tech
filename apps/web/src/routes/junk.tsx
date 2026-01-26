@@ -25,15 +25,13 @@ export function JunkPage() {
       emptyIcon={Trash2}
       emptyTitle="No junk NFTs"
       emptyDescription="Mark spam NFTs as junk to hide them"
+      supportsCollage={false}
       headerRight={
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">{junkNfts.length} junk NFTs</p>
-          {junkNfts.length > 0 && (
-            <Button variant="outline" size="sm" onClick={handleClearAll}>
-              Restore All
-            </Button>
-          )}
-        </div>
+        junkNfts.length > 0 ? (
+          <Button variant="outline" size="sm" onClick={handleClearAll}>
+            Restore All
+          </Button>
+        ) : null
       }
     />
   )

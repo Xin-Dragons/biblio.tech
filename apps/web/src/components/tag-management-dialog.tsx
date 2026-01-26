@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { Tags, Pencil, Trash2, Plus, Loader2, X, Check } from "lucide-react"
 import { toast } from "sonner"
@@ -13,9 +13,41 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { tagsAtom, nftTagsAtom, createTagAtom, updateTagAtom, deleteTagAtom, type Tag } from "@/stores/user"
+import {
+  tagsAtom,
+  tagNftCountsAtom,
+  createTagAtom,
+  updateTagAtom,
+  deleteTagAtom,
+  PRESET_COLORS,
+  type Tag,
+} from "@/stores/user"
 
-const PRESET_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"] as const
+interface ColorPickerProps {
+  value: string
+  onChange: (color: string) => void
+  disabled?: boolean
+}
+
+function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
+  return (
+    <div className="flex items-center gap-1">
+      {PRESET_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          onClick={() => onChange(color)}
+          className={cn(
+            "h-6 w-6 rounded-full transition-all",
+            value === color ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+          )}
+          style={{ backgroundColor: color }}
+          disabled={disabled}
+        />
+      ))}
+    </div>
+  )
+}
 
 interface TagManagementDialogProps {
   open: boolean
@@ -24,7 +56,7 @@ interface TagManagementDialogProps {
 
 export function TagManagementDialog({ open, onOpenChange }: TagManagementDialogProps) {
   const tags = useAtomValue(tagsAtom)
-  const nftTags = useAtomValue(nftTagsAtom)
+  const tagNftCounts = useAtomValue(tagNftCountsAtom)
   const createTag = useSetAtom(createTagAtom)
   const updateTag = useSetAtom(updateTagAtom)
   const deleteTag = useSetAtom(deleteTagAtom)
@@ -37,13 +69,6 @@ export function TagManagementDialog({ open, onOpenChange }: TagManagementDialogP
   const [editName, setEditName] = useState("")
   const [editColor, setEditColor] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
-
-  const getNftCountForTag = useCallback(
-    (tagId: string) => {
-      return Object.values(nftTags).filter((tagIds) => tagIds.includes(tagId)).length
-    },
-    [nftTags]
-  )
 
   const handleCreate = async () => {
     if (!newTagName.trim()) {
@@ -170,21 +195,7 @@ export function TagManagementDialog({ open, onOpenChange }: TagManagementDialogP
                     disabled={isLoading}
                     autoFocus
                   />
-                  <div className="flex items-center gap-1">
-                    {PRESET_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setEditColor(color)}
-                        className={cn(
-                          "h-6 w-6 rounded-full transition-all",
-                          editColor === color ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-                        )}
-                        style={{ backgroundColor: color }}
-                        disabled={isLoading}
-                      />
-                    ))}
-                  </div>
+                  <ColorPicker value={editColor} onChange={setEditColor} disabled={isLoading} />
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={isLoading}>
                       Cancel
@@ -198,7 +209,7 @@ export function TagManagementDialog({ open, onOpenChange }: TagManagementDialogP
                 <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 group">
                   <div className="h-4 w-4 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
                   <span className="flex-1 text-sm font-medium truncate">{tag.name}</span>
-                  <span className="text-xs text-muted-foreground">{getNftCountForTag(tag.id)} NFTs</span>
+                  <span className="text-xs text-muted-foreground">{tagNftCounts[tag.id] ?? 0} NFTs</span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -230,21 +241,7 @@ export function TagManagementDialog({ open, onOpenChange }: TagManagementDialogP
                 disabled={isLoading}
                 autoFocus
               />
-              <div className="flex items-center gap-1">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setNewTagColor(color)}
-                    className={cn(
-                      "h-6 w-6 rounded-full transition-all",
-                      newTagColor === color ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-                    )}
-                    style={{ backgroundColor: color }}
-                    disabled={isLoading}
-                  />
-                ))}
-              </div>
+              <ColorPicker value={newTagColor} onChange={setNewTagColor} disabled={isLoading} />
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={cancelCreate} disabled={isLoading}>
                   Cancel

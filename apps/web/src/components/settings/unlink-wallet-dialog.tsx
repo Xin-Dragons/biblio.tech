@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useWallet, useDisconnectWallet } from "@solana/connector/react"
 import { Loader2, AlertTriangle } from "lucide-react"
 import { useSetAtom } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -90,7 +90,7 @@ export function UnlinkWalletDialog({ open, onOpenChange, wallet }: UnlinkWalletD
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUnlinking}>
             Cancel
           </Button>

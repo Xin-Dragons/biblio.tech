@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { Check, Plus, Minus } from "lucide-react"
+import { Check } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import DraggableGrid, { type DraggableGridHandle } from "ruuri"
 import { cn } from "@/lib/utils"
@@ -14,17 +14,62 @@ import {
   type CollageSizeClass,
 } from "@/stores/user"
 import { isAuthenticatedAtom } from "@/stores/auth"
-import { showInfoAtom } from "@/stores/ui"
-import { selectedNftAtom, type NFT } from "@/stores/nfts"
+import { type NFT } from "@/stores/nfts"
 import { isSelectModeAtom, selectedMintsAtom, toggleSelectedAtom } from "@/stores/selection"
 
 type SizeClass = CollageSizeClass
 
-const sizeToPixels: Record<SizeClass, number> = {
-  small: 120,
-  medium: 248,
-  large: 376,
-  xlarge: 504,
+// Size multipliers - small is 1 unit, medium is 2, etc.
+const sizeMultipliers: Record<SizeClass, number> = {
+  small: 1,
+  medium: 2,
+  large: 3,
+  xlarge: 4,
+}
+
+const GAP_RATIO = 0.07 // Gap as percentage of base unit
+
+const sizeOrder: SizeClass[] = ["small", "medium", "large", "xlarge"]
+const sizeDots: Record<SizeClass, number> = { small: 1, medium: 2, large: 3, xlarge: 4 }
+
+function SizePip({
+  size,
+  isAnimating,
+  onClick,
+}: {
+  size: SizeClass
+  isAnimating: boolean
+  onClick: (e: React.MouseEvent) => void
+}) {
+  const dotCount = sizeDots[size]
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-1 opacity-0 backdrop-blur-sm transition-all group-hover:opacity-100 hover:bg-black/70"
+      title="Click or double-click card to resize"
+    >
+      {[1, 2, 3, 4].map((dot) => (
+        <span
+          key={dot}
+          className={cn(
+            "h-1.5 w-1.5 rounded-full transition-all duration-200",
+            dot <= dotCount ? "bg-white" : "bg-white/30",
+            isAnimating && dot <= dotCount && "animate-pulse"
+          )}
+        />
+      ))}
+    </button>
+  )
+}
+
+function getColumnCount(width: number): number {
+  if (width >= 1536) return 16
+  if (width >= 1280) return 14
+  if (width >= 1024) return 12
+  if (width >= 768) return 10
+  if (width >= 480) return 8
+  return 6
 }
 
 function getImageUrl(url: string, size: SizeClass): string {
@@ -39,17 +84,19 @@ function getImageUrl(url: string, size: SizeClass): string {
 
 interface CollageCardProps {
   nft: NFT
-  showInfo: boolean
   size: SizeClass
+  pixelSize: number
+  borderRadius: number
   onSizeChange: (size: SizeClass) => void
   isAuthenticated: boolean
-  onItemClick: () => void
 }
 
-function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onItemClick }: CollageCardProps) {
+function CollageCard({ nft, size, pixelSize, borderRadius, onSizeChange, isAuthenticated }: CollageCardProps) {
   const isSelectMode = useAtomValue(isSelectModeAtom)
   const selectedMints = useAtomValue(selectedMintsAtom)
+  const toggleSelected = useSetAtom(toggleSelectedAtom)
   const isSelected = selectedMints.has(nft.mint)
+  const [isAnimating, setIsAnimating] = useState(false)
 
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const didDragRef = useRef(false)
@@ -72,39 +119,38 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
     pointerStartRef.current = null
   }
 
+  const cycleSize = useCallback(() => {
+    const currentIndex = sizeOrder.indexOf(size)
+    const nextIndex = (currentIndex + 1) % sizeOrder.length
+    onSizeChange(sizeOrder[nextIndex])
+    setIsAnimating(true)
+    setTimeout(() => setIsAnimating(false), 300)
+  }, [size, onSizeChange])
+
   const handleClick = () => {
     if (didDragRef.current) return
-    onItemClick()
+
+    if (isSelectMode) {
+      toggleSelected(nft.mint)
+    } else if (isAuthenticated) {
+      cycleSize()
+    }
   }
 
-  const handleIncreaseSize = (e: React.MouseEvent) => {
+  const handlePipClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (size === "small") onSizeChange("medium")
-    else if (size === "medium") onSizeChange("large")
-    else if (size === "large") onSizeChange("xlarge")
+    cycleSize()
   }
-
-  const handleDecreaseSize = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (size === "xlarge") onSizeChange("large")
-    else if (size === "large") onSizeChange("medium")
-    else if (size === "medium") onSizeChange("small")
-  }
-
-  const isSmallest = size === "small"
-  const isLargest = size === "xlarge"
-  const px = sizeToPixels[size]
 
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card",
+        "group relative overflow-hidden border bg-card",
         isSelected ? "border-primary ring-2 ring-primary/50" : "border-border",
         isAuthenticated && "collage-card-draggable"
       )}
-      style={{ width: px, height: px }}
+      style={{ width: pixelSize, height: pixelSize, borderRadius }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -119,14 +165,6 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
           draggable={false}
         />
       </div>
-      {showInfo && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <h3 className="truncate text-sm font-medium text-white">{nft.name}</h3>
-          {nft.listing?.price && (
-            <p className="text-xs text-white/70">{(Number(nft.listing.price) / 1e9).toFixed(2)} SOL</p>
-          )}
-        </div>
-      )}
       {isSelectMode && (
         <div
           className={cn(
@@ -137,35 +175,7 @@ function CollageCard({ nft, showInfo, size, onSizeChange, isAuthenticated, onIte
           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
         </div>
       )}
-      {!isSelectMode && isAuthenticated && (
-        <div className="absolute left-2 top-2 flex cursor-pointer items-center gap-0.5 rounded-md bg-black/60 p-0.5 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
-          <button
-            onClick={handleDecreaseSize}
-            onMouseDown={(e) => e.stopPropagation()}
-            disabled={isSmallest}
-            className={cn(
-              "flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors",
-              isSmallest ? "cursor-not-allowed opacity-40" : "hover:bg-white/20"
-            )}
-            title="Decrease size"
-          >
-            <Minus className="h-3.5 w-3.5 text-white" />
-          </button>
-          <div className="h-4 w-px bg-white/30" />
-          <button
-            onClick={handleIncreaseSize}
-            onMouseDown={(e) => e.stopPropagation()}
-            disabled={isLargest}
-            className={cn(
-              "flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors",
-              isLargest ? "cursor-not-allowed opacity-40" : "hover:bg-white/20"
-            )}
-            title="Increase size"
-          >
-            <Plus className="h-3.5 w-3.5 text-white" />
-          </button>
-        </div>
-      )}
+      {!isSelectMode && isAuthenticated && <SizePip size={size} isAnimating={isAnimating} onClick={handlePipClick} />}
       {nft.tokenStandard === "Nifty" && <NiftyBadge />}
     </div>
   )
@@ -179,14 +189,11 @@ interface GridItemData {
 
 interface CollageNftGridProps {
   nfts: NFT[]
+  context?: string
 }
 
-export function CollageNftGrid({ nfts }: CollageNftGridProps) {
-  const showInfo = useAtomValue(showInfoAtom)
+export function CollageNftGrid({ nfts, context = "nfts" }: CollageNftGridProps) {
   const isAuthenticated = useAtomValue(isAuthenticatedAtom)
-  const setSelectedNft = useSetAtom(selectedNftAtom)
-  const isSelectMode = useAtomValue(isSelectModeAtom)
-  const toggleSelected = useSetAtom(toggleSelectedAtom)
 
   const savedSizes = useAtomValue(collageSizesAtom)
   const savedOrder = useAtomValue(collageOrderAtom)
@@ -196,23 +203,71 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
   const fetchOrder = useSetAtom(fetchCollageOrderAtom)
 
   const [sizes, setSizes] = useState<Record<string, SizeClass>>({})
+  const [containerWidth, setContainerWidth] = useState(0)
   const gridRef = useRef<DraggableGridHandle>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const columnCount = useMemo(() => getColumnCount(containerWidth), [containerWidth])
+
+  // Calculate unit size and gap based on container width
+  // baseUnit = containerWidth / columnCount
+  // gap = baseUnit * GAP_RATIO, unitSize = baseUnit - gap
+  const { unitSize, gap } = useMemo(() => {
+    if (containerWidth === 0) return { unitSize: 120, gap: 8 }
+    const baseUnit = containerWidth / columnCount
+    const g = baseUnit * GAP_RATIO
+    return { unitSize: baseUnit - g, gap: g }
+  }, [containerWidth, columnCount])
+
+  const getPixelSize = useCallback(
+    (size: SizeClass) => unitSize * sizeMultipliers[size] + gap * (sizeMultipliers[size] - 1),
+    [unitSize, gap]
+  )
+
+  // Track container width (clientWidth excludes scrollbar) with debounce
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const observer = new ResizeObserver(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        setContainerWidth(container.clientWidth)
+      }, 100)
+    })
+
+    observer.observe(container)
+    setContainerWidth(container.clientWidth)
+
+    return () => {
+      observer.disconnect()
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchSizes()
-      fetchOrder()
+      fetchSizes(context)
+      fetchOrder(context)
     }
-  }, [isAuthenticated, fetchSizes, fetchOrder])
+  }, [isAuthenticated, fetchSizes, fetchOrder, context])
 
   useEffect(() => {
     setSizes(savedSizes)
     // Refresh layout when sizes load from API
-    setTimeout(() => {
+    gridRef.current?.grid?.refreshItems?.()
+    gridRef.current?.grid?.layout?.()
+  }, [savedSizes])
+
+  // Refresh layout when unit size or column count changes (container resized)
+  useEffect(() => {
+    if (unitSize > 0) {
       gridRef.current?.grid?.refreshItems?.()
       gridRef.current?.grid?.layout?.()
-    }, 100)
-  }, [savedSizes])
+    }
+  }, [unitSize, columnCount])
 
   const nftMap = useMemo(() => new Map(nfts.map((nft) => [nft.mint, nft])), [nfts])
 
@@ -236,7 +291,7 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
       setSizes((prev) => {
         const updated = { ...prev, [mint]: newSize }
         if (isAuthenticated) {
-          saveSizes(updated)
+          saveSizes(updated, context)
         }
         return updated
       })
@@ -246,7 +301,7 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
         gridRef.current?.grid?.layout?.()
       }, 0)
     },
-    [isAuthenticated, saveSizes]
+    [isAuthenticated, saveSizes, context]
   )
 
   const handleDragEnd = useCallback(() => {
@@ -260,38 +315,29 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
       })
       .filter(Boolean)
     if (isAuthenticated && newOrder.length > 0) {
-      saveOrder(newOrder)
+      saveOrder(newOrder, context)
     }
-  }, [isAuthenticated, saveOrder])
+  }, [isAuthenticated, saveOrder, context])
 
-  const handleItemClick = useCallback(
-    (nft: NFT) => {
-      if (isSelectMode) {
-        toggleSelected(nft.mint)
-      } else {
-        setSelectedNft(nft)
-      }
-    },
-    [isSelectMode, toggleSelected, setSelectedNft]
-  )
+  const borderRadius = Math.max(6, unitSize * 0.08)
 
   const renderItem = useCallback(
     (item: GridItemData) => {
-      const px = sizeToPixels[item.size]
+      const px = getPixelSize(item.size)
       return (
-        <div data-id={item.id} className="p-1" style={{ width: px + 8, height: px + 8 }}>
+        <div data-id={item.id} style={{ width: px + gap, height: px + gap, padding: gap / 2 }}>
           <CollageCard
             nft={item.nft}
-            showInfo={showInfo}
             size={item.size}
+            pixelSize={px}
+            borderRadius={borderRadius}
             onSizeChange={(newSize) => handleSizeChange(item.id, newSize)}
             isAuthenticated={isAuthenticated}
-            onItemClick={() => handleItemClick(item.nft)}
           />
         </div>
       )
     },
-    [showInfo, handleSizeChange, isAuthenticated, handleItemClick]
+    [handleSizeChange, isAuthenticated, getPixelSize, borderRadius, gap]
   )
 
   if (nfts.length === 0) {
@@ -303,14 +349,16 @@ export function CollageNftGrid({ nfts }: CollageNftGridProps) {
   }
 
   return (
-    <div id="collage-grid-container" className="h-full w-full overflow-y-auto">
+    <div ref={containerRef} id="collage-grid-container" className="collage-grid-wrapper h-full w-full overflow-y-auto">
       <DraggableGrid
         ref={gridRef}
         data={gridData}
         renderItem={renderItem}
         dragEnabled={isAuthenticated}
         dragSort
+        style={{ width: "100%" }}
         layout={{ fillGaps: true }}
+        layoutOnResize
         layoutDuration={300}
         layoutEasing="ease-out"
         dragPlaceholder={{

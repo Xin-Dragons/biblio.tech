@@ -5,6 +5,8 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   appendTransactionMessageInstructions,
   signTransactionMessageWithSigners,
+  compileTransaction,
+  getTransactionEncoder,
   getBase64EncodedWireTransaction,
   pipe,
   type Signature,
@@ -276,12 +278,12 @@ export function buildTransactionMessage({
   )
 }
 
-export async function getEncodedTransactionSize(
+export function getEncodedTransactionSize(
   instructions: Instruction[],
   feePayer: TransactionSigner,
   blockhash: string,
   lastValidBlockHeight: bigint
-): Promise<number> {
+): number {
   const message = buildTransactionMessage({
     instructions,
     feePayer,
@@ -289,9 +291,11 @@ export async function getEncodedTransactionSize(
     lastValidBlockHeight,
     cuLimit: 400_000,
   })
-  const signedTx = await signTransactionMessageWithSigners(message)
-  const encoded = getBase64EncodedWireTransaction(signedTx)
-  return Math.ceil((encoded.length * 3) / 4)
+  // Compile without signing - we just need the size estimate
+  const compiledTx = compileTransaction(message)
+  const encoder = getTransactionEncoder()
+  const txBytes = encoder.encode(compiledTx as Parameters<typeof encoder.encode>[0])
+  return txBytes.length
 }
 
 interface PrepareSignedTransactionOptions {
@@ -333,4 +337,58 @@ export async function prepareSignedTransaction({
 
   const signedTx = await signTransactionMessageWithSigners(finalMessage)
   return getBase64EncodedWireTransaction(signedTx)
+}
+
+export interface InstructionGroup<T = unknown> {
+  item: T
+  instructions: Instruction[]
+}
+
+export interface BatchResult<T = unknown> {
+  items: T[]
+  instructions: Instruction[]
+}
+
+export interface BatchOptions {
+  maxCuPerTx?: number
+  cuPerItem?: number
+}
+
+export async function batchInstructionsBySize<T>(
+  groups: InstructionGroup<T>[],
+  noopSigner: TransactionSigner,
+  options?: BatchOptions
+): Promise<BatchResult<T>[]> {
+  if (groups.length === 0) return []
+
+  const { blockhash, lastValidBlockHeight } = await getBlockhash()
+  const maxItemsPerBatch =
+    options?.maxCuPerTx && options?.cuPerItem ? Math.floor(options.maxCuPerTx / options.cuPerItem) : Infinity
+
+  const batches: BatchResult<T>[] = []
+  let currentBatch: BatchResult<T> = { items: [], instructions: [] }
+
+  for (const { item, instructions } of groups) {
+    if (currentBatch.items.length >= maxItemsPerBatch) {
+      batches.push(currentBatch)
+      currentBatch = { items: [], instructions: [] }
+    }
+
+    const testInstructions = [...currentBatch.instructions, ...instructions]
+    const size = getEncodedTransactionSize(testInstructions, noopSigner, blockhash, lastValidBlockHeight)
+
+    if (size > MAX_TX_SIZE - SIZE_BUFFER && currentBatch.items.length > 0) {
+      batches.push(currentBatch)
+      currentBatch = { items: [], instructions: [] }
+    }
+
+    currentBatch.items.push(item)
+    currentBatch.instructions.push(...instructions)
+  }
+
+  if (currentBatch.items.length > 0) {
+    batches.push(currentBatch)
+  }
+
+  return batches
 }

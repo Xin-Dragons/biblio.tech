@@ -1,18 +1,20 @@
 {
   "project": "Biblio",
-  "branchName": "ralph/nft-lock-state-detection",
-  "description": "NFT Lock State Detection - Fix inaccurate lock state for pNFTs by fetching Token Record accounts on backend",
+  "branchName": "ralph/creator-studio",
+  "description": "Creator Studio - Comprehensive NFT creation and management toolset supporting Core Assets, pNFTs, and Nifty Assets with create, update, and batch operations",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add Token Record PDA derivation to DAS service",
-      "description": "As a developer, I need Token Record PDA derivation on the backend to fetch pNFT lock state.",
+      "title": "Add Tools section to sidebar and Creator Studio route",
+      "description": "As a user, I want to access Creator Studio from a dedicated Tools section in the sidebar.",
       "acceptanceCriteria": [
-        "Add TOKEN_METADATA_PROGRAM_ADDRESS constant to das.ts (reuse from vault-transactions.ts pattern)",
-        "Add getTokenRecordPda(mint, tokenAccount) function using getProgramDerivedAddress from @solana/kit",
-        "Add getAssociatedTokenAddress(mint, owner) helper to derive ATA for token account",
-        "Seeds for Token Record: ['metadata', programId, mint, 'token_record', tokenAccount]",
-        "Typecheck passes"
+        "New 'Tools' section appears in sidebar below existing navigation (after Junk)",
+        "Tools section has 'Creator Studio' link with Hammer or Wrench icon",
+        "Route /tools/creator-studio added to router",
+        "Empty placeholder page renders at /tools/creator-studio",
+        "Tools section visible to all users (authenticated or not)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 1,
       "passes": false,
@@ -20,17 +22,17 @@
     },
     {
       "id": "US-002",
-      "title": "Implement pNFT lock state enrichment",
-      "description": "As a user, I want pNFTs to show accurate lock state based on Token Record.",
+      "title": "Create Creator Studio page layout with tabs",
+      "description": "As a user, I want a clean interface with tabs for Create, Update, and Batch operations.",
       "acceptanceCriteria": [
-        "After processItem loop, collect all pNFTs (tokenStandard === 'ProgrammableNonFungible')",
-        "For each pNFT, derive Token Record PDA using getTokenRecordPda(mint, ata)",
-        "Batch fetch Token Records using rpc.getMultipleAccounts with chunks of 1000",
-        "Import decodeTokenRecord from @biblio/solana-programs and TokenState enum",
-        "Decode each account and check state: frozen = (tokenRecord.state === TokenState.Locked)",
-        "Update the asset's frozen field with the decoded value",
-        "Handle missing Token Records gracefully (account may not exist for unlocked pNFTs)",
-        "Typecheck passes"
+        "Page has three main tabs: Create, Update, Batch",
+        "Tab state syncs with URL param (?tab=create|update|batch)",
+        "Default tab is 'create' when no param",
+        "Responsive layout: form left, preview right on desktop; stacked on mobile",
+        "Use existing Tabs component or create simple tab UI",
+        "Each tab shows placeholder content for now",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
       "passes": false,
@@ -38,16 +40,16 @@
     },
     {
       "id": "US-003",
-      "title": "Create single NFT fetch endpoint",
-      "description": "As a developer, I need an endpoint to refetch a single NFT with updated lock state.",
+      "title": "Implement asset standard selector",
+      "description": "As a user, I want to choose which NFT standard to use (Core, pNFT, or Nifty).",
       "acceptanceCriteria": [
-        "Add GET /nfts/:mint route to apps/api/src/routes/nfts.ts",
-        "Use rpc.getAsset({ id: mint }) to fetch single asset from Helius DAS",
-        "Process with processItem() to get DASAsset shape",
-        "For pNFTs, fetch Token Record and enrich lock state (extract shared helper from getAssetsByOwner)",
-        "Return same DASAsset shape as bulk fetch endpoints",
-        "Return 404 if asset not found",
-        "Typecheck passes"
+        "Segmented control or radio group for standard selection at top of Create tab",
+        "Options: 'Core Asset', 'pNFT (Metaplex)', 'Nifty Asset'",
+        "Default selection is 'Core Asset'",
+        "Selection stored in component state",
+        "Selection persists when switching between tabs (use URL param or context)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
       "passes": false,
@@ -55,15 +57,17 @@
     },
     {
       "id": "US-004",
-      "title": "Add refetch action to NFT store",
-      "description": "As a developer, I need a store action to refetch and update a single NFT.",
+      "title": "Implement Create form basic fields",
+      "description": "As a user, I want to fill out basic NFT metadata fields.",
       "acceptanceCriteria": [
-        "Add refetchNftAtom write atom to apps/web/src/stores/nfts.ts",
-        "Action takes mint address as parameter",
-        "Calls GET /api/nfts/:mint endpoint",
-        "Updates the NFT in nftsAtom array with fresh data",
-        "If NFT not found in local array, ignore (don't add)",
-        "Typecheck passes"
+        "Name field (required, max 32 chars) with character counter",
+        "Symbol field (required, max 10 chars) with character counter",
+        "Description field (textarea, required)",
+        "External URL / Website field (optional, URL validation)",
+        "Form validation with inline error messages",
+        "Form state managed with React state or form library",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
       "passes": false,
@@ -71,14 +75,18 @@
     },
     {
       "id": "US-005",
-      "title": "Call refetch after successful unvault",
-      "description": "As a user, when I unvault an NFT, it should stay removed from vault view.",
+      "title": "Implement image file picker with preview",
+      "description": "As a user, I want to select an image file and see a preview before uploading.",
       "acceptanceCriteria": [
-        "In UnvaultDialog.tsx after successful signWithMultipleWallets, call refetchNft for each unvaulted mint",
-        "Refetch happens after removeVaultedMints call",
-        "Refetched NFT data has frozen: false, preventing re-detection as vaulted",
-        "NFT no longer reappears in vault view after unvault",
-        "Typecheck passes"
+        "File picker button labeled 'Select Image'",
+        "Accepts jpg, png, gif files only",
+        "Max file size 20MB with validation error if exceeded",
+        "Image preview displays after file selection (using URL.createObjectURL)",
+        "Selected file name shown next to preview",
+        "Clear/remove button to deselect file",
+        "File stored in component state for later upload",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
       "passes": false,
@@ -86,17 +94,455 @@
     },
     {
       "id": "US-006",
-      "title": "Extract enrichLockState helper for reuse",
-      "description": "As a developer, I want lock state enrichment logic shared between bulk and single fetch.",
+      "title": "Implement multimedia file picker",
+      "description": "As a user, I want to upload video, audio, or 3D models as NFT content.",
       "acceptanceCriteria": [
-        "Create enrichPnftLockState(rpc, assets) helper function in das.ts",
-        "Takes RPC client and array of DASAssets",
-        "Filters to pNFTs, fetches Token Records, updates frozen field in place",
-        "Use this helper in both getAssetsByOwner and single NFT endpoint",
-        "Avoids code duplication",
-        "Typecheck passes"
+        "Separate 'Add Multimedia' file picker button",
+        "Accepts: mp4, mov, mp3, flac, wav, glb, gltf",
+        "Appropriate preview based on type (video element, audio element, or placeholder for 3D)",
+        "Detects multimedia category from file extension (video, audio, vr)",
+        "File stored in component state for later upload",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Implement royalties and creators configuration",
+      "description": "As a user, I want to set royalties and configure creator splits.",
+      "acceptanceCriteria": [
+        "Royalties percentage field (0-100%, step 0.5)",
+        "Dynamic creator list with add/remove buttons",
+        "Each creator row: address field, share percentage field (0-100)",
+        "Connected wallet auto-populated as first creator with 100% share on mount",
+        "Validation: shares must sum to exactly 100 (show error if not)",
+        "Validation: addresses must look like valid Solana public keys (32-44 chars base58)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement attributes/traits editor",
+      "description": "As a user, I want to add trait_type/value attribute pairs.",
+      "acceptanceCriteria": [
+        "Dynamic attribute list with add/remove buttons",
+        "Each attribute row: trait_type field, value field",
+        "Add button (+) on first row, remove button (-) on subsequent rows",
+        "At least one empty row always present for adding",
+        "Empty attributes (no trait_type) filtered out before use",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement collection assignment field",
+      "description": "As a user, I want to assign my NFT to a collection.",
+      "acceptanceCriteria": [
+        "Collection address text field",
+        "Validation: must be valid Solana public key format",
+        "Optional 'Choose Collection' button (can be placeholder for now)",
+        "Field can be left empty (no collection)",
+        "Store collection address in form state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement mutable toggle and collection NFT mode",
+      "description": "As a user, I want to control mutability and create collection NFTs.",
+      "acceptanceCriteria": [
+        "Mutable toggle switch, default ON (mutable)",
+        "Warning text when toggled OFF about immutability being permanent",
+        "'Create as Collection NFT' toggle switch, default OFF",
+        "When collection NFT mode ON: hide attributes section, hide royalties (set to 0)",
+        "Store both toggles in form state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Implement pNFT-specific rule set options",
+      "description": "As a user creating a pNFT, I want to configure rule sets.",
+      "acceptanceCriteria": [
+        "Section only visible when 'pNFT (Metaplex)' standard selected",
+        "Radio group: Metaplex, Compatibility, None, Custom",
+        "Default selection: Metaplex",
+        "Custom option shows text field for rule set address",
+        "Store Metaplex rule set address: eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9",
+        "Store Compatibility rule set address: AdH2Utn6Fus15ZhtenW4hZBQnvtLgM1YCW2MfVp7pYS5",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Implement NFT preview component",
+      "description": "As a user, I want to see a live preview of my NFT as I fill out the form.",
+      "acceptanceCriteria": [
+        "Preview card component in right column",
+        "Shows image preview (or placeholder if no image)",
+        "Displays name, symbol, description",
+        "Shows attributes as small badges/chips",
+        "Updates in real-time as form fields change",
+        "Handles loading/empty states gracefully",
+        "Styled to look like an NFT card",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement Irys upload service",
+      "description": "As a developer, I need a service to upload files to Arweave via Irys.",
+      "acceptanceCriteria": [
+        "Create uploadToIrys utility function in apps/web/src/lib/irys.ts",
+        "Function accepts File and wallet adapter, returns Arweave URI",
+        "Uses @irys/sdk or @irys/web-upload package",
+        "Handles funding Irys node with SOL if needed",
+        "Returns URI in format: https://arweave.net/{txId}",
+        "Throws descriptive error on failure",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement JSON metadata upload",
+      "description": "As a developer, I need to upload JSON metadata to Arweave.",
+      "acceptanceCriteria": [
+        "Create uploadJsonMetadata function in apps/web/src/lib/irys.ts",
+        "Accepts metadata object, returns Arweave URI",
+        "Constructs proper NFT metadata JSON structure",
+        "Includes: name, symbol, description, image, attributes, external_url",
+        "Includes animation_url if multimedia provided",
+        "Includes properties.files array with all uploaded files",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement Create NFT form submission flow",
+      "description": "As a user, I want to submit the create form and see progress.",
+      "acceptanceCriteria": [
+        "Create button at bottom of form",
+        "Button disabled until required fields valid",
+        "On click: show loading state on button",
+        "Upload image to Irys first (show 'Uploading image...')",
+        "Upload multimedia if present (show 'Uploading multimedia...')",
+        "Upload JSON metadata (show 'Uploading metadata...')",
+        "Store uploaded URIs in state for transaction step",
+        "Show toast on upload errors with retry option",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Implement Core Asset create transaction",
+      "description": "As a user, I want to mint a Core Asset NFT.",
+      "acceptanceCriteria": [
+        "Uses @metaplex-foundation/mpl-core or Kinobi-generated Core client",
+        "Constructs create instruction with: name, uri, plugins",
+        "Handles collection assignment if provided",
+        "Signs and sends transaction via wallet adapter",
+        "Shows toast: 'Minting NFT...' then 'NFT created!' or error",
+        "On success: show success dialog with mint address and Solscan link",
+        "Reset form after successful mint",
+        "Typecheck passes",
+        "Verify in browser by minting a Core Asset (if devnet available)"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Implement pNFT create transaction",
+      "description": "As a user, I want to mint a pNFT (programmable NFT).",
+      "acceptanceCriteria": [
+        "Uses @metaplex-foundation/mpl-token-metadata or Kinobi-generated client",
+        "Creates programmable NFT with: name, symbol, uri, sellerFeeBasisPoints, creators",
+        "Includes rule set configuration based on form selection",
+        "Handles collection assignment and verification if user has authority",
+        "Signs and sends transaction via wallet adapter",
+        "Shows appropriate toasts for progress and completion",
+        "On success: show success dialog with mint address",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Implement Nifty Asset create transaction",
+      "description": "As a user, I want to mint a Nifty Asset NFT.",
+      "acceptanceCriteria": [
+        "Uses Kinobi-generated Nifty client or @nifty-oss/asset",
+        "Constructs Nifty create instruction with appropriate parameters",
+        "Handles Nifty-specific metadata structure",
+        "Signs and sends transaction via wallet adapter",
+        "Shows appropriate toasts for progress and completion",
+        "On success: show success dialog with mint address",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Implement Update tab - NFT selection",
+      "description": "As a user, I want to select an NFT to update.",
+      "acceptanceCriteria": [
+        "Token address input field in Update tab",
+        "Paste or type mint address",
+        "'Load NFT' button to fetch NFT data",
+        "On load: fetch NFT metadata using DAS or direct RPC",
+        "Detect asset standard (Core, pNFT, Nifty) from on-chain data",
+        "Show asset standard badge after detection",
+        "Validate user is update authority, show error if not",
+        "Pre-populate form fields with current NFT data",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Implement Update form with dirty tracking",
+      "description": "As a user, I want to modify NFT metadata and see what changed.",
+      "acceptanceCriteria": [
+        "Same form fields as Create (name, symbol, description, etc.)",
+        "Track dirty state: compare current values to original",
+        "Update button only enabled when form is dirty",
+        "Cancel button resets form to original values",
+        "Visual indicator on changed fields (subtle highlight or icon)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Implement Update NFT transaction",
+      "description": "As a user, I want to submit my NFT updates on-chain.",
+      "acceptanceCriteria": [
+        "Upload new image/multimedia if changed",
+        "Upload new JSON metadata if any metadata changed",
+        "Construct update instruction for detected asset standard",
+        "Handle collection change: unverify old, set new, verify if authority",
+        "Handle update authority transfer if changed",
+        "Signs and sends transaction",
+        "Shows progress toasts",
+        "Refresh NFT data after successful update",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Implement Batch tab - lookup UI",
+      "description": "As a user, I want to load NFTs for batch operations.",
+      "acceptanceCriteria": [
+        "Radio buttons: 'By Collection', 'By First Verified Creator', 'By Hashlist'",
+        "Address input field for collection/creator modes",
+        "Textarea for hashlist mode (JSON array of mint addresses)",
+        "Lookup/Load button to fetch NFTs",
+        "Loading spinner during fetch",
+        "Show count of NFTs found after lookup",
+        "Error handling for invalid addresses or failed lookups",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Implement Batch - NFT list and filters",
+      "description": "As a user, I want to see loaded NFTs and filter them.",
+      "acceptanceCriteria": [
+        "Grid/list of loaded NFT thumbnails and names",
+        "Filter dropdown for creator (shows unique creators)",
+        "Filter dropdown for royalties (shows unique percentages)",
+        "Filter dropdown for update authority",
+        "Filters can be combined (AND logic)",
+        "Shows filtered count vs total count",
+        "Virtualized list for performance with large sets",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Implement Batch - collection assignment",
+      "description": "As a user, I want to add multiple NFTs to a collection at once.",
+      "acceptanceCriteria": [
+        "Expandable/accordion section 'Add to Collection'",
+        "Collection address field with validation",
+        "Shows count of NFTs not yet in selected collection",
+        "Update button to execute batch add",
+        "Handles unverifying old collection if needed",
+        "Verifies new collection if user has authority",
+        "Progress indicator during execution",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Implement Batch - global royalties/creators update",
+      "description": "As a user, I want to update royalties and creators across all selected NFTs.",
+      "acceptanceCriteria": [
+        "Expandable section 'Global Updates'",
+        "Only enabled when user is update authority of filtered NFTs",
+        "Royalties percentage field",
+        "Creators list editor (same as Create form)",
+        "Warning about overwriting individual configurations",
+        "Update button to execute batch",
+        "Progress indicator showing completed/total",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Implement Batch - verify/unverify creator",
+      "description": "As a creator, I want to batch verify or unverify my creator status.",
+      "acceptanceCriteria": [
+        "Expandable section 'Verify Creator' (enabled if user is unverified creator)",
+        "Expandable section 'Unverify Creator' (enabled if user is verified creator)",
+        "Shows count of NFTs to be signed/unsigned",
+        "Verify/Unverify button to execute batch",
+        "Executes verify/unverify instructions in batched transactions",
+        "Progress indicator during execution",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Implement batch transaction execution utility",
+      "description": "As a developer, I need efficient batch transaction execution.",
+      "acceptanceCriteria": [
+        "Create batchExecute utility in apps/web/src/lib/batch-transactions.ts",
+        "Groups instructions into optimal transaction sizes",
+        "Batches transactions (max 50 concurrent to avoid rate limits)",
+        "Returns progress updates via callback",
+        "Handles partial failures gracefully (continues with remaining)",
+        "Returns summary: { successful: number, failed: number, errors: Error[] }",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Implement Create Many batch minting",
+      "description": "As a user, I want to mint multiple identical NFTs at once.",
+      "acceptanceCriteria": [
+        "'Create Many' toggle in Create tab",
+        "Quantity input field (1-1000) appears when enabled",
+        "Hides custom keypair option when enabled",
+        "Uploads media once, reuses URIs for all NFTs",
+        "Creates transactions in batches of 50",
+        "Progress indicator showing minted/total",
+        "Summary dialog on completion with counts",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Implement custom keypair support for Create",
+      "description": "As a user, I want to use a vanity token address.",
+      "acceptanceCriteria": [
+        "Token address field shows generated/uploaded address (read-only)",
+        "'Respin' button generates new random keypair",
+        "'Upload Keypair' button accepts JSON keypair file",
+        "Validates keypair format on upload",
+        "Checks account doesn't already exist (not previously used)",
+        "Error message if keypair invalid or already used",
+        "Uses keypair as mint signer in transaction",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Implement NFT picker modal for collection selection",
+      "description": "As a user, I want to choose a collection from my owned NFTs.",
+      "acceptanceCriteria": [
+        "Create NftPickerModal component",
+        "Opens from 'Choose Collection' button in Create/Update forms",
+        "Shows grid of user's collection NFTs (filter by collectionDetails)",
+        "Search/filter within modal",
+        "Click to select, closes modal and populates field",
+        "Cancel button to close without selection",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
       "passes": false,
       "notes": ""
     }

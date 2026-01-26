@@ -11,7 +11,7 @@ export const DialogClose = DialogPrimitive.Close
 export const DialogOverlay = forwardRef<
   ElementRef<typeof DialogPrimitive.Overlay>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+>(({ className, onClick, onPointerDown, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
@@ -20,6 +20,14 @@ export const DialogOverlay = forwardRef<
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
+    onClick={(e) => {
+      e.stopPropagation()
+      onClick?.(e)
+    }}
+    onPointerDown={(e) => {
+      e.stopPropagation()
+      onPointerDown?.(e)
+    }}
     {...props}
   />
 ))
@@ -28,7 +36,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 export const DialogContent = forwardRef<
   ElementRef<typeof DialogPrimitive.Content>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onClick, onPointerDown, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -45,6 +53,14 @@ export const DialogContent = forwardRef<
         "rounded-2xl",
         className
       )}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick?.(e)
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onPointerDown?.(e)
+      }}
       {...props}
     >
       {children}

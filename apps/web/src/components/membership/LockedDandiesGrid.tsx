@@ -1,24 +1,26 @@
 import { memo } from "react"
 import { useAtomValue } from "jotai"
-import { LockOpen, Unlock } from "lucide-react"
+import { LockOpen, Unlock, Loader2 } from "lucide-react"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
 import { NiftyBadge } from "@/components/nifty-badge"
 import { DandyCardSkeleton } from "@/components/membership/DandyCardSkeleton"
 import { gapBySize, infoHeightBySize, getColumnCount } from "@/components/membership/grid-utils"
-import { userStakeRecordsAtom, isLoadingAtom, type StakeRecordAccount } from "@/stores/stake"
+import { isLoadingAtom } from "@/stores/stake"
 import { nftsAtom, isLoadingAtom as nftsLoadingAtom, type NFT } from "@/stores/nfts"
 import { layoutSizeAtom, searchQueryAtom } from "@/stores/ui"
-import { isNiftyAsset } from "@/hooks/use-staking"
+import { isNiftyAsset, DANDIES_NIFTY_COLLECTION_ADDRESS } from "@/hooks/use-staking"
+
+const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
 
 interface LockedDandyCardProps {
   nft: NFT
-  stakeRecord: StakeRecordAccount
-  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
+  onUnlock: (nft: NFT) => void
+  isUnlocking: boolean
 }
 
-const LockedDandyCard = memo(function LockedDandyCard({ nft, stakeRecord, onUnlock }: LockedDandyCardProps) {
+const LockedDandyCard = memo(function LockedDandyCard({ nft, onUnlock, isUnlocking }: LockedDandyCardProps) {
   const isNifty = isNiftyAsset(nft)
 
   return (
@@ -34,56 +36,57 @@ const LockedDandyCard = memo(function LockedDandyCard({ nft, stakeRecord, onUnlo
       </div>
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">{nft.name}</h3>
-        <p className="text-xs text-muted-foreground">Locked {formatTimeAgo(stakeRecord.stakedAt)}</p>
+        <p className="text-xs text-muted-foreground">Locked</p>
         <Button
           variant="outline"
           size="sm"
           className="mt-2 w-full text-[clamp(0.65rem,1.5vw,0.875rem)]"
-          onClick={() => onUnlock(nft, stakeRecord)}
+          onClick={() => onUnlock(nft)}
+          disabled={isUnlocking}
         >
-          <LockOpen className="mr-1 h-[1em] w-[1em]" />
-          Unlock
+          {isUnlocking ? (
+            <Loader2 className="mr-1 h-[1em] w-[1em] animate-spin" />
+          ) : (
+            <LockOpen className="mr-1 h-[1em] w-[1em]" />
+          )}
+          {isUnlocking ? "Unlocking..." : "Unlock"}
         </Button>
       </div>
     </div>
   )
 })
 
-type LockedDandyWithRecord = {
-  nft: NFT
-  record: StakeRecordAccount
-}
-
 type CellData = {
-  items: LockedDandyWithRecord[]
+  items: NFT[]
   columnCount: number
-  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
+  onUnlock: (nft: NFT) => void
+  unlockingMint: string | null
   gap: number
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { items, columnCount, onUnlock, gap } = data
+  const { items, columnCount, onUnlock, unlockingMint, gap } = data
   const index = rowIndex * columnCount + columnIndex
-  const item = items[index]
+  const nft = items[index]
 
-  if (!item) return null
+  if (!nft) return null
 
   const padding = gap / 2
 
   return (
     <div style={{ ...style, padding }}>
-      <LockedDandyCard nft={item.nft} stakeRecord={item.record} onUnlock={onUnlock} />
+      <LockedDandyCard nft={nft} onUnlock={onUnlock} isUnlocking={unlockingMint === nft.mint} />
     </div>
   )
 }
 
 interface LockedDandiesGridProps {
-  onUnlock: (nft: NFT, stakeRecord: StakeRecordAccount) => void
-  onUnlockAll: (items: { nft: NFT; stakeRecord: StakeRecordAccount }[]) => void
+  onUnlock: (nft: NFT) => void
+  unlockingMint: string | null
+  onUnlockAll: (nfts: NFT[]) => void
 }
 
-export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridProps) {
-  const stakeRecords = useAtomValue(userStakeRecordsAtom)
+export function LockedDandiesGrid({ onUnlock, unlockingMint, onUnlockAll }: LockedDandiesGridProps) {
   const nfts = useAtomValue(nftsAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
   const isNftsLoading = useAtomValue(nftsLoadingAtom)
@@ -91,18 +94,15 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
   const layoutSize = useAtomValue(layoutSizeAtom)
   const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
 
-  const nftsByMint = new Map(nfts.map((nft) => [nft.mint, nft]))
+  const lockedDandies = nfts.filter((nft) => {
+    const isDandies =
+      nft.collectionId === DANDIES_COLLECTION_ID || nft.collectionId === DANDIES_NIFTY_COLLECTION_ADDRESS
+    const isLocked = nft.staked
+    const matchesSearch =
+      !searchQuery || nft.name.toLowerCase().includes(searchQuery) || nft.mint.toLowerCase().includes(searchQuery)
 
-  const lockedDandiesWithRecords = stakeRecords
-    .map((record) => ({
-      nft: nftsByMint.get(record.nftMint),
-      record,
-    }))
-    .filter((item): item is LockedDandyWithRecord => {
-      if (!item.nft) return false
-      if (!searchQuery) return true
-      return item.nft.name.toLowerCase().includes(searchQuery) || item.nft.mint.toLowerCase().includes(searchQuery)
-    })
+    return isDandies && isLocked && matchesSearch
+  })
 
   if (isLoading) {
     return (
@@ -146,7 +146,7 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
     )
   }
 
-  if (lockedDandiesWithRecords.length === 0) {
+  if (lockedDandies.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         <div className="shrink-0 border-b border-border bg-muted/50 px-4 py-3">
@@ -162,14 +162,8 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/50 px-4 py-3">
-        <h2 className="text-lg font-semibold">Your Locked Dandies ({lockedDandiesWithRecords.length})</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onUnlockAll(lockedDandiesWithRecords.map((item) => ({ nft: item.nft, stakeRecord: item.record })))
-          }
-        >
+        <h2 className="text-lg font-semibold">Your Locked Dandies ({lockedDandies.length})</h2>
+        <Button variant="outline" size="sm" onClick={() => onUnlockAll(lockedDandies)}>
           <Unlock className="mr-2 h-4 w-4" />
           Unlock All
         </Button>
@@ -183,7 +177,7 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
             const columnWidth = width / columnCount
             const cardWidth = columnWidth - gap
             const rowHeight = cardWidth + infoHeight + gap
-            const rowCount = Math.ceil(lockedDandiesWithRecords.length / columnCount)
+            const rowCount = Math.ceil(lockedDandies.length / columnCount)
 
             return (
               <FixedSizeGrid<CellData>
@@ -193,7 +187,13 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
                 columnWidth={columnWidth}
                 rowCount={rowCount}
                 rowHeight={rowHeight}
-                itemData={{ items: lockedDandiesWithRecords, columnCount, onUnlock, gap }}
+                itemData={{
+                  items: lockedDandies,
+                  columnCount,
+                  onUnlock,
+                  unlockingMint,
+                  gap,
+                }}
               >
                 {Cell}
               </FixedSizeGrid>
@@ -203,31 +203,4 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
       </div>
     </div>
   )
-}
-
-function formatTimeAgo(stakedAt: bigint): string {
-  const now = BigInt(Math.floor(Date.now() / 1000))
-  const seconds = now - stakedAt
-
-  if (seconds < 60n) {
-    return "just now"
-  }
-
-  const minutes = seconds / 60n
-  if (minutes < 60n) {
-    return `${minutes}m ago`
-  }
-
-  const hours = minutes / 60n
-  if (hours < 24n) {
-    return `${hours}h ago`
-  }
-
-  const days = hours / 24n
-  if (days < 30n) {
-    return `${days}d ago`
-  }
-
-  const months = days / 30n
-  return `${months}mo ago`
 }

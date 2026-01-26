@@ -483,7 +483,8 @@
 }
 
 @keyframes ring-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
   }
   50% {
@@ -510,6 +511,11 @@
 
 .wallet-adapter-modal-list .wallet-adapter-button {
   @apply bg-transparent hover:bg-accent transition-all duration-200 !important;
+}
+
+/* Collage grid full width container */
+.collage-grid-wrapper > div {
+  width: 100%;
 }
 
 /* Collage grid drag cursors */

@@ -1,45 +1,64 @@
-import { useState } from "react"
-import { Lock, X, Loader2 } from "lucide-react"
-import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { Lock, Loader2 } from "lucide-react"
+import { useWallet, useKitTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
+import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
-  stakerAtom,
-  collectionsAtom,
-  addStakeRecordAtom,
-  getEmissionAddresses,
-  invalidateStakeRecordsCache,
-} from "@/stores/stake"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { stakerAtom, collectionsAtom } from "@/stores/stake"
 import {
   buildStakeInstructions,
   buildStakeNiftyInstructions,
   isNiftyAsset,
   DANDIES_NIFTY_COLLECTION_ADDRESS,
 } from "@/hooks/use-staking"
-import { prepareAndSendTransaction } from "@/lib/transaction"
-import type { NFT } from "@/stores/nfts"
-import type { Address, TransactionSigner } from "@solana/kit"
+import { setNftStakedAtom, type NFT } from "@/stores/nfts"
+import { createNoopSigner } from "@/lib/vault-transactions"
+import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 
 interface LockDialogProps {
   nft: NFT
   onClose: () => void
-  onSuccess: () => void
 }
 
-export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
+export function LockDialog({ nft, onClose }: LockDialogProps) {
   const [locking, setLocking] = useState(false)
   const { account } = useWallet()
-  const { signer, capabilities } = useTransactionSigner()
+  const { signer, ready } = useKitTransactionSigner()
+  const { disconnect } = useDisconnectWallet()
+  const { connect } = useConnectWallet()
+  const signerRef = useRef(signer)
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
-  const addStakeRecord = useSetAtom(addStakeRecordAtom)
+  const setNftStaked = useSetAtom(setNftStakedAtom)
+
+  useEffect(() => {
+    signerRef.current = signer
+  }, [signer])
+
+  const getConnectedSigner = useCallback(() => {
+    if (!signerRef.current) throw new Error("No signer available")
+    return signerRef.current
+  }, [])
+
+  const handlePhantomAccountChange = useCallback(async () => {
+    await disconnect()
+    await connect("wallet-standard:phantom" as Parameters<typeof connect>[0])
+  }, [disconnect, connect])
 
   const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
   const handleLock = async () => {
-    if (!account || !signer || !capabilities.canSign || !staker || !collection) {
+    if (!account || !signer || !ready || !staker || !collection) {
       toast.error("Wallet not connected or locking not available")
       return
     }
@@ -48,6 +67,11 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
 
     try {
       const ownerAddress = account as Address
+
+      const requiredSigners: RequiredSigner[] = [{ address: ownerAddress, label: "Owner" }]
+
+      const noopSigners = new Map<string, TransactionSigner>()
+      noopSigners.set(ownerAddress, createNoopSigner(ownerAddress))
 
       const instructions = isNiftyAsset(nft)
         ? await buildStakeNiftyInstructions({
@@ -63,21 +87,17 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
             owner: ownerAddress,
           })
 
-      await prepareAndSendTransaction({
+      await signWithMultipleWallets({
         instructions,
-        feePayer: signer as unknown as TransactionSigner,
+        requiredSigners,
+        noopSigners,
+        getConnectedSigner,
+        onPhantomAccountChange: handlePhantomAccountChange,
       })
 
-      addStakeRecord({
-        nftMint: nft.mint,
-        owner: account,
-        staker: staker.address,
-        emissions: collection ? getEmissionAddresses(collection) : [],
-      })
+      setNftStaked({ mint: nft.mint, staked: true })
 
-      invalidateStakeRecordsCache(account)
       toast.success(`Locked ${nft.name} successfully!`)
-      onSuccess()
       onClose()
     } catch (err) {
       console.error("Lock failed:", err)
@@ -87,41 +107,36 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
     }
   }
 
-  const isReady = !!account && !!signer && capabilities.canSign && !!staker && !!collection
+  const isReady = !!account && !!signer && ready && !!staker && !!collection
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Lock Dandy</h2>
-          <button
-            onClick={onClose}
-            disabled={locking}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-primary" />
+            Lock Dandy
+          </DialogTitle>
+          <DialogDescription>Lock your Dandy to earn membership rewards.</DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4">
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="aspect-square overflow-hidden">
+              <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" />
+            </div>
+            <div className="p-3">
+              <h3 className="truncate font-medium">{nft.name}</h3>
+              <p className="text-sm text-muted-foreground">{nft.collectionName ?? "Dandies"}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="mb-4 overflow-hidden rounded-lg border border-border">
-          <div className="aspect-square overflow-hidden">
-            <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" />
-          </div>
-          <div className="p-3">
-            <h3 className="truncate font-medium">{nft.name}</h3>
-            <p className="text-sm text-muted-foreground">{nft.collectionName ?? "Dandies"}</p>
-          </div>
-        </div>
-
-        <p className="mb-4 text-sm text-muted-foreground">
-          Are you sure you want to lock this Dandy? You can unlock at any time.
-        </p>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={locking} className="flex-1">
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={locking}>
             Cancel
           </Button>
-          <Button onClick={handleLock} disabled={!isReady || locking} className="flex-1">
+          <Button onClick={handleLock} disabled={!isReady || locking}>
             {locking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -134,8 +149,8 @@ export function LockDialog({ nft, onClose, onSuccess }: LockDialogProps) {
               </>
             )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -1,0 +1,153 @@
+# Ralph Progress Log
+# Feature: nft-lock-state-detection
+# Started: 2026-01-25
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**EXISTING PATTERNS TO REUSE:**
+- apps/web/src/lib/vault-transactions.ts — Has getTokenRecordPda() implementation
+- apps/api/src/services/nifty.ts — Uses getMultipleAccounts batch pattern (chunks of 100)
+- apps/api/src/services/das.ts — Main DAS service, processItem() function
+- packages/solana-programs/src/generated/token-metadata/accounts/tokenRecord.ts — Generated decoder
+
+**PDA DERIVATION PATTERN (from vault-transactions.ts):**
+```typescript
+import { getProgramDerivedAddress, getAddressEncoder } from "@solana/kit"
+
+const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+
+async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
+  })
+  return pda
+}
+```
+
+**BATCH FETCH PATTERN (from nifty.ts:464-467):**
+```typescript
+const BATCH_SIZE = 1000
+for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
+  const batch = addresses.slice(i, i + BATCH_SIZE) as Address[]
+  const response = await rpc.getMultipleAccounts(batch, { encoding: "base64" }).send()
+  // Process response.value
+}
+```
+
+**TOKEN RECORD DECODING (RECOMMENDED - using generated SDK helpers):**
+```typescript
+import { tokenMetadata } from "@biblio/solana-programs"
+
+// Batch fetch and decode in one call
+const tokenRecords = await tokenMetadata.fetchAllMaybeTokenRecord(rpc, pdaAddresses)
+for (const record of tokenRecords) {
+  if (record.exists) {
+    const frozen = record.data.state === tokenMetadata.TokenState.Locked
+  }
+}
+```
+
+**ATA DERIVATION:**
+```typescript
+import { getAssociatedTokenAddressSync } from "@solana/spl-token"
+// Or use @solana/kit pattern with getProgramDerivedAddress
+```
+
+**KEY FILES:**
+- apps/api/src/services/das.ts — Add enrichment here
+- apps/api/src/routes/nfts.ts — Add single NFT endpoint
+- apps/web/src/stores/nfts.ts — Add refetchNftAtom
+- apps/web/src/components/vault/UnvaultDialog.tsx — Call refetch after unvault
+
+---
+
+## 2026-01-25 - US-001
+- Added TOKEN_METADATA_PROGRAM_ADDRESS constant to das.ts
+- Added getTokenRecordPda(mint, tokenAccount) function using @solana/kit's getProgramDerivedAddress
+- Added getAssociatedTokenAddress(mint, owner) helper using @solana/spl-token's getAssociatedTokenAddressSync
+- **Learnings for future iterations:**
+  - The api package has @solana/spl-token but NOT @solana-program/token
+  - Use getAssociatedTokenAddressSync from @solana/spl-token for ATA derivation in api package
+  - Use @solana/kit's getProgramDerivedAddress for PDA derivation (modern kit approach)
+  - Need to convert between Address (string) and PublicKey when mixing @solana/kit and @solana/spl-token
+---
+
+## 2026-01-25 - US-002
+- Implemented pNFT lock state enrichment in getAssetsByOwner
+- After processItem loop, filters to pNFTs (tokenStandard === "ProgrammableNonFungible")
+- Derives Token Record PDA for each pNFT using getTokenRecordPda(mint, ata)
+- Uses fetchAllMaybeTokenRecord from @biblio/solana-programs to batch fetch (1000 per batch)
+- Updates frozen field based on TokenState.Locked
+- Gracefully handles missing Token Records via tokenRecord.exists check
+- **Learnings for future iterations:**
+  - @biblio/solana-programs exports as namespaces: `import { tokenMetadata } from "@biblio/solana-programs"`
+  - Use `tokenMetadata.fetchAllMaybeTokenRecord` and `tokenMetadata.TokenState` (not direct imports)
+  - `fetchAllMaybeTokenRecord` returns MaybeAccount[] - check `.exists` before accessing `.data`
+  - The RPC client from solana-client.ts is compatible with fetchAllMaybeTokenRecord
+---
+
+## 2026-01-25 - US-003
+- Added GET /nfts/:mint route to apps/api/src/routes/nfts.ts
+- Exported processItem function from das.ts for reuse
+- Created getAsset function in das.ts that:
+  - Fetches single asset via rpc.getAsset({ id: mint })
+  - Processes with processItem() to get DASAsset shape
+  - Adds owner field from raw asset
+  - Enriches pNFT lock state by fetching Token Record
+  - Returns null if asset not found or not a valid NFT type
+- Route returns 404 if asset is null
+- **Learnings for future iterations:**
+  - Single asset fetch uses same pattern as bulk: processItem + Token Record enrichment
+  - Need to pass owner to getAsset result since processItem doesn't include it
+  - Route ordering matters in Hono - /:mint catches all, so place after more specific routes
+---
+
+## 2026-01-25 - US-004
+- Added refetchNftAtom write atom to apps/web/src/stores/nfts.ts
+- Takes mint address as parameter
+- Calls GET /api/nfts/:mint endpoint to fetch updated NFT data
+- Updates the NFT in nftsAtom array with fresh data (creates new array reference for React)
+- If NFT not found in local array, returns early (doesn't add new NFTs)
+- Uses authFetch to include auth headers for authenticated endpoint
+- **Learnings for future iterations:**
+  - Jotai write atoms use pattern: `atom(null, async (get, set, param) => {...})`
+  - When updating React/Jotai state, always create new array reference: `.map()` instead of direct mutation
+  - mapNftData helper can take optional defaultOwner for fallback
+  - authFetch helper handles auth headers from localStorage session
+---
+
+## 2026-01-25 - US-005
+- In UnvaultDialog.tsx, added refetchNft call after successful unvault
+- Imported refetchNftAtom from @/stores/nfts
+- Used useSetAtom hook to get the refetchNft action
+- After removeVaultedMints call, awaits Promise.all to refetch all unvaulted NFT mints
+- Refetched data will have frozen: false from backend Token Record check
+- This prevents NFT from reappearing in vault view since frozen field is now accurate
+- **Learnings for future iterations:**
+  - useSetAtom returns the setter function for write atoms (not a tuple like useState)
+  - Promise.all is used for parallel refetches since they're independent
+  - Refetch is awaited before showing success toast to ensure UI is updated
+---
+
+## 2026-01-25 - US-006
+- Created enrichPnftLockState(rpc, assets) helper function in das.ts
+- Takes SolanaClient RPC instance and array of DASAssets
+- Filters to pNFTs that have owner set (needed for ATA derivation)
+- Derives Token Record PDAs in parallel, batches fetch (1000 per batch)
+- Updates frozen field in place for each pNFT based on TokenState.Locked
+- Updated getAssetsByOwner to set owner field on all assets before calling helper
+- Updated getAsset (single NFT endpoint) to use the helper with a single-item array
+- Code duplication eliminated - both functions now use the same enrichment logic
+- **Learnings for future iterations:**
+  - Helper functions that modify arrays in place are convenient for enrichment patterns
+  - The owner field must be set on assets before calling enrichPnftLockState
+  - For single items, passing [dasAsset] to the array-based helper works cleanly
+---
+

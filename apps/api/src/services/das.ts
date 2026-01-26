@@ -5,13 +5,52 @@
 
 import type { Asset, GetAssetResponseList, Grouping } from "helius-sdk/types/das"
 import { type Address, getProgramDerivedAddress, getAddressEncoder } from "@solana/kit"
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token"
-import { PublicKey } from "@solana/web3.js"
+import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
 import { tokenMetadata } from "@biblio/solana-programs"
 import { getRpc, type SolanaClient } from "../lib/solana-client"
 import type { Env } from "../types"
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+
+/**
+ * Derives the Metadata PDA for an NFT mint
+ */
+async function getMetadataPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: ["metadata", getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS), getAddressEncoder().encode(mint)],
+  })
+  return pda
+}
+
+/**
+ * Fetches the rule set address from a pNFT's metadata account
+ * Returns null if no rule set is configured
+ */
+async function fetchMetadataRuleSet(rpc: SolanaClient, mint: Address): Promise<Address | null> {
+  try {
+    const metadataPda = await getMetadataPda(mint)
+    const metadata = await tokenMetadata.fetchMaybeMetadata(rpc, metadataPda)
+
+    if (!metadata.exists) {
+      return null
+    }
+
+    // Check if programmableConfig exists and has a rule set
+    const programmableConfig = metadata.data.programmableConfig
+    if (programmableConfig.__option === "Some") {
+      const config = programmableConfig.value
+      if (config.__kind === "V1" && config.ruleSet.__option === "Some") {
+        return config.ruleSet.value
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error(`[DAS] Error fetching metadata rule set for ${mint}:`, error)
+    return null
+  }
+}
 
 /**
  * Derives the Token Record PDA for a pNFT
@@ -34,9 +73,13 @@ export async function getTokenRecordPda(mint: Address, tokenAccount: Address): P
 /**
  * Derives the Associated Token Address for a mint and owner
  */
-export function getAssociatedTokenAddress(mint: Address, owner: Address): Address {
-  const ata = getAssociatedTokenAddressSync(new PublicKey(mint), new PublicKey(owner), false, TOKEN_PROGRAM_ID)
-  return ata.toBase58() as Address
+export async function findAta(mint: Address, owner: Address): Promise<Address> {
+  const [ata] = await findAssociatedTokenPda({
+    mint,
+    owner,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
+  })
+  return ata
 }
 
 // Helius SDK doesn't include plugins type for Core assets - extend it
@@ -84,6 +127,8 @@ export type DASAsset = {
   delegate: string | null
   tokenStandard: TokenStandard
   owner?: string
+  ruleSet: string | null
+  staked: boolean
 }
 
 export type DASCollection = {
@@ -109,7 +154,7 @@ export async function enrichPnftLockState(rpc: SolanaClient, assets: DASAsset[])
   // Derive Token Record PDAs for all pNFTs
   const tokenRecordPdas = await Promise.all(
     pnfts.map(async (pnft) => {
-      const ata = getAssociatedTokenAddress(pnft.mint as Address, pnft.owner as Address)
+      const ata = await findAta(pnft.mint as Address, pnft.owner as Address)
       return getTokenRecordPda(pnft.mint as Address, ata)
     })
   )
@@ -191,6 +236,8 @@ export function processItem(item: CoreAsset, collectionsMap: Map<string, DASColl
     frozen,
     delegate,
     tokenStandard,
+    ruleSet: null,
+    staked: false,
   }
 
   if (collectionId) {
@@ -325,9 +372,71 @@ export async function getAsset(env: Env, mint: string): Promise<DASAsset | null>
     // Enrich pNFT lock state from Token Record
     await enrichPnftLockState(rpc, [dasAsset])
 
+    // For pNFTs, fetch the rule set from metadata
+    if (dasAsset.tokenStandard === "ProgrammableNonFungible") {
+      const ruleSet = await fetchMetadataRuleSet(rpc, mint as Address)
+      dasAsset.ruleSet = ruleSet
+    }
+
     return dasAsset
   } catch (error) {
     console.error(`[DAS] Error fetching asset ${mint}:`, error)
     return null
+  }
+}
+
+/**
+ * Fetches multiple assets by mint addresses and enriches pNFT lock state
+ * More efficient than calling getAsset multiple times
+ */
+export async function getAssetBatch(env: Env, mints: string[]): Promise<DASAsset[]> {
+  if (mints.length === 0) return []
+
+  const rpc = getClient(env)
+  const collectionsMap = new Map<string, DASCollection>()
+  const assets: DASAsset[] = []
+
+  try {
+    // Fetch all assets in parallel
+    const rawAssets = await Promise.all(
+      mints.map(async (mint) => {
+        try {
+          return await rpc.getAsset({ id: mint }).send()
+        } catch {
+          return null
+        }
+      })
+    )
+
+    // Process each asset
+    for (const rawAsset of rawAssets) {
+      if (!rawAsset) continue
+
+      const dasAsset = processItem(rawAsset as CoreAsset, collectionsMap)
+      if (!dasAsset) continue
+
+      if (rawAsset.ownership?.owner) {
+        dasAsset.owner = rawAsset.ownership.owner
+      }
+
+      assets.push(dasAsset)
+    }
+
+    // Enrich pNFT lock states in batch (single batch fetch for all pNFTs)
+    await enrichPnftLockState(rpc, assets)
+
+    // Fetch rule sets for pNFTs
+    const pnfts = assets.filter((a) => a.tokenStandard === "ProgrammableNonFungible")
+    if (pnfts.length > 0) {
+      const ruleSets = await Promise.all(pnfts.map((pnft) => fetchMetadataRuleSet(rpc, pnft.mint as Address)))
+      for (let i = 0; i < pnfts.length; i++) {
+        pnfts[i].ruleSet = ruleSets[i]
+      }
+    }
+
+    return assets
+  } catch (error) {
+    console.error(`[DAS] Error fetching asset batch:`, error)
+    return []
   }
 }

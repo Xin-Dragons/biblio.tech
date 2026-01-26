@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSetAtom, useAtomValue } from "jotai"
 import { getWallets } from "@wallet-standard/app"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
 import { linkWalletAtom, fetchLinkedWalletsAtom, linkedWalletsAtom } from "@/stores/linked-wallets"
 import { sessionAtom, connectedWalletAtom } from "@/stores/auth"
 import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"

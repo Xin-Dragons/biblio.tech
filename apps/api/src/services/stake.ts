@@ -124,6 +124,52 @@ export async function getStakeRecordsByOwner(env: Env, owner: string): Promise<S
 }
 
 /**
+ * Fetches a stake record by NFT mint address
+ * Uses getProgramAccounts with memcmp filter on the nftMint field
+ *
+ * StakeRecord memory layout:
+ * - discriminator: 8 bytes (offset 0)
+ * - staker: 32 bytes (offset 8)
+ * - owner: 32 bytes (offset 40)
+ * - nftMint: 32 bytes (offset 72)
+ */
+export async function getStakeRecordByNftMint(env: Env, nftMint: string): Promise<StakeRecordAccount | null> {
+  const rpc = getClient(env)
+
+  const base58Decoder = getBase58Decoder()
+  const discriminatorBase58 = base58Decoder.decode(stake.STAKE_RECORD_DISCRIMINATOR)
+
+  type Base58EncodedBytes = string & {
+    readonly "__brand:@solana/kit": "Base58EncodedBytes"
+    readonly "__stringEncoding:@solana/kit": "base58"
+  }
+
+  const response = await rpc
+    .getProgramAccounts(stake.STAKE_PROGRAM_ADDRESS, {
+      encoding: "base64",
+      filters: [
+        { memcmp: { offset: 0n, bytes: discriminatorBase58 as Base58EncodedBytes, encoding: "base58" } },
+        { memcmp: { offset: 72n, bytes: nftMint as Base58EncodedBytes, encoding: "base58" } },
+      ],
+    })
+    .send()
+
+  if (response.length === 0) {
+    return null
+  }
+
+  const [dataBase64] = response[0].account.data
+  const data = getBase64Encoder().encode(dataBase64)
+  const decoder = stake.getStakeRecordDecoder()
+  const decoded = decoder.decode(data)
+
+  return {
+    ...decoded,
+    address: response[0].pubkey,
+  }
+}
+
+/**
  * Fetches all emission accounts for the given collections
  * Each collection can have up to 4 emission types: token, selection, points, distribution
  */

@@ -1,0 +1,174 @@
+# Ralph Progress Log
+# Feature: tagging
+# Started: 2026-01-26
+
+## Codebase Patterns - IMPORTANT EXISTING CODE
+
+**EXISTING TAG INFRASTRUCTURE (stores/user.ts):**
+- tagsAtom: atomWithStorage<Tag[]>("biblio-tags", []) - synced from API on load
+- nftTagsAtom: atomWithStorage<Record<string, string[]>>("biblio-nft-tags", {}) - synced from API on load
+- fetchTagsAtom, fetchNftTagsAtom - fetch atoms called on authenticated load
+- tagsLoadingAtom - loading state to avoid flashing empty state
+- addTagAtom, removeTagAtom, toggleNftTagAtom - local-only actions, need to call APIs
+- Tag type: { id: string; name: string; color: string }
+
+**USER DO ENDPOINTS (routes/user.ts):**
+- Existing patterns for layout, sizes, order storage
+- authFetch helper in stores/user.ts for authenticated requests
+- User DO stores preferences as JSON fields
+
+**UI COMPONENTS TO REUSE:**
+- Dialog component: apps/web/src/components/ui/dialog.tsx
+- DropdownMenu: apps/web/src/components/ui/dropdown-menu.tsx
+- CollectionView: apps/web/src/components/collection-view.tsx (for tag page)
+- Toolbar: apps/web/src/components/toolbar.tsx (add tag button here)
+
+**COLOR PALETTE (8 preset colors):**
+```
+#ef4444 (red)
+#f97316 (orange)
+#eab308 (yellow)
+#22c55e (green)
+#06b6d4 (cyan)
+#3b82f6 (blue)
+#8b5cf6 (purple)
+#ec4899 (pink)
+```
+
+**KEY FILES:**
+- apps/api/src/routes/user.ts - Add tag endpoints here
+- apps/api/src/dos/user/index.ts - User Durable Object
+- apps/web/src/stores/user.ts - Tag atoms (extend for API sync)
+- apps/web/src/components/toolbar.tsx - Add tag button
+- apps/web/src/components/layout/sidebar.tsx - Add tags section
+- apps/web/src/components/nft-grid.tsx - Add tag indicators to cards
+
+---
+
+## 2026-01-26 - US-001
+- Implemented tag API endpoint constraints per PRD requirements
+- Files changed:
+  - apps/api/src/dos/user/index.ts - Updated LIMITS (20 tags max, 30 char name), added case-insensitive unique name validation
+  - apps/api/src/routes/user.ts - Changed PATCH to PUT for tag updates, added proper error handling
+- **Learnings for future iterations:**
+  - Tag endpoints already existed in codebase, only needed constraint updates
+  - UserDO uses Drizzle ORM with SQLite storage for tags
+  - ValidationError class is used for returning 400 errors from DO
+  - authFetch helper in stores/user.ts for authenticated requests
+---
+
+## 2026-01-26 - US-002
+- Implemented NFT-tag association API endpoints
+- Files changed:
+  - apps/api/src/dos/user/index.ts - Added getNftTags() method for inverted mapping, added /tags/:id/nfts handlers
+  - apps/api/src/routes/user.ts - Added GET/PUT /tags/:id/nfts and GET /nft-tags routes
+- **Learnings for future iterations:**
+  - The taggedNfts table stores (tagId, mint) pairs
+  - getNftTags() returns the inverted map { [mint]: tagId[] } by querying all rows and grouping
+  - Use regex path matching in DO fetch handler for nested routes like /tags/:id/nfts
+---
+
+## 2026-01-26 - US-010
+- Implemented tag syncing on authenticated app load
+- Files changed:
+  - apps/web/src/stores/user.ts - Added fetchTagsAtom, fetchNftTagsAtom, and tagsLoadingAtom
+  - apps/web/src/components/layout/index.tsx - Added fetch calls in DataFetcher for authenticated users
+- **Learnings for future iterations:**
+  - DataFetcher component in layout/index.tsx handles all initial data fetching
+  - Pattern: check session?.token to determine authenticated state
+  - Use authFetch helper (already in user.ts) for authenticated API requests
+  - tagsLoadingAtom can be used by UI components to avoid flashing empty state
+---
+
+## 2026-01-26 - US-003
+- Implemented TagManagementDialog component for CRUD operations on tags
+- Files changed:
+  - apps/web/src/components/tag-management-dialog.tsx - New component with full tag management UI
+  - apps/web/src/stores/user.ts - Added createTagAtom, updateTagAtom, deleteTagAtom with optimistic updates
+- **Learnings for future iterations:**
+  - Use optimistic updates pattern: save prev state, apply change, try API, rollback on error
+  - Dialog follows BulkSendDialog pattern: controlled open state, Dialog + DialogContent structure
+  - The legacy addTagAtom/removeTagAtom are kept for backward compatibility with existing sidebar
+  - Color picker uses PRESET_COLORS array with ring styling to show selected state
+  - Inline confirmation for delete (delete confirm row replaces normal row) instead of separate dialog
+---
+
+## 2026-01-26 - US-006
+- Added tags section to sidebar with navigation to tag pages
+- Files changed:
+  - apps/web/src/components/layout/sidebar.tsx - Replaced local tag management with TagManagementDialog, added tag navigation links
+- **Learnings for future iterations:**
+  - Sidebar has collapsed state controlled by sidebarCollapsedAtom
+  - Tags section only shows when !collapsed && isAuthenticated
+  - TagNavItem uses Link component for navigation to /tags/:id
+  - "Manage Tags" button at bottom opens TagManagementDialog
+  - Use tagsLoadingAtom to avoid flashing empty state while loading
+  - Removed legacy AddTagDialog and TagItem components (replaced by TagManagementDialog)
+---
+
+## 2026-01-26 - US-004
+- Added Tag button to toolbar with dropdown menu for bulk tagging selected NFTs
+- Files changed:
+  - apps/web/src/components/selection-controls.tsx - New component with Tag dropdown in selection mode
+  - apps/web/src/stores/user.ts - Added bulkUpdateNftTagsAtom for API calls with optimistic updates
+- **Learnings for future iterations:**
+  - SelectionControls component handles bulk actions (Send, Burn, Vault, Tag) when isSelectMode is active
+  - Tag state for selection: "all" = checkmark, "some" = minus icon, "none" = empty
+  - bulkUpdateNftTagsAtom handles PUT /api/user/tags/:id/nfts with { add: string[], remove: string[] }
+  - DropdownMenu from @radix-ui/react-dropdown-menu used for tag picker
+  - isAuthenticatedAtom from stores/auth.ts controls tag button visibility
+---
+
+## 2026-01-26 - US-005
+- Added tag indicator dots to NFT cards showing assigned tags
+- Files changed:
+  - apps/web/src/components/nft-grid.tsx - Added TagDots component with tooltip, max 3 dots + overflow count
+- **Learnings for future iterations:**
+  - TagDots component uses Tooltip from @/components/ui/tooltip for hover behavior
+  - Tag dots positioned at absolute right-2.5 top-2.5 z-10
+  - MAX_VISIBLE_DOTS constant (3) controls visible dots before +N indicator
+  - Uses stopPropagation to prevent card click when hovering dots
+  - Tags hidden in select mode (!isSelectMode) to avoid visual clutter
+  - Reads from tagsAtom and nftTagsAtom directly in NftCard component
+---
+
+## 2026-01-26 - US-007
+- Created tag detail page with route /tags/:id
+- Files changed:
+  - apps/web/src/routes/tag.tsx - New TagPage component using CollectionView
+  - apps/web/src/App.tsx - Added route for /tags/:id
+- **Learnings for future iterations:**
+  - TagPage follows StarredPage pattern: filter allNfts by tag membership using nftTagsAtom
+  - Navigate to /nfts if tag not found (handles deleted tags or invalid IDs)
+  - Title uses inline JSX for colored dot indicator - cast to string for CollectionView prop
+  - Context prop `tag-{id}` enables separate collage layouts per tag
+  - CollectionView provides all standard grid features (selection, bulk actions, sorting) automatically
+---
+
+## 2026-01-26 - US-008
+- Added tag filter dropdown to toolbar with URL sync for filtering NFT grid by tags
+- Files changed:
+  - apps/web/src/stores/ui.ts - Added tagFilterAtom and showUntaggedFilterAtom
+  - apps/web/src/stores/nfts.ts - Integrated tag filtering into filteredNftsAtom (OR logic for tags, AND with search)
+  - apps/web/src/components/tag-filter-dropdown.tsx - New TagFilterDropdown component with multi-select
+  - apps/web/src/components/layout-controls.tsx - Integrated TagFilterDropdown into toolbar
+- **Learnings for future iterations:**
+  - Tag filter uses OR logic (NFTs in ANY selected tag) vs AND logic for search
+  - URL params sync with useSearchParams from react-router (?tags=id1,id2&untagged=true)
+  - TagFilterDropdown renders in LayoutControls for all views with showTagFilter prop
+  - Clear button (X) appears when filters are active for quick reset
+  - Untagged filter is separate boolean to distinguish from "no filter" state
+---
+
+## 2026-01-26 - US-009
+- Added tag management to NFT detail modal with chip-based UI
+- Files changed:
+  - apps/web/src/components/nft-detail-modal.tsx - Replaced toggle-based tag UI with chips and dropdown
+- **Learnings for future iterations:**
+  - Tags section only shows when isAuthenticated (from stores/auth.ts)
+  - Assigned tags displayed as colored chips with X button for removal
+  - Add Tag dropdown shows only unassigned tags (filtered from availableTags)
+  - Uses bulkUpdateNftTagsAtom for API calls instead of local toggleNftTagAtom
+  - Empty states: "No tags created yet" when tags.length === 0, "All tags assigned" when all assigned
+---
+

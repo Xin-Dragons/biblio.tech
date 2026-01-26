@@ -85,12 +85,12 @@ export interface StakeRecordAccount {
 }
 
 /**
- * Base atoms for stake data
+ * Base atoms for stake data (staker config, collections, emissions)
+ * These are needed for building stake/unstake transactions
  */
 export const stakerAtom = atom<StakerAccount | null>(null)
 export const collectionsAtom = atom<CollectionAccount[]>([])
 export const emissionsAtom = atom<EmissionAccount[]>([])
-export const userStakeRecordsAtom = atom<StakeRecordAccount[]>([])
 
 /**
  * Loading and error state atoms
@@ -109,21 +109,6 @@ export function getEmissionAddresses(collection: CollectionAccount): string[] {
   if (isSome(collection.distributionEmission)) emissions.push(collection.distributionEmission.value)
   return emissions
 }
-
-/**
- * Derived atom to check if a specific NFT mint is staked
- */
-export const stakedMintsSetAtom = atom((get) => {
-  const records = get(userStakeRecordsAtom)
-  return new Set(records.map((r) => r.nftMint))
-})
-
-/**
- * Derived atom to get count of staked NFTs
- */
-export const stakedNftCountAtom = atom((get) => {
-  return get(userStakeRecordsAtom).length
-})
 
 /**
  * Fetch stake data action - fetches Dandies staker info, collections, and emissions
@@ -154,91 +139,3 @@ export const fetchStakeDataAtom = atom(null, async (_get, set) => {
     set(isLoadingAtom, false)
   }
 })
-
-/**
- * Fetch user's stake records action
- * @param params.wallet - The wallet address to fetch records for
- * @param params.silent - If true, don't set loading state (for background refreshes)
- */
-export const fetchUserStakeRecordsAtom = atom(
-  null,
-  async (_get, set, params: string | { wallet: string; silent?: boolean }) => {
-    const wallet = typeof params === "string" ? params : params.wallet
-    const silent = typeof params === "object" && params.silent
-
-    if (!silent) {
-      set(isLoadingAtom, true)
-    }
-    set(errorAtom, null)
-
-    try {
-      const response = await fetch(`/api/stake/records/${wallet}`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch stake records")
-      }
-
-      const data = (await response.json()) as {
-        records: StakeRecordAccount[]
-      }
-
-      const bigIntFields = ["stakedAt", "pendingClaim"]
-      const parsedRecords = parseBigInts(data.records, bigIntFields)
-      set(userStakeRecordsAtom, parsedRecords)
-    } catch (err) {
-      set(errorAtom, err instanceof Error ? err.message : "Unknown error")
-    } finally {
-      if (!silent) {
-        set(isLoadingAtom, false)
-      }
-    }
-  }
-)
-
-/**
- * Optimistic update: Add a stake record when staking succeeds
- */
-export const addStakeRecordAtom = atom(
-  null,
-  (
-    get,
-    set,
-    params: {
-      nftMint: string
-      owner: string
-      staker: string
-      emissions: string[]
-    }
-  ) => {
-    const records = get(userStakeRecordsAtom)
-    const newRecord: StakeRecordAccount = {
-      address: `optimistic-${params.nftMint}`,
-      staker: params.staker,
-      owner: params.owner,
-      nftMint: params.nftMint,
-      stakedAt: BigInt(Math.floor(Date.now() / 1000)),
-      pendingClaim: 0n,
-      emissions: params.emissions,
-      bump: 0,
-    }
-    set(userStakeRecordsAtom, [...records, newRecord])
-  }
-)
-
-/**
- * Optimistic update: Remove a stake record when unstaking succeeds
- */
-export const removeStakeRecordAtom = atom(null, (get, set, nftMint: string) => {
-  const records = get(userStakeRecordsAtom)
-  set(
-    userStakeRecordsAtom,
-    records.filter((r) => r.nftMint !== nftMint)
-  )
-})
-
-/**
- * Invalidates the stake records cache for a wallet
- * Call after successful stake/unstake transactions
- */
-export function invalidateStakeRecordsCache(wallet: string): void {
-  fetch(`/api/stake/records/${wallet}`, { method: "DELETE" }).catch(() => {})
-}

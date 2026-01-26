@@ -1,11 +1,9 @@
-import { useMemo, memo, useState, useRef, useEffect } from "react"
-import { Star, Trash2, Check, Lock, Shield, ShieldPlus, MoreVertical } from "lucide-react"
+import { memo, useState, useRef, useEffect } from "react"
+import { Star, Trash2, Check, Lock, Shield, ShieldPlus } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
-import { selectAtom } from "jotai/utils"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { cn } from "@/lib/utils"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { NiftyBadge } from "@/components/nifty-badge"
 import { UnvaultDialog } from "@/components/vault/UnvaultDialog"
@@ -22,7 +20,7 @@ import {
 import { layoutSizeAtom, showInfoAtom, type LayoutSize } from "@/stores/ui"
 import { selectedNftAtom, type NFT } from "@/stores/nfts"
 import { isSelectModeAtom, selectedMintsAtom, toggleSelectedAtom } from "@/stores/selection"
-import { vaultedMintsSetAtom } from "@/stores/vault"
+import { isVaultedAtom } from "@/stores/vault"
 
 interface TagDotsProps {
   mint: string
@@ -106,8 +104,7 @@ const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardPr
     return () => observer.disconnect()
   }, [])
 
-  const isVaultedAtom = useMemo(() => selectAtom(vaultedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
-  const isVaulted = useAtomValue(isVaultedAtom)
+  const isVaulted = useAtomValue(isVaultedAtom(nft.mint))
 
   const isStarred = starred.has(nft.mint)
   const isJunk = junk.has(nft.mint)
@@ -146,12 +143,44 @@ const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardPr
 
       {/* Info Section */}
       {showInfo && (
-        <div className="relative p-3">
-          <h3 className="truncate text-sm font-medium">{nft.name}</h3>
-          {nft.listing?.price && (
-            <p className="mt-0.5 text-xs font-medium text-primary">
-              {(Number(nft.listing.price) / 1e9).toFixed(2)} SOL
-            </p>
+        <div className="relative flex items-center gap-2 p-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-medium">{nft.name}</h3>
+            {nft.listing?.price && (
+              <p className="mt-0.5 text-xs font-medium text-primary">
+                {(Number(nft.listing.price) / 1e9).toFixed(2)} SOL
+              </p>
+            )}
+          </div>
+          {!isSelectMode && (
+            <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  toggleStarred(nft.mint)
+                }}
+                className={cn(
+                  "rounded-md p-1 transition-colors",
+                  isStarred ? "text-amber-500" : "text-muted-foreground hover:text-amber-500"
+                )}
+              >
+                <Star className={cn("h-3.5 w-3.5", isStarred && "fill-current")} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  toggleJunk(nft.mint)
+                }}
+                className={cn(
+                  "rounded-md p-1 transition-colors",
+                  isJunk ? "text-destructive" : "text-muted-foreground hover:text-destructive"
+                )}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -170,68 +199,11 @@ const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardPr
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* Image Overlay Buttons - shown when no info bar or for vault */}
       {!isSelectMode && (
-        <div className="absolute right-2.5 top-2.5 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          {isSmallCard ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded-lg p-1.5 backdrop-blur-sm bg-black/50 text-white/80 hover:bg-black/70"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                {canVault && (
-                  <DropdownMenuItem onClick={() => setVaultDialogOpen(true)}>
-                    <ShieldPlus className="mr-2 h-4 w-4" />
-                    Vault
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => toggleStarred(nft.mint)}>
-                  <Star className={cn("mr-2 h-4 w-4", isStarred && "fill-current text-amber-500")} />
-                  {isStarred ? "Unstar" : "Star"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => toggleJunk(nft.mint)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {isJunk ? "Restore" : "Junk"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div className="flex gap-1.5">
-              {canVault && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setVaultDialogOpen(true)
-                  }}
-                  className="rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200 bg-black/50 text-white/80 hover:bg-primary/80 hover:text-white"
-                >
-                  <ShieldPlus className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  toggleJunk(nft.mint)
-                }}
-                className={cn(
-                  "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
-                  isJunk
-                    ? "bg-destructive/90 text-white"
-                    : "bg-black/50 text-white/80 hover:bg-destructive/80 hover:text-white"
-                )}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+        <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-all duration-300 group-hover:opacity-100">
+          {!showInfo && (
+            <>
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -247,7 +219,34 @@ const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardPr
               >
                 <Star className={cn("h-4 w-4", isStarred && "fill-current")} />
               </button>
-            </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  toggleJunk(nft.mint)
+                }}
+                className={cn(
+                  "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
+                  isJunk
+                    ? "bg-destructive/90 text-white"
+                    : "bg-black/50 text-white/80 hover:bg-destructive/80 hover:text-white"
+                )}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          {canVault && (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setVaultDialogOpen(true)
+              }}
+              className="rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200 bg-black/50 text-white/80 hover:bg-primary/80 hover:text-white"
+            >
+              <ShieldPlus className="h-4 w-4" />
+            </button>
           )}
         </div>
       )}

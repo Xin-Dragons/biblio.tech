@@ -1,6 +1,19 @@
 import { atom } from "jotai"
 import { atomWithStorage, createJSONStorage } from "jotai/utils"
 
+export const PRESET_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+] as const
+
+export type PresetColor = (typeof PRESET_COLORS)[number]
+
 export interface Tag {
   id: string
   name: string
@@ -58,6 +71,18 @@ export const junkAtom = atom(
 export const tagsAtom = atomWithStorage<Tag[]>("biblio-tags", [])
 
 export const nftTagsAtom = atomWithStorage<Record<string, string[]>>("biblio-nft-tags", {})
+
+// Derived atom for tag NFT counts - computed once, used everywhere
+export const tagNftCountsAtom = atom((get) => {
+  const nftTags = get(nftTagsAtom)
+  const counts: Record<string, number> = {}
+  for (const tagIds of Object.values(nftTags)) {
+    for (const tagId of tagIds) {
+      counts[tagId] = (counts[tagId] ?? 0) + 1
+    }
+  }
+  return counts
+})
 
 // Loading state for tags (to avoid flash of empty state)
 export const tagsLoadingAtom = atom(false)
@@ -377,22 +402,3 @@ export const bulkUpdateNftTagsAtom = atom(
     }
   }
 )
-
-// Legacy local-only atoms (used by sidebar until US-006 migrates to API-backed atoms)
-export const addTagAtom = atom(null, (_get, set, tag: Omit<Tag, "id">) => {
-  const id = crypto.randomUUID()
-  set(tagsAtom, (prev) => [...prev, { ...tag, id }])
-  return id
-})
-
-export const removeTagAtom = atom(null, (_get, set, tagId: string) => {
-  set(tagsAtom, (prev) => prev.filter((t) => t.id !== tagId))
-  set(nftTagsAtom, (prev) => {
-    const next: Record<string, string[]> = {}
-    for (const [mint, tags] of Object.entries(prev)) {
-      const filtered = tags.filter((t) => t !== tagId)
-      if (filtered.length > 0) next[mint] = filtered
-    }
-    return next
-  })
-})

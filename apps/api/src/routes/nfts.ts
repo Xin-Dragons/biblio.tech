@@ -2,8 +2,9 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { rateLimiterMiddleware } from "../middleware/rate-limiter"
 import { heliusService } from "../services/helius"
-import { getAssetsByOwner, getAsset, type DASAsset, type DASCollection } from "../services/das"
+import { getAssetsByOwner, getAsset, getAssetBatch, type DASAsset, type DASCollection } from "../services/das"
 import { getNiftyAssetsByOwner, fetchNiftyCollections, type NiftyAsset } from "../services/nifty"
+import { getCachedStakeRecords } from "./stake"
 
 export const nftsRoutes = new Hono<HonoEnv>()
 
@@ -40,6 +41,8 @@ function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string
     frozen: niftyAsset.state === "Locked",
     delegate: niftyAsset.delegate,
     tokenStandard: "Nifty",
+    ruleSet: null,
+    staked: false,
   }
 }
 
@@ -48,10 +51,14 @@ nftsRoutes.get("/by-owner/:wallet", async (c) => {
   const wallet = c.req.param("wallet")
 
   try {
-    const [dasResult, niftyAssets] = await Promise.all([
+    const [dasResult, niftyAssets, stakeRecords] = await Promise.all([
       getAssetsByOwner(c.env, wallet),
       getNiftyAssetsByOwner(c.env, wallet),
+      getCachedStakeRecords(c.env, wallet),
     ])
+
+    // Build set of staked mints
+    const stakedMints = new Set(stakeRecords.map((r) => r.nftMint))
 
     const { assets: dasAssets, collections: dasCollections } = dasResult
 
@@ -64,6 +71,11 @@ nftsRoutes.get("/by-owner/:wallet", async (c) => {
     })
 
     const allAssets = [...dasAssets, ...mappedNiftyAssets]
+
+    // Enrich assets with staked status
+    for (const asset of allAssets) {
+      asset.staked = stakedMints.has(asset.mint)
+    }
 
     const collectionsMap = new Map<string, DASCollection>()
     for (const col of dasCollections) {
@@ -114,10 +126,91 @@ nftsRoutes.get("/:mint", async (c) => {
       return c.json({ error: "Asset not found" }, 404)
     }
 
+    // Update the cache for this NFT's owner (fire and forget)
+    if (asset.owner) {
+      const cacheId = c.env.NFT_CACHE_DO.idFromName(asset.owner)
+      const cacheStub = c.env.NFT_CACHE_DO.get(cacheId)
+      void cacheStub.fetch(
+        new Request("http://do/cache", {
+          method: "PATCH",
+          body: JSON.stringify({
+            mint: asset.mint,
+            name: asset.name,
+            image: asset.image,
+            collectionId: asset.collectionId ?? "",
+            collectionName: asset.collectionName,
+            attributes: asset.attributes,
+            frozen: asset.frozen,
+            delegate: asset.delegate,
+            compressed: asset.compressed,
+            tokenStandard: asset.tokenStandard,
+            staked: asset.staked,
+          }),
+        })
+      )
+    }
+
     return c.json(asset)
   } catch (err) {
     console.error("Error fetching NFT:", err)
     return c.json({ error: "Failed to fetch NFT" }, 500)
+  }
+})
+
+// Batch fetch multiple NFTs by mint addresses with enriched lock state
+nftsRoutes.post("/batch", async (c) => {
+  try {
+    const { mints } = await c.req.json<{ mints: string[] }>()
+
+    if (!mints || !Array.isArray(mints) || mints.length === 0) {
+      return c.json({ error: "mints array required" }, 400)
+    }
+
+    if (mints.length > 100) {
+      return c.json({ error: "Maximum 100 mints per request" }, 400)
+    }
+
+    const assets = await getAssetBatch(c.env, mints)
+
+    // Update cache for each NFT grouped by owner (fire and forget)
+    const assetsByOwner = new Map<string, typeof assets>()
+    for (const asset of assets) {
+      if (asset.owner) {
+        const ownerAssets = assetsByOwner.get(asset.owner) ?? []
+        ownerAssets.push(asset)
+        assetsByOwner.set(asset.owner, ownerAssets)
+      }
+    }
+
+    for (const [owner, ownerAssets] of assetsByOwner) {
+      const cacheId = c.env.NFT_CACHE_DO.idFromName(owner)
+      const cacheStub = c.env.NFT_CACHE_DO.get(cacheId)
+      for (const asset of ownerAssets) {
+        void cacheStub.fetch(
+          new Request("http://do/cache", {
+            method: "PATCH",
+            body: JSON.stringify({
+              mint: asset.mint,
+              name: asset.name,
+              image: asset.image,
+              collectionId: asset.collectionId ?? "",
+              collectionName: asset.collectionName,
+              attributes: asset.attributes,
+              frozen: asset.frozen,
+              delegate: asset.delegate,
+              compressed: asset.compressed,
+              tokenStandard: asset.tokenStandard,
+              staked: asset.staked,
+            }),
+          })
+        )
+      }
+    }
+
+    return c.json({ assets })
+  } catch (err) {
+    console.error("Error fetching NFT batch:", err)
+    return c.json({ error: "Failed to fetch NFTs" }, 500)
   }
 })
 

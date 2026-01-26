@@ -1,35 +1,31 @@
-import { useState, useEffect } from "react"
-import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
-import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Unlock, Loader2 } from "lucide-react"
+import { useWallet, useKitTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
+import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
-  stakerAtom,
-  collectionsAtom,
-  emissionsAtom,
-  removeStakeRecordAtom,
-  invalidateStakeRecordsCache,
-  type StakeRecordAccount,
-} from "@/stores/stake"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { stakerAtom, collectionsAtom, emissionsAtom, type StakeRecordAccount } from "@/stores/stake"
 import {
   buildUnstakeInstructions,
   buildUnstakeNiftyInstructions,
   isNiftyAsset,
   DANDIES_NIFTY_COLLECTION_ADDRESS,
+  fetchStakeRecord,
 } from "@/hooks/use-staking"
-import {
-  getBlockhash,
-  sendTransaction,
-  confirmMultipleTransactionsViaWebSocket,
-  getEncodedTransactionSize,
-  prepareSignedTransaction,
-  MAX_TX_SIZE,
-  SIZE_BUFFER,
-} from "@/lib/transaction"
+import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
 import { logger } from "@/lib/logger"
-import type { NFT } from "@/stores/nfts"
-import type { Address, Instruction, TransactionSigner } from "@solana/kit"
+import { setNftsBatchStakedAtom, type NFT } from "@/stores/nfts"
+import { createNoopSigner } from "@/lib/vault-transactions"
+import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 
 interface BulkUnlockItem {
   nft: NFT
@@ -37,33 +33,59 @@ interface BulkUnlockItem {
 }
 
 interface BulkUnlockDialogProps {
-  items: BulkUnlockItem[]
+  nfts: NFT[]
   onClose: () => void
-  onSuccess: () => void
 }
 
-export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialogProps) {
+export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
   const [unlocking, setUnlocking] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<BulkUnlockItem[]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [estimatedTxCount, setEstimatedTxCount] = useState(1)
   const { account } = useWallet()
-  const { signer, capabilities } = useTransactionSigner()
+  const { signer, ready } = useKitTransactionSigner()
+  const { disconnect } = useDisconnectWallet()
+  const { connect } = useConnectWallet()
+  const signerRef = useRef(signer)
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
   const emissions = useAtomValue(emissionsAtom)
-  const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
+  const setNftsBatchStaked = useSetAtom(setNftsBatchStakedAtom)
 
-  const itemsNotMeetingMinPeriod = items.filter((item) => {
-    const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
-    const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
-    if (!collection) return false
-    const minStakePeriodSeconds = collection.minStakePeriod ? Number(collection.minStakePeriod) : 0
-    if (minStakePeriodSeconds === 0) return false
-    const lockedAtSeconds = Number(item.stakeRecord.stakedAt)
-    const currentTimeSeconds = Math.floor(Date.now() / 1000)
-    const timeLockedSeconds = currentTimeSeconds - lockedAtSeconds
-    return timeLockedSeconds < minStakePeriodSeconds
-  })
+  useEffect(() => {
+    signerRef.current = signer
+  }, [signer])
+
+  const getConnectedSigner = useCallback(() => {
+    if (!signerRef.current) throw new Error("No signer available")
+    return signerRef.current
+  }, [])
+
+  const handlePhantomAccountChange = useCallback(async () => {
+    await disconnect()
+    await connect("wallet-standard:phantom" as Parameters<typeof connect>[0])
+  }, [disconnect, connect])
+
+  useEffect(() => {
+    async function loadStakeRecords() {
+      setLoading(true)
+      const loadedItems: BulkUnlockItem[] = []
+
+      const records = await Promise.all(nfts.map((nft) => fetchStakeRecord(nft.mint)))
+
+      for (let i = 0; i < nfts.length; i++) {
+        const record = records[i]
+        if (record) {
+          loadedItems.push({ nft: nfts[i], stakeRecord: record })
+        }
+      }
+
+      setItems(loadedItems)
+      setLoading(false)
+    }
+    loadStakeRecords()
+  }, [nfts])
 
   useEffect(() => {
     if (!staker || !account || !signer || items.length === 0) {
@@ -73,11 +95,9 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
 
     const estimateTxCount = async () => {
       const ownerAddress = account as Address
-      const { blockhash, lastValidBlockHeight } = await getBlockhash()
+      const noopSigner = createNoopSigner(ownerAddress)
 
-      let txCount = 0
-      let currentInstructions: Instruction[] = []
-
+      const itemInstructions: InstructionGroup<BulkUnlockItem>[] = []
       for (const item of items) {
         const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
         const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
@@ -100,32 +120,18 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
               emissions,
               owner: ownerAddress,
             })
-
-        const testInstructions = [...currentInstructions, ...instructions]
-        const size = await getEncodedTransactionSize(
-          testInstructions,
-          signer as unknown as TransactionSigner,
-          blockhash,
-          lastValidBlockHeight
-        )
-
-        if (size > MAX_TX_SIZE - SIZE_BUFFER && currentInstructions.length > 0) {
-          txCount++
-          currentInstructions = []
-        }
-
-        currentInstructions.push(...instructions)
+        itemInstructions.push({ item, instructions })
       }
 
-      if (currentInstructions.length > 0) txCount++
-      setEstimatedTxCount(txCount)
+      const batches = await batchInstructionsBySize(itemInstructions, noopSigner)
+      setEstimatedTxCount(batches.length)
     }
 
     estimateTxCount().catch(console.error)
   }, [items, staker, collections, emissions, account, signer])
 
   const handleBulkUnlock = async () => {
-    if (!account || !signer || !capabilities.canSign || !staker) {
+    if (!account || !signer || !ready || !staker) {
       toast.error("Wallet not connected or membership not available")
       return
     }
@@ -134,9 +140,9 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
 
     try {
       const ownerAddress = account as Address
-      const { blockhash, lastValidBlockHeight } = await getBlockhash()
+      const noopSigner = createNoopSigner(ownerAddress)
 
-      const itemInstructions: { item: BulkUnlockItem; instructions: Instruction[] }[] = []
+      const itemInstructions: InstructionGroup<BulkUnlockItem>[] = []
       for (const item of items) {
         const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
         const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
@@ -171,73 +177,35 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
         return
       }
 
-      const batches: { items: BulkUnlockItem[]; instructions: Instruction[] }[] = []
-      let currentBatch: { items: BulkUnlockItem[]; instructions: Instruction[] } = {
-        items: [],
-        instructions: [],
-      }
-
-      for (const { item, instructions } of itemInstructions) {
-        const testInstructions = [...currentBatch.instructions, ...instructions]
-        const size = await getEncodedTransactionSize(
-          testInstructions,
-          signer as unknown as TransactionSigner,
-          blockhash,
-          lastValidBlockHeight
-        )
-
-        if (size > MAX_TX_SIZE - SIZE_BUFFER && currentBatch.items.length > 0) {
-          batches.push(currentBatch)
-          currentBatch = { items: [], instructions: [] }
-        }
-
-        currentBatch.items.push(item)
-        currentBatch.instructions.push(...instructions)
-      }
-
-      if (currentBatch.items.length > 0) {
-        batches.push(currentBatch)
-      }
+      const batches = await batchInstructionsBySize(itemInstructions, noopSigner)
 
       setProgress({ current: 0, total: batches.length })
 
-      const transactions: { signedBase64: string; items: BulkUnlockItem[] }[] = []
+      const successfulItems: BulkUnlockItem[] = []
+      const requiredSigners: RequiredSigner[] = [{ address: ownerAddress, label: "Owner" }]
+      const noopSigners = new Map<string, TransactionSigner>()
+      noopSigners.set(ownerAddress, noopSigner)
+
       for (let i = 0; i < batches.length; i++) {
+        setProgress({ current: i + 1, total: batches.length })
         const batch = batches[i]
 
-        logger.debug(`Batch ${i + 1}: Preparing transaction with ${batch.instructions.length} instructions`)
+        logger.debug(`Batch ${i + 1}: Signing and sending transaction with ${batch.instructions.length} instructions`)
 
-        const signedBase64 = await prepareSignedTransaction({
+        await signWithMultipleWallets({
           instructions: batch.instructions,
-          feePayer: signer as unknown as TransactionSigner,
-          blockhash,
-          lastValidBlockHeight,
+          requiredSigners,
+          noopSigners,
+          getConnectedSigner,
+          onPhantomAccountChange: handlePhantomAccountChange,
         })
 
-        transactions.push({ signedBase64, items: batch.items })
+        successfulItems.push(...batch.items)
       }
 
-      const signatures: string[] = []
-      const successfulItems: BulkUnlockItem[] = []
+      setNftsBatchStaked({ mints: successfulItems.map((item) => item.nft.mint), staked: false })
 
-      for (let i = 0; i < transactions.length; i++) {
-        setProgress({ current: i + 1, total: transactions.length })
-        const { signedBase64, items: batchItems } = transactions[i]
-
-        const signature = await sendTransaction(signedBase64)
-        signatures.push(signature)
-        successfulItems.push(...batchItems)
-      }
-
-      await confirmMultipleTransactionsViaWebSocket(signatures)
-
-      for (const item of successfulItems) {
-        removeStakeRecord(item.nft.mint)
-      }
-
-      invalidateStakeRecordsCache(account)
-      toast.success(`Unlocked ${successfulItems.length} Dandies in ${transactions.length} transactions!`)
-      onSuccess()
+      toast.success(`Unlocked ${successfulItems.length} Dandies in ${batches.length} transactions!`)
       onClose()
     } catch (err) {
       console.error("Bulk unlock failed:", err)
@@ -248,92 +216,78 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
     }
   }
 
-  const isReady = !!account && !!signer && capabilities.canSign && !!staker && items.length > 0
+  const isReady = !!account && !!signer && ready && !!staker && items.length > 0 && !loading
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Unlock All Dandies</h2>
-          <button
-            onClick={onClose}
-            disabled={unlocking}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && !unlocking && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Unlock className="h-5 w-5 text-primary" />
+            Unlock All Dandies
+          </DialogTitle>
+          <DialogDescription>Unlock {nfts.length} Dandies to transfer or sell them.</DialogDescription>
+        </DialogHeader>
 
-        <div className="mb-4 rounded-lg border border-border p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Dandies to unlock</span>
-            <span className="font-semibold">{items.length}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Transactions needed</span>
-            <span className="font-semibold">{estimatedTxCount}</span>
-          </div>
-        </div>
-
-        {itemsNotMeetingMinPeriod.length > 0 && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
-            <div className="text-sm">
-              <p className="font-medium text-yellow-500">
-                {itemsNotMeetingMinPeriod.length} Dand{itemsNotMeetingMinPeriod.length > 1 ? "ies" : "y"} haven't met
-                minimum lock period
-              </p>
-              <p className="text-muted-foreground">You can still unlock, but minimum lock period not met.</p>
+        <div className="py-4 space-y-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Dandies to unlock</span>
+              <span className="font-medium">{loading ? "..." : items.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Transactions needed</span>
+              <span className="font-medium">{loading ? "..." : estimatedTxCount}</span>
             </div>
           </div>
-        )}
 
-        {items.length > 0 && (
-          <div className="mb-4 flex -space-x-2 overflow-hidden">
-            {items.slice(0, 8).map((item) => (
-              <img
-                key={item.nft.mint}
-                src={item.nft.image}
-                alt={item.nft.name}
-                className="h-10 w-10 rounded-full border-2 border-card object-cover"
-              />
-            ))}
-            {items.length > 8 && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-card bg-muted text-xs font-medium">
-                +{items.length - 8}
+          {nfts.length > 0 && (
+            <div className="flex -space-x-2 overflow-hidden">
+              {nfts.slice(0, 8).map((nft) => (
+                <img
+                  key={nft.mint}
+                  src={nft.image}
+                  alt={nft.name}
+                  className="h-10 w-10 rounded-full border-2 border-card object-cover"
+                />
+              ))}
+              {nfts.length > 8 && (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-card bg-muted text-xs font-medium">
+                  +{nfts.length - 8}
+                </div>
+              )}
+            </div>
+          )}
+
+          {progress.total > 0 && (
+            <div>
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>Signing transactions</span>
+                <span>
+                  {progress.current}/{progress.total}
+                </span>
               </div>
-            )}
-          </div>
-        )}
-
-        <p className="mb-4 text-sm text-muted-foreground">
-          This will unlock all {items.length} Dandies. You'll need to approve {estimatedTxCount} transaction
-          {estimatedTxCount > 1 ? "s" : ""}.
-        </p>
-
-        {progress.total > 0 && (
-          <div className="mb-4">
-            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>Signing transactions</span>
-              <span>
-                {progress.current}/{progress.total}
-              </span>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                />
+              </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${(progress.current / progress.total) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={unlocking} className="flex-1">
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={unlocking}>
             Cancel
           </Button>
-          <Button onClick={handleBulkUnlock} disabled={!isReady || unlocking} className="flex-1">
-            {unlocking ? (
+          <Button onClick={handleBulkUnlock} disabled={!isReady || unlocking}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : unlocking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Unlocking...
@@ -345,8 +299,8 @@ export function BulkUnlockDialog({ items, onClose, onSuccess }: BulkUnlockDialog
               </>
             )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

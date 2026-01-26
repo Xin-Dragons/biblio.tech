@@ -1,8 +1,8 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react"
-import { Shield, Unlock, AlertTriangle, Loader2, Wallet } from "lucide-react"
+import { Shield, Unlock, AlertTriangle, Loader2 } from "lucide-react"
 import { useWallet, useKitTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
 import { address, type TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +19,7 @@ import { removeVaultedMintsAtom } from "@/stores/vault"
 import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 import { buildUnlockInstructions, createNoopSigner } from "@/lib/vault-transactions"
 import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
+import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
 
 interface UnvaultDialogProps {
   open: boolean
@@ -32,7 +33,7 @@ type SigningState =
   | { status: "building" }
   | { status: "waiting_for_wallet"; signer: RequiredSigner; index: number; total: number }
   | { status: "signing"; signer: RequiredSigner }
-  | { status: "sending" }
+  | { status: "sending"; batchIndex?: number; batchTotal?: number }
 
 export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDialogProps) {
   const [signingState, setSigningState] = useState<SigningState>({ status: "idle" })
@@ -132,7 +133,6 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
 
     abortControllerRef.current = new AbortController()
     setSigningState({ status: "building" })
-    setSkipAuthWalletSwitch(true)
 
     try {
       // Collect all required signers
@@ -154,44 +154,67 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
         ? [connectedFirst, ...allSigners.filter((s) => s.address !== account)]
         : allSigners
 
+      // Only skip auth wallet switch if multiple wallets or non-connected wallet needed
+      const needsWalletSwitch = requiredSigners.length > 1 || !requiredSigners.some((s) => s.address === account)
+      if (needsWalletSwitch) {
+        setSkipAuthWalletSwitch(true)
+      }
+
       // Build instructions with noop signers for the structure
       const noopSigners = new Map<string, TransactionSigner>()
       for (const { address } of requiredSigners) {
         noopSigners.set(address, createNoopSigner(address))
       }
 
-      const allInstructions = await Promise.all(
-        nftsToUnvaultWithSigners.map(({ nft, owner, delegate }) =>
-          buildUnlockInstructions({
+      // Build instructions for each NFT
+      const nftInstructions: InstructionGroup<NFT>[] = await Promise.all(
+        nftsToUnvaultWithSigners.map(async ({ nft, owner, delegate }) => ({
+          item: nft,
+          instructions: await buildUnlockInstructions({
             nft,
             owner,
             delegate,
             signers: noopSigners,
-          })
-        )
+          }),
+        }))
       )
 
-      const flatInstructions = allInstructions.flat()
+      // Batch instructions by transaction size
+      const firstSigner = requiredSigners[0]
+      const noopSigner = noopSigners.get(firstSigner.address) as TransactionSigner
+      const batches = await batchInstructionsBySize(nftInstructions, noopSigner)
 
-      await signWithMultipleWallets({
-        instructions: flatInstructions,
-        requiredSigners,
-        noopSigners,
-        getConnectedSigner,
-        onPhantomAccountChange: handlePhantomAccountChange,
-        onWaitingForWallet: (signerInfo, index, total) =>
-          setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
-        onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
-        onSending: () => setSigningState({ status: "sending" }),
-        signal: abortControllerRef.current.signal,
-      })
-      removeVaultedMints(nftsToUnvaultWithSigners.map(({ nft }) => nft.mint))
+      // Process each batch
+      const successfulNfts: NFT[] = []
+      for (let i = 0; i < batches.length; i++) {
+        if (abortControllerRef.current.signal.aborted) break
 
-      // Refetch each unvaulted NFT to get updated lock state (frozen: false)
-      await Promise.all(nftsToUnvaultWithSigners.map(({ nft }) => refetchNft(nft.mint)))
+        const batch = batches[i]
+        await signWithMultipleWallets({
+          instructions: batch.instructions,
+          requiredSigners,
+          noopSigners,
+          getConnectedSigner,
+          onPhantomAccountChange: handlePhantomAccountChange,
+          onWaitingForWallet: (signerInfo, index, total) =>
+            setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
+          onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
+          onSending: () => setSigningState({ status: "sending", batchIndex: i + 1, batchTotal: batches.length }),
+          signal: abortControllerRef.current.signal,
+        })
+        successfulNfts.push(...batch.items)
+      }
 
+      removeVaultedMints(successfulNfts.map((nft) => nft.mint))
+
+      // Refetch in background to get updated lock state (frozen: false)
+      for (const nft of successfulNfts) {
+        refetchNft(nft.mint)
+      }
+
+      const txCount = batches.length
       toast.success(
-        `Unvaulted ${nftsToUnvaultWithSigners.length} NFT${nftsToUnvaultWithSigners.length === 1 ? "" : "s"}`
+        `Unvaulted ${successfulNfts.length} NFT${successfulNfts.length === 1 ? "" : "s"}${txCount > 1 ? ` in ${txCount} transactions` : ""}`
       )
       onSuccess()
       onOpenChange(false)
@@ -211,14 +234,10 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent
-        className="sm:max-w-md"
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Unlock className="h-5 w-5 text-teal-400" />
+            <Unlock className="h-5 w-5 text-primary" />
             Unvault {nfts.length} NFT{nfts.length === 1 ? "" : "s"}
           </DialogTitle>
           <DialogDescription>
@@ -228,9 +247,9 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
 
         <div className="space-y-4 py-4">
           {signingState.status === "building" && (
-            <div className="rounded-lg border border-teal-500/50 bg-teal-500/10 p-4">
+            <div className="rounded-lg border border-primary/50 bg-primary/10 p-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-teal-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium">Preparing transaction</p>
                   <p className="text-xs text-muted-foreground">Building unlock instructions...</p>
@@ -242,7 +261,7 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
           {signingState.status === "waiting_for_wallet" && (
             <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
               <div className="flex items-center gap-3">
-                <Wallet className="h-6 w-6 text-amber-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
                 <div>
                   <p className="text-sm font-medium">Switch to {signingState.signer.label} wallet</p>
                   <p className="text-xs text-muted-foreground">
@@ -255,9 +274,9 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
           )}
 
           {signingState.status === "signing" && (
-            <div className="rounded-lg border border-teal-500/50 bg-teal-500/10 p-4">
+            <div className="rounded-lg border border-primary/50 bg-primary/10 p-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-teal-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium">Approve in {signingState.signer.label} wallet</p>
                   <p className="text-xs text-muted-foreground">
@@ -269,11 +288,16 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
           )}
 
           {signingState.status === "sending" && (
-            <div className="rounded-lg border border-teal-500/50 bg-teal-500/10 p-4">
+            <div className="rounded-lg border border-primary/50 bg-primary/10 p-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-teal-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <div>
-                  <p className="text-sm font-medium">Sending transaction</p>
+                  <p className="text-sm font-medium">
+                    Sending transaction
+                    {signingState.batchTotal && signingState.batchTotal > 1
+                      ? ` (${signingState.batchIndex}/${signingState.batchTotal})`
+                      : ""}
+                  </p>
                   <p className="text-xs text-muted-foreground">Waiting for confirmation...</p>
                 </div>
               </div>
@@ -299,7 +323,7 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
           <div className="space-y-3">
             <span className="text-sm font-medium">NFTs to Unvault</span>
             <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 max-h-[200px] overflow-y-auto">
-              {nftsWithAuthority.map(({ nft, delegate, canUnlock, requiredSigners }) => (
+              {nftsWithAuthority.map(({ nft, canUnlock, requiredSigners }) => (
                 <div
                   key={nft.mint}
                   className={`flex items-center gap-3 p-2 rounded ${
@@ -310,23 +334,22 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{nft.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {requiredSigners.length > 1 ? (
-                        <span>
-                          Needs {requiredSigners.length} signatures
-                          {canUnlock && <span className="text-teal-400 ml-1">(ready)</span>}
-                        </span>
-                      ) : delegate ? (
-                        <>
-                          Authority: {delegate.slice(0, 4)}...{delegate.slice(-4)}
-                          {canUnlock && <span className="text-teal-400 ml-1">(linked)</span>}
-                        </>
+                      {requiredSigners.length > 0 ? (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                          {requiredSigners.map((s) => (
+                            <span key={s.address}>
+                              {s.label}: {s.address.slice(0, 4)}...{s.address.slice(-4)}
+                            </span>
+                          ))}
+                          {canUnlock && <span className="text-primary">(ready)</span>}
+                        </div>
                       ) : (
                         <span className="text-amber-500">No delegate set</span>
                       )}
                     </div>
                   </div>
                   {canUnlock ? (
-                    <Shield className="h-4 w-4 text-teal-400 shrink-0" />
+                    <Shield className="h-4 w-4 text-primary shrink-0" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                   )}
@@ -336,11 +359,11 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={isProcessing}>
             Cancel
           </Button>
-          <Button onClick={handleUnvault} disabled={isUnvaultDisabled} className="bg-teal-600 hover:bg-teal-700">
+          <Button onClick={handleUnvault} disabled={isUnvaultDisabled}>
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

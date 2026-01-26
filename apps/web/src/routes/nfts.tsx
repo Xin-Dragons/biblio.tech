@@ -1,35 +1,30 @@
 import { useAtomValue } from "jotai"
 import { filteredNftsAtom, collectionsAtom } from "@/stores/nfts"
-import { sortOptionAtom, layoutTypeAtom } from "@/stores/ui"
+import { layoutTypeAtom } from "@/stores/ui"
 import { NftGrid } from "@/components/nft-grid"
-import { SortableNftGrid } from "@/components/sortable-nft-grid"
 import { CollageNftGrid } from "@/components/collage-nft-grid"
+import { LayoutControls } from "@/components/layout-controls"
 
 export function NftsPage() {
   const nfts = useAtomValue(filteredNftsAtom)
   const collections = useAtomValue(collectionsAtom)
-  const sortOption = useAtomValue(sortOptionAtom)
   const layoutType = useAtomValue(layoutTypeAtom)
-
-  const renderGrid = () => {
-    if (sortOption === "custom") {
-      return <SortableNftGrid nfts={nfts} />
-    }
-    if (layoutType === "collage") {
-      return <CollageNftGrid nfts={nfts} />
-    }
-    return <NftGrid nfts={nfts} />
-  }
 
   return (
     <div className="flex h-full flex-col">
       <div className="mb-4 flex shrink-0 items-center justify-between">
-        <h1 className="text-xl font-bold">All NFTs</h1>
-        <p className="text-sm text-muted-foreground">
-          {nfts.length} NFTs in {collections.length} collections
-        </p>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">All NFTs</h1>
+          <span className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{nfts.length}</span> NFTs in{" "}
+            <span className="font-medium text-foreground">{collections.length}</span> collections
+          </span>
+        </div>
+        <LayoutControls nfts={nfts} supportsCollage />
       </div>
-      <div className="min-h-0 flex-1">{renderGrid()}</div>
+      <div className="min-h-0 flex-1">
+        {layoutType === "collage" ? <CollageNftGrid nfts={nfts} context="nfts" /> : <NftGrid nfts={nfts} />}
+      </div>
     </div>
   )
 }

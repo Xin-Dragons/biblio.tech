@@ -65,24 +65,28 @@ function isMplCoreAsset(tokenStandard: TokenStandard): boolean {
   return tokenStandard === "Core"
 }
 
+const AUTH_RULES_PROGRAM_ADDRESS = "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg" as Address
+
 export interface BuildLockInput {
   nft: NFT
   owner: Address
   delegate: Address
-  payer: TransactionSigner
+  signers: Map<string, TransactionSigner>
 }
 
 export async function buildLockInstructions(input: BuildLockInput): Promise<Instruction[]> {
-  const { nft, owner, delegate, payer } = input
+  const { nft, owner, delegate, signers } = input
 
   const mintAddress = nft.mint as Address
+  const ownerSigner = getOrCreateSigner(signers, owner)
+  const delegateSigner = getOrCreateSigner(signers, delegate)
 
   if (isNiftyAsset(nft.tokenStandard)) {
-    return buildNiftyLockInstructions(mintAddress, owner, delegate, payer)
+    return buildNiftyLockInstructionsWithSigners(mintAddress, ownerSigner, delegateSigner)
   }
 
   if (isMplCoreAsset(nft.tokenStandard)) {
-    return buildMplCoreLockInstructions(mintAddress, owner, delegate, payer)
+    return buildMplCoreLockInstructionsWithSigners(mintAddress, ownerSigner, delegateSigner)
   }
 
   const isPnft = isProgrammableNft(nft.tokenStandard)
@@ -100,6 +104,7 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
 
   if (isPnft) {
     const tokenRecord = await getTokenRecordPda(mintAddress, ata)
+    const hasRuleSet = !!nft.ruleSet
 
     const delegateIx = tokenMetadata.getDelegateInstruction({
       delegate: delegate,
@@ -108,23 +113,31 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
       tokenRecord: tokenRecord,
       mint: mintAddress,
       token: ata,
-      authority: createNoopSigner(owner),
-      payer: payer,
+      authority: ownerSigner,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       delegateArgs: { __kind: "UtilityV1", amount: 1, authorizationData: null },
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     const lockIx = tokenMetadata.getLockInstruction({
-      authority: createNoopSigner(delegate),
+      authority: delegateSigner,
       tokenOwner: owner,
       token: ata,
       mint: mintAddress,
       metadata: metadata,
       edition: edition,
       tokenRecord: tokenRecord,
-      payer: payer,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       lockArgs: { __kind: "V1", authorizationData: null },
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     instructions.push(delegateIx, lockIx)
@@ -135,20 +148,20 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
       masterEdition: edition,
       mint: mintAddress,
       token: ata,
-      authority: createNoopSigner(owner),
-      payer: payer,
+      authority: ownerSigner,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       delegateArgs: { __kind: "StandardV1", amount: 1 },
     })
 
     const lockIx = tokenMetadata.getLockInstruction({
-      authority: createNoopSigner(delegate),
+      authority: delegateSigner,
       tokenOwner: owner,
       token: ata,
       mint: mintAddress,
       metadata: metadata,
       edition: edition,
-      payer: payer,
+      payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       lockArgs: { __kind: "V1", authorizationData: null },
     })
@@ -159,29 +172,24 @@ export async function buildLockInstructions(input: BuildLockInput): Promise<Inst
   return instructions
 }
 
-function buildNiftyLockInstructions(
+function buildNiftyLockInstructionsWithSigners(
   assetAddress: Address,
-  owner: Address,
-  delegate: Address,
-  _payer: TransactionSigner
+  ownerSigner: TransactionSigner,
+  delegateSigner: TransactionSigner
 ): Instruction[] {
-  const instructions: Instruction[] = []
-
   const approveIx = asset.getApproveInstruction({
     asset: assetAddress,
-    owner: createNoopSigner(owner),
-    delegate: delegate,
+    owner: ownerSigner,
+    delegate: delegateSigner.address,
     delegateInput: asset.delegateInput("Some", { roles: [asset.DelegateRole.Lock] }),
   })
 
   const lockIx = asset.getLockInstruction({
     asset: assetAddress,
-    signer: createNoopSigner(delegate),
+    signer: delegateSigner,
   })
 
-  instructions.push(approveIx, lockIx)
-
-  return instructions
+  return [approveIx, lockIx]
 }
 
 export interface BuildUnlockInput {
@@ -230,6 +238,7 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
 
   if (isPnft) {
     const tokenRecord = await getTokenRecordPda(mintAddress, ata)
+    const hasRuleSet = !!nft.ruleSet
 
     const unlockIx = tokenMetadata.getUnlockInstruction({
       authority: delegateSigner,
@@ -242,6 +251,10 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
       payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       unlockArgs: { __kind: "V1", authorizationData: null },
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     const revokeIx = tokenMetadata.getRevokeInstruction({
@@ -255,6 +268,10 @@ export async function buildUnlockInstructions(input: BuildUnlockInput): Promise<
       payer: ownerSigner,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       revokeArgs: tokenMetadata.RevokeArgs.UtilityV1,
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     instructions.push(unlockIx, revokeIx)
@@ -308,21 +325,20 @@ function buildNiftyUnlockInstructionsWithSigners(
   return [unlockIx, revokeIx]
 }
 
-function buildMplCoreLockInstructions(
+function buildMplCoreLockInstructionsWithSigners(
   assetAddress: Address,
-  owner: Address,
-  delegate: Address,
-  payer: TransactionSigner
+  ownerSigner: TransactionSigner,
+  delegateSigner: TransactionSigner
 ): Instruction[] {
-  const isBasicFreeze = owner === delegate
+  const isBasicFreeze = ownerSigner.address === delegateSigner.address
   const initAuthority: mplCore.Authority = isBasicFreeze
     ? { __kind: "Owner" }
-    : { __kind: "Address", address: delegate }
+    : { __kind: "Address", address: delegateSigner.address }
 
   const addPluginIx = mplCore.getAddPluginV1Instruction({
     asset: assetAddress,
-    payer: payer,
-    authority: createNoopSigner(owner),
+    payer: ownerSigner,
+    authority: ownerSigner,
     plugin: { __kind: "FreezeDelegate", fields: [{ frozen: true }] },
     initAuthority: initAuthority,
   })
@@ -399,6 +415,7 @@ async function buildTokenMetadataRecoverInstructions(
   if (isPnft) {
     const sourceTokenRecord = await getTokenRecordPda(mintAddress, sourceAta)
     const destTokenRecord = await getTokenRecordPda(mintAddress, destAta)
+    const hasRuleSet = !!nft.ruleSet
 
     const unlockIx = tokenMetadata.getUnlockInstruction({
       authority: createNoopSigner(delegate),
@@ -411,6 +428,10 @@ async function buildTokenMetadataRecoverInstructions(
       payer: payer,
       splTokenProgram: TOKEN_PROGRAM_ADDRESS,
       unlockArgs: { __kind: "V1", authorizationData: null },
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     const transferIx = tokenMetadata.getTransferInstruction({
@@ -426,6 +447,10 @@ async function buildTokenMetadataRecoverInstructions(
       authority: createNoopSigner(owner),
       payer: payer,
       transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
+      ...(hasRuleSet && {
+        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+        authorizationRules: nft.ruleSet as Address,
+      }),
     })
 
     const closeIx = getCloseAccountInstruction({

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Shield, AlertTriangle, ArrowRightLeft, Loader2 } from "lucide-react"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
 import { useSetAtom, useAtomValue } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
 import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { NFT } from "@/stores/nfts"
+import { refetchNftBatchAtom, type NFT } from "@/stores/nfts"
 import { removeVaultedMintsAtom } from "@/stores/vault"
 import { linkedWalletsAtom } from "@/stores/linked-wallets"
 import { buildRecoverInstructions } from "@/lib/vault-transactions"
@@ -33,6 +33,7 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
   const { account } = useWallet()
   const { signer, capabilities } = useTransactionSigner()
   const removeVaultedMints = useSetAtom(removeVaultedMintsAtom)
+  const refetchNftBatch = useSetAtom(refetchNftBatchAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
 
   const connectedAddress = account as Address | undefined
@@ -100,6 +101,9 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
       })
 
       removeVaultedMints(nftsToRecover.map((nft) => nft.mint))
+
+      // Refetch in background to update cache (will show new owner)
+      refetchNftBatch(nftsToRecover.map((nft) => nft.mint))
 
       toast.success(`Recovered ${nftsToRecover.length} NFT${nftsToRecover.length === 1 ? "" : "s"}`)
       onSuccess()
@@ -200,7 +204,7 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
                       {delegate ? (
                         <>
                           Authority: {delegate.slice(0, 4)}...{delegate.slice(-4)}
-                          {hasAuthority && <span className="text-teal-400 ml-1">(you)</span>}
+                          {hasAuthority && <span className="text-primary ml-1">(you)</span>}
                         </>
                       ) : (
                         <span className="text-amber-500">No delegate set</span>
@@ -208,7 +212,7 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
                     </div>
                   </div>
                   {hasAuthority ? (
-                    <Shield className="h-4 w-4 text-teal-400 shrink-0" />
+                    <Shield className="h-4 w-4 text-primary shrink-0" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                   )}
@@ -218,7 +222,7 @@ export function RecoverDialog({ open, onOpenChange, nfts, onSuccess }: RecoverDi
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRecovering}>
             Cancel
           </Button>

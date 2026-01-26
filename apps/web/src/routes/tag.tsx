@@ -32,7 +32,7 @@ export function TagPage() {
   return (
     <CollectionView
       nfts={taggedNfts}
-      title={titleWithDot as unknown as string}
+      title={titleWithDot}
       emptyIcon={TagIcon}
       emptyTitle="No NFTs in this tag"
       emptyDescription="Add NFTs to this tag using the toolbar or NFT detail modal"

@@ -21,7 +21,7 @@ export function Header() {
 
   return (
     <>
-      <header className="flex h-16 items-center justify-between border-b border-white/5 px-4 md:hidden">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-4 md:hidden">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon-sm" onClick={() => setMobileMenuOpen(true)}>
             <Menu className="h-5 w-5" />

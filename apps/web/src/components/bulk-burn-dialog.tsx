@@ -1,8 +1,16 @@
 import { useState } from "react"
-import { Flame, X, Loader2, AlertTriangle } from "lucide-react"
-import toast from "react-hot-toast"
+import { Flame, Loader2, AlertTriangle } from "lucide-react"
+import { toast } from "sonner"
 import { useSolanaActions } from "@/hooks/use-solana-actions"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import type { NFT } from "@/stores/nfts"
 
 interface BulkBurnDialogProps {
@@ -45,33 +53,36 @@ export function BulkBurnDialog({ nfts, onClose, onSuccess }: BulkBurnDialogProps
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-destructive">Burn NFTs</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && !burning && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Flame className="h-5 w-5" />
+            Burn NFTs
+          </DialogTitle>
+          <DialogDescription>Permanently destroy {burnableCount} NFTs. This cannot be undone.</DialogDescription>
+        </DialogHeader>
 
-        <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-4">
-          <div className="mb-2 flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="font-semibold">Warning: This action is irreversible!</span>
+        <div className="py-4 space-y-4">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-destructive">Warning: This action is irreversible!</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  You are about to burn <span className="font-semibold text-foreground">{burnableCount}</span> NFT
+                  {burnableCount > 1 ? "s" : ""}. Burned NFTs cannot be recovered.
+                </p>
+                {compressedCount > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {compressedCount} compressed NFT{compressedCount > 1 ? "s" : ""} will be skipped (not yet supported)
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            You are about to burn <span className="font-semibold text-foreground">{burnableCount}</span> NFT
-            {burnableCount > 1 ? "s" : ""}. Burned NFTs cannot be recovered.
-          </p>
-          {compressedCount > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {compressedCount} compressed NFT{compressedCount > 1 ? "s" : ""} will be skipped (not yet supported)
-            </p>
-          )}
-        </div>
 
-        <div className="mb-4">
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={confirmed}
@@ -81,34 +92,33 @@ export function BulkBurnDialog({ nfts, onClose, onSuccess }: BulkBurnDialogProps
             />
             <span className="text-sm">I understand that burning is permanent and I want to proceed</span>
           </label>
+
+          {burning && (
+            <div>
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>Progress</span>
+                <span>
+                  {progress.completed}/{progress.total}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-destructive transition-all"
+                  style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {burning && (
-          <div className="mb-4">
-            <div className="mb-1 flex justify-between text-sm">
-              <span>Progress</span>
-              <span>
-                {progress.completed} / {progress.total}
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-destructive transition-all"
-                style={{ width: `${(progress.completed / progress.total) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={burning} className="flex-1">
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={burning}>
             Cancel
           </Button>
           <Button
             variant="destructive"
             onClick={handleBurn}
             disabled={!confirmed || !isReady || burning || burnableCount === 0}
-            className="flex-1"
           >
             {burning ? (
               <>
@@ -122,8 +132,8 @@ export function BulkBurnDialog({ nfts, onClose, onSuccess }: BulkBurnDialogProps
               </>
             )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

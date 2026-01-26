@@ -10,7 +10,7 @@ import {
   clearSelectionAtom,
 } from "@/stores/selection"
 import { vaultedMintsSetAtom } from "@/stores/vault"
-import { tagsAtom, nftTagsAtom, bulkUpdateNftTagsAtom } from "@/stores/user"
+import { tagsAtom, nftTagsAtom, tagNftCountsAtom, bulkUpdateNftTagsAtom } from "@/stores/user"
 import { isAuthenticatedAtom } from "@/stores/auth"
 import { BulkSendDialog } from "./bulk-send-dialog"
 import { BulkBurnDialog } from "./bulk-burn-dialog"
@@ -40,6 +40,7 @@ export function SelectionControls({ nfts }: SelectionControlsProps) {
   const vaultedMints = useAtomValue(vaultedMintsSetAtom)
   const tags = useAtomValue(tagsAtom)
   const nftTags = useAtomValue(nftTagsAtom)
+  const tagNftCounts = useAtomValue(tagNftCountsAtom)
   const bulkUpdateNftTags = useSetAtom(bulkUpdateNftTagsAtom)
   const isAuthenticated = useAtomValue(isAuthenticatedAtom)
 
@@ -95,13 +96,6 @@ export function SelectionControls({ nfts }: SelectionControlsProps) {
       return "none"
     },
     [selectedMintsArray, nftTags]
-  )
-
-  const getNftCountForTag = useCallback(
-    (tagId: string) => {
-      return Object.values(nftTags).filter((tagIds) => tagIds.includes(tagId)).length
-    },
-    [nftTags]
   )
 
   const handleTagToggle = useCallback(
@@ -181,7 +175,7 @@ export function SelectionControls({ nfts }: SelectionControlsProps) {
                 ) : (
                   tags.map((tag) => {
                     const state = getTagStateForSelection(tag.id)
-                    const count = getNftCountForTag(tag.id)
+                    const count = tagNftCounts[tag.id] ?? 0
                     return (
                       <DropdownMenuItem key={tag.id} onClick={() => handleTagToggle(tag.id)} className="cursor-pointer">
                         <div className="flex items-center gap-2 flex-1">

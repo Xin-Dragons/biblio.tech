@@ -1,0 +1,104 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/nft-lock-state-detection",
+  "description": "NFT Lock State Detection - Fix inaccurate lock state for pNFTs by fetching Token Record accounts on backend",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add Token Record PDA derivation to DAS service",
+      "description": "As a developer, I need Token Record PDA derivation on the backend to fetch pNFT lock state.",
+      "acceptanceCriteria": [
+        "Add TOKEN_METADATA_PROGRAM_ADDRESS constant to das.ts (reuse from vault-transactions.ts pattern)",
+        "Add getTokenRecordPda(mint, tokenAccount) function using getProgramDerivedAddress from @solana/kit",
+        "Add getAssociatedTokenAddress(mint, owner) helper to derive ATA for token account",
+        "Seeds for Token Record: ['metadata', programId, mint, 'token_record', tokenAccount]",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Implement pNFT lock state enrichment",
+      "description": "As a user, I want pNFTs to show accurate lock state based on Token Record.",
+      "acceptanceCriteria": [
+        "After processItem loop, collect all pNFTs (tokenStandard === 'ProgrammableNonFungible')",
+        "For each pNFT, derive Token Record PDA using getTokenRecordPda(mint, ata)",
+        "Batch fetch Token Records using rpc.getMultipleAccounts with chunks of 1000",
+        "Import decodeTokenRecord from @biblio/solana-programs and TokenState enum",
+        "Decode each account and check state: frozen = (tokenRecord.state === TokenState.Locked)",
+        "Update the asset's frozen field with the decoded value",
+        "Handle missing Token Records gracefully (account may not exist for unlocked pNFTs)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Create single NFT fetch endpoint",
+      "description": "As a developer, I need an endpoint to refetch a single NFT with updated lock state.",
+      "acceptanceCriteria": [
+        "Add GET /nfts/:mint route to apps/api/src/routes/nfts.ts",
+        "Use rpc.getAsset({ id: mint }) to fetch single asset from Helius DAS",
+        "Process with processItem() to get DASAsset shape",
+        "For pNFTs, fetch Token Record and enrich lock state (extract shared helper from getAssetsByOwner)",
+        "Return same DASAsset shape as bulk fetch endpoints",
+        "Return 404 if asset not found",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add refetch action to NFT store",
+      "description": "As a developer, I need a store action to refetch and update a single NFT.",
+      "acceptanceCriteria": [
+        "Add refetchNftAtom write atom to apps/web/src/stores/nfts.ts",
+        "Action takes mint address as parameter",
+        "Calls GET /api/nfts/:mint endpoint",
+        "Updates the NFT in nftsAtom array with fresh data",
+        "If NFT not found in local array, ignore (don't add)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Call refetch after successful unvault",
+      "description": "As a user, when I unvault an NFT, it should stay removed from vault view.",
+      "acceptanceCriteria": [
+        "In UnvaultDialog.tsx after successful signWithMultipleWallets, call refetchNft for each unvaulted mint",
+        "Refetch happens after removeVaultedMints call",
+        "Refetched NFT data has frozen: false, preventing re-detection as vaulted",
+        "NFT no longer reappears in vault view after unvault",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Extract enrichLockState helper for reuse",
+      "description": "As a developer, I want lock state enrichment logic shared between bulk and single fetch.",
+      "acceptanceCriteria": [
+        "Create enrichPnftLockState(rpc, assets) helper function in das.ts",
+        "Takes RPC client and array of DASAssets",
+        "Filters to pNFTs, fetches Token Records, updates frozen field in place",
+        "Use this helper in both getAssetsByOwner and single NFT endpoint",
+        "Avoids code duplication",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

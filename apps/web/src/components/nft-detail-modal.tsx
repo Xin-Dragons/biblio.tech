@@ -1,9 +1,17 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { Star, Trash2, ExternalLink, Copy, Check, Tag, Zap, Shield, X, Plus, ChevronDown } from "lucide-react"
+import { Star, Trash2, ExternalLink, Copy, Check, Tag, Zap, Shield, X, Plus, ChevronDown, Loader2 } from "lucide-react"
 import { useState } from "react"
+import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Button } from "./ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu"
+import { Input } from "./ui/input"
 import { cn } from "@/lib/utils"
 import { selectedNftAtom } from "@/stores/nfts"
 import {
@@ -14,6 +22,8 @@ import {
   tagsAtom,
   nftTagsAtom,
   bulkUpdateNftTagsAtom,
+  createTagAtom,
+  PRESET_COLORS,
 } from "@/stores/user"
 import { isAuthenticatedAtom } from "@/stores/auth"
 
@@ -27,7 +37,12 @@ export function NftDetailModal() {
   const toggleStarred = useSetAtom(toggleStarredAtom)
   const toggleJunk = useSetAtom(toggleJunkAtom)
   const bulkUpdateNftTags = useSetAtom(bulkUpdateNftTagsAtom)
+  const createTag = useSetAtom(createTagAtom)
   const [copied, setCopied] = useState(false)
+  const [isCreatingTag, setIsCreatingTag] = useState(false)
+  const [newTagName, setNewTagName] = useState("")
+  const [newTagColor, setNewTagColor] = useState<string>(PRESET_COLORS[5])
+  const [isLoading, setIsLoading] = useState(false)
 
   if (!nft) return null
 
@@ -43,6 +58,33 @@ export function NftDetailModal() {
 
   const handleRemoveTag = (tagId: string) => {
     bulkUpdateNftTags({ tagId, remove: [nft.mint] })
+  }
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) {
+      toast.error("Tag name is required")
+      return
+    }
+    if (newTagName.length > 30) {
+      toast.error("Tag name must be 30 characters or less")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const newTag = await createTag({ name: newTagName.trim(), color: newTagColor })
+      if (newTag) {
+        await bulkUpdateNftTags({ tagId: newTag.id, add: [nft.mint] })
+        toast.success(`Created "${newTagName.trim()}" and added NFT`)
+      }
+      setNewTagName("")
+      setNewTagColor(PRESET_COLORS[5])
+      setIsCreatingTag(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create tag")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCopy = async () => {
@@ -115,7 +157,63 @@ export function NftDetailModal() {
                       </button>
                     </span>
                   ))}
-                  {availableTags.length > 0 ? (
+                  {isCreatingTag ? (
+                    <div className="flex w-full flex-col gap-2 rounded-lg border border-primary/50 bg-primary/5 p-2">
+                      <Input
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Tag name"
+                        maxLength={30}
+                        disabled={isLoading}
+                        autoFocus
+                        className="h-7 text-xs"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleCreateTag()
+                          if (e.key === "Escape") {
+                            setIsCreatingTag(false)
+                            setNewTagName("")
+                          }
+                        }}
+                      />
+                      <div className="flex items-center gap-1">
+                        {PRESET_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setNewTagColor(color)}
+                            className={cn(
+                              "h-5 w-5 rounded-full transition-all",
+                              newTagColor === color ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+                            )}
+                            style={{ backgroundColor: color }}
+                            disabled={isLoading}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => {
+                            setIsCreatingTag(false)
+                            setNewTagName("")
+                          }}
+                          disabled={isLoading}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={handleCreateTag}
+                          disabled={isLoading || !newTagName.trim()}
+                        >
+                          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
@@ -131,13 +229,14 @@ export function NftDetailModal() {
                             {tag.name}
                           </DropdownMenuItem>
                         ))}
+                        {availableTags.length > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuItem onClick={() => setIsCreatingTag(true)} className="gap-2">
+                          <Plus className="h-3 w-3" />
+                          New Tag
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  ) : tags.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">No tags created yet</span>
-                  ) : assignedTags.length === tags.length ? (
-                    <span className="text-xs text-muted-foreground">All tags assigned</span>
-                  ) : null}
+                  )}
                 </div>
               </div>
             )}

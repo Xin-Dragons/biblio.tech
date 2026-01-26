@@ -1,0 +1,188 @@
+{
+  "project": "Biblio",
+  "branchName": "ralph/tagging",
+  "description": "NFT Tagging - Allow users to organize NFTs into custom tags with cloud sync for cross-device persistence",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create tag API endpoints",
+      "description": "As a developer, I need backend endpoints to persist tags so they sync across devices.",
+      "acceptanceCriteria": [
+        "POST /api/user/tags creates a new tag (name, color) and returns the tag with generated ID",
+        "GET /api/user/tags returns all tags for the authenticated user",
+        "PUT /api/user/tags/:id updates a tag's name or color",
+        "DELETE /api/user/tags/:id deletes a tag and all its NFT associations",
+        "Tag name max 30 chars, must be unique per user (case-insensitive)",
+        "Maximum 20 tags per user enforced on create",
+        "Store tags in User Durable Object",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Create NFT-tag association API endpoints",
+      "description": "As a developer, I need endpoints to manage which NFTs belong to which tags.",
+      "acceptanceCriteria": [
+        "PUT /api/user/tags/:id/nfts accepts { add: string[], remove: string[] } to bulk update associations",
+        "GET /api/user/tags/:id/nfts returns all NFT mints associated with a tag",
+        "GET /api/user/nft-tags returns a map of { [mint]: tagId[] } for all user's NFTs",
+        "Store nftTags as Record<string, string[]> in User Durable Object",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Sync tags on app load",
+      "description": "As a user, I want my tags to load when I open the app.",
+      "acceptanceCriteria": [
+        "On authenticated app load, fetch tags from GET /api/user/tags",
+        "Fetch nft-tag associations from GET /api/user/nft-tags",
+        "Store in Jotai atoms (tagsAtom, nftTagsAtom) for reactive updates",
+        "Handle loading state gracefully (don't flash empty tags)",
+        "Handle unauthenticated users (skip fetch, atoms remain empty)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Create tag management dialog",
+      "description": "As a user, I want to create and manage my tags so I can organize my NFTs.",
+      "acceptanceCriteria": [
+        "Create TagManagementDialog component in apps/web/src/components/",
+        "Dialog shows list of existing tags with name, color indicator, and NFT count",
+        "New Tag button opens inline form with name input and color picker",
+        "Color picker shows 8 preset colors: #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899",
+        "Each tag row has edit (pencil icon) and delete (trash icon) buttons",
+        "Delete shows confirmation dialog before removing tag",
+        "Calls appropriate API endpoints (POST for create, PUT for update, DELETE for delete)",
+        "Optimistic UI updates with rollback on API failure",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add tags section to sidebar",
+      "description": "As a user, I want to navigate to a tag to see all NFTs in it.",
+      "acceptanceCriteria": [
+        "Tags section in sidebar below existing navigation items",
+        "Shows list of user's tags with color dot indicator and name",
+        "Clicking a tag navigates to /tags/:id route",
+        "Manage Tags link at bottom opens TagManagementDialog",
+        "Show 'No tags yet' message with create prompt if user has no tags",
+        "Section only visible when user is authenticated",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add tag button to toolbar",
+      "description": "As a user, I want to quickly tag selected NFTs from the toolbar.",
+      "acceptanceCriteria": [
+        "Tag button appears in toolbar when NFTs are selected (next to Send, Burn, etc.)",
+        "Button shows Tag icon from lucide-react",
+        "Clicking opens a DropdownMenu with list of tags",
+        "Each tag shows checkbox indicating if ALL selected NFTs have that tag",
+        "Each tag shows count of NFTs in that tag (e.g. 'PFPs (12)')",
+        "Checking a tag calls PUT /api/user/tags/:id/nfts with { add: selectedMints }",
+        "Unchecking a tag calls PUT /api/user/tags/:id/nfts with { remove: selectedMints }",
+        "New Tag option at bottom opens TagManagementDialog",
+        "Optimistic UI updates",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Display tags on NFT cards",
+      "description": "As a user, I want to see which tags an NFT belongs to at a glance.",
+      "acceptanceCriteria": [
+        "NFT cards show small colored dots (4-6px diameter) in top-right corner for assigned tags",
+        "Maximum 3 dots displayed",
+        "Hovering dots shows tooltip with tag names",
+        "If more than 3 tags, show '+N' indicator after the 3 dots",
+        "Tags visible in all grid sizes (small, medium, large)",
+        "Read tag colors from tagsAtom, nft assignments from nftTagsAtom",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Create tag detail page",
+      "description": "As a user, I want to view all NFTs in a specific tag.",
+      "acceptanceCriteria": [
+        "Add route /tags/:id to router",
+        "Create TagPage component that uses CollectionView",
+        "Filter nftsAtom to only NFTs where nftTagsAtom[mint] includes the tag ID",
+        "Page title shows tag name with color indicator dot",
+        "Empty state shows 'No NFTs in this tag' with prompt to add some",
+        "All standard grid features work (selection, bulk actions, sorting)",
+        "Pass tag-specific context (e.g. 'tag-{id}') to collage layout storage",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Add tag filter to main views",
+      "description": "As a user, I want to filter my NFT grid by tag without navigating away.",
+      "acceptanceCriteria": [
+        "Add tag filter dropdown/chips to toolbar (integrate with existing filter UI)",
+        "Can select multiple tags (shows NFTs in ANY of the selected tags - OR logic)",
+        "Untagged filter option shows NFTs not in any tag",
+        "Filter state persists in URL params (?tags=id1,id2)",
+        "Tag filter combines with existing collection/search filters (AND logic)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add tag management to NFT detail modal",
+      "description": "As a user, I want to manage tags for a single NFT from its detail view.",
+      "acceptanceCriteria": [
+        "NFT detail modal shows Tags section below existing info",
+        "Lists current tags as removable chips with X button",
+        "Add tag button shows dropdown of available tags (excluding already assigned)",
+        "Clicking a tag in dropdown adds it immediately",
+        "Clicking X on chip removes tag immediately",
+        "Calls PUT /api/user/tags/:id/nfts for each add/remove",
+        "Can add/remove tags without closing modal",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

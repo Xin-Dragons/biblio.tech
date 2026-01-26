@@ -30,7 +30,7 @@ export function CollectionPage() {
       emptyDescription="This collection appears to be empty"
       isLoading={isLoading}
       backTo="/"
-      image={collection?.image}
+      context={id ? `collection-${id}` : undefined}
     />
   )
 }

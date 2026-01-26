@@ -2,14 +2,14 @@ import {
   getProgramDerivedAddress,
   getAddressEncoder,
   type Address,
-  type TransactionSigner,
   type Instruction,
   type AccountMeta,
 } from "@solana/kit"
+import { createNoopSigner } from "@/lib/vault-transactions"
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
 import { stake } from "@biblio/solana-programs"
 
-export const STAKE_PROGRAM_ADDRESS = "stakeU1kxrpYvLXFBLEk6cBtvzr8fmJiLzuVyMSgPo4" as Address
+export const STAKE_PROGRAM_ADDRESS = stake.STAKE_PROGRAM_ADDRESS
 import type { NFT } from "../stores/nfts"
 import {
   getEmissionAddresses,
@@ -99,19 +99,53 @@ async function resolveTokenEmissionAccounts(
   }
 }
 
-function createNoopSigner<T extends string = string>(address: Address<T>): TransactionSigner<T> {
-  return {
-    address,
-    signTransactions: async (transactions) => transactions,
-  } as TransactionSigner<T>
-}
-
 export async function getStakeRecordPda(staker: Address, nftMint: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: STAKE_PROGRAM_ADDRESS,
     seeds: ["STAKE", getAddressEncoder().encode(staker), getAddressEncoder().encode(nftMint), "stake-record"],
   })
   return pda
+}
+
+/**
+ * Fetches a stake record account via the API
+ */
+export async function fetchStakeRecord(nftMint: string): Promise<StakeRecordAccount | null> {
+  try {
+    const response = await fetch(`/api/stake/record/${nftMint}`)
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Failed to fetch stake record: ${response.status}`)
+    }
+
+    const data = (await response.json()) as {
+      address: string
+      staker: string
+      owner: string
+      nftMint: string
+      stakedAt: string
+      pendingClaim: string
+      emissions: string[]
+      bump: number
+    }
+
+    return {
+      address: data.address as Address,
+      staker: data.staker,
+      owner: data.owner,
+      nftMint: data.nftMint,
+      stakedAt: BigInt(data.stakedAt),
+      pendingClaim: BigInt(data.pendingClaim),
+      emissions: data.emissions,
+      bump: data.bump,
+    }
+  } catch (error) {
+    console.error("Failed to fetch stake record:", error)
+    return null
+  }
 }
 
 export async function getNftRecordPda(staker: Address, nftMint: Address): Promise<Address> {

@@ -17,7 +17,7 @@ export function StarredPage() {
       emptyIcon={Star}
       emptyTitle="No starred NFTs"
       emptyDescription="Star NFTs to add them here"
-      headerRight={<p className="text-sm text-muted-foreground">{starredNfts.length} starred NFTs</p>}
+      context="starred"
     />
   )
 }

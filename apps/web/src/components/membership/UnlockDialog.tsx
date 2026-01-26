@@ -1,69 +1,78 @@
-import { useState } from "react"
-import { Unlock, X, Loader2, AlertTriangle } from "lucide-react"
-import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Unlock, Loader2 } from "lucide-react"
+import { useWallet, useKitTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
-import toast from "react-hot-toast"
+import { toast } from "sonner"
+import type { Address, TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
-  stakerAtom,
-  collectionsAtom,
-  emissionsAtom,
-  removeStakeRecordAtom,
-  invalidateStakeRecordsCache,
-  type StakeRecordAccount,
-} from "@/stores/stake"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { stakerAtom, collectionsAtom, emissionsAtom, type StakeRecordAccount } from "@/stores/stake"
 import {
   buildUnstakeInstructions,
   buildUnstakeNiftyInstructions,
   isNiftyAsset,
   DANDIES_NIFTY_COLLECTION_ADDRESS,
+  fetchStakeRecord,
 } from "@/hooks/use-staking"
-import { prepareAndSendTransaction } from "@/lib/transaction"
-import type { NFT } from "@/stores/nfts"
-import type { Address, TransactionSigner } from "@solana/kit"
+import { setNftStakedAtom, type NFT } from "@/stores/nfts"
+import { createNoopSigner } from "@/lib/vault-transactions"
+import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 
 interface UnlockDialogProps {
   nft: NFT
-  stakeRecord: StakeRecordAccount
   onClose: () => void
-  onSuccess: () => void
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds} second${seconds !== 1 ? "s" : ""}`
-  if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60)
-    return `${minutes} minute${minutes !== 1 ? "s" : ""}`
-  }
-  if (seconds < 86400) {
-    const hours = Math.floor(seconds / 3600)
-    return `${hours} hour${hours !== 1 ? "s" : ""}`
-  }
-  const days = Math.floor(seconds / 86400)
-  return `${days} day${days !== 1 ? "s" : ""}`
-}
-
-export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDialogProps) {
+export function UnlockDialog({ nft, onClose }: UnlockDialogProps) {
   const [unlocking, setUnlocking] = useState(false)
+  const [stakeRecord, setStakeRecord] = useState<StakeRecordAccount | null>(null)
+  const [loading, setLoading] = useState(true)
   const { account } = useWallet()
-  const { signer, capabilities } = useTransactionSigner()
+  const { signer, ready } = useKitTransactionSigner()
+  const { disconnect } = useDisconnectWallet()
+  const { connect } = useConnectWallet()
+  const signerRef = useRef(signer)
   const staker = useAtomValue(stakerAtom)
   const collections = useAtomValue(collectionsAtom)
   const emissions = useAtomValue(emissionsAtom)
-  const removeStakeRecord = useSetAtom(removeStakeRecordAtom)
+  const setNftStaked = useSetAtom(setNftStakedAtom)
+
+  useEffect(() => {
+    signerRef.current = signer
+  }, [signer])
+
+  const getConnectedSigner = useCallback(() => {
+    if (!signerRef.current) throw new Error("No signer available")
+    return signerRef.current
+  }, [])
+
+  const handlePhantomAccountChange = useCallback(async () => {
+    await disconnect()
+    await connect("wallet-standard:phantom" as Parameters<typeof connect>[0])
+  }, [disconnect, connect])
 
   const collectionMintToFind = isNiftyAsset(nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : nft.collectionId
   const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
 
-  const lockedAtSeconds = Number(stakeRecord.stakedAt)
-  const minLockPeriodSeconds = collection?.minStakePeriod ? Number(collection.minStakePeriod) : 0
-  const currentTimeSeconds = Math.floor(Date.now() / 1000)
-  const timeLockedSeconds = currentTimeSeconds - lockedAtSeconds
-  const remainingSeconds = minLockPeriodSeconds - timeLockedSeconds
-  const isMinPeriodMet = minLockPeriodSeconds === 0 || remainingSeconds <= 0
+  useEffect(() => {
+    async function loadStakeRecord() {
+      setLoading(true)
+      const record = await fetchStakeRecord(nft.mint)
+      setStakeRecord(record)
+      setLoading(false)
+    }
+    loadStakeRecord()
+  }, [nft.mint])
 
   const handleUnlock = async () => {
-    if (!account || !signer || !capabilities.canSign || !staker || !collection) {
+    if (!account || !signer || !ready || !staker || !collection || !stakeRecord) {
       toast.error("Wallet not connected or membership not available")
       return
     }
@@ -72,6 +81,11 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
 
     try {
       const ownerAddress = account as Address
+
+      const requiredSigners: RequiredSigner[] = [{ address: ownerAddress, label: "Owner" }]
+
+      const noopSigners = new Map<string, TransactionSigner>()
+      noopSigners.set(ownerAddress, createNoopSigner(ownerAddress))
 
       const instructions = isNiftyAsset(nft)
         ? await buildUnstakeNiftyInstructions({
@@ -91,16 +105,17 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
             owner: ownerAddress,
           })
 
-      await prepareAndSendTransaction({
+      await signWithMultipleWallets({
         instructions,
-        feePayer: signer as unknown as TransactionSigner,
+        requiredSigners,
+        noopSigners,
+        getConnectedSigner,
+        onPhantomAccountChange: handlePhantomAccountChange,
       })
 
-      removeStakeRecord(nft.mint)
+      setNftStaked({ mint: nft.mint, staked: false })
 
-      invalidateStakeRecordsCache(account)
       toast.success(`Unlocked ${nft.name} successfully!`)
-      onSuccess()
       onClose()
     } catch (err) {
       console.error("Unlock failed:", err)
@@ -114,56 +129,42 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
     }
   }
 
-  const isReady = !!account && !!signer && capabilities.canSign && !!staker && !!collection
+  const isReady = !!account && !!signer && ready && !!staker && !!collection && !!stakeRecord
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Unlock Dandy</h2>
-          <button
-            onClick={onClose}
-            disabled={unlocking}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Unlock className="h-5 w-5 text-primary" />
+            Unlock Dandy
+          </DialogTitle>
+          <DialogDescription>Unlock your Dandy to transfer or sell it.</DialogDescription>
+        </DialogHeader>
 
-        <div className="mb-4 overflow-hidden rounded-lg border border-border">
-          <div className="aspect-square overflow-hidden">
-            <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" />
-          </div>
-          <div className="p-3">
-            <h3 className="truncate font-medium">{nft.name}</h3>
-            <p className="text-sm text-muted-foreground">{nft.collectionName ?? "Dandies"}</p>
-          </div>
-        </div>
-
-        {!isMinPeriodMet && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
-            <div className="text-sm">
-              <p className="font-medium text-yellow-500">Minimum lock period not met</p>
-              <p className="text-muted-foreground">
-                {formatDuration(remainingSeconds)} remaining. You can still unlock early.
-              </p>
+        <div className="py-4 space-y-4">
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="aspect-square overflow-hidden">
+              <img src={nft.image} alt={nft.name} className="h-full w-full object-cover" />
+            </div>
+            <div className="p-3">
+              <h3 className="truncate font-medium">{nft.name}</h3>
+              <p className="text-sm text-muted-foreground">{nft.collectionName ?? "Dandies"}</p>
             </div>
           </div>
-        )}
+        </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          {isMinPeriodMet
-            ? "Are you sure you want to unlock this Dandy?"
-            : "Are you sure you want to unlock this Dandy early?"}
-        </p>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={unlocking} className="flex-1">
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={unlocking}>
             Cancel
           </Button>
-          <Button onClick={handleUnlock} disabled={!isReady || unlocking} className="flex-1">
-            {unlocking ? (
+          <Button onClick={handleUnlock} disabled={!isReady || unlocking || loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : unlocking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Unlocking...
@@ -175,8 +176,8 @@ export function UnlockDialog({ nft, stakeRecord, onClose, onSuccess }: UnlockDia
               </>
             )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
