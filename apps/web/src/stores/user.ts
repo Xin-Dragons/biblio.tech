@@ -222,22 +222,94 @@ export const toggleJunkAtom = atom(null, (get, set, mint: string) => {
   set(junkAtom, next)
 })
 
-export const addTagAtom = atom(null, (_get, set, tag: Omit<Tag, "id">) => {
+// Create tag via API with optimistic update
+export const createTagAtom = atom(null, async (get, set, tag: Omit<Tag, "id">) => {
   const id = crypto.randomUUID()
-  set(tagsAtom, (prev) => [...prev, { ...tag, id }])
-  return id
+  const newTag: Tag = { ...tag, id }
+
+  // Optimistic update
+  const prevTags = get(tagsAtom)
+  set(tagsAtom, [...prevTags, newTag])
+
+  try {
+    const res = await authFetch("/api/user/tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTag),
+    })
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ error: "Failed to create tag" }))
+      throw new Error((errorData as { error?: string }).error ?? "Failed to create tag")
+    }
+    return newTag
+  } catch (err) {
+    // Rollback on error
+    set(tagsAtom, prevTags)
+    throw err
+  }
 })
 
-export const removeTagAtom = atom(null, (_get, set, tagId: string) => {
-  set(tagsAtom, (prev) => prev.filter((t) => t.id !== tagId))
-  set(nftTagsAtom, (prev) => {
-    const next: Record<string, string[]> = {}
-    for (const [mint, tags] of Object.entries(prev)) {
-      const filtered = tags.filter((t) => t !== tagId)
-      if (filtered.length > 0) next[mint] = filtered
+// Update tag via API with optimistic update
+export const updateTagAtom = atom(
+  null,
+  async (get, set, { id, updates }: { id: string; updates: Partial<{ name: string; color: string }> }) => {
+    const prevTags = get(tagsAtom)
+    const tagIndex = prevTags.findIndex((t) => t.id === id)
+    if (tagIndex === -1) throw new Error("Tag not found")
+
+    // Optimistic update
+    const updatedTag = { ...prevTags[tagIndex], ...updates }
+    const newTags = [...prevTags]
+    newTags[tagIndex] = updatedTag
+    set(tagsAtom, newTags)
+
+    try {
+      const res = await authFetch(`/api/user/tags/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Failed to update tag" }))
+        throw new Error((errorData as { error?: string }).error ?? "Failed to update tag")
+      }
+      return updatedTag
+    } catch (err) {
+      // Rollback on error
+      set(tagsAtom, prevTags)
+      throw err
     }
-    return next
-  })
+  }
+)
+
+// Delete tag via API with optimistic update
+export const deleteTagAtom = atom(null, async (get, set, tagId: string) => {
+  const prevTags = get(tagsAtom)
+  const prevNftTags = get(nftTagsAtom)
+
+  // Optimistic update
+  set(
+    tagsAtom,
+    prevTags.filter((t) => t.id !== tagId)
+  )
+  const nextNftTags: Record<string, string[]> = {}
+  for (const [mint, tags] of Object.entries(prevNftTags)) {
+    const filtered = tags.filter((t) => t !== tagId)
+    if (filtered.length > 0) nextNftTags[mint] = filtered
+  }
+  set(nftTagsAtom, nextNftTags)
+
+  try {
+    const res = await authFetch(`/api/user/tags/${tagId}`, { method: "DELETE" })
+    if (!res.ok && res.status !== 404) {
+      throw new Error("Failed to delete tag")
+    }
+  } catch (err) {
+    // Rollback on error
+    set(tagsAtom, prevTags)
+    set(nftTagsAtom, prevNftTags)
+    throw err
+  }
 })
 
 export const toggleNftTagAtom = atom(null, (_get, set, { mint, tagId }: { mint: string; tagId: string }) => {
@@ -253,5 +325,24 @@ export const toggleNftTagAtom = atom(null, (_get, set, { mint, tagId }: { mint: 
       return { ...prev, [mint]: filtered }
     }
     return { ...prev, [mint]: [...tags, tagId] }
+  })
+})
+
+// Legacy local-only atoms (used by sidebar until US-006 migrates to API-backed atoms)
+export const addTagAtom = atom(null, (_get, set, tag: Omit<Tag, "id">) => {
+  const id = crypto.randomUUID()
+  set(tagsAtom, (prev) => [...prev, { ...tag, id }])
+  return id
+})
+
+export const removeTagAtom = atom(null, (_get, set, tagId: string) => {
+  set(tagsAtom, (prev) => prev.filter((t) => t.id !== tagId))
+  set(nftTagsAtom, (prev) => {
+    const next: Record<string, string[]> = {}
+    for (const [mint, tags] of Object.entries(prev)) {
+      const filtered = tags.filter((t) => t !== tagId)
+      if (filtered.length > 0) next[mint] = filtered
+    }
+    return next
   })
 })
