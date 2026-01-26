@@ -15,6 +15,8 @@ import { detectVaultedNftsAtom } from "@/stores/vault"
 import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
 import { sessionAtom } from "@/stores/auth"
 import { isConnectedAtom } from "@/stores/wallet"
+import { searchQueryAtom } from "@/stores/ui"
+import { fetchTagsAtom, fetchNftTagsAtom } from "@/stores/user"
 
 const PAGES_WITHOUT_TOOLBAR: string[] = []
 
@@ -30,6 +32,8 @@ function DataFetcher() {
   const fetchUserNfts = useSetAtom(fetchUserNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
+  const fetchTags = useSetAtom(fetchTagsAtom)
+  const fetchNftTags = useSetAtom(fetchNftTagsAtom)
   const nfts = useAtomValue(nftsAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const detectVaultedNfts = useSetAtom(detectVaultedNftsAtom)
@@ -46,6 +50,13 @@ function DataFetcher() {
     fetchTier()
     fetchLinkedWallets()
   }, [isConnected, session?.token, fetchTier, fetchLinkedWallets])
+
+  // Fetch tags and nft-tag associations - only for authenticated users
+  useEffect(() => {
+    if (!session?.token) return
+    fetchTags()
+    fetchNftTags()
+  }, [session?.token, fetchTags, fetchNftTags])
 
   // Authenticated: fetch for all linked wallets (no dependency on connected account)
   useEffect(() => {
@@ -77,9 +88,15 @@ function DataFetcher() {
 export function Layout() {
   const location = useLocation()
   const isConnected = useAtomValue(isConnectedAtom)
+  const setSearchQuery = useSetAtom(searchQueryAtom)
   const showToolbar = !PAGES_WITHOUT_TOOLBAR.includes(location.pathname)
   const viewingOthersShowcase = isViewingOthersShowcase(location.pathname)
   const showWelcome = !isConnected && !viewingOthersShowcase
+
+  // Clear search on route change
+  useEffect(() => {
+    setSearchQuery("")
+  }, [location.pathname, setSearchQuery])
 
   return (
     <div className="relative flex h-screen bg-mesh">

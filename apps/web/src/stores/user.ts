@@ -59,8 +59,37 @@ export const tagsAtom = atomWithStorage<Tag[]>("biblio-tags", [])
 
 export const nftTagsAtom = atomWithStorage<Record<string, string[]>>("biblio-nft-tags", {})
 
-// Custom order - stored in user DO
-export const customOrderAtom = atom<string[]>([])
+// Loading state for tags (to avoid flash of empty state)
+export const tagsLoadingAtom = atom(false)
+
+// Fetch tags from API - called on authenticated app load
+export const fetchTagsAtom = atom(null, async (_get, set) => {
+  set(tagsLoadingAtom, true)
+  try {
+    const res = await authFetch("/api/user/tags")
+    if (res.ok) {
+      const tags = (await res.json()) as Tag[]
+      set(tagsAtom, tags)
+    }
+  } catch {
+    // Ignore errors - user might not be authenticated or API unavailable
+  } finally {
+    set(tagsLoadingAtom, false)
+  }
+})
+
+// Fetch nft-tag associations from API - called on authenticated app load
+export const fetchNftTagsAtom = atom(null, async (_get, set) => {
+  try {
+    const res = await authFetch("/api/user/nft-tags")
+    if (res.ok) {
+      const nftTags = (await res.json()) as Record<string, string[]>
+      set(nftTagsAtom, nftTags)
+    }
+  } catch {
+    // Ignore errors - user might not be authenticated or API unavailable
+  }
+})
 
 // Collage layout - stored in user DO
 export interface CollageLayoutItem {
@@ -99,31 +128,6 @@ export const saveCollageLayoutAtom = atom(
     }
   }
 )
-
-export const fetchCustomOrderAtom = atom(null, async (_get, set, context: string = "nfts") => {
-  try {
-    const res = await authFetch(`/api/user/order/${context}`)
-    if (res.ok) {
-      const data = await res.json()
-      set(customOrderAtom, data.order ?? [])
-    }
-  } catch {
-    // Ignore errors - user might not be authenticated
-  }
-})
-
-export const saveCustomOrderAtom = atom(null, async (_get, set, order: string[], context: string = "nfts") => {
-  set(customOrderAtom, order)
-  try {
-    await authFetch(`/api/user/order/${context}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order }),
-    })
-  } catch {
-    // Ignore errors - user might not be authenticated
-  }
-})
 
 // Collage sizes - stored in user DO
 export type CollageSizeClass = "small" | "medium" | "large" | "xlarge"
