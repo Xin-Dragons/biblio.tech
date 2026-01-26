@@ -51,20 +51,28 @@ userRoutes.post("/tags", async (c) => {
       body: JSON.stringify(body),
     })
   )
+  if (!res.ok) {
+    const errorText = await res.text()
+    return c.json({ error: errorText }, res.status as 400)
+  }
   return c.json(await res.json())
 })
 
-userRoutes.patch("/tags/:id", async (c) => {
+userRoutes.put("/tags/:id", async (c) => {
   const userDO = getUserDO(c)
   const id = c.req.param("id")
   const body = await c.req.json()
   const res = await userDO.fetch(
     new Request(`http://do/tags/${id}`, {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify(body),
     })
   )
-  if (!res.ok) return c.json({ error: "Not found" }, 404)
+  if (!res.ok) {
+    const errorText = await res.text()
+    if (res.status === 404) return c.json({ error: "Not found" }, 404)
+    return c.json({ error: errorText }, res.status as 400)
+  }
   return c.json(await res.json())
 })
 
@@ -577,10 +585,12 @@ function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string
     delegate: niftyAsset.delegate,
     tokenStandard: "Nifty",
     owner,
+    ruleSet: null,
+    staked: false,
   }
 }
 
-// NFTs - fetches NFTs for all linked wallets and merges them
+// NFTs - fetches NFTs for all linked wallets and merges them (with caching)
 userRoutes.get("/nfts", async (c) => {
   const userDO = getUserDO(c)
 
@@ -592,41 +602,162 @@ userRoutes.get("/nfts", async (c) => {
     return c.json({ mints: [], collections: [], total: 0 })
   }
 
-  // Fetch NFTs for all wallets in parallel
+  // Fetch NFTs for all wallets in parallel (using cache when available)
   const walletAddresses = wallets.map((w) => w.publicKey)
 
-  const results = await Promise.all(
-    walletAddresses.map(async (wallet) => {
-      const [dasResult, niftyAssets] = await Promise.all([
-        getAssetsByOwner(c.env, wallet),
-        getNiftyAssetsByOwner(c.env, wallet),
-      ])
+  // Fetch stake records for all wallets in parallel
+  const stakeRecordsPromise = Promise.all(walletAddresses.map((wallet) => getCachedStakeRecords(c.env, wallet)))
 
-      const { assets: dasAssets, collections: dasCollections } = dasResult
+  // Check if we should return stale data for faster initial load
+  const forceRefresh = c.req.query("refresh") === "true"
 
-      // Add owner to DAS assets
-      for (const asset of dasAssets) {
-        asset.owner = wallet
-      }
+  const [results, allStakeRecords] = await Promise.all([
+    Promise.all(
+      walletAddresses.map(async (wallet) => {
+        // Check cache first
+        const cacheStub = getNftCacheDO(c, wallet)
+        const cacheRes = await cacheStub.fetch(new Request("http://do/cache"))
+        const cacheData = await cacheRes.json<{
+          cached: boolean
+          stale?: boolean
+          nfts?: Array<{
+            mint: string
+            name: string
+            image: string
+            collectionId: string
+            collectionName: string | null
+            attributes: Array<{ trait_type: string; value: string }>
+            frozen: boolean
+            delegate: string | null
+            compressed: boolean
+            tokenStandard: string
+            staked?: boolean
+          }>
+          collections?: Array<{ id: string; name: string; image: string; numMints: number }>
+        }>()
 
-      // Fetch nifty collections
-      const niftyCollectionIds = niftyAssets.map((a) => a.group).filter((g): g is string => g !== null)
-      const niftyCollections = await fetchNiftyCollections(c.env, niftyCollectionIds)
+        // If cache exists (even if stale), return it immediately unless forceRefresh
+        if (!forceRefresh && cacheData.cached && cacheData.nfts && cacheData.collections) {
+          const cachedAssets: DASAsset[] = cacheData.nfts.map((nft) => ({
+            ...nft,
+            owner: wallet,
+            tokenStandard: nft.tokenStandard as DASAsset["tokenStandard"],
+            ruleSet: null,
+            staked: nft.staked ?? false,
+          }))
+          const cachedCollections: DASCollection[] = cacheData.collections.map((col) => ({
+            id: col.id,
+            name: col.name,
+            image: col.image,
+            count: col.numMints,
+          }))
+          return {
+            assets: cachedAssets,
+            collections: cachedCollections,
+            niftyAssets: [] as NiftyAsset[],
+            niftyCollections: new Map<string, { name: string; image: string | null }>(),
+            stale: cacheData.stale ?? false,
+          }
+        }
 
-      // Map nifty assets with owner
-      const mappedNiftyAssets: DASAsset[] = niftyAssets.map((niftyAsset) => {
-        const collection = niftyAsset.group ? niftyCollections.get(niftyAsset.group) : null
-        return mapNiftyAssetToDASFormat(niftyAsset, collection?.name ?? null, wallet)
+        // Cache miss or forceRefresh - fetch fresh
+        const [dasResult, niftyAssets] = await Promise.all([
+          getAssetsByOwner(c.env, wallet),
+          getNiftyAssetsByOwner(c.env, wallet),
+        ])
+
+        const { assets: dasAssets, collections: dasCollections } = dasResult
+
+        // Add owner to DAS assets
+        for (const asset of dasAssets) {
+          asset.owner = wallet
+        }
+
+        // Fetch nifty collections
+        const niftyCollectionIds = niftyAssets.map((a) => a.group).filter((g): g is string => g !== null)
+        const niftyCollections = await fetchNiftyCollections(c.env, niftyCollectionIds)
+
+        // Map nifty assets with owner
+        const mappedNiftyAssets: DASAsset[] = niftyAssets.map((niftyAsset) => {
+          const collection = niftyAsset.group ? niftyCollections.get(niftyAsset.group) : null
+          return mapNiftyAssetToDASFormat(niftyAsset, collection?.name ?? null, wallet)
+        })
+
+        const allAssets = [...dasAssets, ...mappedNiftyAssets]
+
+        // Build collections map for cache
+        const collectionsForCache = new Map<string, DASCollection>()
+        for (const col of dasCollections) {
+          collectionsForCache.set(col.id, col)
+        }
+        for (const niftyAsset of niftyAssets) {
+          if (niftyAsset.group) {
+            const collectionId =
+              niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+            const existing = collectionsForCache.get(collectionId)
+            if (existing) {
+              existing.count++
+            } else {
+              const collectionData = niftyCollections.get(niftyAsset.group)
+              collectionsForCache.set(collectionId, {
+                id: collectionId,
+                name: collectionData?.name ?? niftyAsset.group,
+                image: collectionData?.image ?? null,
+                count: 1,
+              })
+            }
+          }
+        }
+
+        // Save to cache (fire and forget)
+        const cacheNfts = allAssets.map((a) => ({
+          mint: a.mint,
+          name: a.name,
+          image: a.image,
+          collectionId: a.collectionId ?? "",
+          collectionName: a.collectionName,
+          attributes: a.attributes,
+          frozen: a.frozen,
+          delegate: a.delegate,
+          compressed: a.compressed,
+          tokenStandard: a.tokenStandard,
+          staked: a.staked,
+        }))
+        const cacheCollections = Array.from(collectionsForCache.values()).map((col) => ({
+          id: col.id,
+          name: col.name,
+          image: col.image ?? "",
+          numMints: col.count,
+        }))
+        void cacheStub.fetch(
+          new Request("http://do/cache", {
+            method: "PUT",
+            body: JSON.stringify({ nfts: cacheNfts, collections: cacheCollections }),
+          })
+        )
+
+        return {
+          assets: allAssets,
+          collections: dasCollections,
+          niftyAssets,
+          niftyCollections,
+          stale: false,
+        }
       })
+    ),
+    stakeRecordsPromise,
+  ])
 
-      return {
-        assets: [...dasAssets, ...mappedNiftyAssets],
-        collections: dasCollections,
-        niftyAssets,
-        niftyCollections,
-      }
-    })
-  )
+  // Build set of staked mints from all stake records
+  const stakedMints = new Set<string>()
+  for (const records of allStakeRecords) {
+    for (const record of records) {
+      stakedMints.add(record.nftMint)
+    }
+  }
+
+  // Check if any wallet had stale data
+  const anyStale = results.some((r) => r.stale)
 
   // Merge all assets, dedupe by mint (keep first occurrence)
   const seenMints = new Set<string>()
@@ -671,9 +802,15 @@ userRoutes.get("/nfts", async (c) => {
     }
   }
 
+  // Enrich assets with staked status
+  for (const asset of allAssets) {
+    asset.staked = stakedMints.has(asset.mint)
+  }
+
   return c.json({
     mints: allAssets,
     collections: Array.from(collectionsMap.values()),
     total: allAssets.length,
+    stale: anyStale,
   })
 })

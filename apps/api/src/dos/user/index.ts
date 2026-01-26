@@ -8,8 +8,8 @@ import type { UserDB, Tag } from "./db/types"
 import migrations from "./db/migrations/migrations"
 
 const LIMITS = {
-  MAX_TAGS: 100,
-  MAX_TAG_NAME: 50,
+  MAX_TAGS: 20,
+  MAX_TAG_NAME: 30,
   MAX_COLOR: 20,
   MAX_CONTEXT: 100,
   MAX_STARRED: 5000,
@@ -97,6 +97,12 @@ export class UserDO extends DurableObject<Env> {
       throw new ValidationError(`Maximum number of tags (${LIMITS.MAX_TAGS}) reached`)
     }
 
+    const existingTags = await this.db.query.tags.findMany()
+    const nameLower = tag.name.toLowerCase()
+    if (existingTags.some((t) => t.name.toLowerCase() === nameLower)) {
+      throw new ValidationError("A tag with this name already exists")
+    }
+
     const newTag: Tag = {
       id: tag.id,
       name: tag.name,
@@ -119,6 +125,14 @@ export class UserDO extends DurableObject<Env> {
       where: eq(schema.tags.id, id),
     })
     if (!existing) return null
+
+    if (updates.name !== undefined) {
+      const allTags = await this.db.query.tags.findMany()
+      const nameLower = updates.name.toLowerCase()
+      if (allTags.some((t) => t.id !== id && t.name.toLowerCase() === nameLower)) {
+        throw new ValidationError("A tag with this name already exists")
+      }
+    }
 
     const updated = {
       ...existing,
@@ -476,7 +490,7 @@ export class UserDO extends DurableObject<Env> {
         const body = await request.json<{ id: string; name: string; color: string }>()
         return Response.json(await this.addTag(body))
       }
-      if (path.startsWith("/tags/") && request.method === "PATCH") {
+      if (path.startsWith("/tags/") && request.method === "PUT") {
         const id = path.split("/")[2]
         const body = await request.json<Partial<{ name: string; color: string }>>()
         const result = await this.updateTag(id, body)
