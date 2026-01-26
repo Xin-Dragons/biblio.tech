@@ -10,6 +10,7 @@ import { SplPage } from "./routes/spl"
 import { ShowcasePage } from "./routes/showcase"
 import { MembershipPage } from "./routes/membership"
 import { VaultPage } from "./routes/vault"
+import { TagPage } from "./routes/tag"
 
 export function App() {
   return (
@@ -26,6 +27,7 @@ export function App() {
         <Route path="showcase/:username" element={<ShowcasePage />} />
         <Route path="membership" element={<MembershipPage />} />
         <Route path="vault" element={<VaultPage />} />
+        <Route path="tags/:id" element={<TagPage />} />
       </Route>
     </Routes>
   )
