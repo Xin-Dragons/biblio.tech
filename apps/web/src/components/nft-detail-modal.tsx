@@ -1,8 +1,9 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { Star, Trash2, ExternalLink, Copy, Check, Tag, Zap, Lock } from "lucide-react"
+import { Star, Trash2, ExternalLink, Copy, Check, Tag, Zap, Shield, X, Plus, ChevronDown } from "lucide-react"
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Button } from "./ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { selectedNftAtom } from "@/stores/nfts"
 import {
@@ -12,8 +13,9 @@ import {
   toggleJunkAtom,
   tagsAtom,
   nftTagsAtom,
-  toggleNftTagAtom,
+  bulkUpdateNftTagsAtom,
 } from "@/stores/user"
+import { isAuthenticatedAtom } from "@/stores/auth"
 
 export function NftDetailModal() {
   const [nft, setNft] = useAtom(selectedNftAtom)
@@ -21,17 +23,27 @@ export function NftDetailModal() {
   const junk = useAtomValue(junkAtom)
   const tags = useAtomValue(tagsAtom)
   const nftTags = useAtomValue(nftTagsAtom)
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom)
   const toggleStarred = useSetAtom(toggleStarredAtom)
   const toggleJunk = useSetAtom(toggleJunkAtom)
-  const toggleNftTag = useSetAtom(toggleNftTagAtom)
+  const bulkUpdateNftTags = useSetAtom(bulkUpdateNftTagsAtom)
   const [copied, setCopied] = useState(false)
-  const [showTags, setShowTags] = useState(false)
 
   if (!nft) return null
 
   const isStarred = starred.has(nft.mint)
   const isJunk = junk.has(nft.mint)
   const nftTagIds = nftTags[nft.mint] ?? []
+  const assignedTags = tags.filter((tag) => nftTagIds.includes(tag.id))
+  const availableTags = tags.filter((tag) => !nftTagIds.includes(tag.id))
+
+  const handleAddTag = (tagId: string) => {
+    bulkUpdateNftTags({ tagId, add: [nft.mint] })
+  }
+
+  const handleRemoveTag = (tagId: string) => {
+    bulkUpdateNftTags({ tagId, remove: [nft.mint] })
+  }
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(nft.mint)
@@ -41,7 +53,6 @@ export function NftDetailModal() {
 
   const handleClose = () => {
     setNft(null)
-    setShowTags(false)
   }
 
   return (
@@ -81,32 +92,53 @@ export function NftDetailModal() {
             </div>
 
             {/* Tags */}
-            {tags.length > 0 && (
+            {isAuthenticated && (
               <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setShowTags(!showTags)}>
-                  <Tag className="h-4 w-4" />
-                  Tags ({nftTagIds.length})
-                </Button>
-                {showTags && (
-                  <div className="flex flex-wrap gap-2 rounded-xl border border-border/50 bg-muted/30 p-3">
-                    {tags.map((tag) => {
-                      const isSelected = nftTagIds.includes(tag.id)
-                      return (
-                        <button
-                          key={tag.id}
-                          onClick={() => toggleNftTag({ mint: nft.mint, tagId: tag.id })}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200",
-                            isSelected ? "text-white shadow-sm" : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                          )}
-                          style={isSelected ? { backgroundColor: tag.color } : undefined}
-                        >
-                          {tag.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tags</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {assignedTags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                      style={{ backgroundColor: tag.color }}
+                    >
+                      {tag.name}
+                      <button
+                        onClick={() => handleRemoveTag(tag.id)}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-black/20 transition-colors"
+                        aria-label={`Remove ${tag.name} tag`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {availableTags.length > 0 ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
+                          <Plus className="h-3 w-3" />
+                          Add Tag
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {availableTags.map((tag) => (
+                          <DropdownMenuItem key={tag.id} onClick={() => handleAddTag(tag.id)} className="gap-2">
+                            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                            {tag.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : tags.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">No tags created yet</span>
+                  ) : assignedTags.length === tags.length ? (
+                    <span className="text-xs text-muted-foreground">All tags assigned</span>
+                  ) : null}
+                </div>
               </div>
             )}
           </div>
@@ -155,9 +187,9 @@ export function NftDetailModal() {
                 </span>
               )}
               {nft.frozen && (
-                <span className="badge bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                  <Lock className="h-3 w-3" />
-                  Frozen
+                <span className="badge bg-primary/15 text-primary border border-primary/20">
+                  <Shield className="h-3 w-3" />
+                  Vault
                 </span>
               )}
             </div>
