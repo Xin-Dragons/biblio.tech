@@ -1,6 +1,6 @@
 import { atom } from "jotai"
-import { searchQueryAtom, sortOptionAtom } from "./ui"
-import { junkAtom, customOrderAtom } from "./user"
+import { searchQueryAtom, sortOptionAtom, tagFilterAtom, showUntaggedFilterAtom } from "./ui"
+import { junkAtom, nftTagsAtom } from "./user"
 
 function getAuthHeaders(): HeadersInit {
   try {
@@ -60,6 +60,8 @@ export interface NFT {
   compressed: boolean
   tokenStandard: TokenStandard
   owner: string
+  ruleSet: string | null
+  staked: boolean
   listing: {
     price: string | null
     source: string
@@ -100,6 +102,8 @@ function mapNftData(mint: Record<string, unknown>, defaultOwner?: string): NFT {
     compressed: mint.compressed as boolean,
     tokenStandard: (mint.tokenStandard as TokenStandard) ?? "NonFungible",
     owner: (mint.owner as string) ?? defaultOwner ?? "",
+    ruleSet: (mint.ruleSet as string) ?? null,
+    staked: (mint.staked as boolean) ?? false,
     listing: null,
   }
 }
@@ -127,6 +131,25 @@ async function saveToCache(wallet: string, nfts: NFT[], collections: Collection[
   }
 }
 
+// Background refresh helper
+async function doBackgroundRefresh(set: (atom: unknown, value: unknown) => void) {
+  set(isRefreshingAtom, true)
+  try {
+    const response = await authFetch("/api/user/nfts?refresh=true")
+    if (response.ok) {
+      const data = await response.json()
+      const nfts: NFT[] = data.mints.map((m: Record<string, unknown>) => mapNftData(m))
+      const collections: Collection[] = data.collections.map(mapCollectionData)
+      set(nftsAtom, nfts)
+      set(collectionsAtom, collections)
+    }
+  } catch {
+    // Ignore background refresh errors
+  } finally {
+    set(isRefreshingAtom, false)
+  }
+}
+
 // Fetch NFTs for all linked wallets (authenticated endpoint)
 export const fetchUserNftsAtom = atom(null, async (get, set) => {
   const alreadyFetched = get(userNftsFetchedAtom)
@@ -134,21 +157,7 @@ export const fetchUserNftsAtom = atom(null, async (get, set) => {
 
   // If already fetched, do background refresh
   if (alreadyFetched && existingNfts.length > 0) {
-    set(isRefreshingAtom, true)
-    try {
-      const response = await authFetch("/api/user/nfts")
-      if (response.ok) {
-        const data = await response.json()
-        const nfts: NFT[] = data.mints.map((m: Record<string, unknown>) => mapNftData(m))
-        const collections: Collection[] = data.collections.map(mapCollectionData)
-        set(nftsAtom, nfts)
-        set(collectionsAtom, collections)
-      }
-    } catch {
-      // Ignore background refresh errors
-    } finally {
-      set(isRefreshingAtom, false)
-    }
+    await doBackgroundRefresh(set as (atom: unknown, value: unknown) => void)
     return
   }
 
@@ -168,6 +177,11 @@ export const fetchUserNftsAtom = atom(null, async (get, set) => {
     set(nftsAtom, nfts)
     set(collectionsAtom, collections)
     set(userNftsFetchedAtom, true)
+
+    // If data was stale, trigger background refresh for fresh data
+    if (data.stale) {
+      doBackgroundRefresh(set as (atom: unknown, value: unknown) => void)
+    }
   } catch (err) {
     set(errorAtom, err instanceof Error ? err.message : "Unknown error")
   } finally {
@@ -175,13 +189,13 @@ export const fetchUserNftsAtom = atom(null, async (get, set) => {
   }
 })
 
-// Force refresh for authenticated users
+// Force refresh for authenticated users (bypasses cache)
 export const refreshUserNftsAtom = atom(null, async (_get, set) => {
   set(isLoadingAtom, true)
   set(errorAtom, null)
 
   try {
-    const response = await authFetch("/api/user/nfts")
+    const response = await authFetch("/api/user/nfts?refresh=true")
     if (!response.ok) {
       throw new Error("Failed to fetch NFTs")
     }
@@ -244,6 +258,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
             ...n,
             owner: (n.owner as string) ?? wallet,
             rarityRank: null,
+            staked: (n.staked as boolean) ?? false,
             listing: null,
           }))
           set(nftsAtom, cachedNfts)
@@ -307,7 +322,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
   }
 })
 
-// Force refresh - uses authenticated endpoint if available
+// Force refresh - uses authenticated endpoint if available (bypasses cache)
 export const refreshNftsAtom = atom(null, async (get, set) => {
   set(isLoadingAtom, true)
   set(errorAtom, null)
@@ -315,7 +330,7 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
   try {
     // If authenticated, use the user endpoint for all wallets
     if (isAuthenticated()) {
-      const response = await authFetch("/api/user/nfts")
+      const response = await authFetch("/api/user/nfts?refresh=true")
       if (!response.ok) {
         throw new Error("Failed to fetch NFTs")
       }
@@ -360,9 +375,27 @@ export const filteredNftsAtom = atom((get) => {
   const junk = get(junkAtom)
   const searchQuery = get(searchQueryAtom).toLowerCase()
   const sortOption = get(sortOptionAtom)
-  const customOrder = get(customOrderAtom)
+  const tagFilter = get(tagFilterAtom)
+  const showUntagged = get(showUntaggedFilterAtom)
+  const nftTags = get(nftTagsAtom)
 
   let filtered = nfts.filter((nft) => !junk.has(nft.mint))
+
+  // Apply tag filter (OR logic - show NFTs in ANY of the selected tags)
+  if (tagFilter.size > 0 || showUntagged) {
+    filtered = filtered.filter((nft) => {
+      const mintTags = nftTags[nft.mint] ?? []
+      // Check if untagged filter is active and NFT has no tags
+      if (showUntagged && mintTags.length === 0) {
+        return true
+      }
+      // Check if NFT is in any of the selected tags (OR logic)
+      if (tagFilter.size > 0 && mintTags.some((tagId) => tagFilter.has(tagId))) {
+        return true
+      }
+      return false
+    })
+  }
 
   if (searchQuery) {
     filtered = filtered.filter(
@@ -384,15 +417,6 @@ export const filteredNftsAtom = atom((get) => {
     case "collection":
       sorted.sort((a, b) => (a.collectionName ?? "").localeCompare(b.collectionName ?? ""))
       break
-    case "custom": {
-      const orderMap = new Map(customOrder.map((mint, index) => [mint, index]))
-      sorted.sort((a, b) => {
-        const aIndex = orderMap.get(a.mint) ?? Infinity
-        const bIndex = orderMap.get(b.mint) ?? Infinity
-        return aIndex - bIndex
-      })
-      break
-    }
     case "recent":
     default:
       break
@@ -435,6 +459,24 @@ export const tokensAtom = atom<Token[]>([])
 export const tokensLoadingAtom = atom(false)
 export const tokensFetchedWalletAtom = atom<string | null>(null)
 
+// Optimistic update for staked status - immediately updates UI without waiting for API
+export const setNftStakedAtom = atom(null, (get, set, { mint, staked }: { mint: string; staked: boolean }) => {
+  const currentNfts = get(nftsAtom)
+  const newNfts = currentNfts.map((nft) => (nft.mint === mint ? { ...nft, staked } : nft))
+  set(nftsAtom, newNfts)
+})
+
+// Optimistic update for multiple NFTs staked status
+export const setNftsBatchStakedAtom = atom(
+  null,
+  (get, set, { mints, staked }: { mints: string[]; staked: boolean }) => {
+    const mintSet = new Set(mints)
+    const currentNfts = get(nftsAtom)
+    const newNfts = currentNfts.map((nft) => (mintSet.has(nft.mint) ? { ...nft, staked } : nft))
+    set(nftsAtom, newNfts)
+  }
+)
+
 // Refetch a single NFT by mint address and update in local array
 export const refetchNftAtom = atom(null, async (get, set, mint: string) => {
   const currentNfts = get(nftsAtom)
@@ -459,6 +501,53 @@ export const refetchNftAtom = atom(null, async (get, set, mint: string) => {
     set(nftsAtom, newNfts)
   } catch {
     // Ignore refetch errors silently
+  }
+})
+
+// Refetch multiple NFTs by mint addresses in a single batch request
+export const refetchNftBatchAtom = atom(null, async (get, set, mints: string[]): Promise<NFT[]> => {
+  if (mints.length === 0) return []
+
+  const currentNfts = get(nftsAtom)
+
+  // Filter to only mints that exist in local array
+  const existingMints = new Set(currentNfts.map((nft) => nft.mint))
+  const mintsToFetch = mints.filter((mint) => existingMints.has(mint))
+
+  if (mintsToFetch.length === 0) return []
+
+  try {
+    const response = await authFetch("/api/nfts/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mints: mintsToFetch }),
+    })
+
+    if (!response.ok) return []
+
+    const data = await response.json()
+    const updatedAssets = data.assets as Array<Record<string, unknown>>
+
+    if (!updatedAssets || updatedAssets.length === 0) return []
+
+    // Create map of updated NFTs
+    const updatedMap = new Map<string, NFT>()
+    for (const asset of updatedAssets) {
+      const existingNft = currentNfts.find((n) => n.mint === asset.mint)
+      if (existingNft) {
+        updatedMap.set(asset.mint as string, mapNftData(asset, existingNft.owner))
+      }
+    }
+
+    // Update local array
+    const newNfts = currentNfts.map((nft) => updatedMap.get(nft.mint) ?? nft)
+    set(nftsAtom, newNfts)
+
+    // Return the updated NFTs for immediate use
+    return Array.from(updatedMap.values())
+  } catch {
+    // Ignore refetch errors silently
+    return []
   }
 })
 
