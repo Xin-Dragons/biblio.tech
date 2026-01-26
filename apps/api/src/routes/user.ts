@@ -84,6 +84,37 @@ userRoutes.delete("/tags/:id", async (c) => {
   return c.body(null, 204)
 })
 
+// Tag NFT associations
+userRoutes.get("/tags/:id/nfts", async (c) => {
+  const userDO = getUserDO(c)
+  const id = c.req.param("id")
+  const res = await userDO.fetch(new Request(`http://do/tags/${id}/nfts`))
+  return c.json(await res.json())
+})
+
+userRoutes.put("/tags/:id/nfts", async (c) => {
+  const userDO = getUserDO(c)
+  const id = c.req.param("id")
+  const body = await c.req.json()
+  const res = await userDO.fetch(
+    new Request(`http://do/tags/${id}/nfts`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })
+  )
+  if (!res.ok) {
+    const errorText = await res.text()
+    return c.json({ error: errorText }, res.status as 400)
+  }
+  return c.body(null, 204)
+})
+
+userRoutes.get("/nft-tags", async (c) => {
+  const userDO = getUserDO(c)
+  const res = await userDO.fetch(new Request("http://do/nft-tags"))
+  return c.json(await res.json())
+})
+
 // Tagged NFTs
 userRoutes.get("/tagged", async (c) => {
   const userDO = getUserDO(c)

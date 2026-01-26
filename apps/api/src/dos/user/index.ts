@@ -178,6 +178,18 @@ export class UserDO extends DurableObject<Env> {
     return result
   }
 
+  async getNftTags(): Promise<Record<string, string[]>> {
+    const rows = await this.db.query.taggedNfts.findMany()
+    const result: Record<string, string[]> = {}
+    for (const row of rows) {
+      if (!result[row.mint]) {
+        result[row.mint] = []
+      }
+      result[row.mint].push(row.tagId)
+    }
+    return result
+  }
+
   async addNftsToTag(tagId: string, mints: string[]): Promise<void> {
     const [taggedCount] = await this.db
       .select({ count: count() })
@@ -508,6 +520,9 @@ export class UserDO extends DurableObject<Env> {
       if (path === "/tagged" && request.method === "GET") {
         return Response.json(await this.getAllTaggedNfts())
       }
+      if (path === "/nft-tags" && request.method === "GET") {
+        return Response.json(await this.getNftTags())
+      }
       if (path.startsWith("/tagged/") && request.method === "PUT") {
         const tagId = path.split("/")[2]
         const { mints } = await request.json<{ mints: string[] }>()
@@ -518,6 +533,21 @@ export class UserDO extends DurableObject<Env> {
         const tagId = path.split("/")[2]
         const { mints } = await request.json<{ mints: string[] }>()
         await this.removeNftsFromTag(tagId, mints)
+        return new Response(null, { status: 204 })
+      }
+      if (path.match(/^\/tags\/[^/]+\/nfts$/) && request.method === "GET") {
+        const tagId = path.split("/")[2]
+        return Response.json(await this.getTaggedNfts(tagId))
+      }
+      if (path.match(/^\/tags\/[^/]+\/nfts$/) && request.method === "PUT") {
+        const tagId = path.split("/")[2]
+        const { add, remove } = await request.json<{ add?: string[]; remove?: string[] }>()
+        if (add && add.length > 0) {
+          await this.addNftsToTag(tagId, add)
+        }
+        if (remove && remove.length > 0) {
+          await this.removeNftsFromTag(tagId, remove)
+        }
         return new Response(null, { status: 204 })
       }
 
