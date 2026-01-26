@@ -1,40 +1,110 @@
-import { useMemo, memo, useState } from "react"
-import { Star, Trash2, Check, Lock, Shield } from "lucide-react"
+import { useMemo, memo, useState, useRef, useEffect } from "react"
+import { Star, Trash2, Check, Lock, Shield, ShieldPlus, MoreVertical } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { selectAtom } from "jotai/utils"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { cn } from "@/lib/utils"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { NiftyBadge } from "@/components/nifty-badge"
 import { UnvaultDialog } from "@/components/vault/UnvaultDialog"
-import { starredAtom, toggleStarredAtom, junkAtom, toggleJunkAtom } from "@/stores/user"
+import { VaultDialog } from "@/components/vault/VaultDialog"
+import {
+  starredAtom,
+  toggleStarredAtom,
+  junkAtom,
+  toggleJunkAtom,
+  tagsAtom,
+  nftTagsAtom,
+  type Tag,
+} from "@/stores/user"
 import { layoutSizeAtom, showInfoAtom, type LayoutSize } from "@/stores/ui"
 import { selectedNftAtom, type NFT } from "@/stores/nfts"
 import { isSelectModeAtom, selectedMintsAtom, toggleSelectedAtom } from "@/stores/selection"
-import { stakedMintsSetAtom } from "@/stores/stake"
 import { vaultedMintsSetAtom } from "@/stores/vault"
-import { refreshNftsAtom } from "@/stores/nfts"
+
+interface TagDotsProps {
+  mint: string
+  tags: Tag[]
+  nftTags: Record<string, string[]>
+}
+
+const MAX_VISIBLE_DOTS = 3
+
+const TagDots = memo(function TagDots({ mint, tags, nftTags }: TagDotsProps) {
+  const assignedTagIds = nftTags[mint] ?? []
+  if (assignedTagIds.length === 0) return null
+
+  const assignedTags = assignedTagIds
+    .map((id) => tags.find((t) => t.id === id))
+    .filter((t): t is Tag => t !== undefined)
+
+  if (assignedTags.length === 0) return null
+
+  const visibleTags = assignedTags.slice(0, MAX_VISIBLE_DOTS)
+  const remainingCount = assignedTags.length - MAX_VISIBLE_DOTS
+
+  const tooltipContent = assignedTags.map((t) => t.name).join(", ")
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+          {visibleTags.map((tag) => (
+            <div
+              key={tag.id}
+              className="h-[6px] w-[6px] rounded-full shadow-sm"
+              style={{ backgroundColor: tag.color }}
+            />
+          ))}
+          {remainingCount > 0 && (
+            <span className="ml-0.5 text-[9px] font-medium text-white drop-shadow-md">+{remainingCount}</span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs">
+        {tooltipContent}
+      </TooltipContent>
+    </Tooltip>
+  )
+})
 
 interface NftCardProps {
   nft: NFT
   showInfo: boolean
+  disableModal?: boolean
 }
 
-const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
+const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardProps) {
   const [unvaultDialogOpen, setUnvaultDialogOpen] = useState(false)
+  const [vaultDialogOpen, setVaultDialogOpen] = useState(false)
+  const [cardWidth, setCardWidth] = useState<number | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const isSmallCard = cardWidth !== null && cardWidth < 150
   const starred = useAtomValue(starredAtom)
   const junk = useAtomValue(junkAtom)
+  const tags = useAtomValue(tagsAtom)
+  const nftTags = useAtomValue(nftTagsAtom)
   const toggleStarred = useSetAtom(toggleStarredAtom)
   const toggleJunk = useSetAtom(toggleJunkAtom)
   const setSelectedNft = useSetAtom(selectedNftAtom)
   const isSelectMode = useAtomValue(isSelectModeAtom)
   const selectedMints = useAtomValue(selectedMintsAtom)
   const toggleSelected = useSetAtom(toggleSelectedAtom)
-  const layoutSize = useAtomValue(layoutSizeAtom)
-  const refreshNfts = useSetAtom(refreshNftsAtom)
 
-  const isStakedAtom = useMemo(() => selectAtom(stakedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
-  const isStaked = useAtomValue(isStakedAtom)
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      setCardWidth(width)
+    })
+
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [])
 
   const isVaultedAtom = useMemo(() => selectAtom(vaultedMintsSetAtom, (mints) => mints.has(nft.mint)), [nft.mint])
   const isVaulted = useAtomValue(isVaultedAtom)
@@ -42,17 +112,19 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
   const isStarred = starred.has(nft.mint)
   const isJunk = junk.has(nft.mint)
   const isSelected = selectedMints.has(nft.mint)
+  const canVault = !nft.frozen && !nft.staked && !isVaulted
 
   const handleClick = () => {
     if (isSelectMode) {
       toggleSelected(nft.mint)
-    } else {
+    } else if (!disableModal) {
       setSelectedNft(nft)
     }
   }
 
   return (
     <div
+      ref={cardRef}
       className={cn(
         "group relative cursor-pointer overflow-hidden rounded-xl border bg-card transition-all duration-300",
         "hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20",
@@ -100,50 +172,88 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
 
       {/* Action Buttons */}
       {!isSelectMode && (
-        <div className="absolute right-2.5 top-2.5 flex gap-1.5 opacity-0 transition-all duration-300 group-hover:opacity-100">
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              toggleJunk(nft.mint)
-            }}
-            className={cn(
-              "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
-              isJunk
-                ? "bg-destructive/90 text-white"
-                : "bg-black/50 text-white/80 hover:bg-destructive/80 hover:text-white"
-            )}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              toggleStarred(nft.mint)
-            }}
-            className={cn(
-              "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
-              isStarred
-                ? "bg-amber-500/90 text-white"
-                : "bg-black/50 text-white/80 hover:bg-amber-500/80 hover:text-white"
-            )}
-          >
-            <Star className={cn("h-4 w-4", isStarred && "fill-current")} />
-          </button>
+        <div className="absolute right-2.5 top-2.5 opacity-0 transition-all duration-300 group-hover:opacity-100">
+          {isSmallCard ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded-lg p-1.5 backdrop-blur-sm bg-black/50 text-white/80 hover:bg-black/70"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {canVault && (
+                  <DropdownMenuItem onClick={() => setVaultDialogOpen(true)}>
+                    <ShieldPlus className="mr-2 h-4 w-4" />
+                    Vault
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => toggleStarred(nft.mint)}>
+                  <Star className={cn("mr-2 h-4 w-4", isStarred && "fill-current text-amber-500")} />
+                  {isStarred ? "Unstar" : "Star"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => toggleJunk(nft.mint)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {isJunk ? "Restore" : "Junk"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex gap-1.5">
+              {canVault && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setVaultDialogOpen(true)
+                  }}
+                  className="rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200 bg-black/50 text-white/80 hover:bg-primary/80 hover:text-white"
+                >
+                  <ShieldPlus className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  toggleJunk(nft.mint)
+                }}
+                className={cn(
+                  "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
+                  isJunk
+                    ? "bg-destructive/90 text-white"
+                    : "bg-black/50 text-white/80 hover:bg-destructive/80 hover:text-white"
+                )}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  toggleStarred(nft.mint)
+                }}
+                className={cn(
+                  "rounded-lg p-1.5 backdrop-blur-sm transition-all duration-200",
+                  isStarred
+                    ? "bg-amber-500/90 text-white"
+                    : "bg-black/50 text-white/80 hover:bg-amber-500/80 hover:text-white"
+                )}
+              >
+                <Star className={cn("h-4 w-4", isStarred && "fill-current")} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Staked Badge */}
-      {isStaked && (
-        <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 rounded-lg bg-primary/90 px-2 py-1 text-xs font-semibold text-primary-foreground backdrop-blur-sm shadow-sm">
-          <Lock className="h-3 w-3" />
-          Staked
-        </div>
-      )}
-
-      {/* Vaulted Badge */}
-      {isVaulted && !isStaked && (
+      {/* Status Badge - top left, shows one status at a time */}
+      {isVaulted ? (
         <>
           <button
             onClick={(e) => {
@@ -152,19 +262,35 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
               setUnvaultDialogOpen(true)
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-gradient-to-r from-teal-500 to-cyan-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg shadow-teal-500/25 transition-all hover:from-teal-400 hover:to-cyan-400 hover:shadow-teal-500/40 hover:scale-105"
+            className={cn(
+              "absolute z-10 flex items-center rounded-lg bg-amber-500/90 font-semibold text-white backdrop-blur-sm transition-colors hover:bg-amber-400/90",
+              isSmallCard ? "left-2 top-2 px-1.5 py-1 text-xs" : "left-2.5 top-2.5 gap-1.5 px-2 py-1 text-xs"
+            )}
           >
             <Shield className="h-3 w-3" />
-            {layoutSize !== "small" && <span>Vault</span>}
+            {!isSmallCard && <span>VAULT</span>}
           </button>
           <UnvaultDialog
             open={unvaultDialogOpen}
             onOpenChange={setUnvaultDialogOpen}
             nfts={[nft]}
-            onSuccess={refreshNfts}
+            onSuccess={() => {}}
           />
         </>
-      )}
+      ) : nft.staked ? (
+        <div
+          className={cn(
+            "absolute z-10 flex items-center rounded-lg bg-primary/90 font-semibold text-primary-foreground backdrop-blur-sm",
+            isSmallCard ? "left-2 top-2 px-1.5 py-1 text-xs" : "left-2.5 top-2.5 gap-1.5 px-2 py-1 text-xs"
+          )}
+        >
+          <Lock className="h-3 w-3" />
+          {!isSmallCard && <span>LOCKED</span>}
+        </div>
+      ) : null}
+
+      {/* Vault Dialog */}
+      <VaultDialog open={vaultDialogOpen} onOpenChange={setVaultDialogOpen} nfts={[nft]} onSuccess={() => {}} />
 
       {/* Listed Badge */}
       {nft.listing?.price && !showInfo && (
@@ -175,6 +301,9 @@ const NftCard = memo(function NftCard({ nft, showInfo }: NftCardProps) {
 
       {/* Nifty Badge */}
       {nft.tokenStandard === "Nifty" && <NiftyBadge />}
+
+      {/* Tag Dots */}
+      {!isSelectMode && <TagDots mint={nft.mint} tags={tags} nftTags={nftTags} />}
     </div>
   )
 })
@@ -183,10 +312,11 @@ type CellData = {
   nfts: NFT[]
   columnCount: number
   showInfo: boolean
+  disableModal?: boolean
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { nfts, columnCount, showInfo } = data
+  const { nfts, columnCount, showInfo, disableModal } = data
   const index = rowIndex * columnCount + columnIndex
   const nft = nfts[index]
 
@@ -194,7 +324,7 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
 
   return (
     <div style={style} className="p-1.5">
-      <NftCard nft={nft} showInfo={showInfo} />
+      <NftCard nft={nft} showInfo={showInfo} disableModal={disableModal} />
     </div>
   )
 }
@@ -216,9 +346,10 @@ function getColumnCount(width: number, layoutSize: LayoutSize): number {
 
 interface NftGridProps {
   nfts: NFT[]
+  disableModal?: boolean
 }
 
-export function NftGrid({ nfts }: NftGridProps) {
+export function NftGrid({ nfts, disableModal }: NftGridProps) {
   const layoutSize = useAtomValue(layoutSizeAtom)
   const showInfo = useAtomValue(showInfoAtom)
 
@@ -251,7 +382,7 @@ export function NftGrid({ nfts }: NftGridProps) {
               columnWidth={columnWidth}
               rowCount={rowCount}
               rowHeight={rowHeight}
-              itemData={{ nfts, columnCount, showInfo }}
+              itemData={{ nfts, columnCount, showInfo, disableModal }}
               className="scrollbar-hide"
             >
               {Cell}
