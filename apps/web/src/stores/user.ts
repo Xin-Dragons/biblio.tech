@@ -328,6 +328,56 @@ export const toggleNftTagAtom = atom(null, (_get, set, { mint, tagId }: { mint: 
   })
 })
 
+// Bulk update NFT-tag associations via API with optimistic update
+export const bulkUpdateNftTagsAtom = atom(
+  null,
+  async (get, set, { tagId, add, remove }: { tagId: string; add?: string[]; remove?: string[] }) => {
+    const prevNftTags = get(nftTagsAtom)
+
+    // Optimistic update
+    const nextNftTags = { ...prevNftTags }
+    if (add) {
+      for (const mint of add) {
+        const current = nextNftTags[mint] ?? []
+        if (!current.includes(tagId)) {
+          nextNftTags[mint] = [...current, tagId]
+        }
+      }
+    }
+    if (remove) {
+      for (const mint of remove) {
+        const current = nextNftTags[mint] ?? []
+        const filtered = current.filter((t) => t !== tagId)
+        if (filtered.length === 0) {
+          delete nextNftTags[mint]
+        } else {
+          nextNftTags[mint] = filtered
+        }
+      }
+    }
+    set(nftTagsAtom, nextNftTags)
+
+    try {
+      const body: { add?: string[]; remove?: string[] } = {}
+      if (add && add.length > 0) body.add = add
+      if (remove && remove.length > 0) body.remove = remove
+
+      const res = await authFetch(`/api/user/tags/${tagId}/nfts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        throw new Error("Failed to update tag associations")
+      }
+    } catch (err) {
+      // Rollback on error
+      set(nftTagsAtom, prevNftTags)
+      throw err
+    }
+  }
+)
+
 // Legacy local-only atoms (used by sidebar until US-006 migrates to API-backed atoms)
 export const addTagAtom = atom(null, (_get, set, tag: Omit<Tag, "id">) => {
   const id = crypto.randomUUID()
