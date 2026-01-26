@@ -11,6 +11,7 @@ import { ShowcasePage } from "./routes/showcase"
 import { MembershipPage } from "./routes/membership"
 import { VaultPage } from "./routes/vault"
 import { TagPage } from "./routes/tag"
+import { CreatorStudioPage } from "./routes/creator-studio"
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
         <Route path="membership" element={<MembershipPage />} />
         <Route path="vault" element={<VaultPage />} />
         <Route path="tags/:id" element={<TagPage />} />
+        <Route path="tools/creator-studio" element={<CreatorStudioPage />} />
       </Route>
     </Routes>
   )

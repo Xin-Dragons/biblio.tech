@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Tags,
+  Hammer,
 } from "lucide-react"
 import { useAtom, useAtomValue } from "jotai"
 import { useState } from "react"
@@ -35,6 +36,8 @@ const navItems = [
   { href: "/showcase", label: "Showcase", icon: User },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
+
+const toolsItems = [{ href: "/tools/creator-studio", label: "Creator Studio", icon: Hammer }]
 
 function TagNavItem({ tag, isActive }: { tag: TagType; isActive: boolean }) {
   return (
@@ -123,6 +126,42 @@ export function Sidebar() {
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               )}
               style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
+            >
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform duration-200",
+                  isActive ? "text-primary" : "group-hover:scale-110"
+                )}
+              />
+              {!collapsed && item.label}
+            </Link>
+          )
+        })}
+
+        {/* Tools Section */}
+        {!collapsed && (
+          <p className="mb-3 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Tools
+          </p>
+        )}
+        {collapsed && <div className="my-3 border-t border-white/5" />}
+        {toolsItems.map((item, index) => {
+          const Icon = item.icon
+          const isActive = location.pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              to={item.href}
+              title={collapsed ? item.label : undefined}
+              className={cn(
+                "group flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
+                "animate-fade-up opacity-0",
+                collapsed ? "justify-center px-2" : "px-3",
+                isActive
+                  ? "bg-primary/10 text-primary border-l-2 border-primary"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              )}
+              style={{ animationDelay: `${(navItems.length + index) * 50}ms`, animationFillMode: "forwards" }}
             >
               <Icon
                 className={cn(
