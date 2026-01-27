@@ -1,10 +1,41 @@
+import { useState, useCallback } from "react"
 import { useSearchParams } from "react-router"
 import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
+
+interface CreateFormState {
+  name: string
+  symbol: string
+  description: string
+  externalUrl: string
+}
+
+interface CreateFormErrors {
+  name?: string
+  symbol?: string
+  description?: string
+  externalUrl?: string
+}
+
+const MAX_NAME_LENGTH = 32
+const MAX_SYMBOL_LENGTH = 10
+
+function validateUrl(url: string): boolean {
+  if (!url) return true
+  try {
+    new URL(url)
+    return true
+  } catch {
+    return false
+  }
+}
 
 const VALID_TABS: TabValue[] = ["create", "update", "batch"]
 const VALID_STANDARDS: AssetStandard[] = ["core", "pnft", "nifty"]
@@ -144,17 +175,149 @@ interface CreateTabContentProps {
 }
 
 function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps) {
+  const [form, setForm] = useState<CreateFormState>({
+    name: "",
+    symbol: "",
+    description: "",
+    externalUrl: "",
+  })
+
+  const [errors, setErrors] = useState<CreateFormErrors>({})
+  const [touched, setTouched] = useState<Record<keyof CreateFormState, boolean>>({
+    name: false,
+    symbol: false,
+    description: false,
+    externalUrl: false,
+  })
+
+  const validateField = useCallback((field: keyof CreateFormState, value: string): string | undefined => {
+    switch (field) {
+      case "name":
+        if (!value.trim()) return "Name is required"
+        if (value.length > MAX_NAME_LENGTH) return `Name must be ${MAX_NAME_LENGTH} characters or less`
+        return undefined
+      case "symbol":
+        if (!value.trim()) return "Symbol is required"
+        if (value.length > MAX_SYMBOL_LENGTH) return `Symbol must be ${MAX_SYMBOL_LENGTH} characters or less`
+        return undefined
+      case "description":
+        if (!value.trim()) return "Description is required"
+        return undefined
+      case "externalUrl":
+        if (value && !validateUrl(value)) return "Please enter a valid URL"
+        return undefined
+      default:
+        return undefined
+    }
+  }, [])
+
+  const handleChange = useCallback(
+    (field: keyof CreateFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = e.target.value
+      setForm((prev) => ({ ...prev, [field]: value }))
+
+      if (touched[field]) {
+        setErrors((prev) => ({ ...prev, [field]: validateField(field, value) }))
+      }
+    },
+    [touched, validateField]
+  )
+
+  const handleBlur = useCallback(
+    (field: keyof CreateFormState) => () => {
+      setTouched((prev) => ({ ...prev, [field]: true }))
+      setErrors((prev) => ({ ...prev, [field]: validateField(field, form[field]) }))
+    },
+    [form, validateField]
+  )
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
 
-      <div className="rounded-lg border border-dashed p-8 flex items-center justify-center min-h-[300px]">
-        <div className="text-center text-muted-foreground">
-          <Plus className="h-10 w-10 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">Create New NFT</p>
-          <p className="text-sm mt-1">Form fields will be added here</p>
-        </div>
+      <div className="space-y-4">
+        <FormField
+          label="Name"
+          required
+          error={errors.name}
+          counter={{ current: form.name.length, max: MAX_NAME_LENGTH }}
+        >
+          <Input
+            value={form.name}
+            onChange={handleChange("name")}
+            onBlur={handleBlur("name")}
+            placeholder="My Awesome NFT"
+            maxLength={MAX_NAME_LENGTH}
+            error={!!errors.name}
+          />
+        </FormField>
+
+        <FormField
+          label="Symbol"
+          required
+          error={errors.symbol}
+          counter={{ current: form.symbol.length, max: MAX_SYMBOL_LENGTH }}
+        >
+          <Input
+            value={form.symbol}
+            onChange={handleChange("symbol")}
+            onBlur={handleBlur("symbol")}
+            placeholder="NFT"
+            maxLength={MAX_SYMBOL_LENGTH}
+            error={!!errors.symbol}
+          />
+        </FormField>
+
+        <FormField label="Description" required error={errors.description}>
+          <Textarea
+            value={form.description}
+            onChange={handleChange("description")}
+            onBlur={handleBlur("description")}
+            placeholder="Describe your NFT..."
+            rows={4}
+            error={!!errors.description}
+          />
+        </FormField>
+
+        <FormField label="External URL / Website" error={errors.externalUrl}>
+          <Input
+            type="url"
+            value={form.externalUrl}
+            onChange={handleChange("externalUrl")}
+            onBlur={handleBlur("externalUrl")}
+            placeholder="https://example.com"
+            error={!!errors.externalUrl}
+          />
+        </FormField>
       </div>
+    </div>
+  )
+}
+
+interface FormFieldProps {
+  label: string
+  required?: boolean
+  error?: string
+  counter?: { current: number; max: number }
+  children: React.ReactNode
+}
+
+function FormField({ label, required, error, counter, children }: FormFieldProps) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className={cn(error && "text-destructive")}>
+          {label}
+          {required && <span className="text-destructive ml-1">*</span>}
+        </Label>
+        {counter && (
+          <span className={cn("text-xs", counter.current > counter.max ? "text-destructive" : "text-muted-foreground")}>
+            {counter.current}/{counter.max}
+          </span>
+        )}
+      </div>
+      {children}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }
