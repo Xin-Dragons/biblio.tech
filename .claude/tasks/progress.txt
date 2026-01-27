@@ -551,3 +551,31 @@
   - AutoSizer provides width/height for responsive virtualized grids
 ---
 
+## 2026-01-27 - US-024
+- Implemented Batch tab collection assignment section
+- Created CollectionAssignmentSection component with expandable/accordion UI
+- Added ChevronDown icon for accordion toggle with rotation animation
+- Collection address field with validation (uses existing isValidSolanaAddress)
+- Shows count of NFTs not in selected collection and count user can update
+- Filters NFTs by collectionId mismatch and updateAuthority match
+- Batch execution using mplCore.getUpdateV1Instruction for Core Assets
+- Uses batchInstructionsBySize utility to group instructions by transaction size
+- Sequential batch processing with progress tracking
+- Progress indicator with completed/total and visual progress bar
+- Handles partial failures gracefully (continues with remaining batches)
+- Refreshes NFT list on completion via handleBatchOperationComplete callback
+- Added imports: ChevronDown icon, batch transaction utilities from lib/transaction
+- Converted handleLookup to useCallback for proper dependency tracking
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added CollectionAssignmentSection, BatchOperationProgress interface)
+- **Learnings for future iterations:**
+  - Accordion pattern: use state for isExpanded + ChevronDown with rotate-180 transition
+  - batchInstructionsBySize groups instructions to fit transaction size limits
+  - prepareSignedTransaction + sendTransaction + confirmTransactionViaWebSocket for batch processing
+  - InstructionGroup<T> type allows tracking which items belong to each instruction set
+  - Filter NFTs by collectionId !== targetCollection for "not in collection" logic
+  - Filter by updateAuthority === account to show only NFTs user can update
+  - Progress tracking: { completed, total, failed } with visual progress bar
+  - toast.loading with id allows updating same toast during progress
+---
+
