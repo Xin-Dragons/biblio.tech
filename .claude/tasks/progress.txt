@@ -464,3 +464,30 @@
   - Ring highlight (ring-2 ring-primary/20) is subtle but clear for modified fields
 ---
 
+## 2026-01-27 - US-021
+- Implemented Update NFT transaction with full upload and on-chain update flow
+- Added update functions for each asset standard:
+  - updateCoreAsset: uses mplCore.getUpdateV1Instruction with newName, newUri, collection
+  - updatePnft: uses tokenMetadata.getUpdateInstruction with V1 UpdateArgs, handles collection toggle
+  - updateNiftyAsset: uses asset.getUpdateInstruction with Metadata and Attributes extensions
+- Implemented handleUpdateSubmit in UpdateTabContent:
+  - Checks for dirty fields to determine if metadata upload is needed
+  - Uploads new image via Irys if imageFile changed
+  - Uploads new multimedia via Irys if multimediaFile changed
+  - Uploads new JSON metadata if any content changed
+  - Calls appropriate update function based on loadedNft.standard
+  - Shows progress via UpdateStep state and toast notifications
+  - Refreshes NFT data after successful update via loadNft()
+- Added success dialog with token address, transaction signature, and Solscan link
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added update functions, submission flow, success dialog)
+- **Learnings for future iterations:**
+  - Core Asset update: only pass newName/newUri if actually changed, pass null otherwise
+  - pNFT update: CollectionToggle uses { __kind: "None" } to keep, "Clear" to remove, "Set" to change
+  - Nifty update: can update multiple extensions in same transaction with multiple instructions
+  - UpdateStep type tracks: idle, uploading-image, uploading-multimedia, uploading-metadata, updating, complete
+  - capabilities?.canSignMessage (singular) not canSignMessages (plural)
+  - NftMetadataInput uses "image" not "imageUri" for the image field
+  - After successful update, call loadNft() again and populateFormFromNft() to refresh both data and originalForm
+---
+
