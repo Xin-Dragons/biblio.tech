@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
-import { useWallet } from "@solana/connector/react"
+import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { toast } from "sonner"
 import {
   Hammer,
   Plus,
@@ -17,6 +18,7 @@ import {
   FolderOpen,
   AlertTriangle,
   ImageIcon,
+  Loader2,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -25,6 +27,13 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import {
+  uploadToIrys,
+  uploadJsonMetadata,
+  type ConnectorSigner,
+  type NftMetadataInput,
+  type MultimediaCategory as IrysMultimediaCategory,
+} from "@/lib/irys"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
@@ -94,6 +103,14 @@ type TextFormField = Exclude<
   | "ruleSetOption"
   | "customRuleSetAddress"
 >
+
+type UploadStep = "idle" | "uploading-image" | "uploading-multimedia" | "uploading-metadata" | "complete"
+
+interface UploadedUris {
+  imageUri: string | null
+  multimediaUri: string | null
+  metadataUri: string | null
+}
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
@@ -382,6 +399,15 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
   const [multimediaPreviewUrl, setMultimediaPreviewUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const multimediaInputRef = useRef<HTMLInputElement>(null)
+
+  const [uploadStep, setUploadStep] = useState<UploadStep>("idle")
+  const [uploadedUris, setUploadedUris] = useState<UploadedUris>({
+    imageUri: null,
+    multimediaUri: null,
+    metadataUri: null,
+  })
+
+  const { signer, capabilities } = useTransactionSigner()
 
   const validateField = useCallback((field: TextFormField, value: string): string | undefined => {
     switch (field) {
@@ -681,6 +707,214 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     setErrors((prev) => ({ ...prev, customRuleSetAddress: error }))
   }, [form.customRuleSetAddress])
 
+  const validateForm = useCallback((): boolean => {
+    const newErrors: CreateFormErrors = {}
+    let isValid = true
+
+    const nameError = validateField("name", form.name)
+    if (nameError) {
+      newErrors.name = nameError
+      isValid = false
+    }
+
+    const symbolError = validateField("symbol", form.symbol)
+    if (symbolError) {
+      newErrors.symbol = symbolError
+      isValid = false
+    }
+
+    const descriptionError = validateField("description", form.description)
+    if (descriptionError) {
+      newErrors.description = descriptionError
+      isValid = false
+    }
+
+    const externalUrlError = validateField("externalUrl", form.externalUrl)
+    if (externalUrlError) {
+      newErrors.externalUrl = externalUrlError
+      isValid = false
+    }
+
+    if (!form.imageFile) {
+      newErrors.imageFile = "Image is required"
+      isValid = false
+    }
+
+    if (form.collectionAddress && !isValidSolanaAddress(form.collectionAddress)) {
+      newErrors.collectionAddress = "Invalid Solana address"
+      isValid = false
+    }
+
+    if (!form.isCollectionNft) {
+      const { isValid: creatorsValid, errors: creatorErrors } = validateCreators(form.creators)
+      if (!creatorsValid) {
+        newErrors.creators = creatorErrors.creators
+        newErrors.creatorAddresses = creatorErrors.creatorAddresses
+        newErrors.creatorShares = creatorErrors.creatorShares
+        isValid = false
+      }
+    }
+
+    if (standard === "pnft" && form.ruleSetOption === "custom") {
+      if (!form.customRuleSetAddress) {
+        newErrors.customRuleSetAddress = "Custom rule set address is required"
+        isValid = false
+      } else if (!isValidSolanaAddress(form.customRuleSetAddress)) {
+        newErrors.customRuleSetAddress = "Invalid Solana address"
+        isValid = false
+      }
+    }
+
+    setErrors(newErrors)
+    setTouched({
+      name: true,
+      symbol: true,
+      description: true,
+      externalUrl: true,
+      imageFile: true,
+      multimediaFile: true,
+      multimediaCategory: true,
+      royaltiesPercent: true,
+      creators: true,
+      attributes: true,
+      collectionAddress: true,
+      isMutable: true,
+      isCollectionNft: true,
+      ruleSetOption: true,
+      customRuleSetAddress: true,
+    })
+
+    return isValid
+  }, [form, standard, validateField])
+
+  const isFormValid = useCallback((): boolean => {
+    if (!form.name.trim()) return false
+    if (!form.symbol.trim()) return false
+    if (!form.description.trim()) return false
+    if (form.externalUrl && !validateUrl(form.externalUrl)) return false
+    if (!form.imageFile) return false
+    if (form.collectionAddress && !isValidSolanaAddress(form.collectionAddress)) return false
+
+    if (!form.isCollectionNft) {
+      const { isValid } = validateCreators(form.creators)
+      if (!isValid) return false
+    }
+
+    if (standard === "pnft" && form.ruleSetOption === "custom") {
+      if (!form.customRuleSetAddress || !isValidSolanaAddress(form.customRuleSetAddress)) return false
+    }
+
+    return true
+  }, [form, standard])
+
+  const handleSubmit = useCallback(async () => {
+    if (!account) {
+      toast.error("Please connect your wallet")
+      return
+    }
+
+    if (!signer || !capabilities.canSign) {
+      toast.error("Wallet does not support signing")
+      return
+    }
+
+    if (!validateForm()) {
+      toast.error("Please fix the form errors before continuing")
+      return
+    }
+
+    if (!form.imageFile) {
+      toast.error("Image is required")
+      return
+    }
+
+    const connectorSigner: ConnectorSigner = {
+      signMessage: signer.signMessage?.bind(signer) as ConnectorSigner["signMessage"],
+    }
+
+    try {
+      setUploadStep("uploading-image")
+      toast.loading("Uploading image...", { id: "upload-progress" })
+
+      const imageResult = await uploadToIrys(form.imageFile, account, connectorSigner)
+      setUploadedUris((prev) => ({ ...prev, imageUri: imageResult.uri }))
+
+      let multimediaResult: { uri: string; type: string } | null = null
+      if (form.multimediaFile) {
+        setUploadStep("uploading-multimedia")
+        toast.loading("Uploading multimedia...", { id: "upload-progress" })
+
+        const result = await uploadToIrys(form.multimediaFile, account, connectorSigner)
+        multimediaResult = { uri: result.uri, type: form.multimediaFile.type }
+        setUploadedUris((prev) => ({ ...prev, multimediaUri: result.uri }))
+      }
+
+      setUploadStep("uploading-metadata")
+      toast.loading("Uploading metadata...", { id: "upload-progress" })
+
+      const metadataInput: NftMetadataInput = {
+        name: form.name,
+        symbol: form.symbol,
+        description: form.description,
+        image: imageResult.uri,
+        imageType: form.imageFile.type,
+        externalUrl: form.externalUrl || undefined,
+        attributes: form.attributes
+          .filter((attr) => attr.traitType.trim() && attr.value.trim())
+          .map((attr) => ({ trait_type: attr.traitType, value: attr.value })),
+      }
+
+      if (multimediaResult) {
+        metadataInput.animationUrl = multimediaResult.uri
+        metadataInput.animationType = multimediaResult.type
+        metadataInput.multimediaCategory = form.multimediaCategory as IrysMultimediaCategory
+      }
+
+      if (!form.isCollectionNft) {
+        metadataInput.sellerFeeBasisPoints = Math.round(form.royaltiesPercent * 100)
+        metadataInput.creators = form.creators.map((c) => ({
+          address: c.address,
+          share: c.share,
+          verified: c.address === account,
+        }))
+      }
+
+      const metadataResult = await uploadJsonMetadata(metadataInput, account, connectorSigner)
+      setUploadedUris((prev) => ({ ...prev, metadataUri: metadataResult.uri }))
+
+      setUploadStep("complete")
+      toast.success("Files uploaded successfully! Ready to mint.", { id: "upload-progress" })
+    } catch (err) {
+      console.error("Upload failed:", err)
+      const errorMessage = err instanceof Error ? err.message : "Upload failed"
+      toast.error(errorMessage, {
+        id: "upload-progress",
+        action: {
+          label: "Retry",
+          onClick: () => handleSubmit(),
+        },
+      })
+      setUploadStep("idle")
+    }
+  }, [account, signer, capabilities.canSign, form, validateForm])
+
+  const isSubmitting = uploadStep !== "idle" && uploadStep !== "complete"
+
+  const getSubmitButtonText = (): string => {
+    switch (uploadStep) {
+      case "uploading-image":
+        return "Uploading image..."
+      case "uploading-multimedia":
+        return "Uploading multimedia..."
+      case "uploading-metadata":
+        return "Uploading metadata..."
+      case "complete":
+        return "Ready to mint"
+      default:
+        return "Create NFT"
+    }
+  }
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -877,6 +1111,25 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             onCustomAddressBlur={handleCustomRuleSetAddressBlur}
           />
         )}
+
+        <div className="pt-6 border-t">
+          <Button
+            type="button"
+            className="w-full h-12"
+            disabled={!isFormValid() || isSubmitting || !account}
+            onClick={handleSubmit}
+          >
+            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {getSubmitButtonText()}
+          </Button>
+          {!account && <p className="text-sm text-muted-foreground text-center mt-2">Connect wallet to create NFT</p>}
+          {uploadStep === "complete" && uploadedUris.metadataUri && (
+            <div className="mt-4 rounded-lg bg-primary/10 p-4">
+              <p className="text-sm font-medium text-primary mb-2">Metadata uploaded successfully!</p>
+              <p className="text-xs text-muted-foreground break-all">URI: {uploadedUris.metadataUri}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
