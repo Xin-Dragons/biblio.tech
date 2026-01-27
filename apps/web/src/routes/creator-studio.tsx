@@ -5,6 +5,7 @@ import {
   generateKeyPairSigner,
   getProgramDerivedAddress,
   getAddressEncoder,
+  getAddressDecoder,
   type Address,
   type TransactionSigner,
   type Instruction,
@@ -32,6 +33,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Copy,
+  Search,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -71,6 +73,8 @@ const RULE_SET_ADDRESSES = {
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
 const AUTH_RULES_PROGRAM_ADDRESS = "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg" as Address
+const MPL_CORE_PROGRAM_ADDRESS = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" as Address
+const NIFTY_ASSET_PROGRAM_ADDRESS = "AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73" as Address
 
 const MINT_ACCOUNT_SIZE = 82
 const MINT_RENT_LAMPORTS = 1461600
@@ -181,6 +185,25 @@ interface UploadedUris {
   metadataUri: string | null
 }
 
+interface LoadedNftData {
+  mintAddress: string
+  standard: AssetStandard
+  name: string
+  symbol: string
+  description: string
+  uri: string
+  imageUrl: string | null
+  externalUrl: string | null
+  attributes: Attribute[]
+  updateAuthority: string
+  owner: string
+  isMutable: boolean
+  royaltiesPercent: number
+  creators: Creator[]
+  collectionAddress: string | null
+  ruleSetAddress: string | null
+}
+
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
 const MAX_IMAGE_SIZE_MB = 20
@@ -224,6 +247,340 @@ function isValidSolanaAddress(address: string): boolean {
     if (!BASE58_CHARS.includes(char)) return false
   }
   return true
+}
+
+async function rpcRequest<T>(method: string, params: unknown[]): Promise<T> {
+  const response = await fetch("/api/rpc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: crypto.randomUUID(),
+      method,
+      params,
+    }),
+  })
+  const data = (await response.json()) as { result?: T; error?: { message: string } }
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+  return data.result as T
+}
+
+interface AccountInfo {
+  data: [string, string]
+  owner: string
+  lamports: number
+  executable: boolean
+  rentEpoch: number
+}
+
+async function detectAssetStandard(mintAddress: string): Promise<{
+  standard: AssetStandard
+  accountData: Uint8Array
+  owner: string
+} | null> {
+  const accountInfo = await rpcRequest<{ value: AccountInfo | null }>("getAccountInfo", [
+    mintAddress,
+    { encoding: "base64" },
+  ])
+
+  if (!accountInfo.value) {
+    return null
+  }
+
+  const owner = accountInfo.value.owner
+  const dataBase64 = accountInfo.value.data[0]
+  const accountData = Uint8Array.from(atob(dataBase64), (c) => c.charCodeAt(0))
+
+  if (owner === MPL_CORE_PROGRAM_ADDRESS) {
+    return { standard: "core", accountData, owner }
+  }
+
+  if (owner === NIFTY_ASSET_PROGRAM_ADDRESS) {
+    return { standard: "nifty", accountData, owner }
+  }
+
+  if (owner === TOKEN_PROGRAM_ADDRESS) {
+    const metadataPda = await getMetadataPda(mintAddress as Address)
+    const metadataAccountInfo = await rpcRequest<{ value: AccountInfo | null }>("getAccountInfo", [
+      metadataPda,
+      { encoding: "base64" },
+    ])
+
+    if (metadataAccountInfo.value && metadataAccountInfo.value.owner === TOKEN_METADATA_PROGRAM_ADDRESS) {
+      const metadataData = Uint8Array.from(atob(metadataAccountInfo.value.data[0]), (c) => c.charCodeAt(0))
+      return { standard: "pnft", accountData: metadataData, owner: TOKEN_METADATA_PROGRAM_ADDRESS }
+    }
+  }
+
+  return null
+}
+
+async function fetchNftMetadataJson(uri: string): Promise<{
+  name?: string
+  symbol?: string
+  description?: string
+  image?: string
+  external_url?: string
+  attributes?: Array<{ trait_type: string; value: string }>
+  seller_fee_basis_points?: number
+  properties?: {
+    creators?: Array<{ address: string; share: number }>
+  }
+} | null> {
+  try {
+    const response = await fetch(uri)
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function decodeLengthPrefixedString(data: Uint8Array, offset: number): { value: string; bytesRead: number } {
+  const view = new DataView(data.buffer, data.byteOffset + offset)
+  const length = view.getUint32(0, true)
+  const textDecoder = new TextDecoder()
+  const value = textDecoder.decode(data.slice(offset + 4, offset + 4 + length))
+  return { value, bytesRead: 4 + length }
+}
+
+async function loadCoreAsset(mintAddress: string, accountData: Uint8Array): Promise<LoadedNftData> {
+  const ownerBytes = accountData.slice(1, 33)
+  const ownerAddress = getAddressDecoder().decode(ownerBytes) as string
+
+  let offset = 33
+  const updateAuthorityType = accountData[offset]
+  offset += 1
+
+  let updateAuthority = ""
+  if (updateAuthorityType === 1) {
+    const updateAuthorityBytes = accountData.slice(offset, offset + 32)
+    updateAuthority = getAddressDecoder().decode(updateAuthorityBytes) as string
+    offset += 32
+  } else if (updateAuthorityType === 2) {
+    offset += 32
+    updateAuthority = ownerAddress
+  }
+
+  const { value: name, bytesRead: nameBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += nameBytes
+
+  const { value: uri, bytesRead: uriBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += uriBytes
+
+  const metadata = await fetchNftMetadataJson(uri)
+
+  return {
+    mintAddress,
+    standard: "core",
+    name: name.replace(/\0+$/, ""),
+    symbol: metadata?.symbol || "",
+    description: metadata?.description || "",
+    uri,
+    imageUrl: metadata?.image || null,
+    externalUrl: metadata?.external_url || null,
+    attributes: (metadata?.attributes || []).map((a) => ({ traitType: a.trait_type, value: a.value })),
+    updateAuthority,
+    owner: ownerAddress,
+    isMutable: true,
+    royaltiesPercent: (metadata?.seller_fee_basis_points || 0) / 100,
+    creators: metadata?.properties?.creators?.map((c) => ({ address: c.address, share: c.share })) || [],
+    collectionAddress: null,
+    ruleSetAddress: null,
+  }
+}
+
+async function loadPnftMetadata(mintAddress: string, accountData: Uint8Array): Promise<LoadedNftData> {
+  let offset = 1
+  const updateAuthorityBytes = accountData.slice(offset, offset + 32)
+  const updateAuthority = getAddressDecoder().decode(updateAuthorityBytes) as string
+  offset += 32
+
+  offset += 32
+
+  const { value: name, bytesRead: nameBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += nameBytes
+
+  const { value: symbol, bytesRead: symbolBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += symbolBytes
+
+  const { value: uri, bytesRead: uriBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += uriBytes
+
+  const view = new DataView(accountData.buffer, accountData.byteOffset)
+  const sellerFeeBasisPoints = view.getUint16(offset, true)
+  offset += 2
+
+  const hasCreators = accountData[offset] === 1
+  offset += 1
+
+  const creators: Creator[] = []
+  if (hasCreators) {
+    const creatorsCount = view.getUint32(offset, true)
+    offset += 4
+    for (let i = 0; i < creatorsCount; i++) {
+      const creatorBytes = accountData.slice(offset, offset + 32)
+      const creatorAddress = getAddressDecoder().decode(creatorBytes) as string
+      offset += 32
+      offset += 1
+      const share = accountData[offset]
+      offset += 1
+      creators.push({ address: creatorAddress, share })
+    }
+  }
+
+  offset += 1
+  const isMutable = accountData[offset] === 1
+  offset += 1
+
+  const metadata = await fetchNftMetadataJson(uri)
+
+  let collectionAddress: string | null = null
+  const hasEditionNonce = accountData[offset] === 1
+  offset += hasEditionNonce ? 2 : 1
+
+  const hasTokenStandard = accountData[offset] === 1
+  offset += hasTokenStandard ? 2 : 1
+
+  const hasCollection = accountData[offset] === 1
+  offset += 1
+  if (hasCollection) {
+    offset += 1
+    const collectionBytes = accountData.slice(offset, offset + 32)
+    collectionAddress = getAddressDecoder().decode(collectionBytes) as string
+    offset += 32
+  }
+
+  return {
+    mintAddress,
+    standard: "pnft",
+    name: name.replace(/\0+$/, ""),
+    symbol: symbol.replace(/\0+$/, ""),
+    description: metadata?.description || "",
+    uri,
+    imageUrl: metadata?.image || null,
+    externalUrl: metadata?.external_url || null,
+    attributes: (metadata?.attributes || []).map((a) => ({ traitType: a.trait_type, value: a.value })),
+    updateAuthority,
+    owner: "",
+    isMutable,
+    royaltiesPercent: sellerFeeBasisPoints / 100,
+    creators,
+    collectionAddress,
+    ruleSetAddress: null,
+  }
+}
+
+async function loadNiftyAsset(mintAddress: string, accountData: Uint8Array): Promise<LoadedNftData> {
+  let offset = 1
+
+  const ownerBytes = accountData.slice(offset, offset + 32)
+  const ownerAddress = getAddressDecoder().decode(ownerBytes) as string
+  offset += 32
+
+  const authorityBytes = accountData.slice(offset, offset + 32)
+  const updateAuthority = getAddressDecoder().decode(authorityBytes) as string
+  offset += 32
+
+  const hasGroup = accountData[offset] === 1
+  offset += 1
+  let collectionAddress: string | null = null
+  if (hasGroup) {
+    const groupBytes = accountData.slice(offset, offset + 32)
+    collectionAddress = getAddressDecoder().decode(groupBytes) as string
+    offset += 32
+  }
+
+  const { value: name, bytesRead: nameBytes } = decodeLengthPrefixedString(accountData, offset)
+  offset += nameBytes
+
+  let uri = ""
+  let symbol = ""
+  let description = ""
+  const attributes: Attribute[] = []
+
+  const extensionDataOffset = offset + 3
+  if (extensionDataOffset < accountData.length) {
+    let extOffset = extensionDataOffset
+
+    while (extOffset + 5 < accountData.length) {
+      const extType = accountData[extOffset]
+      extOffset += 1
+      const extView = new DataView(accountData.buffer, accountData.byteOffset + extOffset)
+      const extLength = extView.getUint32(0, true)
+      extOffset += 4
+
+      if (extType === 2 && extLength > 0) {
+        let metaOffset = extOffset
+        const { value: sym, bytesRead: symBytes } = decodeLengthPrefixedString(accountData, metaOffset)
+        symbol = sym
+        metaOffset += symBytes
+        const { value: desc, bytesRead: descBytes } = decodeLengthPrefixedString(accountData, metaOffset)
+        description = desc
+        metaOffset += descBytes
+        const { value: uriVal } = decodeLengthPrefixedString(accountData, metaOffset)
+        uri = uriVal
+      } else if (extType === 3 && extLength > 0) {
+        const attrView = new DataView(accountData.buffer, accountData.byteOffset + extOffset)
+        const attrCount = attrView.getUint32(0, true)
+        let attrOffset = extOffset + 4
+        for (let i = 0; i < attrCount && attrOffset < extOffset + extLength; i++) {
+          const { value: traitType, bytesRead: traitBytes } = decodeLengthPrefixedString(accountData, attrOffset)
+          attrOffset += traitBytes
+          const { value: traitValue, bytesRead: valueBytes } = decodeLengthPrefixedString(accountData, attrOffset)
+          attrOffset += valueBytes
+          attributes.push({ traitType, value: traitValue })
+        }
+      }
+
+      extOffset += extLength
+    }
+  }
+
+  const metadata = uri ? await fetchNftMetadataJson(uri) : null
+
+  return {
+    mintAddress,
+    standard: "nifty",
+    name: name.replace(/\0+$/, ""),
+    symbol: symbol.replace(/\0+$/, ""),
+    description: description || metadata?.description || "",
+    uri,
+    imageUrl: metadata?.image || null,
+    externalUrl: metadata?.external_url || null,
+    attributes:
+      attributes.length > 0
+        ? attributes
+        : (metadata?.attributes || []).map((a) => ({ traitType: a.trait_type, value: a.value })),
+    updateAuthority,
+    owner: ownerAddress,
+    isMutable: true,
+    royaltiesPercent: (metadata?.seller_fee_basis_points || 0) / 100,
+    creators: metadata?.properties?.creators?.map((c) => ({ address: c.address, share: c.share })) || [],
+    collectionAddress,
+    ruleSetAddress: null,
+  }
+}
+
+async function loadNft(mintAddress: string): Promise<LoadedNftData> {
+  const detection = await detectAssetStandard(mintAddress)
+
+  if (!detection) {
+    throw new Error("Could not find NFT or determine asset standard")
+  }
+
+  const { standard, accountData } = detection
+
+  switch (standard) {
+    case "core":
+      return loadCoreAsset(mintAddress, accountData)
+    case "pnft":
+      return loadPnftMetadata(mintAddress, accountData)
+    case "nifty":
+      return loadNiftyAsset(mintAddress, accountData)
+  }
 }
 
 function validateCreators(creators: Creator[]): { isValid: boolean; errors: CreateFormErrors } {
@@ -370,7 +727,7 @@ export function CreatorStudioPage() {
                 />
               </TabsContent>
               <TabsContent value="update" className="mt-0 h-full">
-                <UpdateTabPlaceholder />
+                <UpdateTabContent onPreviewUpdate={handlePreviewUpdate} />
               </TabsContent>
               <TabsContent value="batch" className="mt-0 h-full">
                 <BatchTabPlaceholder />
@@ -2182,13 +2539,241 @@ function FormField({ label, required, error, counter, children }: FormFieldProps
   )
 }
 
-function UpdateTabPlaceholder() {
+interface UpdateTabContentProps {
+  onPreviewUpdate: (data: NftPreviewData) => void
+}
+
+function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
+  const { account } = useWallet()
+  const [tokenAddress, setTokenAddress] = useState("")
+  const [tokenAddressError, setTokenAddressError] = useState<string | undefined>()
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadedNft, setLoadedNft] = useState<LoadedNftData | null>(null)
+  const [authorityError, setAuthorityError] = useState<string | undefined>()
+
+  const handleTokenAddressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setTokenAddress(value)
+    setTokenAddressError(undefined)
+    setAuthorityError(undefined)
+  }, [])
+
+  const handleTokenAddressBlur = useCallback(() => {
+    if (tokenAddress && !isValidSolanaAddress(tokenAddress)) {
+      setTokenAddressError("Invalid Solana address")
+    }
+  }, [tokenAddress])
+
+  const handleLoadNft = useCallback(async () => {
+    if (!tokenAddress) {
+      setTokenAddressError("Token address is required")
+      return
+    }
+
+    if (!isValidSolanaAddress(tokenAddress)) {
+      setTokenAddressError("Invalid Solana address")
+      return
+    }
+
+    setIsLoading(true)
+    setTokenAddressError(undefined)
+    setAuthorityError(undefined)
+    setLoadedNft(null)
+
+    try {
+      const nftData = await loadNft(tokenAddress)
+      setLoadedNft(nftData)
+
+      if (account && nftData.updateAuthority !== account) {
+        setAuthorityError(
+          `You are not the update authority. Update authority: ${nftData.updateAuthority.slice(0, 8)}...${nftData.updateAuthority.slice(-8)}`
+        )
+      }
+
+      onPreviewUpdate({
+        name: nftData.name,
+        symbol: nftData.symbol,
+        description: nftData.description,
+        imagePreviewUrl: nftData.imageUrl,
+        attributes: nftData.attributes,
+      })
+
+      toast.success(`Loaded ${ASSET_STANDARDS.find((s) => s.value === nftData.standard)?.label || nftData.standard}`)
+    } catch (err) {
+      console.error("Failed to load NFT:", err)
+      const message = err instanceof Error ? err.message : "Failed to load NFT"
+      setTokenAddressError(message)
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [tokenAddress, account, onPreviewUpdate])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !isLoading) {
+        handleLoadNft()
+      }
+    },
+    [handleLoadNft, isLoading]
+  )
+
+  const getStandardBadge = (standard: AssetStandard) => {
+    const config = ASSET_STANDARDS.find((s) => s.value === standard)
+    if (!config) return null
+    const Icon = config.icon
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+        <Icon className="h-4 w-4" />
+        {config.label}
+      </span>
+    )
+  }
+
   return (
-    <div className="rounded-lg border border-dashed p-8 h-full flex items-center justify-center">
-      <div className="text-center text-muted-foreground">
-        <Pencil className="h-10 w-10 mx-auto mb-3 opacity-50" />
-        <p className="font-medium">Update Existing NFT</p>
-        <p className="text-sm mt-1">Load an NFT to modify its metadata</p>
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className={cn(tokenAddressError && "text-destructive")}>Token Address</Label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                value={tokenAddress}
+                onChange={handleTokenAddressChange}
+                onBlur={handleTokenAddressBlur}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter NFT mint address"
+                error={!!tokenAddressError}
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="button" onClick={handleLoadNft} disabled={isLoading || !tokenAddress} className="shrink-0">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+              {isLoading ? "Loading..." : "Load NFT"}
+            </Button>
+          </div>
+          {tokenAddressError && <p className="text-sm text-destructive">{tokenAddressError}</p>}
+          <p className="text-xs text-muted-foreground">Paste or type the mint address of the NFT you want to update</p>
+        </div>
+
+        {loadedNft && (
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium">Loaded NFT</h3>
+              {getStandardBadge(loadedNft.standard)}
+            </div>
+
+            {authorityError && (
+              <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-sm">{authorityError}</p>
+              </div>
+            )}
+
+            {!authorityError && account && loadedNft.updateAuthority === account && (
+              <div className="flex items-start gap-2 rounded-lg bg-green-500/10 p-3 text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-sm">You are the update authority and can modify this NFT</p>
+              </div>
+            )}
+
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-start gap-4">
+                {loadedNft.imageUrl && (
+                  <img
+                    src={loadedNft.imageUrl}
+                    alt={loadedNft.name}
+                    className="h-20 w-20 rounded-lg object-cover border"
+                  />
+                )}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <h4 className="font-semibold truncate">{loadedNft.name}</h4>
+                  {loadedNft.symbol && <p className="text-sm text-muted-foreground">Symbol: {loadedNft.symbol}</p>}
+                  {loadedNft.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{loadedNft.description}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Royalties:</span>{" "}
+                  <span className="font-medium">{loadedNft.royaltiesPercent}%</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Mutable:</span>{" "}
+                  <span className="font-medium">{loadedNft.isMutable ? "Yes" : "No"}</span>
+                </div>
+                {loadedNft.collectionAddress && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Collection:</span>{" "}
+                    <code className="text-xs font-mono">
+                      {loadedNft.collectionAddress.slice(0, 8)}...{loadedNft.collectionAddress.slice(-8)}
+                    </code>
+                  </div>
+                )}
+              </div>
+
+              {loadedNft.attributes.length > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                    Attributes ({loadedNft.attributes.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {loadedNft.attributes.slice(0, 6).map((attr, index) => (
+                      <div
+                        key={index}
+                        className="inline-flex flex-col rounded-md border bg-background px-2 py-1 text-xs"
+                      >
+                        <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                          {attr.traitType}
+                        </span>
+                        <span className="font-medium">{attr.value}</span>
+                      </div>
+                    ))}
+                    {loadedNft.attributes.length > 6 && (
+                      <div className="inline-flex items-center rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground">
+                        +{loadedNft.attributes.length - 6} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {loadedNft.creators.length > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                    Creators ({loadedNft.creators.length})
+                  </p>
+                  <div className="space-y-1">
+                    {loadedNft.creators.map((creator, index) => (
+                      <div key={index} className="flex items-center justify-between text-xs">
+                        <code className="font-mono">
+                          {creator.address.slice(0, 8)}...{creator.address.slice(-8)}
+                        </code>
+                        <span className="font-medium">{creator.share}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Update functionality coming soon. Form fields will be pre-populated with the current NFT data.
+            </p>
+          </div>
+        )}
+
+        {!loadedNft && !isLoading && (
+          <div className="rounded-lg border border-dashed p-8 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <Pencil className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p className="font-medium">Update Existing NFT</p>
+              <p className="text-sm mt-1">Enter a token address above to load an NFT</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
