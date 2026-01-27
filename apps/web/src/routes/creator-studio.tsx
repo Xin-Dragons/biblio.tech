@@ -41,6 +41,8 @@ import {
   Filter,
   ChevronDown,
   Percent,
+  UserCheck,
+  UserX,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -229,6 +231,7 @@ interface BatchNft {
   updateAuthority: string | null
   royaltiesPercent: number
   creators: Array<{ address: string; share: number; verified: boolean }>
+  interface: string | null
 }
 
 interface BatchNftFilters {
@@ -244,6 +247,7 @@ type BatchNftGridCellData = {
 
 interface HeliusDasAsset {
   id: string
+  interface?: string
   content?: {
     metadata?: {
       name?: string
@@ -659,6 +663,7 @@ function mapHeliusAssetToBatchNft(asset: HeliusDasAsset): BatchNft {
     updateAuthority,
     royaltiesPercent: (asset.royalty?.basis_points ?? 0) / 100,
     creators: asset.creators ?? [],
+    interface: asset.interface ?? null,
   }
 }
 
@@ -4640,6 +4645,307 @@ function GlobalUpdatesSection({ nfts, account, onComplete }: GlobalUpdatesSectio
   )
 }
 
+interface VerifyCreatorSectionProps {
+  nfts: BatchNft[]
+  account: string | null
+  onComplete: () => void
+}
+
+function VerifyCreatorSection({ nfts, account, onComplete }: VerifyCreatorSectionProps) {
+  const { signer, capabilities } = useTransactionSigner()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [progress, setProgress] = useState<BatchOperationProgress | null>(null)
+
+  const nftsWhereUserIsUnverifiedCreator = useMemo(() => {
+    if (!account) return []
+    return nfts.filter((nft) => {
+      const isTokenMetadata = nft.interface === "V1_NFT" || nft.interface === "ProgrammableNFT"
+      if (!isTokenMetadata) return false
+      const creatorEntry = nft.creators.find((c) => c.address === account)
+      return creatorEntry && !creatorEntry.verified
+    })
+  }, [nfts, account])
+
+  const nftsWhereUserIsVerifiedCreator = useMemo(() => {
+    if (!account) return []
+    return nfts.filter((nft) => {
+      const isTokenMetadata = nft.interface === "V1_NFT" || nft.interface === "ProgrammableNFT"
+      if (!isTokenMetadata) return false
+      const creatorEntry = nft.creators.find((c) => c.address === account)
+      return creatorEntry && creatorEntry.verified
+    })
+  }, [nfts, account])
+
+  const handleBatchVerify = useCallback(async () => {
+    if (!account || !signer || !capabilities?.canSignMessage) {
+      toast.error("Please connect your wallet")
+      return
+    }
+
+    if (nftsWhereUserIsUnverifiedCreator.length === 0) {
+      toast.error("No NFTs to verify")
+      return
+    }
+
+    setIsProcessing(true)
+    setProgress({ completed: 0, total: nftsWhereUserIsUnverifiedCreator.length, failed: 0 })
+
+    const toastId = toast.loading(`Verifying creator on ${nftsWhereUserIsUnverifiedCreator.length} NFTs...`)
+
+    try {
+      const feePayer = signer as unknown as TransactionSigner
+
+      const instructionGroups: InstructionGroup<BatchNft>[] = await Promise.all(
+        nftsWhereUserIsUnverifiedCreator.map(async (nft) => {
+          const metadataPda = await getMetadataPda(nft.mint as Address)
+          const verifyInstruction = tokenMetadata.getVerifyInstruction({
+            authority: feePayer,
+            metadata: metadataPda,
+            verificationArgs: tokenMetadata.VerificationArgs.CreatorV1,
+          })
+          return { item: nft, instructions: [verifyInstruction] }
+        })
+      )
+
+      const batches = await batchInstructionsBySize(instructionGroups, feePayer)
+
+      let completed = 0
+      let failed = 0
+
+      for (const batch of batches) {
+        try {
+          const { blockhash, lastValidBlockHeight } = await getBlockhash()
+          const signedTx = await prepareSignedTransaction({
+            instructions: batch.instructions,
+            feePayer,
+            blockhash,
+            lastValidBlockHeight,
+          })
+          const signature = await sendTransaction(signedTx)
+          await confirmTransactionViaWebSocket(signature)
+          completed += batch.items.length
+        } catch (error) {
+          console.error("Batch failed:", error)
+          failed += batch.items.length
+        }
+
+        setProgress({ completed, total: nftsWhereUserIsUnverifiedCreator.length, failed })
+        toast.loading(`Verifying creator: ${completed}/${nftsWhereUserIsUnverifiedCreator.length}`, { id: toastId })
+      }
+
+      if (failed === 0) {
+        toast.success(`Successfully verified creator on ${completed} NFTs`, { id: toastId })
+      } else {
+        toast.warning(`Verified ${completed} NFTs, ${failed} failed`, { id: toastId })
+      }
+
+      onComplete()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to verify creator"
+      toast.error(message, { id: toastId })
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [account, signer, capabilities, nftsWhereUserIsUnverifiedCreator, onComplete])
+
+  const handleBatchUnverify = useCallback(async () => {
+    if (!account || !signer || !capabilities?.canSignMessage) {
+      toast.error("Please connect your wallet")
+      return
+    }
+
+    if (nftsWhereUserIsVerifiedCreator.length === 0) {
+      toast.error("No NFTs to unverify")
+      return
+    }
+
+    setIsProcessing(true)
+    setProgress({ completed: 0, total: nftsWhereUserIsVerifiedCreator.length, failed: 0 })
+
+    const toastId = toast.loading(`Unverifying creator on ${nftsWhereUserIsVerifiedCreator.length} NFTs...`)
+
+    try {
+      const feePayer = signer as unknown as TransactionSigner
+
+      const instructionGroups: InstructionGroup<BatchNft>[] = await Promise.all(
+        nftsWhereUserIsVerifiedCreator.map(async (nft) => {
+          const metadataPda = await getMetadataPda(nft.mint as Address)
+          const unverifyInstruction = tokenMetadata.getUnverifyInstruction({
+            authority: feePayer,
+            metadata: metadataPda,
+            verificationArgs: tokenMetadata.VerificationArgs.CreatorV1,
+          })
+          return { item: nft, instructions: [unverifyInstruction] }
+        })
+      )
+
+      const batches = await batchInstructionsBySize(instructionGroups, feePayer)
+
+      let completed = 0
+      let failed = 0
+
+      for (const batch of batches) {
+        try {
+          const { blockhash, lastValidBlockHeight } = await getBlockhash()
+          const signedTx = await prepareSignedTransaction({
+            instructions: batch.instructions,
+            feePayer,
+            blockhash,
+            lastValidBlockHeight,
+          })
+          const signature = await sendTransaction(signedTx)
+          await confirmTransactionViaWebSocket(signature)
+          completed += batch.items.length
+        } catch (error) {
+          console.error("Batch failed:", error)
+          failed += batch.items.length
+        }
+
+        setProgress({ completed, total: nftsWhereUserIsVerifiedCreator.length, failed })
+        toast.loading(`Unverifying creator: ${completed}/${nftsWhereUserIsVerifiedCreator.length}`, { id: toastId })
+      }
+
+      if (failed === 0) {
+        toast.success(`Successfully unverified creator on ${completed} NFTs`, { id: toastId })
+      } else {
+        toast.warning(`Unverified ${completed} NFTs, ${failed} failed`, { id: toastId })
+      }
+
+      onComplete()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to unverify creator"
+      toast.error(message, { id: toastId })
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [account, signer, capabilities, nftsWhereUserIsVerifiedCreator, onComplete])
+
+  const hasUnverifiedNfts = nftsWhereUserIsUnverifiedCreator.length > 0
+  const hasVerifiedNfts = nftsWhereUserIsVerifiedCreator.length > 0
+  const hasAnyNfts = hasUnverifiedNfts || hasVerifiedNfts
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Verify / Unverify Creator</span>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+      </button>
+
+      {isExpanded && (
+        <div className="border-t px-4 pb-4 pt-3 space-y-4">
+          {!account ? (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Connect your wallet to verify or unverify your creator status
+            </p>
+          ) : !hasAnyNfts ? (
+            <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground text-center">
+              You are not listed as a creator on any of the loaded NFTs, or the NFTs are not Token Metadata standard
+              (pNFT/V1_NFT).
+            </div>
+          ) : (
+            <>
+              {hasUnverifiedNfts && (
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserCheck className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">Verify Creator</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sign to verify your creator status on {nftsWhereUserIsUnverifiedCreator.length} NFT
+                      {nftsWhereUserIsUnverifiedCreator.length !== 1 ? "s" : ""} where you are listed as an unverified
+                      creator.
+                    </p>
+                  </div>
+
+                  <Button onClick={handleBatchVerify} disabled={isProcessing} className="w-full gap-2">
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-4 w-4" />
+                        Verify Creator on {nftsWhereUserIsUnverifiedCreator.length} NFT
+                        {nftsWhereUserIsUnverifiedCreator.length !== 1 ? "s" : ""}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {hasVerifiedNfts && (
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserX className="h-4 w-4 text-amber-500" />
+                      <span className="font-medium">Unverify Creator</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sign to remove your verification from {nftsWhereUserIsVerifiedCreator.length} NFT
+                      {nftsWhereUserIsVerifiedCreator.length !== 1 ? "s" : ""} where you are listed as a verified
+                      creator.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={handleBatchUnverify}
+                    disabled={isProcessing}
+                    variant="outline"
+                    className="w-full gap-2"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <UserX className="h-4 w-4" />
+                        Unverify Creator on {nftsWhereUserIsVerifiedCreator.length} NFT
+                        {nftsWhereUserIsVerifiedCreator.length !== 1 ? "s" : ""}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {progress && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Progress</span>
+                    <span className="font-mono">
+                      {progress.completed}/{progress.total}
+                      {progress.failed > 0 && <span className="text-destructive ml-2">({progress.failed} failed)</span>}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BatchTabContent() {
   const { account } = useWallet()
   const [lookupMode, setLookupMode] = useState<BatchLookupMode>("collection")
@@ -5033,6 +5339,12 @@ function BatchTabContent() {
           />
 
           <GlobalUpdatesSection
+            nfts={filteredNfts}
+            account={account ?? null}
+            onComplete={handleBatchOperationComplete}
+          />
+
+          <VerifyCreatorSection
             nfts={filteredNfts}
             account={account ?? null}
             onComplete={handleBatchOperationComplete}
