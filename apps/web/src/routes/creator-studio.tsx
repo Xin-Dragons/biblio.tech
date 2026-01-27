@@ -39,6 +39,7 @@ import {
   Users,
   FileCode,
   Filter,
+  ChevronDown,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -63,7 +64,15 @@ import {
   type NftMetadataInput,
   type MultimediaCategory as IrysMultimediaCategory,
 } from "@/lib/irys"
-import { prepareAndSendTransaction } from "@/lib/transaction"
+import {
+  prepareAndSendTransaction,
+  batchInstructionsBySize,
+  getBlockhash,
+  prepareSignedTransaction,
+  sendTransaction,
+  confirmTransactionViaWebSocket,
+  type InstructionGroup,
+} from "@/lib/transaction"
 import { mplCore, tokenMetadata, asset } from "@biblio/solana-programs"
 
 type TabValue = "create" | "update" | "batch"
@@ -4085,6 +4094,229 @@ function BatchNftGrid({ nfts }: BatchNftGridProps) {
   )
 }
 
+interface BatchOperationProgress {
+  completed: number
+  total: number
+  failed: number
+}
+
+interface CollectionAssignmentSectionProps {
+  nfts: BatchNft[]
+  account: string | null
+  onComplete: () => void
+}
+
+function CollectionAssignmentSection({ nfts, account, onComplete }: CollectionAssignmentSectionProps) {
+  const { signer, capabilities } = useTransactionSigner()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [collectionAddress, setCollectionAddress] = useState("")
+  const [collectionError, setCollectionError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [progress, setProgress] = useState<BatchOperationProgress | null>(null)
+
+  const nftsNotInCollection = useMemo(() => {
+    if (!collectionAddress.trim() || !isValidSolanaAddress(collectionAddress.trim())) {
+      return []
+    }
+    return nfts.filter((nft) => nft.collectionId !== collectionAddress.trim())
+  }, [nfts, collectionAddress])
+
+  const nftsUserCanUpdate = useMemo(() => {
+    if (!account) return []
+    return nftsNotInCollection.filter((nft) => nft.updateAuthority === account)
+  }, [nftsNotInCollection, account])
+
+  const validateCollectionAddress = useCallback((value: string) => {
+    if (!value.trim()) {
+      setCollectionError(null)
+      return
+    }
+    if (!isValidSolanaAddress(value.trim())) {
+      setCollectionError("Invalid Solana address")
+    } else {
+      setCollectionError(null)
+    }
+  }, [])
+
+  const handleCollectionAddressChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      setCollectionAddress(value)
+      validateCollectionAddress(value)
+    },
+    [validateCollectionAddress]
+  )
+
+  const handleBatchAddToCollection = useCallback(async () => {
+    if (!account || !signer || !capabilities?.canSignMessage) {
+      toast.error("Please connect your wallet")
+      return
+    }
+
+    if (nftsUserCanUpdate.length === 0) {
+      toast.error("No NFTs to update")
+      return
+    }
+
+    setIsProcessing(true)
+    setProgress({ completed: 0, total: nftsUserCanUpdate.length, failed: 0 })
+
+    const toastId = toast.loading(`Adding ${nftsUserCanUpdate.length} NFTs to collection...`)
+
+    try {
+      const feePayer = signer as unknown as TransactionSigner
+      const collectionAddr = collectionAddress.trim() as Address
+
+      const instructionGroups: InstructionGroup<BatchNft>[] = nftsUserCanUpdate.map((nft) => {
+        const updateInstruction = mplCore.getUpdateV1Instruction({
+          asset: nft.mint as Address,
+          payer: feePayer,
+          authority: feePayer,
+          collection: collectionAddr,
+          newName: null,
+          newUri: null,
+          newUpdateAuthority: null,
+        })
+        return { item: nft, instructions: [updateInstruction] }
+      })
+
+      const batches = await batchInstructionsBySize(instructionGroups, feePayer)
+
+      let completed = 0
+      let failed = 0
+
+      for (const batch of batches) {
+        try {
+          const { blockhash, lastValidBlockHeight } = await getBlockhash()
+          const signedTx = await prepareSignedTransaction({
+            instructions: batch.instructions,
+            feePayer,
+            blockhash,
+            lastValidBlockHeight,
+          })
+          const signature = await sendTransaction(signedTx)
+          await confirmTransactionViaWebSocket(signature)
+          completed += batch.items.length
+        } catch (error) {
+          console.error("Batch failed:", error)
+          failed += batch.items.length
+        }
+
+        setProgress({ completed, total: nftsUserCanUpdate.length, failed })
+        toast.loading(`Adding to collection: ${completed}/${nftsUserCanUpdate.length}`, { id: toastId })
+      }
+
+      if (failed === 0) {
+        toast.success(`Successfully added ${completed} NFTs to collection`, { id: toastId })
+      } else {
+        toast.warning(`Added ${completed} NFTs, ${failed} failed`, { id: toastId })
+      }
+
+      onComplete()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add to collection"
+      toast.error(message, { id: toastId })
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [account, signer, capabilities, nftsUserCanUpdate, collectionAddress, onComplete])
+
+  const canExecute =
+    account && collectionAddress.trim() && !collectionError && nftsUserCanUpdate.length > 0 && !isProcessing
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Add to Collection</span>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+      </button>
+
+      {isExpanded && (
+        <div className="border-t px-4 pb-4 pt-3 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="batch-collection-address">Collection Address</Label>
+            <Input
+              id="batch-collection-address"
+              type="text"
+              placeholder="Enter collection mint address"
+              value={collectionAddress}
+              onChange={handleCollectionAddressChange}
+              disabled={isProcessing}
+              className={cn(collectionError && "border-destructive")}
+            />
+            {collectionError && <p className="text-sm text-destructive">{collectionError}</p>}
+          </div>
+
+          {collectionAddress.trim() && !collectionError && (
+            <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">NFTs not in this collection:</span>
+                <span className="font-medium">{nftsNotInCollection.length}</span>
+              </div>
+              {account && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">NFTs you can update:</span>
+                  <span className="font-medium text-primary">{nftsUserCanUpdate.length}</span>
+                </div>
+              )}
+              {nftsNotInCollection.length > 0 && nftsUserCanUpdate.length === 0 && account && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  You are not the update authority of any NFTs not already in this collection.
+                </p>
+              )}
+            </div>
+          )}
+
+          {progress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>Progress</span>
+                <span className="font-mono">
+                  {progress.completed}/{progress.total}
+                  {progress.failed > 0 && <span className="text-destructive ml-2">({progress.failed} failed)</span>}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <Button onClick={handleBatchAddToCollection} disabled={!canExecute} className="w-full gap-2">
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <FolderOpen className="h-4 w-4" />
+                Add {nftsUserCanUpdate.length > 0 ? nftsUserCanUpdate.length : ""} NFT
+                {nftsUserCanUpdate.length !== 1 ? "s" : ""} to Collection
+              </>
+            )}
+          </Button>
+
+          {!account && (
+            <p className="text-xs text-muted-foreground text-center">Connect your wallet to add NFTs to a collection</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BatchTabContent() {
   const { account } = useWallet()
   const [lookupMode, setLookupMode] = useState<BatchLookupMode>("collection")
@@ -4197,7 +4429,7 @@ function BatchTabContent() {
     }
   }, [])
 
-  const handleLookup = async () => {
+  const handleLookup = useCallback(async () => {
     setLoadError(null)
     setLoadedNfts([])
 
@@ -4250,7 +4482,7 @@ function BatchTabContent() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [lookupMode, addressInput, hashlistInput, validateHashlist])
 
   const handleClear = () => {
     setAddressInput("")
@@ -4260,6 +4492,10 @@ function BatchTabContent() {
     setLoadError(null)
     clearFilters()
   }
+
+  const handleBatchOperationComplete = useCallback(() => {
+    handleLookup()
+  }, [handleLookup])
 
   return (
     <div className="space-y-6">
@@ -4466,6 +4702,12 @@ function BatchTabContent() {
               </div>
             </div>
           </div>
+
+          <CollectionAssignmentSection
+            nfts={filteredNfts}
+            account={account ?? null}
+            onComplete={handleBatchOperationComplete}
+          />
 
           <BatchNftGrid nfts={filteredNfts} />
         </div>
