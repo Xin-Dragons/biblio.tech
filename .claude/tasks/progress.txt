@@ -441,3 +441,26 @@
   - Fetch metadata JSON from URI to get full NFT data (description, image, attributes, etc.)
 ---
 
+## 2026-01-27 - US-020
+- Implemented Update form with dirty tracking in UpdateTabContent
+- Added UpdateFormState and OriginalFormState interfaces to track current and original values
+- populateFormFromNft() initializes form and originalForm from loaded NFT data
+- isFieldDirty() callback compares individual fields - uses JSON.stringify for objects/arrays
+- isFormDirty useMemo computes whether any field has changed from original
+- Update button only enabled when isFormDirty is true
+- Cancel button resets form to original values using populateFormFromNft()
+- Added UpdateFormField component with visual "Modified" indicator (ring highlight + pencil icon)
+- Form fields: name, symbol, description, externalUrl, image, multimedia, royalties, creators, attributes, collection
+- Image handling: shows "Replace" button for existing images, "Revert" button when new image selected
+- Live preview updates as form fields change via useEffect
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added form state management, dirty tracking, UpdateFormField component)
+- **Learnings for future iterations:**
+  - Use useMemo for computed dirty state to avoid recalculating on every render
+  - JSON.stringify works well for deep comparison of arrays/objects (creators, attributes)
+  - For image dirty tracking, compare File | null since object URLs change between loads
+  - Original form state should exclude file uploads (they're always new when changed)
+  - UpdateFormField wrapper component simplifies adding visual dirty indicators to all fields
+  - Ring highlight (ring-2 ring-primary/20) is subtle but clear for modified fields
+---
+
