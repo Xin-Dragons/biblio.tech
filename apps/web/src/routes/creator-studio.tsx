@@ -272,6 +272,19 @@ type BatchNftGridCellData = {
   columnCount: number
 }
 
+interface CollectionNft {
+  mint: string
+  name: string
+  image: string
+}
+
+type CollectionNftGridCellData = {
+  nfts: CollectionNft[]
+  columnCount: number
+  selectedMint: string | null
+  onSelect: (mint: string) => void
+}
+
 interface HeliusDasAsset {
   id: string
   interface?: string
@@ -762,6 +775,54 @@ async function lookupNftsByHashlist(mintAddresses: string[]): Promise<BatchNft[]
   }
 
   return allNfts
+}
+
+interface HeliusDasAssetExtended extends HeliusDasAsset {
+  specification_asset_class?: string
+}
+
+interface HeliusDasResponseExtended {
+  items: HeliusDasAssetExtended[]
+  total: number
+  grand_total?: number
+}
+
+async function fetchUserCollectionNfts(ownerAddress: string): Promise<CollectionNft[]> {
+  const allCollections: CollectionNft[] = []
+  let page = 1
+  let total = 1
+
+  while (allCollections.length < total) {
+    const response = await rpcRequest<HeliusDasResponseExtended>("getAssetsByOwner", {
+      ownerAddress,
+      page,
+      limit: 1000,
+      displayOptions: {
+        showGrandTotal: true,
+      },
+    })
+
+    total = response.grand_total ?? response.total
+
+    for (const item of response.items) {
+      // Check if this asset is a collection parent
+      // DAS returns specification_asset_class: "nft_collection" for collection NFTs
+      // or we can check interface === "MplCoreCollection" for Core collections
+      const isCollection = item.specification_asset_class === "nft_collection" || item.interface === "MplCoreCollection"
+
+      if (isCollection) {
+        const rawImage = item.content?.links?.image ?? item.content?.files?.[0]?.uri ?? ""
+        allCollections.push({
+          mint: item.id,
+          name: item.content?.metadata?.name ?? "Unknown Collection",
+          image: rawImage,
+        })
+      }
+    }
+    page++
+  }
+
+  return allCollections
 }
 
 function validateCreators(creators: Creator[]): { isValid: boolean; errors: CreateFormErrors } {
@@ -2061,6 +2122,12 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     setErrors((prev) => ({ ...prev, collectionAddress: error }))
   }, [form.collectionAddress])
 
+  const handleSelectCollection = useCallback((mintAddress: string) => {
+    setForm((prev) => ({ ...prev, collectionAddress: mintAddress }))
+    setTouched((prev) => ({ ...prev, collectionAddress: true }))
+    setErrors((prev) => ({ ...prev, collectionAddress: undefined }))
+  }, [])
+
   const handleMutableChange = useCallback((checked: boolean) => {
     setForm((prev) => ({ ...prev, isMutable: checked }))
     setTouched((prev) => ({ ...prev, isMutable: true }))
@@ -2878,8 +2945,10 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
         <CollectionSection
           collectionAddress={form.collectionAddress}
           error={errors.collectionAddress}
+          account={account}
           onChange={handleCollectionAddressChange}
           onBlur={handleCollectionAddressBlur}
+          onSelectCollection={handleSelectCollection}
         />
 
         <SettingsSection
@@ -3268,11 +3337,29 @@ function AttributesSection({
 interface CollectionSectionProps {
   collectionAddress: string
   error?: string
+  account: string | null
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onBlur: () => void
+  onSelectCollection: (mintAddress: string) => void
 }
 
-function CollectionSection({ collectionAddress, error, onChange, onBlur }: CollectionSectionProps) {
+function CollectionSection({
+  collectionAddress,
+  error,
+  account,
+  onChange,
+  onBlur,
+  onSelectCollection,
+}: CollectionSectionProps) {
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
+
+  const handleSelectCollection = useCallback(
+    (mintAddress: string) => {
+      onSelectCollection(mintAddress)
+    },
+    [onSelectCollection]
+  )
+
   return (
     <div className="space-y-4 pt-4 border-t">
       <div className="space-y-2">
@@ -3287,7 +3374,13 @@ function CollectionSection({ collectionAddress, error, onChange, onBlur }: Colle
               error={!!error}
             />
           </div>
-          <Button type="button" variant="outline" className="shrink-0" disabled>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setIsPickerOpen(true)}
+            disabled={!account}
+          >
             <FolderOpen className="h-4 w-4 mr-2" />
             Choose Collection
           </Button>
@@ -3297,6 +3390,13 @@ function CollectionSection({ collectionAddress, error, onChange, onBlur }: Colle
           Optionally assign this NFT to a collection. Leave empty to create a standalone NFT.
         </p>
       </div>
+
+      <NftPickerModal
+        open={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onSelect={handleSelectCollection}
+        account={account}
+      />
     </div>
   )
 }
@@ -3955,6 +4055,14 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
     setErrors((prev) => ({ ...prev, collectionAddress: error }))
   }, [form.collectionAddress])
 
+  const handleSelectCollection = useCallback((mintAddress: string) => {
+    setForm((prev) => ({ ...prev, collectionAddress: mintAddress }))
+    setTouched((prev) => ({ ...prev, collectionAddress: true }))
+    setErrors((prev) => ({ ...prev, collectionAddress: undefined }))
+  }, [])
+
+  const [isCollectionPickerOpen, setIsCollectionPickerOpen] = useState(false)
+
   const validateCreatorsOnBlur = useCallback(() => {
     const { errors: creatorErrors } = validateCreators(form.creators)
     setErrors((prev) => ({
@@ -4561,12 +4669,25 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
                         error={!!errors.collectionAddress}
                       />
                     </div>
-                    <Button type="button" variant="outline" className="shrink-0" disabled>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setIsCollectionPickerOpen(true)}
+                      disabled={!account}
+                    >
                       <FolderOpen className="h-4 w-4 mr-2" />
                       Choose
                     </Button>
                   </div>
                 </UpdateFormField>
+
+                <NftPickerModal
+                  open={isCollectionPickerOpen}
+                  onClose={() => setIsCollectionPickerOpen(false)}
+                  onSelect={handleSelectCollection}
+                  account={account}
+                />
 
                 <div className="pt-6 border-t flex gap-3">
                   <Button
@@ -6186,5 +6307,226 @@ function NftPreviewCard({ data }: NftPreviewCardProps) {
         )}
       </div>
     </div>
+  )
+}
+
+const CollectionNftCard = memo(function CollectionNftCard({
+  nft,
+  isSelected,
+  onSelect,
+}: {
+  nft: CollectionNft
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  const truncatedMint = `${nft.mint.slice(0, 4)}...${nft.mint.slice(-4)}`
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "group relative rounded-lg border bg-card overflow-hidden transition-all text-left w-full",
+        "hover:border-primary/50 hover:shadow-md",
+        isSelected && "ring-2 ring-primary border-primary"
+      )}
+    >
+      <div className="aspect-square relative bg-muted">
+        {nft.image ? (
+          <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+          </div>
+        )}
+        {isSelected && (
+          <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+            <CheckCircle2 className="h-8 w-8 text-primary" />
+          </div>
+        )}
+      </div>
+      <div className="p-2 space-y-0.5">
+        <p className="text-sm font-medium truncate" title={nft.name}>
+          {nft.name}
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">{truncatedMint}</p>
+      </div>
+    </button>
+  )
+})
+
+function CollectionNftGridCell({
+  columnIndex,
+  rowIndex,
+  style,
+  data,
+}: GridChildComponentProps<CollectionNftGridCellData>) {
+  const { nfts, columnCount, selectedMint, onSelect } = data
+  const index = rowIndex * columnCount + columnIndex
+  const nft = nfts[index]
+
+  if (!nft) return null
+
+  return (
+    <div style={style} className="p-1.5">
+      <CollectionNftCard nft={nft} isSelected={selectedMint === nft.mint} onSelect={() => onSelect(nft.mint)} />
+    </div>
+  )
+}
+
+function getPickerGridColumnCount(width: number): number {
+  if (width >= 600) return 4
+  if (width >= 450) return 3
+  return 2
+}
+
+interface NftPickerModalProps {
+  open: boolean
+  onClose: () => void
+  onSelect: (mintAddress: string) => void
+  account: string | null
+}
+
+function NftPickerModal({ open, onClose, onSelect, account }: NftPickerModalProps) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [collections, setCollections] = useState<CollectionNft[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedMint, setSelectedMint] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const filteredCollections = useMemo(() => {
+    if (!searchQuery.trim()) return collections
+    const query = searchQuery.toLowerCase()
+    return collections.filter((nft) => nft.name.toLowerCase().includes(query) || nft.mint.toLowerCase().includes(query))
+  }, [collections, searchQuery])
+
+  const loadCollections = useCallback(async () => {
+    if (!account) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const userCollections = await fetchUserCollectionNfts(account)
+      setCollections(userCollections)
+    } catch (err) {
+      console.error("Failed to load collections:", err)
+      setError(err instanceof Error ? err.message : "Failed to load collections")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [account])
+
+  useEffect(() => {
+    if (open && account && collections.length === 0) {
+      loadCollections()
+    }
+  }, [open, account, collections.length, loadCollections])
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedMint(null)
+      setSearchQuery("")
+    }
+  }, [open])
+
+  const handleSelect = useCallback((mint: string) => {
+    setSelectedMint(mint)
+  }, [])
+
+  const handleConfirm = useCallback(() => {
+    if (selectedMint) {
+      onSelect(selectedMint)
+      onClose()
+    }
+  }, [selectedMint, onSelect, onClose])
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Choose Collection</DialogTitle>
+          <DialogDescription>Select a collection NFT that you own</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 min-h-0 flex flex-col gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or address..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {!account ? (
+            <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
+              <p className="text-muted-foreground font-medium">Connect your wallet</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">to view your collection NFTs</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground font-medium mt-4">Loading collections...</p>
+            </div>
+          ) : error ? (
+            <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-destructive/30 bg-destructive/5">
+              <p className="text-destructive font-medium">{error}</p>
+              <Button variant="outline" className="mt-4" onClick={loadCollections}>
+                Try Again
+              </Button>
+            </div>
+          ) : filteredCollections.length === 0 ? (
+            <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
+              <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                <FolderOpen className="h-6 w-6 text-muted-foreground/50" />
+              </div>
+              <p className="text-muted-foreground font-medium">
+                {collections.length === 0 ? "No collection NFTs found" : "No collections match your search"}
+              </p>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                {collections.length === 0 ? "Create a collection NFT first" : "Try a different search term"}
+              </p>
+            </div>
+          ) : (
+            <div className="h-[350px] w-full">
+              <AutoSizer>
+                {({ width, height }) => {
+                  const columnCount = getPickerGridColumnCount(width)
+                  const columnWidth = width / columnCount
+                  const rowHeight = columnWidth * 1.3
+                  const rowCount = Math.ceil(filteredCollections.length / columnCount)
+
+                  return (
+                    <FixedSizeGrid<CollectionNftGridCellData>
+                      width={width}
+                      height={height}
+                      columnCount={columnCount}
+                      columnWidth={columnWidth}
+                      rowCount={rowCount}
+                      rowHeight={rowHeight}
+                      itemData={{ nfts: filteredCollections, columnCount, selectedMint, onSelect: handleSelect }}
+                      className="scrollbar-hide"
+                    >
+                      {CollectionNftGridCell}
+                    </FixedSizeGrid>
+                  )
+                }}
+              </AutoSizer>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={!selectedMint}>
+            Select Collection
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
