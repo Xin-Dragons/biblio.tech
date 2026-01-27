@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
-import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X, Film, Music } from "lucide-react"
+import { useWallet } from "@solana/connector/react"
+import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X, Film, Music, Trash2 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +14,11 @@ type AssetStandard = "core" | "pnft" | "nifty"
 
 type MultimediaCategory = "video" | "audio" | "vr"
 
+interface Creator {
+  address: string
+  share: number
+}
+
 interface CreateFormState {
   name: string
   symbol: string
@@ -21,6 +27,8 @@ interface CreateFormState {
   imageFile: File | null
   multimediaFile: File | null
   multimediaCategory: MultimediaCategory | null
+  royaltiesPercent: number
+  creators: Creator[]
 }
 
 interface CreateFormErrors {
@@ -30,9 +38,16 @@ interface CreateFormErrors {
   externalUrl?: string
   imageFile?: string
   multimediaFile?: string
+  royaltiesPercent?: string
+  creators?: string
+  creatorAddresses?: Record<number, string>
+  creatorShares?: Record<number, string>
 }
 
-type TextFormField = Exclude<keyof CreateFormState, "imageFile" | "multimediaFile" | "multimediaCategory">
+type TextFormField = Exclude<
+  keyof CreateFormState,
+  "imageFile" | "multimediaFile" | "multimediaCategory" | "royaltiesPercent" | "creators"
+>
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
@@ -66,6 +81,53 @@ function validateUrl(url: string): boolean {
   } catch {
     return false
   }
+}
+
+const BASE58_CHARS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+function isValidSolanaAddress(address: string): boolean {
+  if (!address) return false
+  if (address.length < 32 || address.length > 44) return false
+  for (const char of address) {
+    if (!BASE58_CHARS.includes(char)) return false
+  }
+  return true
+}
+
+function validateCreators(creators: Creator[]): { isValid: boolean; errors: CreateFormErrors } {
+  const errors: CreateFormErrors = {
+    creatorAddresses: {},
+    creatorShares: {},
+  }
+
+  let totalShare = 0
+  let hasErrors = false
+
+  for (let i = 0; i < creators.length; i++) {
+    const creator = creators[i]
+
+    if (!creator.address.trim()) {
+      errors.creatorAddresses![i] = "Address is required"
+      hasErrors = true
+    } else if (!isValidSolanaAddress(creator.address.trim())) {
+      errors.creatorAddresses![i] = "Invalid Solana address"
+      hasErrors = true
+    }
+
+    if (creator.share < 0 || creator.share > 100) {
+      errors.creatorShares![i] = "Share must be 0-100"
+      hasErrors = true
+    }
+
+    totalShare += creator.share
+  }
+
+  if (totalShare !== 100) {
+    errors.creators = `Creator shares must sum to 100% (currently ${totalShare}%)`
+    hasErrors = true
+  }
+
+  return { isValid: !hasErrors, errors }
 }
 
 const VALID_TABS: TabValue[] = ["create", "update", "batch"]
@@ -206,6 +268,8 @@ interface CreateTabContentProps {
 }
 
 function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps) {
+  const { account } = useWallet()
+
   const [form, setForm] = useState<CreateFormState>({
     name: "",
     symbol: "",
@@ -214,6 +278,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     imageFile: null,
     multimediaFile: null,
     multimediaCategory: null,
+    royaltiesPercent: 5,
+    creators: [],
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -225,6 +291,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     imageFile: false,
     multimediaFile: false,
     multimediaCategory: false,
+    royaltiesPercent: false,
+    creators: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -376,6 +444,57 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     [form, validateField]
   )
 
+  useEffect(() => {
+    if (account && form.creators.length === 0) {
+      setForm((prev) => ({
+        ...prev,
+        creators: [{ address: account, share: 100 }],
+      }))
+    }
+  }, [account, form.creators.length])
+
+  const handleRoyaltiesChange = useCallback((value: number) => {
+    setForm((prev) => ({ ...prev, royaltiesPercent: value }))
+    setTouched((prev) => ({ ...prev, royaltiesPercent: true }))
+  }, [])
+
+  const handleCreatorChange = useCallback((index: number, field: "address" | "share", value: string | number) => {
+    setForm((prev) => {
+      const newCreators = [...prev.creators]
+      newCreators[index] = { ...newCreators[index], [field]: value }
+      return { ...prev, creators: newCreators }
+    })
+    setTouched((prev) => ({ ...prev, creators: true }))
+  }, [])
+
+  const handleAddCreator = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      creators: [...prev.creators, { address: "", share: 0 }],
+    }))
+    setTouched((prev) => ({ ...prev, creators: true }))
+  }, [])
+
+  const handleRemoveCreator = useCallback((index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      creators: prev.creators.filter((_, i) => i !== index),
+    }))
+    setTouched((prev) => ({ ...prev, creators: true }))
+  }, [])
+
+  const validateCreatorsOnBlur = useCallback(() => {
+    if (touched.creators) {
+      const { errors: creatorErrors } = validateCreators(form.creators)
+      setErrors((prev) => ({
+        ...prev,
+        creators: creatorErrors.creators,
+        creatorAddresses: creatorErrors.creatorAddresses,
+        creatorShares: creatorErrors.creatorShares,
+      }))
+    }
+  }, [form.creators, touched.creators])
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -525,6 +644,121 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
             </Button>
           )}
         </FormField>
+
+        <RoyaltiesCreatorsSection
+          royaltiesPercent={form.royaltiesPercent}
+          creators={form.creators}
+          errors={errors}
+          onRoyaltiesChange={handleRoyaltiesChange}
+          onCreatorChange={handleCreatorChange}
+          onAddCreator={handleAddCreator}
+          onRemoveCreator={handleRemoveCreator}
+          onBlur={validateCreatorsOnBlur}
+        />
+      </div>
+    </div>
+  )
+}
+
+interface RoyaltiesCreatorsSectionProps {
+  royaltiesPercent: number
+  creators: Creator[]
+  errors: CreateFormErrors
+  onRoyaltiesChange: (value: number) => void
+  onCreatorChange: (index: number, field: "address" | "share", value: string | number) => void
+  onAddCreator: () => void
+  onRemoveCreator: (index: number) => void
+  onBlur: () => void
+}
+
+function RoyaltiesCreatorsSection({
+  royaltiesPercent,
+  creators,
+  errors,
+  onRoyaltiesChange,
+  onCreatorChange,
+  onAddCreator,
+  onRemoveCreator,
+  onBlur,
+}: RoyaltiesCreatorsSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Royalties</Label>
+          <span className="text-sm font-medium">{royaltiesPercent}%</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={0.5}
+          value={royaltiesPercent}
+          onChange={(e) => onRoyaltiesChange(parseFloat(e.target.value))}
+          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+        />
+        <p className="text-xs text-muted-foreground">Percentage of secondary sales you receive as royalties</p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Creators</Label>
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={onAddCreator}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Creator
+          </Button>
+        </div>
+
+        {errors.creators && <p className="text-sm text-destructive">{errors.creators}</p>}
+
+        <div className="space-y-2">
+          {creators.map((creator, index) => (
+            <div key={index} className="flex items-start gap-2">
+              <div className="flex-1">
+                <Input
+                  value={creator.address}
+                  onChange={(e) => onCreatorChange(index, "address", e.target.value)}
+                  onBlur={onBlur}
+                  placeholder="Wallet address"
+                  error={!!errors.creatorAddresses?.[index]}
+                />
+                {errors.creatorAddresses?.[index] && (
+                  <p className="text-xs text-destructive mt-1">{errors.creatorAddresses[index]}</p>
+                )}
+              </div>
+              <div className="w-24">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={creator.share}
+                  onChange={(e) => onCreatorChange(index, "share", parseInt(e.target.value) || 0)}
+                  onBlur={onBlur}
+                  placeholder="%"
+                  error={!!errors.creatorShares?.[index]}
+                />
+                {errors.creatorShares?.[index] && (
+                  <p className="text-xs text-destructive mt-1">{errors.creatorShares[index]}</p>
+                )}
+              </div>
+              {creators.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onRemoveCreator(index)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Creator shares must sum to 100%. The first creator is typically the primary creator.
+        </p>
       </div>
     </div>
   )
