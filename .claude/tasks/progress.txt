@@ -37,3 +37,103 @@
 
 ---
 
+## 2026-01-27 - US-001
+- Implemented Tools section in sidebar with Creator Studio link
+- Added route /tools/creator-studio to App.tsx
+- Created placeholder CreatorStudioPage component at apps/web/src/routes/creator-studio.tsx
+- Files changed:
+  - apps/web/src/components/layout/sidebar.tsx (added Hammer icon, toolsItems array, Tools section rendering)
+  - apps/web/src/App.tsx (added route and import)
+  - apps/web/src/routes/creator-studio.tsx (new file - placeholder page)
+- **Learnings for future iterations:**
+  - Sidebar uses separate arrays for different nav sections (navItems, toolsItems)
+  - Animation delay is calculated based on array length to stagger animations
+  - When collapsed, sections use a border divider instead of text header
+  - Route pages follow consistent pattern with centered content using animate-fade-up
+---
+
+## 2026-01-27 - US-002
+- Implemented Creator Studio page layout with tabs (Create, Update, Batch)
+- Tab state syncs with URL param (?tab=create|update|batch)
+- Responsive layout: form left, preview right on desktop; stacked on mobile
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (replaced placeholder with full tabbed layout)
+- **Learnings for future iterations:**
+  - Use @radix-ui/react-tabs via existing components/ui/tabs.tsx
+  - URL sync pattern: useSearchParams from react-router, setSearchParams with { replace: true }
+  - Default tab handled by deleting param rather than setting to "create" (cleaner URLs)
+  - Grid layout with lg:grid-cols-[1fr_400px] for form/preview split on desktop
+  - Placeholder components help visualize structure before implementing real content
+---
+
+## 2026-01-27 - US-003
+- Implemented asset standard selector (segmented control) in Create tab
+- Options: Core Asset, pNFT (Metaplex), Nifty Asset
+- Default is Core Asset, selection persists via URL param (?standard=core|pnft|nifty)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added AssetStandard type, ASSET_STANDARDS config, AssetStandardSelector component, CreateTabContent component)
+- **Learnings for future iterations:**
+  - Segmented control pattern: use buttons inside a bg-muted container with p-1 padding
+  - Active button gets bg-background and shadow-sm to appear elevated
+  - Same URL param pattern as tabs - delete param when default value
+  - Box, Shield, Sparkles icons from lucide-react work well for asset standards
+  - cn() utility from @/lib/utils for conditional classNames
+---
+
+## 2026-01-27 - US-004
+- Implemented Create form basic fields with validation
+- Added Name field (required, max 32 chars) with character counter
+- Added Symbol field (required, max 10 chars) with character counter
+- Added Description textarea (required)
+- Added External URL field with URL validation
+- Created reusable Textarea UI component
+- Created reusable FormField component for consistent field layout
+- Form validation with inline error messages and touched state tracking
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added form state, validation, FormField component)
+  - apps/web/src/components/ui/textarea.tsx (new file - matches Input component styling)
+- **Learnings for future iterations:**
+  - Form validation pattern: useState for form values, errors, and touched states
+  - validateField callback validates on blur and on change (if already touched)
+  - FormField component wraps label, input, character counter, and error display
+  - Textarea component follows same pattern as Input with error prop for styling
+  - useCallback for handlers to prevent unnecessary re-renders
+---
+
+## 2026-01-27 - US-005
+- Implemented image file picker with preview in Create tab
+- File picker accepts JPG, PNG, GIF files only (max 20MB)
+- Shows image preview with file name and size after selection
+- Clear/remove button to deselect file
+- Validation errors displayed inline for invalid files
+- File stored in component state (imageFile: File | null)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added image file handling, preview, validation)
+- **Learnings for future iterations:**
+  - Use hidden input[type=file] with ref, triggered by button click
+  - URL.createObjectURL for local preview - remember to revokeObjectURL on cleanup
+  - useEffect cleanup function to revoke object URL on unmount
+  - TextFormField type excludes File fields from string-based validation
+  - File validation separate from text field validation (different callback)
+  - ACCEPTED_IMAGE_TYPES array for MIME type validation, ACCEPTED_IMAGE_EXTENSIONS for accept attribute
+---
+
+## 2026-01-27 - US-006
+- Implemented multimedia file picker with category detection and appropriate previews
+- Added 'Add Multimedia' button accepting: mp4, mov, mp3, flac, wav, glb, gltf (max 100MB)
+- Category detection: getMultimediaCategory function parses file extension
+- Preview components:
+  - Video: renders <video> element (muted, playsInline)
+  - Audio: renders <audio> element with controls in a placeholder box
+  - VR/3D: renders Box icon placeholder (3D preview not possible in browser)
+- MultimediaCategoryBadge shows category with icon (Film, Music, Box)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added multimedia state, handlers, preview components)
+- **Learnings for future iterations:**
+  - lucide-react has no "Cube" icon - use "Box" for 3D/VR representations
+  - File extension parsing: filename.slice(filename.lastIndexOf("."))
+  - Separate state for multimedia: multimediaFile (File), multimediaCategory (MultimediaCategory | null)
+  - Same pattern as image picker: hidden input, ref, URL.createObjectURL with cleanup
+  - MAX_MULTIMEDIA_SIZE_MB set to 100MB (larger than images for video/audio)
+---
+

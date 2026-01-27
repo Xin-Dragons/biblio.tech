@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
-import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X } from "lucide-react"
+import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X, Film, Music } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,12 +11,16 @@ import { cn } from "@/lib/utils"
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
 
+type MultimediaCategory = "video" | "audio" | "vr"
+
 interface CreateFormState {
   name: string
   symbol: string
   description: string
   externalUrl: string
   imageFile: File | null
+  multimediaFile: File | null
+  multimediaCategory: MultimediaCategory | null
 }
 
 interface CreateFormErrors {
@@ -25,14 +29,31 @@ interface CreateFormErrors {
   description?: string
   externalUrl?: string
   imageFile?: string
+  multimediaFile?: string
 }
 
-type TextFormField = Exclude<keyof CreateFormState, "imageFile">
+type TextFormField = Exclude<keyof CreateFormState, "imageFile" | "multimediaFile" | "multimediaCategory">
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
 const MAX_IMAGE_SIZE_MB = 20
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+const ACCEPTED_MULTIMEDIA_EXTENSIONS = ".mp4,.mov,.mp3,.flac,.wav,.glb,.gltf"
+const MAX_MULTIMEDIA_SIZE_MB = 100
+const MAX_MULTIMEDIA_SIZE_BYTES = MAX_MULTIMEDIA_SIZE_MB * 1024 * 1024
+
+const VIDEO_EXTENSIONS = [".mp4", ".mov"]
+const AUDIO_EXTENSIONS = [".mp3", ".flac", ".wav"]
+const VR_EXTENSIONS = [".glb", ".gltf"]
+
+function getMultimediaCategory(filename: string): MultimediaCategory | null {
+  const ext = filename.toLowerCase().slice(filename.lastIndexOf("."))
+  if (VIDEO_EXTENSIONS.includes(ext)) return "video"
+  if (AUDIO_EXTENSIONS.includes(ext)) return "audio"
+  if (VR_EXTENSIONS.includes(ext)) return "vr"
+  return null
+}
 
 const MAX_NAME_LENGTH = 32
 const MAX_SYMBOL_LENGTH = 10
@@ -191,6 +212,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     description: "",
     externalUrl: "",
     imageFile: null,
+    multimediaFile: null,
+    multimediaCategory: null,
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -200,10 +223,14 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     description: false,
     externalUrl: false,
     imageFile: false,
+    multimediaFile: false,
+    multimediaCategory: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [multimediaPreviewUrl, setMultimediaPreviewUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const multimediaInputRef = useRef<HTMLInputElement>(null)
 
   const validateField = useCallback((field: TextFormField, value: string): string | undefined => {
     switch (field) {
@@ -232,6 +259,17 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
       return `Image must be ${MAX_IMAGE_SIZE_MB}MB or less`
+    }
+    return undefined
+  }, [])
+
+  const validateMultimediaFile = useCallback((file: File): string | undefined => {
+    const category = getMultimediaCategory(file.name)
+    if (!category) {
+      return "Please select a valid multimedia file (MP4, MOV, MP3, FLAC, WAV, GLB, or GLTF)"
+    }
+    if (file.size > MAX_MULTIMEDIA_SIZE_BYTES) {
+      return `File must be ${MAX_MULTIMEDIA_SIZE_MB}MB or less`
     }
     return undefined
   }, [])
@@ -271,13 +309,52 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     }
   }, [imagePreviewUrl])
 
+  const handleMultimediaSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      const error = validateMultimediaFile(file)
+      if (error) {
+        setErrors((prev) => ({ ...prev, multimediaFile: error }))
+        setTouched((prev) => ({ ...prev, multimediaFile: true }))
+        e.target.value = ""
+        return
+      }
+
+      const category = getMultimediaCategory(file.name)
+      setForm((prev) => ({ ...prev, multimediaFile: file, multimediaCategory: category }))
+      setErrors((prev) => ({ ...prev, multimediaFile: undefined }))
+      setTouched((prev) => ({ ...prev, multimediaFile: true }))
+
+      const objectUrl = URL.createObjectURL(file)
+      setMultimediaPreviewUrl(objectUrl)
+    },
+    [validateMultimediaFile]
+  )
+
+  const handleMultimediaClear = useCallback(() => {
+    setForm((prev) => ({ ...prev, multimediaFile: null, multimediaCategory: null }))
+    setErrors((prev) => ({ ...prev, multimediaFile: undefined }))
+    if (multimediaPreviewUrl) {
+      URL.revokeObjectURL(multimediaPreviewUrl)
+      setMultimediaPreviewUrl(null)
+    }
+    if (multimediaInputRef.current) {
+      multimediaInputRef.current.value = ""
+    }
+  }, [multimediaPreviewUrl])
+
   useEffect(() => {
     return () => {
       if (imagePreviewUrl) {
         URL.revokeObjectURL(imagePreviewUrl)
       }
+      if (multimediaPreviewUrl) {
+        URL.revokeObjectURL(multimediaPreviewUrl)
+      }
     }
-  }, [imagePreviewUrl])
+  }, [imagePreviewUrl, multimediaPreviewUrl])
 
   const handleChange = useCallback(
     (field: TextFormField) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -401,8 +478,111 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
             </Button>
           )}
         </FormField>
+
+        <FormField label="Multimedia (Optional)" error={errors.multimediaFile}>
+          <input
+            ref={multimediaInputRef}
+            type="file"
+            accept={ACCEPTED_MULTIMEDIA_EXTENSIONS}
+            onChange={handleMultimediaSelect}
+            className="hidden"
+          />
+          {form.multimediaFile && multimediaPreviewUrl ? (
+            <div className="flex items-start gap-4 rounded-lg border bg-muted/30 p-4">
+              <MultimediaPreview category={form.multimediaCategory} previewUrl={multimediaPreviewUrl} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{form.multimediaFile.name}</p>
+                  <MultimediaCategoryBadge category={form.multimediaCategory} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(form.multimediaFile.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={handleMultimediaClear}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-24 border-dashed"
+              onClick={() => multimediaInputRef.current?.click()}
+            >
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <Film className="h-8 w-8" />
+                <span>Add Multimedia</span>
+                <span className="text-xs">Video, audio, or 3D model (max {MAX_MULTIMEDIA_SIZE_MB}MB)</span>
+              </div>
+            </Button>
+          )}
+        </FormField>
       </div>
     </div>
+  )
+}
+
+interface MultimediaPreviewProps {
+  category: MultimediaCategory | null
+  previewUrl: string
+}
+
+function MultimediaPreview({ category, previewUrl }: MultimediaPreviewProps) {
+  if (category === "video") {
+    return <video src={previewUrl} className="h-24 w-24 rounded-lg object-cover border" muted playsInline />
+  }
+
+  if (category === "audio") {
+    return (
+      <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center">
+        <audio src={previewUrl} controls className="w-20" />
+      </div>
+    )
+  }
+
+  if (category === "vr") {
+    return (
+      <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center">
+        <Box className="h-10 w-10 text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center">
+      <Film className="h-10 w-10 text-muted-foreground" />
+    </div>
+  )
+}
+
+interface MultimediaCategoryBadgeProps {
+  category: MultimediaCategory | null
+}
+
+function MultimediaCategoryBadge({ category }: MultimediaCategoryBadgeProps) {
+  if (!category) return null
+
+  const config: Record<MultimediaCategory, { label: string; icon: typeof Film }> = {
+    video: { label: "Video", icon: Film },
+    audio: { label: "Audio", icon: Music },
+    vr: { label: "3D Model", icon: Box },
+  }
+
+  const { label, icon: Icon } = config[category]
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+      <Icon className="h-3 w-3" />
+      {label}
+    </span>
   )
 }
 
