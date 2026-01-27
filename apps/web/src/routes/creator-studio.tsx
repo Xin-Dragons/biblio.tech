@@ -40,6 +40,7 @@ import {
   FileCode,
   Filter,
   ChevronDown,
+  Percent,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -4317,6 +4318,328 @@ function CollectionAssignmentSection({ nfts, account, onComplete }: CollectionAs
   )
 }
 
+interface GlobalUpdatesSectionProps {
+  nfts: BatchNft[]
+  account: string | null
+  onComplete: () => void
+}
+
+function GlobalUpdatesSection({ nfts, account, onComplete }: GlobalUpdatesSectionProps) {
+  const { signer, capabilities } = useTransactionSigner()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [royaltiesPercent, setRoyaltiesPercent] = useState(5)
+  const [creators, setCreators] = useState<Creator[]>([{ address: "", share: 100 }])
+  const [creatorsError, setCreatorsError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [progress, setProgress] = useState<BatchOperationProgress | null>(null)
+
+  useEffect(() => {
+    if (account && creators.length === 1 && !creators[0].address) {
+      setCreators([{ address: account, share: 100 }])
+    }
+  }, [account, creators])
+
+  const nftsUserCanUpdate = useMemo(() => {
+    if (!account) return []
+    return nfts.filter((nft) => nft.updateAuthority === account)
+  }, [nfts, account])
+
+  const validateCreators = useCallback((): boolean => {
+    if (creators.length === 0) {
+      setCreatorsError("At least one creator is required")
+      return false
+    }
+
+    const totalShare = creators.reduce((sum, c) => sum + c.share, 0)
+    if (totalShare !== 100) {
+      setCreatorsError(`Creator shares must sum to 100% (currently ${totalShare}%)`)
+      return false
+    }
+
+    for (const creator of creators) {
+      if (!isValidSolanaAddress(creator.address)) {
+        setCreatorsError("One or more creator addresses are invalid")
+        return false
+      }
+    }
+
+    setCreatorsError(null)
+    return true
+  }, [creators])
+
+  const handleRoyaltiesChange = useCallback((value: number) => {
+    setRoyaltiesPercent(value)
+  }, [])
+
+  const handleCreatorChange = useCallback((index: number, field: "address" | "share", value: string | number) => {
+    setCreators((prev) => {
+      const newCreators = [...prev]
+      newCreators[index] = { ...newCreators[index], [field]: value }
+      return newCreators
+    })
+    setCreatorsError(null)
+  }, [])
+
+  const handleAddCreator = useCallback(() => {
+    setCreators((prev) => [...prev, { address: "", share: 0 }])
+  }, [])
+
+  const handleRemoveCreator = useCallback((index: number) => {
+    setCreators((prev) => {
+      const newCreators = prev.filter((_, i) => i !== index)
+      return newCreators.length > 0 ? newCreators : [{ address: "", share: 100 }]
+    })
+  }, [])
+
+  const handleBatchUpdate = useCallback(async () => {
+    if (!account || !signer || !capabilities?.canSignMessage) {
+      toast.error("Please connect your wallet")
+      return
+    }
+
+    if (!validateCreators()) {
+      return
+    }
+
+    if (nftsUserCanUpdate.length === 0) {
+      toast.error("No NFTs to update")
+      return
+    }
+
+    setIsProcessing(true)
+    setProgress({ completed: 0, total: nftsUserCanUpdate.length, failed: 0 })
+
+    const toastId = toast.loading(`Updating ${nftsUserCanUpdate.length} NFTs...`)
+
+    try {
+      const feePayer = signer as unknown as TransactionSigner
+      const basisPoints = Math.round(royaltiesPercent * 100)
+
+      const royaltiesData = {
+        basisPoints,
+        creators: creators.map((c) => ({
+          address: c.address as Address,
+          percentage: c.share,
+        })),
+        ruleSet: { __kind: "None" as const },
+      }
+
+      const instructionGroups: InstructionGroup<BatchNft>[] = nftsUserCanUpdate.map((nft) => {
+        const updatePluginInstruction = mplCore.getUpdatePluginV1Instruction({
+          asset: nft.mint as Address,
+          payer: feePayer,
+          authority: feePayer,
+          collection: nft.collectionId ? (nft.collectionId as Address) : undefined,
+          plugin: {
+            __kind: "Royalties",
+            fields: [royaltiesData] as const,
+          },
+        })
+        return { item: nft, instructions: [updatePluginInstruction] }
+      })
+
+      const batches = await batchInstructionsBySize(instructionGroups, feePayer)
+
+      let completed = 0
+      let failed = 0
+
+      for (const batch of batches) {
+        try {
+          const { blockhash, lastValidBlockHeight } = await getBlockhash()
+          const signedTx = await prepareSignedTransaction({
+            instructions: batch.instructions,
+            feePayer,
+            blockhash,
+            lastValidBlockHeight,
+          })
+          const signature = await sendTransaction(signedTx)
+          await confirmTransactionViaWebSocket(signature)
+          completed += batch.items.length
+        } catch (error) {
+          console.error("Batch failed:", error)
+          failed += batch.items.length
+        }
+
+        setProgress({ completed, total: nftsUserCanUpdate.length, failed })
+        toast.loading(`Updating royalties: ${completed}/${nftsUserCanUpdate.length}`, { id: toastId })
+      }
+
+      if (failed === 0) {
+        toast.success(`Successfully updated ${completed} NFTs`, { id: toastId })
+      } else {
+        toast.warning(`Updated ${completed} NFTs, ${failed} failed`, { id: toastId })
+      }
+
+      onComplete()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update NFTs"
+      toast.error(message, { id: toastId })
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [account, signer, capabilities, nftsUserCanUpdate, royaltiesPercent, creators, validateCreators, onComplete])
+
+  const canExecute = account && nftsUserCanUpdate.length > 0 && !isProcessing && !creatorsError
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Percent className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Global Updates</span>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")} />
+      </button>
+
+      {isExpanded && (
+        <div className="border-t px-4 pb-4 pt-3 space-y-4">
+          {!account ? (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Connect your wallet to update royalties and creators
+            </p>
+          ) : nftsUserCanUpdate.length === 0 ? (
+            <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+              You are not the update authority of any loaded NFTs.
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg bg-amber-500/10 p-3 space-y-1">
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="font-medium text-sm">Warning</span>
+                </div>
+                <p className="text-xs text-amber-600/80 dark:text-amber-400/80">
+                  This will overwrite existing royalties and creator configurations on all selected NFTs.
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">NFTs you can update:</span>
+                  <span className="font-medium text-primary">{nftsUserCanUpdate.length}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Royalties</Label>
+                  <span className="text-sm font-medium">{royaltiesPercent}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={royaltiesPercent}
+                  onChange={(e) => handleRoyaltiesChange(parseFloat(e.target.value))}
+                  disabled={isProcessing}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary disabled:opacity-50"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Creators</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={handleAddCreator}
+                    disabled={isProcessing}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Creator
+                  </Button>
+                </div>
+
+                {creatorsError && <p className="text-sm text-destructive">{creatorsError}</p>}
+
+                <div className="space-y-2">
+                  {creators.map((creator, index) => (
+                    <div key={index} className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <Input
+                          value={creator.address}
+                          onChange={(e) => handleCreatorChange(index, "address", e.target.value)}
+                          placeholder="Wallet address"
+                          disabled={isProcessing}
+                        />
+                      </div>
+                      <div className="w-24">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={creator.share}
+                          onChange={(e) => handleCreatorChange(index, "share", parseInt(e.target.value) || 0)}
+                          placeholder="%"
+                          disabled={isProcessing}
+                        />
+                      </div>
+                      {creators.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-10 w-10 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveCreator(index)}
+                          disabled={isProcessing}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-muted-foreground">Creator shares must sum to 100%.</p>
+              </div>
+
+              {progress && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Progress</span>
+                    <span className="font-mono">
+                      {progress.completed}/{progress.total}
+                      {progress.failed > 0 && <span className="text-destructive ml-2">({progress.failed} failed)</span>}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={handleBatchUpdate} disabled={!canExecute} className="w-full gap-2">
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Percent className="h-4 w-4" />
+                    Update {nftsUserCanUpdate.length} NFT{nftsUserCanUpdate.length !== 1 ? "s" : ""}
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BatchTabContent() {
   const { account } = useWallet()
   const [lookupMode, setLookupMode] = useState<BatchLookupMode>("collection")
@@ -4704,6 +5027,12 @@ function BatchTabContent() {
           </div>
 
           <CollectionAssignmentSection
+            nfts={filteredNfts}
+            account={account ?? null}
+            onComplete={handleBatchOperationComplete}
+          />
+
+          <GlobalUpdatesSection
             nfts={filteredNfts}
             account={account ?? null}
             onComplete={handleBatchOperationComplete}
