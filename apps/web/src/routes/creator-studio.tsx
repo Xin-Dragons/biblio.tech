@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useSearchParams } from "react-router"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
 import {
@@ -2539,6 +2539,34 @@ function FormField({ label, required, error, counter, children }: FormFieldProps
   )
 }
 
+interface UpdateFormState {
+  name: string
+  symbol: string
+  description: string
+  externalUrl: string
+  imageFile: File | null
+  multimediaFile: File | null
+  multimediaCategory: MultimediaCategory | null
+  royaltiesPercent: number
+  creators: Creator[]
+  attributes: Attribute[]
+  collectionAddress: string
+  isMutable: boolean
+}
+
+interface OriginalFormState {
+  name: string
+  symbol: string
+  description: string
+  externalUrl: string
+  imageUrl: string | null
+  royaltiesPercent: number
+  creators: Creator[]
+  attributes: Attribute[]
+  collectionAddress: string
+  isMutable: boolean
+}
+
 interface UpdateTabContentProps {
   onPreviewUpdate: (data: NftPreviewData) => void
 }
@@ -2550,6 +2578,93 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [loadedNft, setLoadedNft] = useState<LoadedNftData | null>(null)
   const [authorityError, setAuthorityError] = useState<string | undefined>()
+
+  const [form, setForm] = useState<UpdateFormState>({
+    name: "",
+    symbol: "",
+    description: "",
+    externalUrl: "",
+    imageFile: null,
+    multimediaFile: null,
+    multimediaCategory: null,
+    royaltiesPercent: 0,
+    creators: [],
+    attributes: [{ traitType: "", value: "" }],
+    collectionAddress: "",
+    isMutable: true,
+  })
+
+  const [originalForm, setOriginalForm] = useState<OriginalFormState | null>(null)
+  const [errors, setErrors] = useState<CreateFormErrors>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [multimediaPreviewUrl, setMultimediaPreviewUrl] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const multimediaInputRef = useRef<HTMLInputElement>(null)
+
+  const validateField = useCallback((field: string, value: string): string | undefined => {
+    switch (field) {
+      case "name":
+        if (!value.trim()) return "Name is required"
+        if (value.length > MAX_NAME_LENGTH) return `Name must be ${MAX_NAME_LENGTH} characters or less`
+        return undefined
+      case "symbol":
+        if (!value.trim()) return "Symbol is required"
+        if (value.length > MAX_SYMBOL_LENGTH) return `Symbol must be ${MAX_SYMBOL_LENGTH} characters or less`
+        return undefined
+      case "description":
+        if (!value.trim()) return "Description is required"
+        return undefined
+      case "externalUrl":
+        if (value && !validateUrl(value)) return "Please enter a valid URL"
+        return undefined
+      default:
+        return undefined
+    }
+  }, [])
+
+  const populateFormFromNft = useCallback(
+    (nftData: LoadedNftData) => {
+      const attrs = nftData.attributes.length > 0 ? nftData.attributes : [{ traitType: "", value: "" }]
+      const creators = nftData.creators.length > 0 ? nftData.creators : [{ address: account || "", share: 100 }]
+
+      setForm({
+        name: nftData.name,
+        symbol: nftData.symbol,
+        description: nftData.description,
+        externalUrl: nftData.externalUrl || "",
+        imageFile: null,
+        multimediaFile: null,
+        multimediaCategory: null,
+        royaltiesPercent: nftData.royaltiesPercent,
+        creators,
+        attributes: attrs,
+        collectionAddress: nftData.collectionAddress || "",
+        isMutable: nftData.isMutable,
+      })
+
+      setOriginalForm({
+        name: nftData.name,
+        symbol: nftData.symbol,
+        description: nftData.description,
+        externalUrl: nftData.externalUrl || "",
+        imageUrl: nftData.imageUrl,
+        royaltiesPercent: nftData.royaltiesPercent,
+        creators,
+        attributes: attrs,
+        collectionAddress: nftData.collectionAddress || "",
+        isMutable: nftData.isMutable,
+      })
+
+      if (nftData.imageUrl) {
+        setImagePreviewUrl(nftData.imageUrl)
+      }
+
+      setErrors({})
+      setTouched({})
+    },
+    [account]
+  )
 
   const handleTokenAddressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -2590,6 +2705,8 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
         )
       }
 
+      populateFormFromNft(nftData)
+
       onPreviewUpdate({
         name: nftData.name,
         symbol: nftData.symbol,
@@ -2607,7 +2724,7 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
     } finally {
       setIsLoading(false)
     }
-  }, [tokenAddress, account, onPreviewUpdate])
+  }, [tokenAddress, account, onPreviewUpdate, populateFormFromNft])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2617,6 +2734,238 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
     },
     [handleLoadNft, isLoading]
   )
+
+  const handleChange = useCallback(
+    (field: "name" | "symbol" | "description" | "externalUrl") =>
+      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const value = e.target.value
+        setForm((prev) => ({ ...prev, [field]: value }))
+
+        if (touched[field]) {
+          setErrors((prev) => ({ ...prev, [field]: validateField(field, value) }))
+        }
+      },
+    [touched, validateField]
+  )
+
+  const handleBlur = useCallback(
+    (field: "name" | "symbol" | "description" | "externalUrl") => () => {
+      setTouched((prev) => ({ ...prev, [field]: true }))
+      setErrors((prev) => ({ ...prev, [field]: validateField(field, form[field]) }))
+    },
+    [form, validateField]
+  )
+
+  const handleRoyaltiesChange = useCallback((value: number) => {
+    setForm((prev) => ({ ...prev, royaltiesPercent: value }))
+  }, [])
+
+  const handleCreatorChange = useCallback((index: number, field: "address" | "share", value: string | number) => {
+    setForm((prev) => {
+      const newCreators = [...prev.creators]
+      newCreators[index] = { ...newCreators[index], [field]: value }
+      return { ...prev, creators: newCreators }
+    })
+  }, [])
+
+  const handleAddCreator = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      creators: [...prev.creators, { address: "", share: 0 }],
+    }))
+  }, [])
+
+  const handleRemoveCreator = useCallback((index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      creators: prev.creators.filter((_, i) => i !== index),
+    }))
+  }, [])
+
+  const handleAttributeChange = useCallback((index: number, field: "traitType" | "value", value: string) => {
+    setForm((prev) => {
+      const newAttributes = [...prev.attributes]
+      newAttributes[index] = { ...newAttributes[index], [field]: value }
+      return { ...prev, attributes: newAttributes }
+    })
+  }, [])
+
+  const handleAddAttribute = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      attributes: [...prev.attributes, { traitType: "", value: "" }],
+    }))
+  }, [])
+
+  const handleRemoveAttribute = useCallback((index: number) => {
+    setForm((prev) => {
+      const newAttributes = prev.attributes.filter((_, i) => i !== index)
+      return { ...prev, attributes: newAttributes.length > 0 ? newAttributes : [{ traitType: "", value: "" }] }
+    })
+  }, [])
+
+  const handleCollectionAddressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setForm((prev) => ({ ...prev, collectionAddress: value }))
+  }, [])
+
+  const handleCollectionAddressBlur = useCallback(() => {
+    setTouched((prev) => ({ ...prev, collectionAddress: true }))
+    const error =
+      form.collectionAddress && !isValidSolanaAddress(form.collectionAddress) ? "Invalid Solana address" : undefined
+    setErrors((prev) => ({ ...prev, collectionAddress: error }))
+  }, [form.collectionAddress])
+
+  const validateCreatorsOnBlur = useCallback(() => {
+    const { errors: creatorErrors } = validateCreators(form.creators)
+    setErrors((prev) => ({
+      ...prev,
+      creators: creatorErrors.creators,
+      creatorAddresses: creatorErrors.creatorAddresses,
+      creatorShares: creatorErrors.creatorShares,
+    }))
+  }, [form.creators])
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setErrors((prev) => ({ ...prev, imageFile: "Please select a valid image file (JPG, PNG, or GIF)" }))
+      e.target.value = ""
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setErrors((prev) => ({ ...prev, imageFile: `Image must be ${MAX_IMAGE_SIZE_MB}MB or less` }))
+      e.target.value = ""
+      return
+    }
+
+    setForm((prev) => ({ ...prev, imageFile: file }))
+    setErrors((prev) => ({ ...prev, imageFile: undefined }))
+
+    const objectUrl = URL.createObjectURL(file)
+    setImagePreviewUrl(objectUrl)
+  }, [])
+
+  const handleImageClear = useCallback(() => {
+    setForm((prev) => ({ ...prev, imageFile: null }))
+    setErrors((prev) => ({ ...prev, imageFile: undefined }))
+    if (imagePreviewUrl && originalForm?.imageUrl !== imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl)
+    }
+    setImagePreviewUrl(originalForm?.imageUrl || null)
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ""
+    }
+  }, [imagePreviewUrl, originalForm?.imageUrl])
+
+  const handleMultimediaSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const category = getMultimediaCategory(file.name)
+    if (!category) {
+      setErrors((prev) => ({
+        ...prev,
+        multimediaFile: "Please select a valid multimedia file (MP4, MOV, MP3, FLAC, WAV, GLB, or GLTF)",
+      }))
+      e.target.value = ""
+      return
+    }
+    if (file.size > MAX_MULTIMEDIA_SIZE_BYTES) {
+      setErrors((prev) => ({ ...prev, multimediaFile: `File must be ${MAX_MULTIMEDIA_SIZE_MB}MB or less` }))
+      e.target.value = ""
+      return
+    }
+
+    setForm((prev) => ({ ...prev, multimediaFile: file, multimediaCategory: category }))
+    setErrors((prev) => ({ ...prev, multimediaFile: undefined }))
+
+    const objectUrl = URL.createObjectURL(file)
+    setMultimediaPreviewUrl(objectUrl)
+  }, [])
+
+  const handleMultimediaClear = useCallback(() => {
+    setForm((prev) => ({ ...prev, multimediaFile: null, multimediaCategory: null }))
+    setErrors((prev) => ({ ...prev, multimediaFile: undefined }))
+    if (multimediaPreviewUrl) {
+      URL.revokeObjectURL(multimediaPreviewUrl)
+      setMultimediaPreviewUrl(null)
+    }
+    if (multimediaInputRef.current) {
+      multimediaInputRef.current.value = ""
+    }
+  }, [multimediaPreviewUrl])
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl && originalForm?.imageUrl !== imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl)
+      }
+      if (multimediaPreviewUrl) {
+        URL.revokeObjectURL(multimediaPreviewUrl)
+      }
+    }
+  }, [imagePreviewUrl, multimediaPreviewUrl, originalForm?.imageUrl])
+
+  useEffect(() => {
+    if (loadedNft) {
+      onPreviewUpdate({
+        name: form.name,
+        symbol: form.symbol,
+        description: form.description,
+        imagePreviewUrl,
+        attributes: form.attributes.filter((attr) => attr.traitType.trim()),
+      })
+    }
+  }, [form.name, form.symbol, form.description, imagePreviewUrl, form.attributes, loadedNft, onPreviewUpdate])
+
+  const isFieldDirty = useCallback(
+    (field: keyof OriginalFormState): boolean => {
+      if (!originalForm) return false
+      if (field === "creators" || field === "attributes") {
+        return JSON.stringify(form[field]) !== JSON.stringify(originalForm[field])
+      }
+      return form[field as keyof UpdateFormState] !== originalForm[field]
+    },
+    [form, originalForm]
+  )
+
+  const isImageDirty = useMemo(() => {
+    if (!originalForm) return false
+    return form.imageFile !== null
+  }, [form.imageFile, originalForm])
+
+  const isFormDirty = useMemo(() => {
+    if (!originalForm) return false
+    return (
+      form.name !== originalForm.name ||
+      form.symbol !== originalForm.symbol ||
+      form.description !== originalForm.description ||
+      form.externalUrl !== originalForm.externalUrl ||
+      form.imageFile !== null ||
+      form.royaltiesPercent !== originalForm.royaltiesPercent ||
+      form.collectionAddress !== originalForm.collectionAddress ||
+      JSON.stringify(form.creators) !== JSON.stringify(originalForm.creators) ||
+      JSON.stringify(form.attributes) !== JSON.stringify(originalForm.attributes)
+    )
+  }, [form, originalForm])
+
+  const handleCancel = useCallback(() => {
+    if (!originalForm || !loadedNft) return
+
+    if (imagePreviewUrl && originalForm.imageUrl !== imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl)
+    }
+    if (multimediaPreviewUrl) {
+      URL.revokeObjectURL(multimediaPreviewUrl)
+      setMultimediaPreviewUrl(null)
+    }
+
+    populateFormFromNft(loadedNft)
+    toast.info("Changes discarded")
+  }, [originalForm, loadedNft, imagePreviewUrl, multimediaPreviewUrl, populateFormFromNft])
 
   const getStandardBadge = (standard: AssetStandard) => {
     const config = ASSET_STANDARDS.find((s) => s.value === standard)
@@ -2629,6 +2978,8 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
       </span>
     )
   }
+
+  const canUpdate = loadedNft && account && loadedNft.updateAuthority === account && !authorityError
 
   return (
     <div className="space-y-6">
@@ -2677,91 +3028,281 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
               </div>
             )}
 
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div className="flex items-start gap-4">
-                {loadedNft.imageUrl && (
-                  <img
-                    src={loadedNft.imageUrl}
-                    alt={loadedNft.name}
-                    className="h-20 w-20 rounded-lg object-cover border"
+            {canUpdate && (
+              <div className="space-y-4 pt-4 border-t">
+                <UpdateFormField
+                  label="Name"
+                  required
+                  error={errors.name}
+                  counter={{ current: form.name.length, max: MAX_NAME_LENGTH }}
+                  isDirty={isFieldDirty("name")}
+                >
+                  <Input
+                    value={form.name}
+                    onChange={handleChange("name")}
+                    onBlur={handleBlur("name")}
+                    placeholder="NFT Name"
+                    maxLength={MAX_NAME_LENGTH}
+                    error={!!errors.name}
                   />
-                )}
-                <div className="flex-1 min-w-0 space-y-1">
-                  <h4 className="font-semibold truncate">{loadedNft.name}</h4>
-                  {loadedNft.symbol && <p className="text-sm text-muted-foreground">Symbol: {loadedNft.symbol}</p>}
-                  {loadedNft.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{loadedNft.description}</p>
+                </UpdateFormField>
+
+                <UpdateFormField
+                  label="Symbol"
+                  required
+                  error={errors.symbol}
+                  counter={{ current: form.symbol.length, max: MAX_SYMBOL_LENGTH }}
+                  isDirty={isFieldDirty("symbol")}
+                >
+                  <Input
+                    value={form.symbol}
+                    onChange={handleChange("symbol")}
+                    onBlur={handleBlur("symbol")}
+                    placeholder="Symbol"
+                    maxLength={MAX_SYMBOL_LENGTH}
+                    error={!!errors.symbol}
+                  />
+                </UpdateFormField>
+
+                <UpdateFormField
+                  label="Description"
+                  required
+                  error={errors.description}
+                  isDirty={isFieldDirty("description")}
+                >
+                  <Textarea
+                    value={form.description}
+                    onChange={handleChange("description")}
+                    onBlur={handleBlur("description")}
+                    placeholder="Describe your NFT..."
+                    rows={4}
+                    error={!!errors.description}
+                  />
+                </UpdateFormField>
+
+                <UpdateFormField
+                  label="External URL / Website"
+                  error={errors.externalUrl}
+                  isDirty={isFieldDirty("externalUrl")}
+                >
+                  <Input
+                    type="url"
+                    value={form.externalUrl}
+                    onChange={handleChange("externalUrl")}
+                    onBlur={handleBlur("externalUrl")}
+                    placeholder="https://example.com"
+                    error={!!errors.externalUrl}
+                  />
+                </UpdateFormField>
+
+                <UpdateFormField label="Image" error={errors.imageFile} isDirty={isImageDirty}>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept={ACCEPTED_IMAGE_EXTENSIONS}
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  {imagePreviewUrl ? (
+                    <div className="flex items-start gap-4 rounded-lg border bg-muted/30 p-4">
+                      <img src={imagePreviewUrl} alt="Preview" className="h-24 w-24 rounded-lg object-cover border" />
+                      <div className="flex-1 min-w-0">
+                        {form.imageFile ? (
+                          <>
+                            <p className="text-sm font-medium truncate">{form.imageFile.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {(form.imageFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Current image</p>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => imageInputRef.current?.click()}
+                          >
+                            <ImagePlus className="h-4 w-4 mr-1" />
+                            Replace
+                          </Button>
+                          {form.imageFile && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={handleImageClear}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Revert
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-24 border-dashed"
+                      onClick={() => imageInputRef.current?.click()}
+                    >
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <ImagePlus className="h-8 w-8" />
+                        <span>Select Image</span>
+                        <span className="text-xs">JPG, PNG, or GIF (max {MAX_IMAGE_SIZE_MB}MB)</span>
+                      </div>
+                    </Button>
                   )}
-                </div>
-              </div>
+                </UpdateFormField>
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Royalties:</span>{" "}
-                  <span className="font-medium">{loadedNft.royaltiesPercent}%</span>
+                <UpdateFormField
+                  label="Multimedia (Optional)"
+                  error={errors.multimediaFile}
+                  isDirty={form.multimediaFile !== null}
+                >
+                  <input
+                    ref={multimediaInputRef}
+                    type="file"
+                    accept={ACCEPTED_MULTIMEDIA_EXTENSIONS}
+                    onChange={handleMultimediaSelect}
+                    className="hidden"
+                  />
+                  {form.multimediaFile && multimediaPreviewUrl ? (
+                    <div className="flex items-start gap-4 rounded-lg border bg-muted/30 p-4">
+                      <MultimediaPreview category={form.multimediaCategory} previewUrl={multimediaPreviewUrl} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium truncate">{form.multimediaFile.name}</p>
+                          <MultimediaCategoryBadge category={form.multimediaCategory} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(form.multimediaFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={handleMultimediaClear}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-24 border-dashed"
+                      onClick={() => multimediaInputRef.current?.click()}
+                    >
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Film className="h-8 w-8" />
+                        <span>Add Multimedia</span>
+                        <span className="text-xs">Video, audio, or 3D model (max {MAX_MULTIMEDIA_SIZE_MB}MB)</span>
+                      </div>
+                    </Button>
+                  )}
+                </UpdateFormField>
+
+                <div
+                  className={cn(
+                    "pt-4 border-t",
+                    isFieldDirty("royaltiesPercent") && "ring-2 ring-primary/20 rounded-lg p-4 -m-4"
+                  )}
+                >
+                  {isFieldDirty("royaltiesPercent") && (
+                    <div className="flex items-center gap-1 text-xs text-primary font-medium mb-2">
+                      <Pencil className="h-3 w-3" />
+                      Modified
+                    </div>
+                  )}
+                  <RoyaltiesCreatorsSection
+                    royaltiesPercent={form.royaltiesPercent}
+                    creators={form.creators}
+                    errors={errors}
+                    onRoyaltiesChange={handleRoyaltiesChange}
+                    onCreatorChange={handleCreatorChange}
+                    onAddCreator={handleAddCreator}
+                    onRemoveCreator={handleRemoveCreator}
+                    onBlur={validateCreatorsOnBlur}
+                  />
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Mutable:</span>{" "}
-                  <span className="font-medium">{loadedNft.isMutable ? "Yes" : "No"}</span>
+
+                <div
+                  className={cn(
+                    "pt-4 border-t",
+                    isFieldDirty("attributes") && "ring-2 ring-primary/20 rounded-lg p-4 -m-4"
+                  )}
+                >
+                  {isFieldDirty("attributes") && (
+                    <div className="flex items-center gap-1 text-xs text-primary font-medium mb-2">
+                      <Pencil className="h-3 w-3" />
+                      Modified
+                    </div>
+                  )}
+                  <AttributesSection
+                    attributes={form.attributes}
+                    onAttributeChange={handleAttributeChange}
+                    onAddAttribute={handleAddAttribute}
+                    onRemoveAttribute={handleRemoveAttribute}
+                  />
                 </div>
-                {loadedNft.collectionAddress && (
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Collection:</span>{" "}
-                    <code className="text-xs font-mono">
-                      {loadedNft.collectionAddress.slice(0, 8)}...{loadedNft.collectionAddress.slice(-8)}
-                    </code>
+
+                <UpdateFormField
+                  label="Collection"
+                  error={errors.collectionAddress}
+                  isDirty={isFieldDirty("collectionAddress")}
+                >
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Input
+                        value={form.collectionAddress}
+                        onChange={handleCollectionAddressChange}
+                        onBlur={handleCollectionAddressBlur}
+                        placeholder="Collection address (optional)"
+                        error={!!errors.collectionAddress}
+                      />
+                    </div>
+                    <Button type="button" variant="outline" className="shrink-0" disabled>
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Choose
+                    </Button>
                   </div>
+                </UpdateFormField>
+
+                <div className="pt-6 border-t flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleCancel}
+                    disabled={!isFormDirty}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="button" className="flex-1" disabled={!isFormDirty}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Update NFT
+                  </Button>
+                </div>
+
+                {isFormDirty && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    You have unsaved changes. Click Update NFT to apply them.
+                  </p>
                 )}
               </div>
+            )}
 
-              {loadedNft.attributes.length > 0 && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Attributes ({loadedNft.attributes.length})
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {loadedNft.attributes.slice(0, 6).map((attr, index) => (
-                      <div
-                        key={index}
-                        className="inline-flex flex-col rounded-md border bg-background px-2 py-1 text-xs"
-                      >
-                        <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
-                          {attr.traitType}
-                        </span>
-                        <span className="font-medium">{attr.value}</span>
-                      </div>
-                    ))}
-                    {loadedNft.attributes.length > 6 && (
-                      <div className="inline-flex items-center rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground">
-                        +{loadedNft.attributes.length - 6} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {loadedNft.creators.length > 0 && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Creators ({loadedNft.creators.length})
-                  </p>
-                  <div className="space-y-1">
-                    {loadedNft.creators.map((creator, index) => (
-                      <div key={index} className="flex items-center justify-between text-xs">
-                        <code className="font-mono">
-                          {creator.address.slice(0, 8)}...{creator.address.slice(-8)}
-                        </code>
-                        <span className="font-medium">{creator.share}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Update functionality coming soon. Form fields will be pre-populated with the current NFT data.
-            </p>
+            {!canUpdate && !authorityError && (
+              <p className="text-sm text-muted-foreground">Connect your wallet to check update authority.</p>
+            )}
           </div>
         )}
 
@@ -2775,6 +3316,43 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+interface UpdateFormFieldProps {
+  label: string
+  required?: boolean
+  error?: string
+  counter?: { current: number; max: number }
+  isDirty?: boolean
+  children: React.ReactNode
+}
+
+function UpdateFormField({ label, required, error, counter, isDirty, children }: UpdateFormFieldProps) {
+  return (
+    <div className={cn("space-y-2", isDirty && "ring-2 ring-primary/20 rounded-lg p-3 -m-1")}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Label className={cn(error && "text-destructive")}>
+            {label}
+            {required && <span className="text-destructive ml-1">*</span>}
+          </Label>
+          {isDirty && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+              <Pencil className="h-3 w-3" />
+              Modified
+            </span>
+          )}
+        </div>
+        {counter && (
+          <span className={cn("text-xs", counter.current > counter.max ? "text-destructive" : "text-muted-foreground")}>
+            {counter.current}/{counter.max}
+          </span>
+        )}
+      </div>
+      {children}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }
