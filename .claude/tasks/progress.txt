@@ -491,3 +491,30 @@
   - After successful update, call loadNft() again and populateFormFromNft() to refresh both data and originalForm
 ---
 
+## 2026-01-27 - US-022
+- Implemented Batch tab lookup UI with three lookup modes
+- Added BatchLookupMode type: "collection" | "creator" | "hashlist"
+- Added BatchNft interface for batch operation data structure
+- Added HeliusDasAsset and HeliusDasResponse interfaces for DAS API typing
+- Created lookup functions:
+  - lookupNftsByCollection: uses getAssetsByGroup with groupKey "collection"
+  - lookupNftsByCreator: uses getAssetsByCreator with onlyVerified: true
+  - lookupNftsByHashlist: uses getAssetBatch in batches of 100
+- Created BatchTabContent component with:
+  - Radio buttons for selecting lookup mode with descriptions and icons
+  - Address input field for collection/creator modes
+  - JSON array textarea for hashlist mode with validation
+  - Loading spinner and count display after successful lookup
+  - Error handling for invalid addresses and failed lookups
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added batch lookup types, interfaces, functions, and component)
+- **Learnings for future iterations:**
+  - DAS methods (getAssetsByGroup, getAssetsByCreator, getAssetBatch) use object params, not array
+  - rpcRequest function param type was updated to accept both array and object
+  - Helius DAS pagination: use grand_total when available for accurate total count
+  - getAssetsByCreator has onlyVerified param to filter to first verified creator
+  - getAssetBatch accepts ids array (not mints), batch in groups of 100 max
+  - mapHeliusAssetToBatchNft extracts common fields from DAS response
+  - JSON hashlist validation: parse, check array type, validate each address
+---
+
