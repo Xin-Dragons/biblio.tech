@@ -603,3 +603,26 @@
   - Same validateCreators pattern can be extracted as shared utility if needed
 ---
 
+## 2026-01-27 - US-026
+- Implemented VerifyCreatorSection component for batch verify/unverify creator
+- Added interface field to BatchNft and HeliusDasAsset for asset standard detection
+- Filter NFTs by Token Metadata standard (V1_NFT, ProgrammableNFT) for creator verification
+- Verify section: enabled when user is listed as unverified creator on NFTs
+- Unverify section: enabled when user is listed as verified creator on NFTs
+- Uses tokenMetadata.getVerifyInstruction with VerificationArgs.CreatorV1 for verification
+- Uses tokenMetadata.getUnverifyInstruction with VerificationArgs.CreatorV1 for unverification
+- Batch execution with progress tracking (completed/total/failed)
+- Progress bar and toast notifications during execution
+- Handles partial failures gracefully (continues with remaining batches)
+- Refreshes NFT list on completion
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added VerifyCreatorSection, interface field, UserCheck/UserX icons)
+- **Learnings for future iterations:**
+  - Helius DAS API returns `interface` field indicating asset type: "V1_NFT", "ProgrammableNFT", etc.
+  - Creator verification only applies to Token Metadata standard (V1_NFT, ProgrammableNFT), not Core Assets
+  - tokenMetadata.VerificationArgs.CreatorV1 is the enum value for creator verification
+  - Verify/Unverify instructions require metadata PDA (derived from mint) and authority (creator)
+  - Filter NFTs by checking both interface type AND creator.verified status
+  - Same batch processing pattern as other sections (batchInstructionsBySize + sequential confirmation)
+---
+
