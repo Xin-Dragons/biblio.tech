@@ -31,9 +31,12 @@
 - pNFTs: @metaplex-foundation/mpl-token-metadata (or Kinobi client)
 - Nifty: @nifty-oss/asset (or Kinobi client)
 
-**FILE UPLOAD:**
-- Use Irys for Arweave uploads
-- @irys/web-upload or @irys/sdk
+**FILE UPLOAD (apps/web/src/lib/irys.ts):**
+- Use Irys for Arweave uploads via @irys/web-upload and @irys/web-upload-solana
+- uploadToIrys(file, address, signer) - uploads File, returns { uri, arweaveUri, id }
+- uploadJsonMetadata(metadata, address, signer) - uploads NFT metadata JSON
+- Requires wallet address (string) and signer from useTransactionSigner()
+- Gateway: https://gateway.irys.xyz/{id} (also available at https://arweave.net/{id})
 
 ---
 
@@ -243,5 +246,43 @@
   - line-clamp-3 utility truncates text to 3 lines with ellipsis
   - ImageIcon from lucide-react works as placeholder for missing images
   - aspect-square maintains 1:1 ratio for image container
+---
+
+## 2026-01-27 - US-013
+- Created uploadToIrys utility function in apps/web/src/lib/irys.ts
+- Function accepts File and wallet signer, returns Arweave URI
+- Uses @irys/web-upload and @irys/web-upload-solana packages
+- Created adapter between @solana/connector and Irys wallet adapter interface
+- Returns URI in format: https://gateway.irys.xyz/{txId}
+- Added helper functions: uploadDataToIrys, getIrysPrice, getIrysBalance
+- Throws descriptive errors on failure
+- Files changed:
+  - apps/web/src/lib/irys.ts (new file)
+  - apps/web/package.json (added @irys/web-upload, @irys/web-upload-solana, @solana/web3.js, @solana/wallet-adapter-base)
+- **Learnings for future iterations:**
+  - Irys SDK requires @solana/web3.js internally - unavoidable dependency
+  - Use WebUploader(WebSolana).withProvider(walletAdapter).withRpc(rpcUrl) pattern
+  - createWalletAdapter bridges @solana/connector to MessageSignerWalletAdapter interface
+  - irys.uploadFile for files, irys.uploader.uploadData for raw data
+  - Gateway URLs: https://gateway.irys.xyz/{id} and https://arweave.net/{id}
+---
+
+## 2026-01-27 - US-014
+- Created uploadJsonMetadata function in apps/web/src/lib/irys.ts
+- Accepts NftMetadataInput object, returns Arweave URI
+- Constructs proper NFT metadata JSON structure following Metaplex standard
+- Includes: name, symbol, description, image, attributes, external_url
+- Includes animation_url if multimedia provided
+- Includes properties.files array with all uploaded files
+- Includes seller_fee_basis_points and creators if provided
+- Files changed:
+  - apps/web/src/lib/irys.ts (added NftMetadataInput, NftMetadataJson interfaces, uploadJsonMetadata function)
+- **Learnings for future iterations:**
+  - NftMetadataJson interface follows Metaplex NFT metadata standard
+  - Filter empty attributes before upload (trait_type and value must be present)
+  - properties.category can be: video, audio, vr, image (MultimediaCategory type)
+  - properties.files array contains {uri, type} objects for all media files
+  - Content-Type tag should be "application/json" for metadata uploads
+  - Convert JSON string to Buffer for upload: Buffer.from(JSON.stringify(metadata), "utf-8")
 ---
 
