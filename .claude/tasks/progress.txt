@@ -27,9 +27,15 @@
 - Add new routes inside Layout
 
 **ASSET STANDARDS:**
-- Core Assets: @metaplex-foundation/mpl-core (or Kinobi client)
-- pNFTs: @metaplex-foundation/mpl-token-metadata (or Kinobi client)
-- Nifty: @nifty-oss/asset (or Kinobi client)
+- Core Assets: mplCore from @biblio/solana-programs (Kinobi client)
+- pNFTs: tokenMetadata from @biblio/solana-programs (Kinobi client)
+- Nifty: asset from @biblio/solana-programs (Kinobi client)
+
+**NIFTY EXTENSION ENCODING:**
+- Extensions are raw bytes with: extensionType (enum), length (u32), data (bytes)
+- Metadata extension: 3 length-prefixed strings (symbol, description, uri)
+- Attributes extension: u32 count + array of (lenName + name + lenValue + value)
+- Use encodeLengthPrefixedString helper: 4-byte LE length prefix + UTF-8 bytes
 
 **FILE UPLOAD (apps/web/src/lib/irys.ts):**
 - Use Irys for Arweave uploads via @irys/web-upload and @irys/web-upload-solana
@@ -368,5 +374,33 @@
   - MINT_ACCOUNT_SIZE = 82 bytes, MINT_RENT_LAMPORTS = 1461600 lamports
   - getCreateAccountInstruction requires TransactionSigner for both payer and newAccount
   - printSupply: { __kind: "Zero" } for NFTs (no prints allowed)
+---
+
+## 2026-01-27 - US-018
+- Implemented Nifty Asset create transaction using Kinobi-generated asset client
+- Added extension encoding helper functions:
+  - encodeLengthPrefixedString(str) - encodes string with 4-byte LE length prefix
+  - encodeMetadataExtension(symbol, description, uri) - encodes Metadata extension
+  - encodeAttributesExtension(attributes) - encodes Attributes extension with count + pairs
+- Added mintNiftyAsset function that:
+  - Generates new keypair for asset using generateKeyPairSigner()
+  - Creates Metadata extension with symbol, description, and uri
+  - Creates Attributes extension for trait_type/value pairs (when not collection NFT)
+  - Uses asset.getCreateInstruction with Standard.NonFungible
+  - Supports group (collection) assignment via group parameter
+- Updated handleSubmit to call mintNiftyAsset when standard === "nifty"
+- Updated success dialog description to show "Nifty Asset" for Nifty standard
+- Removed placeholder that showed metadata URI before minting (no longer needed)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added Nifty minting, extension encoders, updated submit flow)
+- **Learnings for future iterations:**
+  - Nifty Asset uses a single create instruction (simpler than pNFT's 4 instructions)
+  - Extensions are passed inline in the create instruction data, not separate accounts
+  - Extension encoding: extensionType (enum), length (u32), data (bytes)
+  - Metadata extension format: 3 length-prefixed strings (symbol, description, uri)
+  - Attributes extension format: u32 count + array of (lenName + name + lenValue + value)
+  - asset.Standard.NonFungible for regular NFTs
+  - group parameter maps to collection in the Nifty standard
+  - Nifty doesn't use PDAs for metadata - all data is in the asset account
 ---
 
