@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react"
 import { useSearchParams } from "react-router"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
 import {
@@ -13,6 +13,8 @@ import {
 import { getCreateAccountInstruction } from "@solana-program/system"
 import { getInitializeMint2Instruction, TOKEN_PROGRAM_ADDRESS, findAssociatedTokenPda } from "@solana-program/token"
 import { toast } from "sonner"
+import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
+import AutoSizer from "react-virtualized-auto-sizer"
 import {
   Hammer,
   Plus,
@@ -36,6 +38,7 @@ import {
   Search,
   Users,
   FileCode,
+  Filter,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -51,6 +54,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
   uploadToIrys,
@@ -215,6 +219,17 @@ interface BatchNft {
   updateAuthority: string | null
   royaltiesPercent: number
   creators: Array<{ address: string; share: number; verified: boolean }>
+}
+
+interface BatchNftFilters {
+  creator: string | null
+  royalties: string | null
+  updateAuthority: string | null
+}
+
+type BatchNftGridCellData = {
+  nfts: BatchNft[]
+  columnCount: number
 }
 
 interface HeliusDasAsset {
@@ -3978,6 +3993,98 @@ const BATCH_LOOKUP_MODES: Array<{
   },
 ]
 
+const BatchNftCard = memo(function BatchNftCard({ nft }: { nft: BatchNft }) {
+  const truncatedMint = `${nft.mint.slice(0, 4)}...${nft.mint.slice(-4)}`
+
+  return (
+    <div className="group relative rounded-lg border bg-card overflow-hidden transition-colors hover:border-primary/50">
+      <div className="aspect-square relative bg-muted">
+        {nft.image ? (
+          <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+          </div>
+        )}
+      </div>
+      <div className="p-2 space-y-0.5">
+        <p className="text-sm font-medium truncate" title={nft.name}>
+          {nft.name || "Unnamed"}
+        </p>
+        <p className="text-xs text-muted-foreground font-mono">{truncatedMint}</p>
+      </div>
+    </div>
+  )
+})
+
+function BatchNftGridCell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<BatchNftGridCellData>) {
+  const { nfts, columnCount } = data
+  const index = rowIndex * columnCount + columnIndex
+  const nft = nfts[index]
+
+  if (!nft) return null
+
+  return (
+    <div style={style} className="p-1.5">
+      <BatchNftCard nft={nft} />
+    </div>
+  )
+}
+
+function getGridColumnCount(width: number): number {
+  if (width >= 1024) return 6
+  if (width >= 768) return 5
+  if (width >= 640) return 4
+  if (width >= 480) return 3
+  return 2
+}
+
+interface BatchNftGridProps {
+  nfts: BatchNft[]
+}
+
+function BatchNftGrid({ nfts }: BatchNftGridProps) {
+  if (nfts.length === 0) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/30">
+        <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+          <ImageIcon className="h-6 w-6 text-muted-foreground/50" />
+        </div>
+        <p className="text-muted-foreground font-medium">No NFTs match filters</p>
+        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your filter criteria</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-[400px] w-full">
+      <AutoSizer>
+        {({ width, height }) => {
+          const columnCount = getGridColumnCount(width)
+          const columnWidth = width / columnCount
+          const rowHeight = columnWidth * 1.3
+          const rowCount = Math.ceil(nfts.length / columnCount)
+
+          return (
+            <FixedSizeGrid<BatchNftGridCellData>
+              width={width}
+              height={height}
+              columnCount={columnCount}
+              columnWidth={columnWidth}
+              rowCount={rowCount}
+              rowHeight={rowHeight}
+              itemData={{ nfts, columnCount }}
+              className="scrollbar-hide"
+            >
+              {BatchNftGridCell}
+            </FixedSizeGrid>
+          )
+        }}
+      </AutoSizer>
+    </div>
+  )
+}
+
 function BatchTabContent() {
   const { account } = useWallet()
   const [lookupMode, setLookupMode] = useState<BatchLookupMode>("collection")
@@ -3987,6 +4094,61 @@ function BatchTabContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadedNfts, setLoadedNfts] = useState<BatchNft[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [filters, setFilters] = useState<BatchNftFilters>({
+    creator: null,
+    royalties: null,
+    updateAuthority: null,
+  })
+
+  const uniqueCreators = useMemo(() => {
+    const creatorsSet = new Set<string>()
+    loadedNfts.forEach((nft) => {
+      nft.creators.forEach((creator) => {
+        creatorsSet.add(creator.address)
+      })
+    })
+    return Array.from(creatorsSet).sort()
+  }, [loadedNfts])
+
+  const uniqueRoyalties = useMemo(() => {
+    const royaltiesSet = new Set<number>()
+    loadedNfts.forEach((nft) => {
+      royaltiesSet.add(nft.royaltiesPercent)
+    })
+    return Array.from(royaltiesSet).sort((a, b) => a - b)
+  }, [loadedNfts])
+
+  const uniqueUpdateAuthorities = useMemo(() => {
+    const authSet = new Set<string>()
+    loadedNfts.forEach((nft) => {
+      if (nft.updateAuthority) {
+        authSet.add(nft.updateAuthority)
+      }
+    })
+    return Array.from(authSet).sort()
+  }, [loadedNfts])
+
+  const filteredNfts = useMemo(() => {
+    return loadedNfts.filter((nft) => {
+      if (filters.creator) {
+        const hasCreator = nft.creators.some((c) => c.address === filters.creator)
+        if (!hasCreator) return false
+      }
+      if (filters.royalties !== null) {
+        if (nft.royaltiesPercent !== parseFloat(filters.royalties)) return false
+      }
+      if (filters.updateAuthority) {
+        if (nft.updateAuthority !== filters.updateAuthority) return false
+      }
+      return true
+    })
+  }, [loadedNfts, filters])
+
+  const hasActiveFilters = filters.creator || filters.royalties !== null || filters.updateAuthority
+
+  const clearFilters = useCallback(() => {
+    setFilters({ creator: null, royalties: null, updateAuthority: null })
+  }, [])
 
   const handleLookupModeChange = (mode: BatchLookupMode) => {
     setLookupMode(mode)
@@ -4096,10 +4258,11 @@ function BatchTabContent() {
     setHashlistError(null)
     setLoadedNfts([])
     setLoadError(null)
+    clearFilters()
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="space-y-4">
         <div className="space-y-2">
           <Label className="text-sm font-medium">Lookup Mode</Label>
@@ -4194,18 +4357,117 @@ function BatchTabContent() {
       </div>
 
       {loadedNfts.length > 0 && (
-        <div className="rounded-lg border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              <span className="font-medium">NFTs Loaded</span>
+        <div className="space-y-6">
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                <span className="font-medium">NFTs Loaded</span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-bold text-primary">{filteredNfts.length.toLocaleString()}</span>
+                {hasActiveFilters && (
+                  <span className="text-sm text-muted-foreground ml-1">/ {loadedNfts.length.toLocaleString()}</span>
+                )}
+              </div>
             </div>
-            <span className="text-2xl font-bold text-primary">{loadedNfts.length.toLocaleString()}</span>
+            <p className="text-sm text-muted-foreground">
+              {hasActiveFilters
+                ? `Showing ${filteredNfts.length.toLocaleString()} of ${loadedNfts.length.toLocaleString()} NFT${loadedNfts.length !== 1 ? "s" : ""}.`
+                : `Found ${loadedNfts.length.toLocaleString()} NFT${loadedNfts.length !== 1 ? "s" : ""}.`}
+              {!account && " Connect your wallet to perform batch operations."}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Found {loadedNfts.length.toLocaleString()} NFT{loadedNfts.length !== 1 ? "s" : ""}.
-            {!account && " Connect your wallet to perform batch operations."}
-          </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Filters</Label>
+              </div>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-7">
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-creator" className="text-xs text-muted-foreground">
+                  Creator
+                </Label>
+                <Select
+                  value={filters.creator ?? "all"}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, creator: value === "all" ? null : value }))
+                  }
+                >
+                  <SelectTrigger id="filter-creator" className="h-9">
+                    <SelectValue placeholder="All creators" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All creators</SelectItem>
+                    {uniqueCreators.map((creator) => (
+                      <SelectItem key={creator} value={creator}>
+                        <span className="font-mono text-xs">{`${creator.slice(0, 4)}...${creator.slice(-4)}`}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-royalties" className="text-xs text-muted-foreground">
+                  Royalties
+                </Label>
+                <Select
+                  value={filters.royalties ?? "all"}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, royalties: value === "all" ? null : value }))
+                  }
+                >
+                  <SelectTrigger id="filter-royalties" className="h-9">
+                    <SelectValue placeholder="All royalties" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All royalties</SelectItem>
+                    {uniqueRoyalties.map((royalty) => (
+                      <SelectItem key={royalty} value={royalty.toString()}>
+                        {royalty}%
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-authority" className="text-xs text-muted-foreground">
+                  Update Authority
+                </Label>
+                <Select
+                  value={filters.updateAuthority ?? "all"}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, updateAuthority: value === "all" ? null : value }))
+                  }
+                >
+                  <SelectTrigger id="filter-authority" className="h-9">
+                    <SelectValue placeholder="All authorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All authorities</SelectItem>
+                    {uniqueUpdateAuthorities.map((auth) => (
+                      <SelectItem key={auth} value={auth}>
+                        <span className="font-mono text-xs">{`${auth.slice(0, 4)}...${auth.slice(-4)}`}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <BatchNftGrid nfts={filteredNfts} />
         </div>
       )}
     </div>
