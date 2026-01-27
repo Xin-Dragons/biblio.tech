@@ -15,12 +15,14 @@ import {
   Music,
   Trash2,
   FolderOpen,
+  AlertTriangle,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 
 type TabValue = "create" | "update" | "batch"
@@ -50,6 +52,8 @@ interface CreateFormState {
   creators: Creator[]
   attributes: Attribute[]
   collectionAddress: string
+  isMutable: boolean
+  isCollectionNft: boolean
 }
 
 interface CreateFormErrors {
@@ -75,6 +79,8 @@ type TextFormField = Exclude<
   | "creators"
   | "attributes"
   | "collectionAddress"
+  | "isMutable"
+  | "isCollectionNft"
 >
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
@@ -310,6 +316,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     creators: [],
     attributes: [{ traitType: "", value: "" }],
     collectionAddress: "",
+    isMutable: true,
+    isCollectionNft: false,
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -325,6 +333,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     creators: false,
     attributes: false,
     collectionAddress: false,
+    isMutable: false,
+    isCollectionNft: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -572,6 +582,20 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     setErrors((prev) => ({ ...prev, collectionAddress: error }))
   }, [form.collectionAddress])
 
+  const handleMutableChange = useCallback((checked: boolean) => {
+    setForm((prev) => ({ ...prev, isMutable: checked }))
+    setTouched((prev) => ({ ...prev, isMutable: true }))
+  }, [])
+
+  const handleCollectionNftChange = useCallback((checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      isCollectionNft: checked,
+      royaltiesPercent: checked ? 0 : prev.royaltiesPercent,
+    }))
+    setTouched((prev) => ({ ...prev, isCollectionNft: true }))
+  }, [])
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -722,29 +746,40 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
           )}
         </FormField>
 
-        <RoyaltiesCreatorsSection
-          royaltiesPercent={form.royaltiesPercent}
-          creators={form.creators}
-          errors={errors}
-          onRoyaltiesChange={handleRoyaltiesChange}
-          onCreatorChange={handleCreatorChange}
-          onAddCreator={handleAddCreator}
-          onRemoveCreator={handleRemoveCreator}
-          onBlur={validateCreatorsOnBlur}
-        />
+        {!form.isCollectionNft && (
+          <RoyaltiesCreatorsSection
+            royaltiesPercent={form.royaltiesPercent}
+            creators={form.creators}
+            errors={errors}
+            onRoyaltiesChange={handleRoyaltiesChange}
+            onCreatorChange={handleCreatorChange}
+            onAddCreator={handleAddCreator}
+            onRemoveCreator={handleRemoveCreator}
+            onBlur={validateCreatorsOnBlur}
+          />
+        )}
 
-        <AttributesSection
-          attributes={form.attributes}
-          onAttributeChange={handleAttributeChange}
-          onAddAttribute={handleAddAttribute}
-          onRemoveAttribute={handleRemoveAttribute}
-        />
+        {!form.isCollectionNft && (
+          <AttributesSection
+            attributes={form.attributes}
+            onAttributeChange={handleAttributeChange}
+            onAddAttribute={handleAddAttribute}
+            onRemoveAttribute={handleRemoveAttribute}
+          />
+        )}
 
         <CollectionSection
           collectionAddress={form.collectionAddress}
           error={errors.collectionAddress}
           onChange={handleCollectionAddressChange}
           onBlur={handleCollectionAddressBlur}
+        />
+
+        <SettingsSection
+          isMutable={form.isMutable}
+          isCollectionNft={form.isCollectionNft}
+          onMutableChange={handleMutableChange}
+          onCollectionNftChange={handleCollectionNftChange}
         />
       </div>
     </div>
@@ -950,6 +985,61 @@ function CollectionSection({ collectionAddress, error, onChange, onBlur }: Colle
         <p className="text-xs text-muted-foreground">
           Optionally assign this NFT to a collection. Leave empty to create a standalone NFT.
         </p>
+      </div>
+    </div>
+  )
+}
+
+interface SettingsSectionProps {
+  isMutable: boolean
+  isCollectionNft: boolean
+  onMutableChange: (checked: boolean) => void
+  onCollectionNftChange: (checked: boolean) => void
+}
+
+function SettingsSection({ isMutable, isCollectionNft, onMutableChange, onCollectionNftChange }: SettingsSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <Label>Settings</Label>
+
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="mutable-toggle" className="text-sm font-medium cursor-pointer">
+              Mutable
+            </Label>
+            <p className="text-xs text-muted-foreground">Allow this NFT to be updated after creation</p>
+          </div>
+          <Switch id="mutable-toggle" checked={isMutable} onCheckedChange={onMutableChange} />
+        </div>
+
+        {!isMutable && (
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 p-3 text-warning">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <p className="text-xs">
+              <span className="font-medium">Warning:</span> Immutability is permanent. Once created, this NFT&apos;s
+              metadata cannot be changed.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="collection-nft-toggle" className="text-sm font-medium cursor-pointer">
+              Create as Collection NFT
+            </Label>
+            <p className="text-xs text-muted-foreground">Create a collection NFT that other NFTs can be added to</p>
+          </div>
+          <Switch id="collection-nft-toggle" checked={isCollectionNft} onCheckedChange={onCollectionNftChange} />
+        </div>
+
+        {isCollectionNft && (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">
+              Collection NFTs do not have attributes or royalties. These sections have been hidden.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
