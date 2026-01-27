@@ -56,7 +56,7 @@ import {
   type MultimediaCategory as IrysMultimediaCategory,
 } from "@/lib/irys"
 import { prepareAndSendTransaction } from "@/lib/transaction"
-import { mplCore, tokenMetadata } from "@biblio/solana-programs"
+import { mplCore, tokenMetadata, asset } from "@biblio/solana-programs"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
@@ -615,6 +615,125 @@ async function mintPnft({
   }
 }
 
+function encodeLengthPrefixedString(str: string): Uint8Array {
+  const encoder = new TextEncoder()
+  const strBytes = encoder.encode(str)
+  const buffer = new ArrayBuffer(4 + strBytes.length)
+  const view = new DataView(buffer)
+  view.setUint32(0, strBytes.length, true)
+  const arr = new Uint8Array(buffer)
+  arr.set(strBytes, 4)
+  return arr
+}
+
+function encodeMetadataExtension(symbol: string, description: string, uri: string): Uint8Array {
+  const symbolBytes = encodeLengthPrefixedString(symbol)
+  const descBytes = encodeLengthPrefixedString(description)
+  const uriBytes = encodeLengthPrefixedString(uri)
+  const totalLen = symbolBytes.length + descBytes.length + uriBytes.length
+  const buffer = new Uint8Array(totalLen)
+  let offset = 0
+  buffer.set(symbolBytes, offset)
+  offset += symbolBytes.length
+  buffer.set(descBytes, offset)
+  offset += descBytes.length
+  buffer.set(uriBytes, offset)
+  return buffer
+}
+
+function encodeAttributesExtension(attributes: Array<{ traitType: string; value: string }>): Uint8Array {
+  const filtered = attributes.filter((a) => a.traitType.trim() && a.value.trim())
+  const parts: Uint8Array[] = []
+  const countBuffer = new ArrayBuffer(4)
+  new DataView(countBuffer).setUint32(0, filtered.length, true)
+  parts.push(new Uint8Array(countBuffer))
+
+  for (const attr of filtered) {
+    parts.push(encodeLengthPrefixedString(attr.traitType))
+    parts.push(encodeLengthPrefixedString(attr.value))
+  }
+
+  const totalLen = parts.reduce((sum, p) => sum + p.length, 0)
+  const buffer = new Uint8Array(totalLen)
+  let offset = 0
+  for (const part of parts) {
+    buffer.set(part, offset)
+    offset += part.length
+  }
+  return buffer
+}
+
+interface MintNiftyAssetOptions {
+  name: string
+  uri: string
+  symbol: string
+  description: string
+  attributes: Array<{ traitType: string; value: string }>
+  collectionAddress?: string
+  isMutable: boolean
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function mintNiftyAsset({
+  name,
+  uri,
+  symbol,
+  description,
+  attributes,
+  collectionAddress,
+  isMutable,
+  isCollectionNft,
+  feePayer,
+  account,
+}: MintNiftyAssetOptions): Promise<MintResult> {
+  const assetSigner = await generateKeyPairSigner()
+
+  const extensions: asset.ExtensionInputArgs[] = []
+
+  const metadataBytes = encodeMetadataExtension(symbol, description, uri)
+  extensions.push({
+    extensionType: asset.ExtensionType.Metadata,
+    length: metadataBytes.length,
+    data: metadataBytes,
+  })
+
+  if (!isCollectionNft) {
+    const filteredAttrs = attributes.filter((a) => a.traitType.trim() && a.value.trim())
+    if (filteredAttrs.length > 0) {
+      const attributesBytes = encodeAttributesExtension(filteredAttrs)
+      extensions.push({
+        extensionType: asset.ExtensionType.Attributes,
+        length: attributesBytes.length,
+        data: attributesBytes,
+      })
+    }
+  }
+
+  const createInstruction = asset.getCreateInstruction({
+    asset: assetSigner,
+    authority: account as Address,
+    owner: account as Address,
+    group: collectionAddress ? (collectionAddress as Address) : undefined,
+    payer: feePayer,
+    name,
+    standard: asset.Standard.NonFungible,
+    mutable: isMutable,
+    extensions: extensions.length > 0 ? extensions : null,
+  })
+
+  const signature = await prepareAndSendTransaction({
+    instructions: [createInstruction],
+    feePayer,
+  })
+
+  return {
+    mintAddress: assetSigner.address,
+    signature,
+  }
+}
+
 interface CreateTabContentProps {
   standard: AssetStandard
   onStandardChange: (value: AssetStandard) => void
@@ -667,7 +786,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
   const multimediaInputRef = useRef<HTMLInputElement>(null)
 
   const [uploadStep, setUploadStep] = useState<UploadStep>("idle")
-  const [uploadedUris, setUploadedUris] = useState<UploadedUris>({
+  const [, setUploadedUris] = useState<UploadedUris>({
     imageUri: null,
     multimediaUri: null,
     metadataUri: null,
@@ -1150,12 +1269,6 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       const metadataResult = await uploadJsonMetadata(metadataInput, account, connectorSigner)
       setUploadedUris((prev) => ({ ...prev, metadataUri: metadataResult.uri }))
 
-      if (standard === "nifty") {
-        setUploadStep("complete")
-        toast.success("Files uploaded successfully! Ready to mint.", { id: "upload-progress" })
-        return
-      }
-
       setUploadStep("minting")
       toast.loading("Minting NFT...", { id: "upload-progress" })
 
@@ -1177,7 +1290,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
           feePayer: signer as unknown as TransactionSigner,
           account,
         })
-      } else {
+      } else if (standard === "pnft") {
         result = await mintPnft({
           name: form.name,
           symbol: form.symbol,
@@ -1193,6 +1306,19 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
           collectionAddress: form.collectionAddress || undefined,
           ruleSetOption: form.ruleSetOption,
           customRuleSetAddress: form.customRuleSetAddress || undefined,
+          isMutable: form.isMutable,
+          isCollectionNft: form.isCollectionNft,
+          feePayer: signer as unknown as TransactionSigner,
+          account,
+        })
+      } else {
+        result = await mintNiftyAsset({
+          name: form.name,
+          uri: metadataResult.uri,
+          symbol: form.symbol,
+          description: form.description,
+          attributes: form.attributes,
+          collectionAddress: form.collectionAddress || undefined,
           isMutable: form.isMutable,
           isCollectionNft: form.isCollectionNft,
           feePayer: signer as unknown as TransactionSigner,
@@ -1511,12 +1637,6 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             {getSubmitButtonText()}
           </Button>
           {!account && <p className="text-sm text-muted-foreground text-center mt-2">Connect wallet to create NFT</p>}
-          {uploadStep === "complete" && uploadedUris.metadataUri && !mintResult && standard === "nifty" && (
-            <div className="mt-4 rounded-lg bg-primary/10 p-4">
-              <p className="text-sm font-medium text-primary mb-2">Metadata uploaded successfully!</p>
-              <p className="text-xs text-muted-foreground break-all">URI: {uploadedUris.metadataUri}</p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1528,7 +1648,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
               NFT Created Successfully!
             </DialogTitle>
             <DialogDescription>
-              Your {standard === "core" ? "Core Asset" : "pNFT"} has been minted on Solana.
+              Your {standard === "core" ? "Core Asset" : standard === "pnft" ? "pNFT" : "Nifty Asset"} has been minted
+              on Solana.
             </DialogDescription>
           </DialogHeader>
 
