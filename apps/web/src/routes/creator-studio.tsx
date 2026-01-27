@@ -34,6 +34,8 @@ import {
   ExternalLink,
   Copy,
   Search,
+  Users,
+  FileCode,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -63,6 +65,7 @@ import { mplCore, tokenMetadata, asset } from "@biblio/solana-programs"
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
 type RuleSetOption = "metaplex" | "compatibility" | "none" | "custom"
+type BatchLookupMode = "collection" | "creator" | "hashlist"
 
 type MultimediaCategory = "video" | "audio" | "vr"
 
@@ -204,6 +207,41 @@ interface LoadedNftData {
   ruleSetAddress: string | null
 }
 
+interface BatchNft {
+  mint: string
+  name: string
+  image: string
+  collectionId: string | null
+  updateAuthority: string | null
+  royaltiesPercent: number
+  creators: Array<{ address: string; share: number; verified: boolean }>
+}
+
+interface HeliusDasAsset {
+  id: string
+  content?: {
+    metadata?: {
+      name?: string
+    }
+    links?: {
+      image?: string
+    }
+    files?: Array<{ uri?: string }>
+  }
+  grouping?: Array<{ group_key: string; group_value: string }>
+  authorities?: Array<{ address: string; scopes: string[] }>
+  royalty?: {
+    basis_points: number
+  }
+  creators?: Array<{ address: string; share: number; verified: boolean }>
+}
+
+interface HeliusDasResponse {
+  items: HeliusDasAsset[]
+  total: number
+  grand_total?: number
+}
+
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
 const MAX_IMAGE_SIZE_MB = 20
@@ -249,7 +287,7 @@ function isValidSolanaAddress(address: string): boolean {
   return true
 }
 
-async function rpcRequest<T>(method: string, params: unknown[]): Promise<T> {
+async function rpcRequest<T>(method: string, params: unknown[] | Record<string, unknown>): Promise<T> {
   const response = await fetch("/api/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -583,6 +621,92 @@ async function loadNft(mintAddress: string): Promise<LoadedNftData> {
   }
 }
 
+function mapHeliusAssetToBatchNft(asset: HeliusDasAsset): BatchNft {
+  const collectionGrouping = asset.grouping?.find((g) => g.group_key === "collection")
+  const rawImage = asset.content?.links?.image ?? asset.content?.files?.[0]?.uri ?? ""
+  const updateAuthority = asset.authorities?.find((a) => a.scopes.includes("full"))?.address ?? null
+
+  return {
+    mint: asset.id,
+    name: asset.content?.metadata?.name ?? "Unknown",
+    image: rawImage,
+    collectionId: collectionGrouping?.group_value ?? null,
+    updateAuthority,
+    royaltiesPercent: (asset.royalty?.basis_points ?? 0) / 100,
+    creators: asset.creators ?? [],
+  }
+}
+
+async function lookupNftsByCollection(collectionAddress: string): Promise<BatchNft[]> {
+  const allNfts: BatchNft[] = []
+  let page = 1
+  let total = 1
+
+  while (allNfts.length < total) {
+    const response = await rpcRequest<HeliusDasResponse>("getAssetsByGroup", {
+      groupKey: "collection",
+      groupValue: collectionAddress,
+      page,
+      limit: 1000,
+      displayOptions: {
+        showGrandTotal: true,
+      },
+    })
+
+    total = response.grand_total ?? response.total
+    for (const item of response.items) {
+      allNfts.push(mapHeliusAssetToBatchNft(item))
+    }
+    page++
+  }
+
+  return allNfts
+}
+
+async function lookupNftsByCreator(creatorAddress: string): Promise<BatchNft[]> {
+  const allNfts: BatchNft[] = []
+  let page = 1
+  let total = 1
+
+  while (allNfts.length < total) {
+    const response = await rpcRequest<HeliusDasResponse>("getAssetsByCreator", {
+      creatorAddress,
+      onlyVerified: true,
+      page,
+      limit: 1000,
+      displayOptions: {
+        showGrandTotal: true,
+      },
+    })
+
+    total = response.grand_total ?? response.total
+    for (const item of response.items) {
+      allNfts.push(mapHeliusAssetToBatchNft(item))
+    }
+    page++
+  }
+
+  return allNfts
+}
+
+async function lookupNftsByHashlist(mintAddresses: string[]): Promise<BatchNft[]> {
+  const allNfts: BatchNft[] = []
+  const batchSize = 100
+
+  for (let i = 0; i < mintAddresses.length; i += batchSize) {
+    const batch = mintAddresses.slice(i, i + batchSize)
+    const response = await rpcRequest<HeliusDasAsset[]>("getAssetBatch", {
+      ids: batch,
+    })
+
+    for (const item of response) {
+      allNfts.push(mapHeliusAssetToBatchNft(item))
+    }
+  }
+
+  return allNfts
+}
+
 function validateCreators(creators: Creator[]): { isValid: boolean; errors: CreateFormErrors } {
   const errors: CreateFormErrors = {
     creatorAddresses: {},
@@ -730,7 +854,7 @@ export function CreatorStudioPage() {
                 <UpdateTabContent onPreviewUpdate={handlePreviewUpdate} />
               </TabsContent>
               <TabsContent value="batch" className="mt-0 h-full">
-                <BatchTabPlaceholder />
+                <BatchTabContent />
               </TabsContent>
             </div>
             <div className="hidden lg:block">
@@ -3828,14 +3952,262 @@ function UpdateFormField({ label, required, error, counter, isDirty, children }:
   )
 }
 
-function BatchTabPlaceholder() {
+const BATCH_LOOKUP_MODES: Array<{
+  value: BatchLookupMode
+  label: string
+  description: string
+  icon: typeof FolderOpen
+}> = [
+  {
+    value: "collection",
+    label: "By Collection",
+    description: "Look up all NFTs in a collection",
+    icon: FolderOpen,
+  },
+  {
+    value: "creator",
+    label: "By First Verified Creator",
+    description: "Look up NFTs by their first verified creator",
+    icon: Users,
+  },
+  {
+    value: "hashlist",
+    label: "By Hashlist",
+    description: "Provide a JSON array of mint addresses",
+    icon: FileCode,
+  },
+]
+
+function BatchTabContent() {
+  const { account } = useWallet()
+  const [lookupMode, setLookupMode] = useState<BatchLookupMode>("collection")
+  const [addressInput, setAddressInput] = useState("")
+  const [hashlistInput, setHashlistInput] = useState("")
+  const [hashlistError, setHashlistError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadedNfts, setLoadedNfts] = useState<BatchNft[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const handleLookupModeChange = (mode: BatchLookupMode) => {
+    setLookupMode(mode)
+    setLoadError(null)
+  }
+
+  const validateHashlist = useCallback((input: string): string[] | null => {
+    if (!input.trim()) {
+      setHashlistError("Hashlist is required")
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(input)
+      if (!Array.isArray(parsed)) {
+        setHashlistError("Hashlist must be a JSON array")
+        return null
+      }
+
+      const invalidAddresses: number[] = []
+      for (let i = 0; i < parsed.length; i++) {
+        if (typeof parsed[i] !== "string" || !isValidSolanaAddress(parsed[i])) {
+          invalidAddresses.push(i + 1)
+        }
+      }
+
+      if (invalidAddresses.length > 0) {
+        if (invalidAddresses.length <= 3) {
+          setHashlistError(`Invalid addresses at positions: ${invalidAddresses.join(", ")}`)
+        } else {
+          setHashlistError(`${invalidAddresses.length} invalid addresses found`)
+        }
+        return null
+      }
+
+      if (parsed.length === 0) {
+        setHashlistError("Hashlist is empty")
+        return null
+      }
+
+      setHashlistError(null)
+      return parsed as string[]
+    } catch {
+      setHashlistError("Invalid JSON format")
+      return null
+    }
+  }, [])
+
+  const handleLookup = async () => {
+    setLoadError(null)
+    setLoadedNfts([])
+
+    if (lookupMode === "collection" || lookupMode === "creator") {
+      if (!addressInput.trim()) {
+        setLoadError("Address is required")
+        return
+      }
+      if (!isValidSolanaAddress(addressInput.trim())) {
+        setLoadError("Invalid Solana address")
+        return
+      }
+    }
+
+    if (lookupMode === "hashlist") {
+      const addresses = validateHashlist(hashlistInput)
+      if (!addresses) {
+        return
+      }
+    }
+
+    setIsLoading(true)
+
+    try {
+      let nfts: BatchNft[] = []
+
+      switch (lookupMode) {
+        case "collection":
+          nfts = await lookupNftsByCollection(addressInput.trim())
+          break
+        case "creator":
+          nfts = await lookupNftsByCreator(addressInput.trim())
+          break
+        case "hashlist": {
+          const addresses = JSON.parse(hashlistInput) as string[]
+          nfts = await lookupNftsByHashlist(addresses)
+          break
+        }
+      }
+
+      setLoadedNfts(nfts)
+
+      if (nfts.length === 0) {
+        setLoadError("No NFTs found")
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load NFTs"
+      setLoadError(message)
+      toast.error("Failed to load NFTs", { description: message })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleClear = () => {
+    setAddressInput("")
+    setHashlistInput("")
+    setHashlistError(null)
+    setLoadedNfts([])
+    setLoadError(null)
+  }
+
   return (
-    <div className="rounded-lg border border-dashed p-8 h-full flex items-center justify-center">
-      <div className="text-center text-muted-foreground">
-        <Layers className="h-10 w-10 mx-auto mb-3 opacity-50" />
-        <p className="font-medium">Batch Operations</p>
-        <p className="text-sm mt-1">Manage multiple NFTs at once</p>
+    <div className="space-y-6 max-w-2xl">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Lookup Mode</Label>
+          <div className="grid gap-3">
+            {BATCH_LOOKUP_MODES.map(({ value, label, description, icon: Icon }) => (
+              <label
+                key={value}
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors",
+                  lookupMode === value ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="lookupMode"
+                  value={value}
+                  checked={lookupMode === value}
+                  onChange={() => handleLookupModeChange(value)}
+                  className="mt-1 accent-primary"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{label}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {(lookupMode === "collection" || lookupMode === "creator") && (
+          <div className="space-y-2">
+            <Label htmlFor="batch-address">
+              {lookupMode === "collection" ? "Collection Address" : "Creator Address"}
+            </Label>
+            <Input
+              id="batch-address"
+              type="text"
+              placeholder={`Enter ${lookupMode === "collection" ? "collection" : "creator"} address`}
+              value={addressInput}
+              onChange={(e) => {
+                setAddressInput(e.target.value)
+                setLoadError(null)
+              }}
+              className={cn(loadError && "border-destructive")}
+            />
+          </div>
+        )}
+
+        {lookupMode === "hashlist" && (
+          <div className="space-y-2">
+            <Label htmlFor="batch-hashlist">Mint Addresses (JSON Array)</Label>
+            <Textarea
+              id="batch-hashlist"
+              placeholder='["mintAddress1", "mintAddress2", ...]'
+              value={hashlistInput}
+              onChange={(e) => {
+                setHashlistInput(e.target.value)
+                setHashlistError(null)
+                setLoadError(null)
+              }}
+              className={cn("font-mono text-sm min-h-[120px]", hashlistError && "border-destructive")}
+            />
+            {hashlistError && <p className="text-sm text-destructive">{hashlistError}</p>}
+          </div>
+        )}
+
+        {loadError && lookupMode !== "hashlist" && <p className="text-sm text-destructive">{loadError}</p>}
+
+        <div className="flex gap-3">
+          <Button onClick={handleLookup} disabled={isLoading} className="gap-2">
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <Search className="h-4 w-4" />
+                Lookup NFTs
+              </>
+            )}
+          </Button>
+          {(addressInput || hashlistInput || loadedNfts.length > 0) && (
+            <Button variant="outline" onClick={handleClear} disabled={isLoading}>
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
+
+      {loadedNfts.length > 0 && (
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <span className="font-medium">NFTs Loaded</span>
+            </div>
+            <span className="text-2xl font-bold text-primary">{loadedNfts.length.toLocaleString()}</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Found {loadedNfts.length.toLocaleString()} NFT{loadedNfts.length !== 1 ? "s" : ""}.
+            {!account && " Connect your wallet to perform batch operations."}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
