@@ -579,3 +579,27 @@
   - toast.loading with id allows updating same toast during progress
 ---
 
+## 2026-01-27 - US-025
+- Implemented GlobalUpdatesSection component for batch royalties/creators update
+- Created expandable accordion section with Percent icon
+- Added royalties slider (0-100%, step 0.5) matching Create form pattern
+- Added dynamic creators list with add/remove buttons
+- Auto-populates connected wallet as first creator with 100% share
+- Validation: shares must sum to 100%, addresses must be valid Solana public keys
+- Warning message about overwriting existing configurations
+- Only enabled when user is update authority of filtered NFTs
+- Uses mplCore.getUpdatePluginV1Instruction to update Royalties plugin on Core Assets
+- Batch execution with progress tracking (completed/total/failed)
+- Handles partial failures gracefully
+- Refreshes NFT list on completion
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added GlobalUpdatesSection component, Percent icon import)
+- **Learnings for future iterations:**
+  - For Core Assets, royalties are stored as a plugin - use getUpdatePluginV1Instruction to update
+  - PluginArgs fields must be typed as tuple with `as const`: `fields: [royaltiesData] as const`
+  - RoyaltiesArgs: { basisPoints: number, creators: Array<{ address: Address, percentage: number }>, ruleSet: RuleSetArgs }
+  - Creator percentage is u8 (0-100), not basis points
+  - Reuse patterns from CollectionAssignmentSection for accordion UI and batch processing
+  - Same validateCreators pattern can be extracted as shared utility if needed
+---
+
