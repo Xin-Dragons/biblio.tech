@@ -137,3 +137,39 @@
   - MAX_MULTIMEDIA_SIZE_MB set to 100MB (larger than images for video/audio)
 ---
 
+## 2026-01-27 - US-007
+- Implemented royalties and creators configuration section in Create tab
+- Added royalties slider (0-100%, step 0.5) with percentage display
+- Added dynamic creator list with add/remove buttons
+- Each creator row: address field (validated) + share percentage field (0-100)
+- Connected wallet auto-populated as first creator with 100% share on component mount
+- Validation: shares must sum to exactly 100% (error shown if not)
+- Validation: addresses must be valid Solana public keys (32-44 chars base58)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added Creator interface, validation functions, RoyaltiesCreatorsSection component)
+- **Learnings for future iterations:**
+  - useWallet() from @solana/connector/react provides account (wallet address as string)
+  - Auto-populate creators on mount using useEffect that checks account and creators.length
+  - Solana address validation: 32-44 chars, base58 character set only
+  - Range input for sliders with step=0.5, accent-primary for styling
+  - Creator validation is separate from text field validation (validateCreators function)
+  - Error display for creators: global errors.creators message + per-index creatorAddresses/creatorShares
+  - TextFormField type must exclude non-string form fields (royaltiesPercent, creators)
+---
+
+## 2026-01-27 - US-008
+- Implemented attributes/traits editor section in Create tab
+- Added Attribute interface with traitType and value fields
+- Dynamic attribute list with add/remove buttons
+- Each row: trait_type input, value input, remove button (when >1 row)
+- Always keeps at least one empty row for adding new attributes
+- Add button in section header, remove buttons on individual rows
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added Attribute interface, attributes to form state, handlers, AttributesSection component)
+- **Learnings for future iterations:**
+  - Same pattern as creators: array in state with add/remove handlers
+  - When removing last item, ensure array doesn't become empty (reset to one empty item)
+  - TextFormField type must exclude array fields like attributes
+  - Empty attributes (no traitType) should be filtered out before use in metadata upload
+---
+

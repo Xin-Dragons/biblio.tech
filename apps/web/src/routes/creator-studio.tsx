@@ -1,7 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
 import { useWallet } from "@solana/connector/react"
-import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X, Film, Music, Trash2 } from "lucide-react"
+import {
+  Hammer,
+  Plus,
+  Pencil,
+  Layers,
+  Box,
+  Shield,
+  Sparkles,
+  ImagePlus,
+  X,
+  Film,
+  Music,
+  Trash2,
+  FolderOpen,
+} from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,6 +49,7 @@ interface CreateFormState {
   royaltiesPercent: number
   creators: Creator[]
   attributes: Attribute[]
+  collectionAddress: string
 }
 
 interface CreateFormErrors {
@@ -48,11 +63,18 @@ interface CreateFormErrors {
   creators?: string
   creatorAddresses?: Record<number, string>
   creatorShares?: Record<number, string>
+  collectionAddress?: string
 }
 
 type TextFormField = Exclude<
   keyof CreateFormState,
-  "imageFile" | "multimediaFile" | "multimediaCategory" | "royaltiesPercent" | "creators" | "attributes"
+  | "imageFile"
+  | "multimediaFile"
+  | "multimediaCategory"
+  | "royaltiesPercent"
+  | "creators"
+  | "attributes"
+  | "collectionAddress"
 >
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
@@ -287,6 +309,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     royaltiesPercent: 5,
     creators: [],
     attributes: [{ traitType: "", value: "" }],
+    collectionAddress: "",
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -301,6 +324,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     royaltiesPercent: false,
     creators: false,
     attributes: false,
+    collectionAddress: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -528,6 +552,26 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     setTouched((prev) => ({ ...prev, attributes: true }))
   }, [])
 
+  const handleCollectionAddressChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      setForm((prev) => ({ ...prev, collectionAddress: value }))
+
+      if (touched.collectionAddress) {
+        const error = value && !isValidSolanaAddress(value) ? "Invalid Solana address" : undefined
+        setErrors((prev) => ({ ...prev, collectionAddress: error }))
+      }
+    },
+    [touched.collectionAddress]
+  )
+
+  const handleCollectionAddressBlur = useCallback(() => {
+    setTouched((prev) => ({ ...prev, collectionAddress: true }))
+    const error =
+      form.collectionAddress && !isValidSolanaAddress(form.collectionAddress) ? "Invalid Solana address" : undefined
+    setErrors((prev) => ({ ...prev, collectionAddress: error }))
+  }, [form.collectionAddress])
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -694,6 +738,13 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
           onAttributeChange={handleAttributeChange}
           onAddAttribute={handleAddAttribute}
           onRemoveAttribute={handleRemoveAttribute}
+        />
+
+        <CollectionSection
+          collectionAddress={form.collectionAddress}
+          error={errors.collectionAddress}
+          onChange={handleCollectionAddressChange}
+          onBlur={handleCollectionAddressBlur}
         />
       </div>
     </div>
@@ -862,6 +913,42 @@ function AttributesSection({
 
         <p className="text-xs text-muted-foreground">
           Add traits to describe your NFT. Attributes with empty trait types will be excluded.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+interface CollectionSectionProps {
+  collectionAddress: string
+  error?: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onBlur: () => void
+}
+
+function CollectionSection({ collectionAddress, error, onChange, onBlur }: CollectionSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="space-y-2">
+        <Label className={cn(error && "text-destructive")}>Collection</Label>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <Input
+              value={collectionAddress}
+              onChange={onChange}
+              onBlur={onBlur}
+              placeholder="Collection address (optional)"
+              error={!!error}
+            />
+          </div>
+          <Button type="button" variant="outline" className="shrink-0" disabled>
+            <FolderOpen className="h-4 w-4 mr-2" />
+            Choose Collection
+          </Button>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <p className="text-xs text-muted-foreground">
+          Optionally assign this NFT to a collection. Leave empty to create a standalone NFT.
         </p>
       </div>
     </div>
