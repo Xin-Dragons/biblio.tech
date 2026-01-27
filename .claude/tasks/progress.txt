@@ -286,3 +286,56 @@
   - Convert JSON string to Buffer for upload: Buffer.from(JSON.stringify(metadata), "utf-8")
 ---
 
+## 2026-01-27 - US-015
+- Implemented Create NFT form submission flow with progress tracking
+- Added UploadStep type for tracking upload state: idle, uploading-image, uploading-multimedia, uploading-metadata, complete
+- Added UploadedUris interface to store uploaded image, multimedia, and metadata URIs
+- Implemented validateForm() for comprehensive form validation before submission
+- Implemented isFormValid() for button disabled state checking
+- Implemented handleSubmit() async handler with:
+  - Wallet connection checks
+  - Toast notifications for each upload step (loading/success/error)
+  - Sequential uploads: image → multimedia (if present) → metadata
+  - Retry action on error toast
+- Added Create NFT button with loading spinner and dynamic text
+- Shows metadata URI after successful upload
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added submission flow, imports, state, handlers)
+- **Learnings for future iterations:**
+  - useTransactionSigner() from @solana/connector/react provides signer and capabilities
+  - Toast from sonner: toast.loading(msg, {id}) updates same toast, toast.success/error can override
+  - Toast action: { label: string, onClick: () => void } for retry buttons
+  - ConnectorSigner interface: { signMessage?: (message: Uint8Array) => Promise<Uint8Array> }
+  - Adapter pattern: signer.signMessage?.bind(signer) to preserve context
+  - seller_fee_basis_points is royalties * 100 (e.g., 5% = 500 basis points)
+  - Button disabled state should check isFormValid() AND isSubmitting AND account connection
+---
+
+## 2026-01-27 - US-016
+- Implemented Core Asset create transaction using mpl-core Kinobi client
+- Added mintCoreAsset function that:
+  - Generates new keypair for asset mint address using generateKeyPairSigner()
+  - Constructs createV1 instruction with name, uri, owner, updateAuthority
+  - Configures Royalties plugin with creator splits (if not collection NFT)
+  - Uses prepareAndSendTransaction from lib/transaction.ts
+- Added "minting" step to UploadStep type
+- Added MintResult interface with mintAddress and signature
+- Added success dialog with:
+  - Mint address display with copy button
+  - Transaction signature display with copy button
+  - Links to Solscan for token and transaction views
+  - "Create Another NFT" button that resets form
+- Added resetForm() function to clear all form state after successful mint
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added minting flow, success dialog, form reset)
+- **Learnings for future iterations:**
+  - generateKeyPairSigner() from @solana/kit creates new keypair for asset address
+  - mplCore.getCreateV1Instruction() from @biblio/solana-programs for Core Asset creation
+  - Plugin format: { plugin: { __kind: "Royalties", fields: [...] }, authority: null }
+  - RuleSet for royalties uses { __kind: "None" } when no specific rule set needed
+  - Creator percentage is stored as u8 (0-100), not basis points like royalties
+  - TransactionSigner type mismatch between connector and kit - use `as unknown as TransactionSigner`
+  - Button component doesn't have asChild prop - use styled anchor tags for links
+  - URL.revokeObjectURL must be called for both image and multimedia previews in resetForm
+---
+
