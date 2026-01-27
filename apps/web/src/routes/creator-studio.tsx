@@ -1,7 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
-import { generateKeyPairSigner, type Address, type TransactionSigner } from "@solana/kit"
+import {
+  generateKeyPairSigner,
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  type Address,
+  type TransactionSigner,
+  type Instruction,
+} from "@solana/kit"
+import { getCreateAccountInstruction } from "@solana-program/system"
+import { getInitializeMint2Instruction, TOKEN_PROGRAM_ADDRESS, findAssociatedTokenPda } from "@solana-program/token"
 import { toast } from "sonner"
 import {
   Hammer,
@@ -47,7 +56,7 @@ import {
   type MultimediaCategory as IrysMultimediaCategory,
 } from "@/lib/irys"
 import { prepareAndSendTransaction } from "@/lib/transaction"
-import { mplCore } from "@biblio/solana-programs"
+import { mplCore, tokenMetadata } from "@biblio/solana-programs"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
@@ -59,6 +68,47 @@ const RULE_SET_ADDRESSES = {
   metaplex: "eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9",
   compatibility: "AdH2Utn6Fus15ZhtenW4hZBQnvtLgM1YCW2MfVp7pYS5",
 } as const
+
+const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
+const AUTH_RULES_PROGRAM_ADDRESS = "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg" as Address
+
+const MINT_ACCOUNT_SIZE = 82
+const MINT_RENT_LAMPORTS = 1461600
+
+async function getMetadataPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: ["metadata", getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS), getAddressEncoder().encode(mint)],
+  })
+  return pda
+}
+
+async function getMasterEditionPda(mint: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "edition",
+    ],
+  })
+  return pda
+}
+
+async function getTokenRecordPda(mint: Address, tokenAccount: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: TOKEN_METADATA_PROGRAM_ADDRESS,
+    seeds: [
+      "metadata",
+      getAddressEncoder().encode(TOKEN_METADATA_PROGRAM_ADDRESS),
+      getAddressEncoder().encode(mint),
+      "token_record",
+      getAddressEncoder().encode(tokenAccount),
+    ],
+  })
+  return pda
+}
 
 interface Creator {
   address: string
@@ -428,6 +478,139 @@ async function mintCoreAsset({
 
   return {
     mintAddress: assetSigner.address,
+    signature,
+  }
+}
+
+interface MintPnftOptions {
+  name: string
+  symbol: string
+  uri: string
+  sellerFeeBasisPoints: number
+  creators: Array<{ address: Address; verified: boolean; share: number }>
+  collectionAddress?: string
+  ruleSetOption: RuleSetOption
+  customRuleSetAddress?: string
+  isMutable: boolean
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function mintPnft({
+  name,
+  symbol,
+  uri,
+  sellerFeeBasisPoints,
+  creators,
+  collectionAddress,
+  ruleSetOption,
+  customRuleSetAddress,
+  isMutable,
+  isCollectionNft,
+  feePayer,
+  account,
+}: MintPnftOptions): Promise<MintResult> {
+  const mintSigner = await generateKeyPairSigner()
+  const mintAddress = mintSigner.address
+
+  const metadata = await getMetadataPda(mintAddress)
+  const masterEdition = await getMasterEditionPda(mintAddress)
+
+  const [ata] = await findAssociatedTokenPda({
+    mint: mintAddress,
+    owner: account as Address,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
+  })
+  const tokenRecord = await getTokenRecordPda(mintAddress, ata)
+
+  let ruleSetAddress: Address | null = null
+  if (ruleSetOption === "metaplex") {
+    ruleSetAddress = RULE_SET_ADDRESSES.metaplex as Address
+  } else if (ruleSetOption === "compatibility") {
+    ruleSetAddress = RULE_SET_ADDRESSES.compatibility as Address
+  } else if (ruleSetOption === "custom" && customRuleSetAddress) {
+    ruleSetAddress = customRuleSetAddress as Address
+  }
+
+  const instructions: Instruction[] = []
+
+  const createAccountIx = getCreateAccountInstruction({
+    payer: feePayer,
+    newAccount: mintSigner,
+    lamports: BigInt(MINT_RENT_LAMPORTS),
+    space: BigInt(MINT_ACCOUNT_SIZE),
+    programAddress: TOKEN_PROGRAM_ADDRESS,
+  })
+  instructions.push(createAccountIx)
+
+  const initMintIx = getInitializeMint2Instruction({
+    mint: mintAddress,
+    decimals: 0,
+    mintAuthority: account as Address,
+    freezeAuthority: account as Address,
+  })
+  instructions.push(initMintIx)
+
+  const createMetadataIx = tokenMetadata.getCreateInstruction({
+    metadata,
+    masterEdition,
+    mint: mintAddress,
+    authority: feePayer,
+    payer: feePayer,
+    updateAuthority: account as Address,
+    splTokenProgram: TOKEN_PROGRAM_ADDRESS,
+    createArgs: {
+      __kind: "V1",
+      assetData: {
+        name,
+        symbol,
+        uri,
+        sellerFeeBasisPoints,
+        creators: isCollectionNft ? null : creators,
+        primarySaleHappened: false,
+        isMutable,
+        tokenStandard: tokenMetadata.TokenStandard.ProgrammableNonFungible,
+        collection: collectionAddress ? { key: collectionAddress as Address, verified: false } : null,
+        uses: null,
+        collectionDetails: isCollectionNft ? { __kind: "V1", size: BigInt(0) } : null,
+        ruleSet: ruleSetAddress,
+      },
+      decimals: 0,
+      printSupply: { __kind: "Zero" },
+    },
+  })
+  instructions.push(createMetadataIx)
+
+  const mintIx = tokenMetadata.getMintInstruction({
+    token: ata,
+    tokenOwner: account as Address,
+    metadata,
+    masterEdition,
+    tokenRecord,
+    mint: mintAddress,
+    authority: feePayer,
+    payer: feePayer,
+    splTokenProgram: TOKEN_PROGRAM_ADDRESS,
+    mintArgs: {
+      __kind: "V1",
+      amount: 1,
+      authorizationData: null,
+    },
+    ...(ruleSetAddress && {
+      authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+      authorizationRules: ruleSetAddress,
+    }),
+  })
+  instructions.push(mintIx)
+
+  const signature = await prepareAndSendTransaction({
+    instructions,
+    feePayer,
+  })
+
+  return {
+    mintAddress,
     signature,
   }
 }
@@ -967,7 +1150,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       const metadataResult = await uploadJsonMetadata(metadataInput, account, connectorSigner)
       setUploadedUris((prev) => ({ ...prev, metadataUri: metadataResult.uri }))
 
-      if (standard !== "core") {
+      if (standard === "nifty") {
         setUploadStep("complete")
         toast.success("Files uploaded successfully! Ready to mint.", { id: "upload-progress" })
         return
@@ -976,21 +1159,46 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       setUploadStep("minting")
       toast.loading("Minting NFT...", { id: "upload-progress" })
 
-      const result = await mintCoreAsset({
-        name: form.name,
-        uri: metadataResult.uri,
-        collectionAddress: form.collectionAddress || undefined,
-        royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
-        creators: form.isCollectionNft
-          ? []
-          : form.creators.map((c) => ({
-              address: c.address as Address,
-              percentage: c.share,
-            })),
-        isCollectionNft: form.isCollectionNft,
-        feePayer: signer as unknown as TransactionSigner,
-        account,
-      })
+      let result: MintResult
+
+      if (standard === "core") {
+        result = await mintCoreAsset({
+          name: form.name,
+          uri: metadataResult.uri,
+          collectionAddress: form.collectionAddress || undefined,
+          royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
+          creators: form.isCollectionNft
+            ? []
+            : form.creators.map((c) => ({
+                address: c.address as Address,
+                percentage: c.share,
+              })),
+          isCollectionNft: form.isCollectionNft,
+          feePayer: signer as unknown as TransactionSigner,
+          account,
+        })
+      } else {
+        result = await mintPnft({
+          name: form.name,
+          symbol: form.symbol,
+          uri: metadataResult.uri,
+          sellerFeeBasisPoints: form.isCollectionNft ? 0 : Math.round(form.royaltiesPercent * 100),
+          creators: form.isCollectionNft
+            ? []
+            : form.creators.map((c) => ({
+                address: c.address as Address,
+                verified: c.address === account,
+                share: c.share,
+              })),
+          collectionAddress: form.collectionAddress || undefined,
+          ruleSetOption: form.ruleSetOption,
+          customRuleSetAddress: form.customRuleSetAddress || undefined,
+          isMutable: form.isMutable,
+          isCollectionNft: form.isCollectionNft,
+          feePayer: signer as unknown as TransactionSigner,
+          account,
+        })
+      }
 
       setMintResult(result)
       setUploadStep("complete")
@@ -1303,7 +1511,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             {getSubmitButtonText()}
           </Button>
           {!account && <p className="text-sm text-muted-foreground text-center mt-2">Connect wallet to create NFT</p>}
-          {uploadStep === "complete" && uploadedUris.metadataUri && !mintResult && standard !== "core" && (
+          {uploadStep === "complete" && uploadedUris.metadataUri && !mintResult && standard === "nifty" && (
             <div className="mt-4 rounded-lg bg-primary/10 p-4">
               <p className="text-sm font-medium text-primary mb-2">Metadata uploaded successfully!</p>
               <p className="text-xs text-muted-foreground break-all">URI: {uploadedUris.metadataUri}</p>
@@ -1319,7 +1527,9 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
               <CheckCircle2 className="h-5 w-5 text-green-500" />
               NFT Created Successfully!
             </DialogTitle>
-            <DialogDescription>Your Core Asset NFT has been minted on Solana.</DialogDescription>
+            <DialogDescription>
+              Your {standard === "core" ? "Core Asset" : "pNFT"} has been minted on Solana.
+            </DialogDescription>
           </DialogHeader>
 
           {mintResult && (
