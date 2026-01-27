@@ -3,12 +3,14 @@ import { useSearchParams } from "react-router"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
 import {
   generateKeyPairSigner,
+  createKeyPairSignerFromBytes,
   getProgramDerivedAddress,
   getAddressEncoder,
   getAddressDecoder,
   type Address,
   type TransactionSigner,
   type Instruction,
+  type KeyPairSigner,
 } from "@solana/kit"
 import { getCreateAccountInstruction } from "@solana-program/system"
 import { getInitializeMint2Instruction, TOKEN_PROGRAM_ADDRESS, findAssociatedTokenPda } from "@solana-program/token"
@@ -43,6 +45,9 @@ import {
   Percent,
   UserCheck,
   UserX,
+  RefreshCw,
+  Upload,
+  Key,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -162,6 +167,7 @@ interface CreateFormState {
   createManyQuantity: number
   ruleSetOption: RuleSetOption
   customRuleSetAddress: string
+  customKeypair: KeyPairSigner | null
 }
 
 interface CreateFormErrors {
@@ -177,6 +183,7 @@ interface CreateFormErrors {
   creatorShares?: Record<number, string>
   collectionAddress?: string
   customRuleSetAddress?: string
+  customKeypair?: string
 }
 
 type TextFormField = Exclude<
@@ -194,6 +201,7 @@ type TextFormField = Exclude<
   | "createManyQuantity"
   | "ruleSetOption"
   | "customRuleSetAddress"
+  | "customKeypair"
 >
 
 type UploadStep =
@@ -957,6 +965,7 @@ interface MintCoreAssetOptions {
   isCollectionNft: boolean
   feePayer: TransactionSigner
   account: string
+  customKeypair?: KeyPairSigner | null
 }
 
 async function mintCoreAsset({
@@ -968,8 +977,9 @@ async function mintCoreAsset({
   isCollectionNft,
   feePayer,
   account,
+  customKeypair,
 }: MintCoreAssetOptions): Promise<MintResult> {
-  const assetSigner = await generateKeyPairSigner()
+  const assetSigner = customKeypair ?? (await generateKeyPairSigner())
 
   const plugins: mplCore.PluginAuthorityPairArgs[] = []
 
@@ -1025,6 +1035,7 @@ interface MintPnftOptions {
   isCollectionNft: boolean
   feePayer: TransactionSigner
   account: string
+  customKeypair?: KeyPairSigner | null
 }
 
 async function mintPnft({
@@ -1040,8 +1051,9 @@ async function mintPnft({
   isCollectionNft,
   feePayer,
   account,
+  customKeypair,
 }: MintPnftOptions): Promise<MintResult> {
-  const mintSigner = await generateKeyPairSigner()
+  const mintSigner = customKeypair ?? (await generateKeyPairSigner())
   const mintAddress = mintSigner.address
 
   const metadata = await getMetadataPda(mintAddress)
@@ -1204,6 +1216,7 @@ interface MintNiftyAssetOptions {
   isCollectionNft: boolean
   feePayer: TransactionSigner
   account: string
+  customKeypair?: KeyPairSigner | null
 }
 
 async function mintNiftyAsset({
@@ -1217,8 +1230,9 @@ async function mintNiftyAsset({
   isCollectionNft,
   feePayer,
   account,
+  customKeypair,
 }: MintNiftyAssetOptions): Promise<MintResult> {
-  const assetSigner = await generateKeyPairSigner()
+  const assetSigner = customKeypair ?? (await generateKeyPairSigner())
 
   const extensions: asset.ExtensionInputArgs[] = []
 
@@ -1752,6 +1766,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     createManyQuantity: 10,
     ruleSetOption: "metaplex",
     customRuleSetAddress: "",
+    customKeypair: null,
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -1773,12 +1788,15 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     createManyQuantity: false,
     ruleSetOption: false,
     customRuleSetAddress: false,
+    customKeypair: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [multimediaPreviewUrl, setMultimediaPreviewUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const multimediaInputRef = useRef<HTMLInputElement>(null)
+  const keypairInputRef = useRef<HTMLInputElement>(null)
+  const [isValidatingKeypair, setIsValidatingKeypair] = useState(false)
 
   const [uploadStep, setUploadStep] = useState<UploadStep>("idle")
   const [, setUploadedUris] = useState<UploadedUris>({
@@ -2110,6 +2128,114 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     setErrors((prev) => ({ ...prev, customRuleSetAddress: error }))
   }, [form.customRuleSetAddress])
 
+  const checkAccountExists = useCallback(async (address: string): Promise<boolean> => {
+    try {
+      const accountInfo = await rpcRequest<{ value: { data: string } | null }>("getAccountInfo", [
+        address,
+        { encoding: "base64" },
+      ])
+      return accountInfo.value !== null
+    } catch {
+      return false
+    }
+  }, [])
+
+  const handleGenerateKeypair = useCallback(async () => {
+    setIsValidatingKeypair(true)
+    setErrors((prev) => ({ ...prev, customKeypair: undefined }))
+    try {
+      const newKeypair = await generateKeyPairSigner()
+
+      const exists = await checkAccountExists(newKeypair.address)
+      if (exists) {
+        setErrors((prev) => ({
+          ...prev,
+          customKeypair: "Generated address already exists. Click Respin to try again.",
+        }))
+        setIsValidatingKeypair(false)
+        return
+      }
+
+      setForm((prev) => ({ ...prev, customKeypair: newKeypair }))
+      setTouched((prev) => ({ ...prev, customKeypair: true }))
+    } catch (err) {
+      console.error("Failed to generate keypair:", err)
+      setErrors((prev) => ({ ...prev, customKeypair: "Failed to generate keypair" }))
+    }
+    setIsValidatingKeypair(false)
+  }, [checkAccountExists])
+
+  const handleUploadKeypair = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      setIsValidatingKeypair(true)
+      setErrors((prev) => ({ ...prev, customKeypair: undefined }))
+
+      try {
+        const text = await file.text()
+        const keypairArray = JSON.parse(text)
+
+        if (!Array.isArray(keypairArray)) {
+          setErrors((prev) => ({ ...prev, customKeypair: "Invalid keypair format. Expected a JSON array of bytes." }))
+          setIsValidatingKeypair(false)
+          return
+        }
+
+        if (keypairArray.length !== 64) {
+          setErrors((prev) => ({
+            ...prev,
+            customKeypair: `Invalid keypair length. Expected 64 bytes, got ${keypairArray.length}.`,
+          }))
+          setIsValidatingKeypair(false)
+          return
+        }
+
+        const bytes = new Uint8Array(keypairArray)
+        const keypairSigner = await createKeyPairSignerFromBytes(bytes)
+
+        const exists = await checkAccountExists(keypairSigner.address)
+        if (exists) {
+          setErrors((prev) => ({
+            ...prev,
+            customKeypair: "This keypair has already been used. The account already exists on-chain.",
+          }))
+          setIsValidatingKeypair(false)
+          return
+        }
+
+        setForm((prev) => ({ ...prev, customKeypair: keypairSigner }))
+        setTouched((prev) => ({ ...prev, customKeypair: true }))
+      } catch (err) {
+        console.error("Failed to parse keypair:", err)
+        if (err instanceof SyntaxError) {
+          setErrors((prev) => ({
+            ...prev,
+            customKeypair: "Invalid JSON format. Please upload a valid keypair JSON file.",
+          }))
+        } else {
+          setErrors((prev) => ({ ...prev, customKeypair: "Failed to parse keypair. Please check the file format." }))
+        }
+      }
+
+      setIsValidatingKeypair(false)
+      if (keypairInputRef.current) {
+        keypairInputRef.current.value = ""
+      }
+    },
+    [checkAccountExists]
+  )
+
+  const handleClearKeypair = useCallback(() => {
+    setForm((prev) => ({ ...prev, customKeypair: null }))
+    setErrors((prev) => ({ ...prev, customKeypair: undefined }))
+    setTouched((prev) => ({ ...prev, customKeypair: false }))
+    if (keypairInputRef.current) {
+      keypairInputRef.current.value = ""
+    }
+  }, [])
+
   const validateForm = useCallback((): boolean => {
     const newErrors: CreateFormErrors = {}
     let isValid = true
@@ -2187,6 +2313,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       createManyQuantity: true,
       ruleSetOption: true,
       customRuleSetAddress: true,
+      customKeypair: true,
     })
 
     return isValid
@@ -2415,6 +2542,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             isCollectionNft: form.isCollectionNft,
             feePayer: signer as unknown as TransactionSigner,
             account,
+            customKeypair: form.customKeypair,
           })
         } else if (standard === "pnft") {
           result = await mintPnft({
@@ -2436,6 +2564,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             isCollectionNft: form.isCollectionNft,
             feePayer: signer as unknown as TransactionSigner,
             account,
+            customKeypair: form.customKeypair,
           })
         } else {
           result = await mintNiftyAsset({
@@ -2449,6 +2578,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             isCollectionNft: form.isCollectionNft,
             feePayer: signer as unknown as TransactionSigner,
             account,
+            customKeypair: form.customKeypair,
           })
         }
 
@@ -2516,6 +2646,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       createManyQuantity: 10,
       ruleSetOption: "metaplex",
       customRuleSetAddress: "",
+      customKeypair: null,
     })
     setErrors({})
     setTouched({
@@ -2536,6 +2667,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       createManyQuantity: false,
       ruleSetOption: false,
       customRuleSetAddress: false,
+      customKeypair: false,
     })
     if (imagePreviewUrl) {
       URL.revokeObjectURL(imagePreviewUrl)
@@ -2550,6 +2682,9 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     }
     if (multimediaInputRef.current) {
       multimediaInputRef.current.value = ""
+    }
+    if (keypairInputRef.current) {
+      keypairInputRef.current.value = ""
     }
     setUploadStep("idle")
     setUploadedUris({ imageUri: null, multimediaUri: null, metadataUri: null })
@@ -2766,6 +2901,18 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
             onRuleSetOptionChange={handleRuleSetOptionChange}
             onCustomAddressChange={handleCustomRuleSetAddressChange}
             onCustomAddressBlur={handleCustomRuleSetAddressBlur}
+          />
+        )}
+
+        {!form.isCreateMany && (
+          <CustomKeypairSection
+            customKeypair={form.customKeypair}
+            error={errors.customKeypair}
+            isValidating={isValidatingKeypair}
+            onGenerate={handleGenerateKeypair}
+            onUpload={handleUploadKeypair}
+            onClear={handleClearKeypair}
+            inputRef={keypairInputRef}
           />
         )}
 
@@ -3352,6 +3499,91 @@ function RuleSetSection({
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+interface CustomKeypairSectionProps {
+  customKeypair: KeyPairSigner | null
+  error?: string
+  isValidating: boolean
+  onGenerate: () => void
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onClear: () => void
+  inputRef: React.RefObject<HTMLInputElement>
+}
+
+function CustomKeypairSection({
+  customKeypair,
+  error,
+  isValidating,
+  onGenerate,
+  onUpload,
+  onClear,
+  inputRef,
+}: CustomKeypairSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="space-y-1">
+        <Label className="flex items-center gap-2">
+          <Key className="h-4 w-4" />
+          Token Address
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Customize the mint address with a vanity keypair or use a random one
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Input
+            value={customKeypair?.address ?? "Generate or upload a keypair"}
+            readOnly
+            className={cn("flex-1 font-mono text-sm", !customKeypair && "text-muted-foreground italic")}
+          />
+          {customKeypair && (
+            <Button type="button" variant="ghost" size="icon" onClick={onClear} className="shrink-0">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onGenerate}
+            disabled={isValidating}
+            className="flex-1"
+          >
+            {isValidating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Respin
+          </Button>
+
+          <input ref={inputRef} type="file" accept=".json" onChange={onUpload} className="hidden" />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={isValidating}
+            className="flex-1"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Keypair
+          </Button>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {customKeypair && !error && (
+          <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-2 text-green-600 text-xs">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>Keypair validated. Account does not exist on-chain.</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
