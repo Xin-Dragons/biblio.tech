@@ -1,10 +1,11 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
-import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles } from "lucide-react"
+import { Hammer, Plus, Pencil, Layers, Box, Shield, Sparkles, ImagePlus, X } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type TabValue = "create" | "update" | "batch"
@@ -15,6 +16,7 @@ interface CreateFormState {
   symbol: string
   description: string
   externalUrl: string
+  imageFile: File | null
 }
 
 interface CreateFormErrors {
@@ -22,7 +24,15 @@ interface CreateFormErrors {
   symbol?: string
   description?: string
   externalUrl?: string
+  imageFile?: string
 }
+
+type TextFormField = Exclude<keyof CreateFormState, "imageFile">
+
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
+const ACCEPTED_IMAGE_EXTENSIONS = ".jpg,.jpeg,.png,.gif"
+const MAX_IMAGE_SIZE_MB = 20
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 
 const MAX_NAME_LENGTH = 32
 const MAX_SYMBOL_LENGTH = 10
@@ -180,6 +190,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     symbol: "",
     description: "",
     externalUrl: "",
+    imageFile: null,
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -188,9 +199,13 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     symbol: false,
     description: false,
     externalUrl: false,
+    imageFile: false,
   })
 
-  const validateField = useCallback((field: keyof CreateFormState, value: string): string | undefined => {
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const validateField = useCallback((field: TextFormField, value: string): string | undefined => {
     switch (field) {
       case "name":
         if (!value.trim()) return "Name is required"
@@ -211,8 +226,61 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     }
   }, [])
 
+  const validateImageFile = useCallback((file: File): string | undefined => {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      return "Please select a valid image file (JPG, PNG, or GIF)"
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      return `Image must be ${MAX_IMAGE_SIZE_MB}MB or less`
+    }
+    return undefined
+  }, [])
+
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      const error = validateImageFile(file)
+      if (error) {
+        setErrors((prev) => ({ ...prev, imageFile: error }))
+        setTouched((prev) => ({ ...prev, imageFile: true }))
+        e.target.value = ""
+        return
+      }
+
+      setForm((prev) => ({ ...prev, imageFile: file }))
+      setErrors((prev) => ({ ...prev, imageFile: undefined }))
+      setTouched((prev) => ({ ...prev, imageFile: true }))
+
+      const objectUrl = URL.createObjectURL(file)
+      setImagePreviewUrl(objectUrl)
+    },
+    [validateImageFile]
+  )
+
+  const handleImageClear = useCallback(() => {
+    setForm((prev) => ({ ...prev, imageFile: null }))
+    setErrors((prev) => ({ ...prev, imageFile: undefined }))
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl)
+      setImagePreviewUrl(null)
+    }
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ""
+    }
+  }, [imagePreviewUrl])
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl)
+      }
+    }
+  }, [imagePreviewUrl])
+
   const handleChange = useCallback(
-    (field: keyof CreateFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (field: TextFormField) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const value = e.target.value
       setForm((prev) => ({ ...prev, [field]: value }))
 
@@ -224,7 +292,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
   )
 
   const handleBlur = useCallback(
-    (field: keyof CreateFormState) => () => {
+    (field: TextFormField) => () => {
       setTouched((prev) => ({ ...prev, [field]: true }))
       setErrors((prev) => ({ ...prev, [field]: validateField(field, form[field]) }))
     },
@@ -288,6 +356,50 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
             placeholder="https://example.com"
             error={!!errors.externalUrl}
           />
+        </FormField>
+
+        <FormField label="Image" required error={errors.imageFile}>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept={ACCEPTED_IMAGE_EXTENSIONS}
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+          {form.imageFile && imagePreviewUrl ? (
+            <div className="flex items-start gap-4 rounded-lg border bg-muted/30 p-4">
+              <img src={imagePreviewUrl} alt="Preview" className="h-24 w-24 rounded-lg object-cover border" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{form.imageFile.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(form.imageFile.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={handleImageClear}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-24 border-dashed"
+              onClick={() => imageInputRef.current?.click()}
+            >
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <ImagePlus className="h-8 w-8" />
+                <span>Select Image</span>
+                <span className="text-xs">JPG, PNG, or GIF (max {MAX_IMAGE_SIZE_MB}MB)</span>
+              </div>
+            </Button>
+          )}
         </FormField>
       </div>
     </div>
