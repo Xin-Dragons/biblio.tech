@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useSearchParams } from "react-router"
 import { useWallet, useTransactionSigner } from "@solana/connector/react"
+import { generateKeyPairSigner, type Address, type TransactionSigner } from "@solana/kit"
 import { toast } from "sonner"
 import {
   Hammer,
@@ -19,6 +20,9 @@ import {
   AlertTriangle,
   ImageIcon,
   Loader2,
+  CheckCircle2,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -26,6 +30,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import {
   uploadToIrys,
@@ -34,6 +46,8 @@ import {
   type NftMetadataInput,
   type MultimediaCategory as IrysMultimediaCategory,
 } from "@/lib/irys"
+import { prepareAndSendTransaction } from "@/lib/transaction"
+import { mplCore } from "@biblio/solana-programs"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
@@ -104,7 +118,12 @@ type TextFormField = Exclude<
   | "customRuleSetAddress"
 >
 
-type UploadStep = "idle" | "uploading-image" | "uploading-multimedia" | "uploading-metadata" | "complete"
+type UploadStep = "idle" | "uploading-image" | "uploading-multimedia" | "uploading-metadata" | "minting" | "complete"
+
+interface MintResult {
+  mintAddress: string
+  signature: string
+}
 
 interface UploadedUris {
   imageUri: string | null
@@ -349,6 +368,70 @@ function AssetStandardSelector({ value, onChange }: AssetStandardSelectorProps) 
   )
 }
 
+interface MintCoreAssetOptions {
+  name: string
+  uri: string
+  collectionAddress?: string
+  royaltiesPercent: number
+  creators: Array<{ address: Address; percentage: number }>
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function mintCoreAsset({
+  name,
+  uri,
+  collectionAddress,
+  royaltiesPercent,
+  creators,
+  isCollectionNft,
+  feePayer,
+  account,
+}: MintCoreAssetOptions): Promise<MintResult> {
+  const assetSigner = await generateKeyPairSigner()
+
+  const plugins: mplCore.PluginAuthorityPairArgs[] = []
+
+  if (!isCollectionNft && royaltiesPercent > 0 && creators.length > 0) {
+    plugins.push({
+      plugin: {
+        __kind: "Royalties",
+        fields: [
+          {
+            basisPoints: Math.round(royaltiesPercent * 100),
+            creators: creators,
+            ruleSet: { __kind: "None" },
+          },
+        ],
+      },
+      authority: null,
+    })
+  }
+
+  const createInstruction = mplCore.getCreateV1Instruction({
+    asset: assetSigner,
+    payer: feePayer,
+    owner: account as Address,
+    updateAuthority: account as Address,
+    collection: collectionAddress ? (collectionAddress as Address) : undefined,
+    dataState: mplCore.DataState.AccountState,
+    name,
+    uri,
+    plugins: plugins.length > 0 ? plugins : null,
+  })
+
+  const signature = await prepareAndSendTransaction({
+    instructions: [createInstruction],
+    feePayer,
+  })
+
+  return {
+    mintAddress: assetSigner.address,
+    signature,
+  }
+}
+
 interface CreateTabContentProps {
   standard: AssetStandard
   onStandardChange: (value: AssetStandard) => void
@@ -406,6 +489,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     multimediaUri: null,
     metadataUri: null,
   })
+  const [mintResult, setMintResult] = useState<MintResult | null>(null)
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
 
   const { signer, capabilities } = useTransactionSigner()
 
@@ -882,11 +967,38 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       const metadataResult = await uploadJsonMetadata(metadataInput, account, connectorSigner)
       setUploadedUris((prev) => ({ ...prev, metadataUri: metadataResult.uri }))
 
+      if (standard !== "core") {
+        setUploadStep("complete")
+        toast.success("Files uploaded successfully! Ready to mint.", { id: "upload-progress" })
+        return
+      }
+
+      setUploadStep("minting")
+      toast.loading("Minting NFT...", { id: "upload-progress" })
+
+      const result = await mintCoreAsset({
+        name: form.name,
+        uri: metadataResult.uri,
+        collectionAddress: form.collectionAddress || undefined,
+        royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
+        creators: form.isCollectionNft
+          ? []
+          : form.creators.map((c) => ({
+              address: c.address as Address,
+              percentage: c.share,
+            })),
+        isCollectionNft: form.isCollectionNft,
+        feePayer: signer as unknown as TransactionSigner,
+        account,
+      })
+
+      setMintResult(result)
       setUploadStep("complete")
-      toast.success("Files uploaded successfully! Ready to mint.", { id: "upload-progress" })
+      toast.success("NFT created successfully!", { id: "upload-progress" })
+      setShowSuccessDialog(true)
     } catch (err) {
-      console.error("Upload failed:", err)
-      const errorMessage = err instanceof Error ? err.message : "Upload failed"
+      console.error("Operation failed:", err)
+      const errorMessage = err instanceof Error ? err.message : "Operation failed"
       toast.error(errorMessage, {
         id: "upload-progress",
         action: {
@@ -896,7 +1008,7 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       })
       setUploadStep("idle")
     }
-  }, [account, signer, capabilities.canSign, form, validateForm])
+  }, [account, signer, capabilities.canSign, form, standard, validateForm])
 
   const isSubmitting = uploadStep !== "idle" && uploadStep !== "complete"
 
@@ -908,12 +1020,79 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
         return "Uploading multimedia..."
       case "uploading-metadata":
         return "Uploading metadata..."
+      case "minting":
+        return "Minting NFT..."
       case "complete":
-        return "Ready to mint"
+        return mintResult ? "NFT Created!" : "Ready to mint"
       default:
         return "Create NFT"
     }
   }
+
+  const resetForm = useCallback(() => {
+    setForm({
+      name: "",
+      symbol: "",
+      description: "",
+      externalUrl: "",
+      imageFile: null,
+      multimediaFile: null,
+      multimediaCategory: null,
+      royaltiesPercent: 5,
+      creators: account ? [{ address: account, share: 100 }] : [],
+      attributes: [{ traitType: "", value: "" }],
+      collectionAddress: "",
+      isMutable: true,
+      isCollectionNft: false,
+      ruleSetOption: "metaplex",
+      customRuleSetAddress: "",
+    })
+    setErrors({})
+    setTouched({
+      name: false,
+      symbol: false,
+      description: false,
+      externalUrl: false,
+      imageFile: false,
+      multimediaFile: false,
+      multimediaCategory: false,
+      royaltiesPercent: false,
+      creators: false,
+      attributes: false,
+      collectionAddress: false,
+      isMutable: false,
+      isCollectionNft: false,
+      ruleSetOption: false,
+      customRuleSetAddress: false,
+    })
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl)
+      setImagePreviewUrl(null)
+    }
+    if (multimediaPreviewUrl) {
+      URL.revokeObjectURL(multimediaPreviewUrl)
+      setMultimediaPreviewUrl(null)
+    }
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ""
+    }
+    if (multimediaInputRef.current) {
+      multimediaInputRef.current.value = ""
+    }
+    setUploadStep("idle")
+    setUploadedUris({ imageUri: null, multimediaUri: null, metadataUri: null })
+    setMintResult(null)
+  }, [account, imagePreviewUrl, multimediaPreviewUrl])
+
+  const handleSuccessDialogClose = useCallback(() => {
+    setShowSuccessDialog(false)
+    resetForm()
+  }, [resetForm])
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success("Copied to clipboard!")
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -1116,14 +1295,15 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
           <Button
             type="button"
             className="w-full h-12"
-            disabled={!isFormValid() || isSubmitting || !account}
+            disabled={!isFormValid() || isSubmitting || !account || mintResult !== null}
             onClick={handleSubmit}
           >
             {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {mintResult && <CheckCircle2 className="h-4 w-4 mr-2" />}
             {getSubmitButtonText()}
           </Button>
           {!account && <p className="text-sm text-muted-foreground text-center mt-2">Connect wallet to create NFT</p>}
-          {uploadStep === "complete" && uploadedUris.metadataUri && (
+          {uploadStep === "complete" && uploadedUris.metadataUri && !mintResult && standard !== "core" && (
             <div className="mt-4 rounded-lg bg-primary/10 p-4">
               <p className="text-sm font-medium text-primary mb-2">Metadata uploaded successfully!</p>
               <p className="text-xs text-muted-foreground break-all">URI: {uploadedUris.metadataUri}</p>
@@ -1131,6 +1311,97 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
           )}
         </div>
       </div>
+
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              NFT Created Successfully!
+            </DialogTitle>
+            <DialogDescription>Your Core Asset NFT has been minted on Solana.</DialogDescription>
+          </DialogHeader>
+
+          {mintResult && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Mint Address</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded bg-muted px-3 py-2 text-xs font-mono break-all">
+                    {mintResult.mintAddress}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => copyToClipboard(mintResult.mintAddress)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Transaction Signature</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded bg-muted px-3 py-2 text-xs font-mono break-all">
+                    {mintResult.signature.slice(0, 20)}...{mintResult.signature.slice(-20)}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => copyToClipboard(mintResult.signature)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <a
+                  href={`https://solscan.io/token/${mintResult.mintAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium",
+                    "ring-offset-background transition-all duration-200 ease-out-expo",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground hover:border-border-hover",
+                    "h-10 px-4 py-2 text-sm w-full"
+                  )}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View on Solscan
+                </a>
+                <a
+                  href={`https://solscan.io/tx/${mintResult.signature}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium",
+                    "ring-offset-background transition-all duration-200 ease-out-expo",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground hover:border-border-hover",
+                    "h-10 px-4 py-2 text-sm w-full"
+                  )}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View Transaction
+                </a>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" onClick={handleSuccessDialogClose} className="w-full">
+              Create Another NFT
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
