@@ -16,6 +16,7 @@ import {
   Trash2,
   FolderOpen,
   AlertTriangle,
+  ImageIcon,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -178,6 +179,14 @@ function validateCreators(creators: Creator[]): { isValid: boolean; errors: Crea
 const VALID_TABS: TabValue[] = ["create", "update", "batch"]
 const VALID_STANDARDS: AssetStandard[] = ["core", "pnft", "nifty"]
 
+interface NftPreviewData {
+  name: string
+  symbol: string
+  description: string
+  imagePreviewUrl: string | null
+  attributes: Attribute[]
+}
+
 function isValidTab(value: string | null): value is TabValue {
   return value !== null && VALID_TABS.includes(value as TabValue)
 }
@@ -199,6 +208,14 @@ export function CreatorStudioPage() {
   const activeTab: TabValue = isValidTab(tabParam) ? tabParam : "create"
   const activeStandard: AssetStandard = isValidStandard(standardParam) ? standardParam : "core"
 
+  const [previewData, setPreviewData] = useState<NftPreviewData>({
+    name: "",
+    symbol: "",
+    description: "",
+    imagePreviewUrl: null,
+    attributes: [],
+  })
+
   const handleTabChange = (value: string) => {
     const newParams = new URLSearchParams(searchParams)
     if (value === "create") {
@@ -218,6 +235,10 @@ export function CreatorStudioPage() {
     }
     setSearchParams(newParams, { replace: true })
   }
+
+  const handlePreviewUpdate = useCallback((data: NftPreviewData) => {
+    setPreviewData(data)
+  }, [])
 
   return (
     <div className="h-full flex flex-col animate-fade-up">
@@ -256,7 +277,11 @@ export function CreatorStudioPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 h-full">
             <div className="min-h-0">
               <TabsContent value="create" className="mt-0 h-full">
-                <CreateTabContent standard={activeStandard} onStandardChange={handleStandardChange} />
+                <CreateTabContent
+                  standard={activeStandard}
+                  onStandardChange={handleStandardChange}
+                  onPreviewUpdate={handlePreviewUpdate}
+                />
               </TabsContent>
               <TabsContent value="update" className="mt-0 h-full">
                 <UpdateTabPlaceholder />
@@ -266,7 +291,7 @@ export function CreatorStudioPage() {
               </TabsContent>
             </div>
             <div className="hidden lg:block">
-              <PreviewPlaceholder />
+              <NftPreviewCard data={previewData} />
             </div>
           </div>
         </div>
@@ -310,9 +335,10 @@ function AssetStandardSelector({ value, onChange }: AssetStandardSelectorProps) 
 interface CreateTabContentProps {
   standard: AssetStandard
   onStandardChange: (value: AssetStandard) => void
+  onPreviewUpdate: (data: NftPreviewData) => void
 }
 
-function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps) {
+function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: CreateTabContentProps) {
   const { account } = useWallet()
 
   const [form, setForm] = useState<CreateFormState>({
@@ -509,6 +535,16 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
       }))
     }
   }, [account, form.creators.length])
+
+  useEffect(() => {
+    onPreviewUpdate({
+      name: form.name,
+      symbol: form.symbol,
+      description: form.description,
+      imagePreviewUrl,
+      attributes: form.attributes.filter((attr) => attr.traitType.trim()),
+    })
+  }, [form.name, form.symbol, form.description, imagePreviewUrl, form.attributes, onPreviewUpdate])
 
   const handleRoyaltiesChange = useCallback((value: number) => {
     setForm((prev) => ({ ...prev, royaltiesPercent: value }))
@@ -1315,13 +1351,68 @@ function BatchTabPlaceholder() {
   )
 }
 
-function PreviewPlaceholder() {
+interface NftPreviewCardProps {
+  data: NftPreviewData
+}
+
+function NftPreviewCard({ data }: NftPreviewCardProps) {
+  const { name, symbol, description, imagePreviewUrl, attributes } = data
+  const hasContent = name || symbol || description || imagePreviewUrl || attributes.length > 0
+
   return (
-    <div className="rounded-lg border bg-muted/30 p-6 h-full flex items-center justify-center sticky top-6">
-      <div className="text-center text-muted-foreground">
-        <div className="w-32 h-32 rounded-lg bg-muted mx-auto mb-4" />
-        <p className="font-medium">NFT Preview</p>
-        <p className="text-sm mt-1">Live preview will appear here</p>
+    <div className="rounded-lg border bg-card overflow-hidden sticky top-6 shadow-sm">
+      <div className="aspect-square relative bg-muted">
+        {imagePreviewUrl ? (
+          <img src={imagePreviewUrl} alt={name || "NFT Preview"} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <ImageIcon className="h-16 w-16 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No image selected</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 space-y-3">
+        {hasContent ? (
+          <>
+            <div className="space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-display font-semibold text-lg leading-tight truncate">
+                  {name || <span className="text-muted-foreground italic">Untitled</span>}
+                </h3>
+                {symbol && (
+                  <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {symbol}
+                  </span>
+                )}
+              </div>
+              {description && <p className="text-sm text-muted-foreground line-clamp-3">{description}</p>}
+            </div>
+
+            {attributes.length > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attributes</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {attributes.map((attr, index) => (
+                    <div key={index} className="inline-flex flex-col rounded-md border bg-muted/50 px-2 py-1 text-xs">
+                      <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                        {attr.traitType}
+                      </span>
+                      <span className="font-medium">{attr.value || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-2 text-muted-foreground">
+            <p className="font-medium">NFT Preview</p>
+            <p className="text-sm mt-1">Fill out the form to see a live preview</p>
+          </div>
+        )}
       </div>
     </div>
   )

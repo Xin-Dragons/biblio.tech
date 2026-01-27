@@ -173,3 +173,75 @@
   - Empty attributes (no traitType) should be filtered out before use in metadata upload
 ---
 
+## 2026-01-27 - US-009
+- Implemented collection assignment field in Create tab
+- Added collectionAddress to form state (string, initially empty)
+- Validation: checks if address is valid Solana public key format (when not empty)
+- Field is optional - can be left empty for standalone NFTs
+- Added 'Choose Collection' button (placeholder/disabled for now, will be implemented in US-030)
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added collectionAddress to form state, errors, touched; CollectionSection component)
+- **Learnings for future iterations:**
+  - FolderOpen icon from lucide-react works well for collection selection
+  - Collection field uses same validation pattern as creators (isValidSolanaAddress)
+  - Placeholder buttons use disabled prop to indicate future functionality
+  - CollectionSection follows same pattern as other sections with border-t separator
+---
+
+## 2026-01-27 - US-010
+- Implemented mutable toggle and collection NFT mode in Create tab
+- Added isMutable (default true) and isCollectionNft (default false) to form state
+- Mutable toggle: uses Switch component, shows warning when OFF about permanence
+- Collection NFT toggle: when ON, hides royalties and attributes sections, sets royalties to 0
+- SettingsSection component groups both toggles with descriptive labels and helper text
+- Warning uses AlertTriangle icon with bg-warning/10 background
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added Switch import, boolean state fields, handlers, SettingsSection component, conditional rendering)
+- **Learnings for future iterations:**
+  - Switch component from @/components/ui/switch uses onCheckedChange (not onChange)
+  - When adding boolean fields to form state, update TextFormField Exclude list
+  - Conditional rendering with {!form.isCollectionNft && <Section />} for clean show/hide
+  - Warning pattern: bg-warning/10 text-warning with AlertTriangle icon
+  - Auto-reset related fields (royaltiesPercent to 0) when toggling collection mode
+---
+
+## 2026-01-27 - US-011
+- Implemented pNFT-specific rule set options in Create tab
+- Added RuleSetOption type: "metaplex" | "compatibility" | "none" | "custom"
+- Added RULE_SET_ADDRESSES constant with Metaplex and Compatibility addresses
+- RuleSetSection component only renders when standard === "pnft"
+- Radio-style option list with label, description, and visual selection state
+- Custom option shows text field for entering custom rule set address
+- Non-custom/non-none options show the rule set address in a code block
+- Validation for custom address uses existing isValidSolanaAddress function
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added RuleSetOption type, RULE_SET_ADDRESSES, form state fields, handlers, RuleSetSection component)
+- **Learnings for future iterations:**
+  - Radio-style options can be styled as cards with border-primary highlight when selected
+  - Use native input[type=radio] with accent-primary for consistent styling
+  - Clear customRuleSetAddress when switching away from "custom" option
+  - Clear validation errors when switching away from "custom" option
+  - Show address in code block for preset options (metaplex, compatibility)
+  - Section is conditionally rendered based on standard prop (not form state)
+---
+
+## 2026-01-27 - US-012
+- Implemented NFT preview component with real-time updates
+- Added NftPreviewCard component with image preview, name, symbol, description, and attributes
+- Added NftPreviewData interface to define preview data structure
+- Lifted preview state to CreatorStudioPage level for sharing between form and preview
+- Created onPreviewUpdate callback in CreateTabContent that fires on form changes
+- Empty state shows placeholder when no content entered, prompts user to fill form
+- Attributes filtered to only show those with traitType filled in
+- Card styled with aspect-square image area, card border/shadow, and attribute badges
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added NftPreviewData interface, NftPreviewCard component, preview state in page, callback prop)
+- **Learnings for future iterations:**
+  - Lift preview state to parent component when multiple children need access
+  - Use useCallback for callbacks passed to children to prevent unnecessary re-renders
+  - Filter out incomplete data (empty traitType) when displaying in preview
+  - line-clamp-3 utility truncates text to 3 lines with ellipsis
+  - ImageIcon from lucide-react works as placeholder for missing images
+  - aspect-square maintains 1:1 ratio for image container
+---
+
