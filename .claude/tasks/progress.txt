@@ -518,3 +518,36 @@
   - JSON hashlist validation: parse, check array type, validate each address
 ---
 
+## 2026-01-27 - US-023
+- Implemented Batch tab NFT list with filters and virtualization
+- Added BatchNftFilters interface for filter state management
+- Added BatchNftGridCellData type for virtualized grid
+- Created BatchNftCard component (memoized) with image, name, and truncated mint display
+- Created BatchNftGridCell component for react-window integration
+- Created BatchNftGrid component with:
+  - FixedSizeGrid from react-window for virtualization
+  - AutoSizer for responsive container
+  - Empty state when no NFTs match filters
+- Added filter state to BatchTabContent with three filters:
+  - Creator filter (dropdown of unique creators)
+  - Royalties filter (dropdown of unique royalty percentages)
+  - Update authority filter (dropdown of unique authorities)
+- Implemented useMemo for:
+  - uniqueCreators: extracts and deduplicates all creator addresses
+  - uniqueRoyalties: extracts unique royalty percentages, sorted ascending
+  - uniqueUpdateAuthorities: extracts unique authority addresses
+  - filteredNfts: applies AND logic across all active filters
+- Shows filtered count vs total count when filters active
+- Clear Filters button resets all filters
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added filters, virtualized grid, new components)
+- **Learnings for future iterations:**
+  - Use memo() for grid cell components to prevent unnecessary re-renders
+  - FixedSizeGrid requires itemData prop with typed generic for cell data
+  - Filter pattern: null for "all", string value for specific selection
+  - Select component uses "all" as placeholder value, convert to null in state
+  - getGridColumnCount helper determines responsive column count by width
+  - Grid row height calculation: columnWidth * ratio (1.3 for card with text)
+  - AutoSizer provides width/height for responsive virtualized grids
+---
+
