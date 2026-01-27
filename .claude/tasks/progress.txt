@@ -44,6 +44,16 @@
 - Requires wallet address (string) and signer from useTransactionSigner()
 - Gateway: https://gateway.irys.xyz/{id} (also available at https://arweave.net/{id})
 
+**ASSET STANDARD DETECTION (by account owner):**
+- Core Assets: account owner is CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d (MPL_CORE_PROGRAM_ADDRESS)
+- pNFTs: Token Program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA) + metadata PDA owned by metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+- Nifty Assets: account owner is AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73 (NIFTY_ASSET_PROGRAM_ADDRESS)
+
+**ADDRESS ENCODING/DECODING:**
+- Use getAddressDecoder().decode(bytes) to decode address bytes to string
+- Use getAddressEncoder().encode(address) to encode address string to bytes
+- NEVER use getAddressEncoder().decode() - it doesn't exist!
+
 ---
 
 ## 2026-01-27 - US-001
@@ -402,5 +412,32 @@
   - asset.Standard.NonFungible for regular NFTs
   - group parameter maps to collection in the Nifty standard
   - Nifty doesn't use PDAs for metadata - all data is in the asset account
+---
+
+## 2026-01-27 - US-019
+- Implemented Update tab NFT selection with token address input and Load NFT button
+- Added asset standard detection by checking account owner:
+  - Core Assets: owned by CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
+  - pNFTs: Token Program account with metadata PDA owned by metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+  - Nifty Assets: owned by AssetGtQBTSgm5s91d1RAQod5JmaZiJDxqsgtqrZud73
+- Added functions to decode on-chain account data for each standard:
+  - loadCoreAsset: parses Core Asset V1 account structure
+  - loadPnftMetadata: parses Token Metadata account structure
+  - loadNiftyAsset: parses Nifty Asset account with extensions
+- Shows asset standard badge after successful load
+- Validates user is update authority - shows error with authority address if not
+- Shows success message with green checkmark if user is update authority
+- Displays loaded NFT data: image, name, symbol, description, royalties, mutability, collection, attributes, creators
+- Updates preview panel with loaded NFT data
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added UpdateTabContent, RPC helpers, asset loading functions)
+- **Learnings for future iterations:**
+  - Use getAddressDecoder().decode() to decode address bytes, NOT getAddressEncoder().decode()
+  - RPC calls can be made to /api/rpc endpoint with JSON-RPC format
+  - Account detection: check account owner to determine program, then check for PDAs if needed (e.g., metadata PDA for pNFT)
+  - Core Asset V1: key(1) + owner(32) + updateAuthority(1+32?) + name(4+len) + uri(4+len) + seq(option)
+  - pNFT Metadata: key(1) + updateAuthority(32) + mint(32) + name(4+len) + symbol(4+len) + uri(4+len) + sellerFeeBasisPoints(2) + creators(option) + ...
+  - Nifty Asset: discriminator(1) + owner(32) + authority(32) + group(option 1+32) + name(4+len) + ... extensions
+  - Fetch metadata JSON from URI to get full NFT data (description, image, attributes, etc.)
 ---
 
