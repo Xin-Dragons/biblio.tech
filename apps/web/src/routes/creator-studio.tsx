@@ -19,6 +19,11 @@ interface Creator {
   share: number
 }
 
+interface Attribute {
+  traitType: string
+  value: string
+}
+
 interface CreateFormState {
   name: string
   symbol: string
@@ -29,6 +34,7 @@ interface CreateFormState {
   multimediaCategory: MultimediaCategory | null
   royaltiesPercent: number
   creators: Creator[]
+  attributes: Attribute[]
 }
 
 interface CreateFormErrors {
@@ -46,7 +52,7 @@ interface CreateFormErrors {
 
 type TextFormField = Exclude<
   keyof CreateFormState,
-  "imageFile" | "multimediaFile" | "multimediaCategory" | "royaltiesPercent" | "creators"
+  "imageFile" | "multimediaFile" | "multimediaCategory" | "royaltiesPercent" | "creators" | "attributes"
 >
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
@@ -280,6 +286,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     multimediaCategory: null,
     royaltiesPercent: 5,
     creators: [],
+    attributes: [{ traitType: "", value: "" }],
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -293,6 +300,7 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     multimediaCategory: false,
     royaltiesPercent: false,
     creators: false,
+    attributes: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -495,6 +503,31 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     }
   }, [form.creators, touched.creators])
 
+  const handleAttributeChange = useCallback((index: number, field: "traitType" | "value", value: string) => {
+    setForm((prev) => {
+      const newAttributes = [...prev.attributes]
+      newAttributes[index] = { ...newAttributes[index], [field]: value }
+      return { ...prev, attributes: newAttributes }
+    })
+    setTouched((prev) => ({ ...prev, attributes: true }))
+  }, [])
+
+  const handleAddAttribute = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      attributes: [...prev.attributes, { traitType: "", value: "" }],
+    }))
+    setTouched((prev) => ({ ...prev, attributes: true }))
+  }, [])
+
+  const handleRemoveAttribute = useCallback((index: number) => {
+    setForm((prev) => {
+      const newAttributes = prev.attributes.filter((_, i) => i !== index)
+      return { ...prev, attributes: newAttributes.length > 0 ? newAttributes : [{ traitType: "", value: "" }] }
+    })
+    setTouched((prev) => ({ ...prev, attributes: true }))
+  }, [])
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -655,6 +688,13 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
           onRemoveCreator={handleRemoveCreator}
           onBlur={validateCreatorsOnBlur}
         />
+
+        <AttributesSection
+          attributes={form.attributes}
+          onAttributeChange={handleAttributeChange}
+          onAddAttribute={handleAddAttribute}
+          onRemoveAttribute={handleRemoveAttribute}
+        />
       </div>
     </div>
   )
@@ -758,6 +798,70 @@ function RoyaltiesCreatorsSection({
 
         <p className="text-xs text-muted-foreground">
           Creator shares must sum to 100%. The first creator is typically the primary creator.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+interface AttributesSectionProps {
+  attributes: Attribute[]
+  onAttributeChange: (index: number, field: "traitType" | "value", value: string) => void
+  onAddAttribute: () => void
+  onRemoveAttribute: (index: number) => void
+}
+
+function AttributesSection({
+  attributes,
+  onAttributeChange,
+  onAddAttribute,
+  onRemoveAttribute,
+}: AttributesSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Attributes / Traits</Label>
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={onAddAttribute}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Attribute
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          {attributes.map((attribute, index) => (
+            <div key={index} className="flex items-start gap-2">
+              <div className="flex-1">
+                <Input
+                  value={attribute.traitType}
+                  onChange={(e) => onAttributeChange(index, "traitType", e.target.value)}
+                  placeholder="Trait type (e.g., Background)"
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  value={attribute.value}
+                  onChange={(e) => onAttributeChange(index, "value", e.target.value)}
+                  placeholder="Value (e.g., Blue)"
+                />
+              </div>
+              {attributes.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onRemoveAttribute(index)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Add traits to describe your NFT. Attributes with empty trait types will be excluded.
         </p>
       </div>
     </div>
