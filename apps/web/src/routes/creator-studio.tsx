@@ -76,6 +76,7 @@ import {
   confirmTransactionViaWebSocket,
   type InstructionGroup,
 } from "@/lib/transaction"
+import { batchExecute } from "@/lib/batch-transactions"
 import { mplCore, tokenMetadata, asset } from "@biblio/solana-programs"
 
 type TabValue = "create" | "update" | "batch"
@@ -157,6 +158,8 @@ interface CreateFormState {
   collectionAddress: string
   isMutable: boolean
   isCollectionNft: boolean
+  isCreateMany: boolean
+  createManyQuantity: number
   ruleSetOption: RuleSetOption
   customRuleSetAddress: string
 }
@@ -187,15 +190,31 @@ type TextFormField = Exclude<
   | "collectionAddress"
   | "isMutable"
   | "isCollectionNft"
+  | "isCreateMany"
+  | "createManyQuantity"
   | "ruleSetOption"
   | "customRuleSetAddress"
 >
 
-type UploadStep = "idle" | "uploading-image" | "uploading-multimedia" | "uploading-metadata" | "minting" | "complete"
+type UploadStep =
+  | "idle"
+  | "uploading-image"
+  | "uploading-multimedia"
+  | "uploading-metadata"
+  | "minting"
+  | "batch-minting"
+  | "complete"
 
 interface MintResult {
   mintAddress: string
   signature: string
+}
+
+interface BatchMintResult {
+  successful: number
+  failed: number
+  mintAddresses: string[]
+  signatures: string[]
 }
 
 interface UploadedUris {
@@ -1245,6 +1264,253 @@ async function mintNiftyAsset({
   }
 }
 
+interface BatchMintCoreAssetOptions {
+  name: string
+  uri: string
+  collectionAddress?: string
+  royaltiesPercent: number
+  creators: Array<{ address: Address; percentage: number }>
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+interface BatchMintItem {
+  index: number
+  assetSigner: TransactionSigner
+}
+
+async function createCoreAssetInstruction({
+  assetSigner,
+  name,
+  uri,
+  collectionAddress,
+  royaltiesPercent,
+  creators,
+  isCollectionNft,
+  feePayer,
+  account,
+}: BatchMintCoreAssetOptions & { assetSigner: TransactionSigner }): Promise<Instruction[]> {
+  const plugins: mplCore.PluginAuthorityPairArgs[] = []
+
+  if (!isCollectionNft && royaltiesPercent > 0 && creators.length > 0) {
+    plugins.push({
+      plugin: {
+        __kind: "Royalties",
+        fields: [
+          {
+            basisPoints: Math.round(royaltiesPercent * 100),
+            creators: creators,
+            ruleSet: { __kind: "None" },
+          },
+        ],
+      },
+      authority: null,
+    })
+  }
+
+  const createInstruction = mplCore.getCreateV1Instruction({
+    asset: assetSigner,
+    payer: feePayer,
+    owner: account as Address,
+    updateAuthority: account as Address,
+    collection: collectionAddress ? (collectionAddress as Address) : undefined,
+    dataState: mplCore.DataState.AccountState,
+    name,
+    uri,
+    plugins: plugins.length > 0 ? plugins : null,
+  })
+
+  return [createInstruction]
+}
+
+interface BatchMintPnftOptions {
+  name: string
+  symbol: string
+  uri: string
+  sellerFeeBasisPoints: number
+  creators: Array<{ address: Address; verified: boolean; share: number }>
+  collectionAddress?: string
+  ruleSetOption: RuleSetOption
+  customRuleSetAddress?: string
+  isMutable: boolean
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function createPnftInstructions({
+  mintSigner,
+  name,
+  symbol,
+  uri,
+  sellerFeeBasisPoints,
+  creators,
+  collectionAddress,
+  ruleSetOption,
+  customRuleSetAddress,
+  isMutable,
+  isCollectionNft,
+  feePayer,
+  account,
+}: BatchMintPnftOptions & { mintSigner: TransactionSigner }): Promise<Instruction[]> {
+  const mintAddress = mintSigner.address
+
+  const metadata = await getMetadataPda(mintAddress)
+  const masterEdition = await getMasterEditionPda(mintAddress)
+
+  const [ata] = await findAssociatedTokenPda({
+    mint: mintAddress,
+    owner: account as Address,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
+  })
+  const tokenRecord = await getTokenRecordPda(mintAddress, ata)
+
+  let ruleSetAddress: Address | null = null
+  if (ruleSetOption === "metaplex") {
+    ruleSetAddress = RULE_SET_ADDRESSES.metaplex as Address
+  } else if (ruleSetOption === "compatibility") {
+    ruleSetAddress = RULE_SET_ADDRESSES.compatibility as Address
+  } else if (ruleSetOption === "custom" && customRuleSetAddress) {
+    ruleSetAddress = customRuleSetAddress as Address
+  }
+
+  const instructions: Instruction[] = []
+
+  const createAccountIx = getCreateAccountInstruction({
+    payer: feePayer,
+    newAccount: mintSigner,
+    lamports: BigInt(MINT_RENT_LAMPORTS),
+    space: BigInt(MINT_ACCOUNT_SIZE),
+    programAddress: TOKEN_PROGRAM_ADDRESS,
+  })
+  instructions.push(createAccountIx)
+
+  const initMintIx = getInitializeMint2Instruction({
+    mint: mintAddress,
+    decimals: 0,
+    mintAuthority: account as Address,
+    freezeAuthority: account as Address,
+  })
+  instructions.push(initMintIx)
+
+  const createMetadataIx = tokenMetadata.getCreateInstruction({
+    metadata,
+    masterEdition,
+    mint: mintAddress,
+    authority: feePayer,
+    payer: feePayer,
+    updateAuthority: account as Address,
+    splTokenProgram: TOKEN_PROGRAM_ADDRESS,
+    createArgs: {
+      __kind: "V1",
+      assetData: {
+        name,
+        symbol,
+        uri,
+        sellerFeeBasisPoints,
+        creators: isCollectionNft ? null : creators,
+        primarySaleHappened: false,
+        isMutable,
+        tokenStandard: tokenMetadata.TokenStandard.ProgrammableNonFungible,
+        collection: collectionAddress ? { key: collectionAddress as Address, verified: false } : null,
+        uses: null,
+        collectionDetails: isCollectionNft ? { __kind: "V1", size: BigInt(0) } : null,
+        ruleSet: ruleSetAddress,
+      },
+      decimals: 0,
+      printSupply: { __kind: "Zero" },
+    },
+  })
+  instructions.push(createMetadataIx)
+
+  const mintIx = tokenMetadata.getMintInstruction({
+    token: ata,
+    tokenOwner: account as Address,
+    metadata,
+    masterEdition,
+    tokenRecord,
+    mint: mintAddress,
+    payer: feePayer,
+    authority: feePayer,
+    splTokenProgram: TOKEN_PROGRAM_ADDRESS,
+    splAtaProgram: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" as Address,
+    sysvarInstructions: "Sysvar1nstructions1111111111111111111111111" as Address,
+    authorizationRulesProgram: ruleSetAddress ? AUTH_RULES_PROGRAM_ADDRESS : undefined,
+    authorizationRules: ruleSetAddress ?? undefined,
+    mintArgs: {
+      __kind: "V1",
+      amount: BigInt(1),
+      authorizationData: null,
+    },
+  })
+  instructions.push(mintIx)
+
+  return instructions
+}
+
+interface BatchMintNiftyOptions {
+  name: string
+  uri: string
+  symbol: string
+  description: string
+  attributes: Array<{ traitType: string; value: string }>
+  collectionAddress?: string
+  isMutable: boolean
+  isCollectionNft: boolean
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function createNiftyAssetInstruction({
+  assetSigner,
+  name,
+  uri,
+  symbol,
+  description,
+  attributes,
+  collectionAddress,
+  isMutable,
+  isCollectionNft,
+  feePayer,
+  account,
+}: BatchMintNiftyOptions & { assetSigner: TransactionSigner }): Promise<Instruction[]> {
+  const extensions: asset.ExtensionInputArgs[] = []
+
+  const metadataBytes = encodeMetadataExtension(symbol, description, uri)
+  extensions.push({
+    extensionType: asset.ExtensionType.Metadata,
+    length: metadataBytes.length,
+    data: metadataBytes,
+  })
+
+  if (!isCollectionNft) {
+    const filteredAttrs = attributes.filter((a) => a.traitType.trim() && a.value.trim())
+    if (filteredAttrs.length > 0) {
+      const attributesBytes = encodeAttributesExtension(filteredAttrs)
+      extensions.push({
+        extensionType: asset.ExtensionType.Attributes,
+        length: attributesBytes.length,
+        data: attributesBytes,
+      })
+    }
+  }
+
+  const createInstruction = asset.getCreateInstruction({
+    asset: assetSigner,
+    authority: account as Address,
+    owner: account as Address,
+    group: collectionAddress ? (collectionAddress as Address) : undefined,
+    payer: feePayer,
+    name,
+    standard: asset.Standard.NonFungible,
+    mutable: isMutable,
+    extensions: extensions.length > 0 ? extensions : null,
+  })
+
+  return [createInstruction]
+}
+
 interface UpdateCoreAssetOptions {
   assetAddress: Address
   newName?: string
@@ -1482,6 +1748,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     collectionAddress: "",
     isMutable: true,
     isCollectionNft: false,
+    isCreateMany: false,
+    createManyQuantity: 10,
     ruleSetOption: "metaplex",
     customRuleSetAddress: "",
   })
@@ -1501,6 +1769,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     collectionAddress: false,
     isMutable: false,
     isCollectionNft: false,
+    isCreateMany: false,
+    createManyQuantity: false,
     ruleSetOption: false,
     customRuleSetAddress: false,
   })
@@ -1517,6 +1787,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     metadataUri: null,
   })
   const [mintResult, setMintResult] = useState<MintResult | null>(null)
+  const [batchMintResult, setBatchMintResult] = useState<BatchMintResult | null>(null)
+  const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number; failed: number } | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
 
   const { signer, capabilities } = useTransactionSigner()
@@ -1785,6 +2057,25 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     setTouched((prev) => ({ ...prev, isCollectionNft: true }))
   }, [])
 
+  const handleCreateManyChange = useCallback((checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      isCreateMany: checked,
+    }))
+    setTouched((prev) => ({ ...prev, isCreateMany: true }))
+  }, [])
+
+  const handleCreateManyQuantityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10)
+    if (!isNaN(value)) {
+      setForm((prev) => ({
+        ...prev,
+        createManyQuantity: Math.min(1000, Math.max(1, value)),
+      }))
+    }
+    setTouched((prev) => ({ ...prev, createManyQuantity: true }))
+  }, [])
+
   const handleRuleSetOptionChange = useCallback((option: RuleSetOption) => {
     setForm((prev) => ({
       ...prev,
@@ -1892,6 +2183,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       collectionAddress: true,
       isMutable: true,
       isCollectionNft: true,
+      isCreateMany: true,
+      createManyQuantity: true,
       ruleSetOption: true,
       customRuleSetAddress: true,
     })
@@ -1914,6 +2207,10 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
 
     if (standard === "pnft" && form.ruleSetOption === "custom") {
       if (!form.customRuleSetAddress || !isValidSolanaAddress(form.customRuleSetAddress)) return false
+    }
+
+    if (form.isCreateMany) {
+      if (form.createManyQuantity < 1 || form.createManyQuantity > 1000) return false
     }
 
     return true
@@ -1994,67 +2291,172 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       const metadataResult = await uploadJsonMetadata(metadataInput, account, connectorSigner)
       setUploadedUris((prev) => ({ ...prev, metadataUri: metadataResult.uri }))
 
-      setUploadStep("minting")
-      toast.loading("Minting NFT...", { id: "upload-progress" })
+      if (form.isCreateMany) {
+        setUploadStep("batch-minting")
+        toast.loading(`Minting ${form.createManyQuantity} NFTs...`, { id: "upload-progress" })
 
-      let result: MintResult
+        const quantity = form.createManyQuantity
+        const mintItems: BatchMintItem[] = await Promise.all(
+          Array.from({ length: quantity }, async (_, i) => ({
+            index: i,
+            assetSigner: await generateKeyPairSigner(),
+          }))
+        )
 
-      if (standard === "core") {
-        result = await mintCoreAsset({
-          name: form.name,
-          uri: metadataResult.uri,
-          collectionAddress: form.collectionAddress || undefined,
-          royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
-          creators: form.isCollectionNft
-            ? []
-            : form.creators.map((c) => ({
-                address: c.address as Address,
-                percentage: c.share,
-              })),
-          isCollectionNft: form.isCollectionNft,
-          feePayer: signer as unknown as TransactionSigner,
-          account,
+        const mintAddresses: string[] = mintItems.map((item) => item.assetSigner.address)
+        setBatchProgress({ completed: 0, total: quantity, failed: 0 })
+
+        const instructionGroups: InstructionGroup<BatchMintItem>[] = await Promise.all(
+          mintItems.map(async (item) => {
+            let instructions: Instruction[]
+            if (standard === "core") {
+              instructions = await createCoreAssetInstruction({
+                assetSigner: item.assetSigner,
+                name: form.name,
+                uri: metadataResult.uri,
+                collectionAddress: form.collectionAddress || undefined,
+                royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
+                creators: form.isCollectionNft
+                  ? []
+                  : form.creators.map((c) => ({
+                      address: c.address as Address,
+                      percentage: c.share,
+                    })),
+                isCollectionNft: form.isCollectionNft,
+                feePayer: signer as unknown as TransactionSigner,
+                account,
+              })
+            } else if (standard === "pnft") {
+              instructions = await createPnftInstructions({
+                mintSigner: item.assetSigner,
+                name: form.name,
+                symbol: form.symbol,
+                uri: metadataResult.uri,
+                sellerFeeBasisPoints: form.isCollectionNft ? 0 : Math.round(form.royaltiesPercent * 100),
+                creators: form.isCollectionNft
+                  ? []
+                  : form.creators.map((c) => ({
+                      address: c.address as Address,
+                      verified: c.address === account,
+                      share: c.share,
+                    })),
+                collectionAddress: form.collectionAddress || undefined,
+                ruleSetOption: form.ruleSetOption,
+                customRuleSetAddress: form.customRuleSetAddress || undefined,
+                isMutable: form.isMutable,
+                isCollectionNft: form.isCollectionNft,
+                feePayer: signer as unknown as TransactionSigner,
+                account,
+              })
+            } else {
+              instructions = await createNiftyAssetInstruction({
+                assetSigner: item.assetSigner,
+                name: form.name,
+                uri: metadataResult.uri,
+                symbol: form.symbol,
+                description: form.description,
+                attributes: form.attributes,
+                collectionAddress: form.collectionAddress || undefined,
+                isMutable: form.isMutable,
+                isCollectionNft: form.isCollectionNft,
+                feePayer: signer as unknown as TransactionSigner,
+                account,
+              })
+            }
+            return { item, instructions }
+          })
+        )
+
+        const result = await batchExecute(instructionGroups, signer as unknown as TransactionSigner, {
+          onProgress: (progress) => {
+            setBatchProgress({
+              completed: progress.completed,
+              total: progress.total,
+              failed: progress.failed,
+            })
+            toast.loading(`Minting NFTs: ${progress.completed}/${progress.total} (${progress.failed} failed)`, {
+              id: "upload-progress",
+            })
+          },
         })
-      } else if (standard === "pnft") {
-        result = await mintPnft({
-          name: form.name,
-          symbol: form.symbol,
-          uri: metadataResult.uri,
-          sellerFeeBasisPoints: form.isCollectionNft ? 0 : Math.round(form.royaltiesPercent * 100),
-          creators: form.isCollectionNft
-            ? []
-            : form.creators.map((c) => ({
-                address: c.address as Address,
-                verified: c.address === account,
-                share: c.share,
-              })),
-          collectionAddress: form.collectionAddress || undefined,
-          ruleSetOption: form.ruleSetOption,
-          customRuleSetAddress: form.customRuleSetAddress || undefined,
-          isMutable: form.isMutable,
-          isCollectionNft: form.isCollectionNft,
-          feePayer: signer as unknown as TransactionSigner,
-          account,
+
+        setBatchMintResult({
+          successful: result.successful,
+          failed: result.failed,
+          mintAddresses: mintAddresses.slice(0, result.successful),
+          signatures: result.signatures,
         })
+        setUploadStep("complete")
+
+        if (result.failed === 0) {
+          toast.success(`Successfully minted ${result.successful} NFTs!`, { id: "upload-progress" })
+        } else {
+          toast.warning(`Minted ${result.successful} NFTs, ${result.failed} failed`, { id: "upload-progress" })
+        }
+        setShowSuccessDialog(true)
       } else {
-        result = await mintNiftyAsset({
-          name: form.name,
-          uri: metadataResult.uri,
-          symbol: form.symbol,
-          description: form.description,
-          attributes: form.attributes,
-          collectionAddress: form.collectionAddress || undefined,
-          isMutable: form.isMutable,
-          isCollectionNft: form.isCollectionNft,
-          feePayer: signer as unknown as TransactionSigner,
-          account,
-        })
-      }
+        setUploadStep("minting")
+        toast.loading("Minting NFT...", { id: "upload-progress" })
 
-      setMintResult(result)
-      setUploadStep("complete")
-      toast.success("NFT created successfully!", { id: "upload-progress" })
-      setShowSuccessDialog(true)
+        let result: MintResult
+
+        if (standard === "core") {
+          result = await mintCoreAsset({
+            name: form.name,
+            uri: metadataResult.uri,
+            collectionAddress: form.collectionAddress || undefined,
+            royaltiesPercent: form.isCollectionNft ? 0 : form.royaltiesPercent,
+            creators: form.isCollectionNft
+              ? []
+              : form.creators.map((c) => ({
+                  address: c.address as Address,
+                  percentage: c.share,
+                })),
+            isCollectionNft: form.isCollectionNft,
+            feePayer: signer as unknown as TransactionSigner,
+            account,
+          })
+        } else if (standard === "pnft") {
+          result = await mintPnft({
+            name: form.name,
+            symbol: form.symbol,
+            uri: metadataResult.uri,
+            sellerFeeBasisPoints: form.isCollectionNft ? 0 : Math.round(form.royaltiesPercent * 100),
+            creators: form.isCollectionNft
+              ? []
+              : form.creators.map((c) => ({
+                  address: c.address as Address,
+                  verified: c.address === account,
+                  share: c.share,
+                })),
+            collectionAddress: form.collectionAddress || undefined,
+            ruleSetOption: form.ruleSetOption,
+            customRuleSetAddress: form.customRuleSetAddress || undefined,
+            isMutable: form.isMutable,
+            isCollectionNft: form.isCollectionNft,
+            feePayer: signer as unknown as TransactionSigner,
+            account,
+          })
+        } else {
+          result = await mintNiftyAsset({
+            name: form.name,
+            uri: metadataResult.uri,
+            symbol: form.symbol,
+            description: form.description,
+            attributes: form.attributes,
+            collectionAddress: form.collectionAddress || undefined,
+            isMutable: form.isMutable,
+            isCollectionNft: form.isCollectionNft,
+            feePayer: signer as unknown as TransactionSigner,
+            account,
+          })
+        }
+
+        setMintResult(result)
+        setUploadStep("complete")
+        toast.success("NFT created successfully!", { id: "upload-progress" })
+        setShowSuccessDialog(true)
+      }
     } catch (err) {
       console.error("Operation failed:", err)
       const errorMessage = err instanceof Error ? err.message : "Operation failed"
@@ -2081,10 +2483,17 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
         return "Uploading metadata..."
       case "minting":
         return "Minting NFT..."
+      case "batch-minting":
+        return batchProgress
+          ? `Minting ${batchProgress.completed}/${batchProgress.total}...`
+          : `Minting ${form.createManyQuantity} NFTs...`
       case "complete":
+        if (batchMintResult) {
+          return `${batchMintResult.successful} NFTs Created!`
+        }
         return mintResult ? "NFT Created!" : "Ready to mint"
       default:
-        return "Create NFT"
+        return form.isCreateMany ? `Create ${form.createManyQuantity} NFTs` : "Create NFT"
     }
   }
 
@@ -2103,6 +2512,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       collectionAddress: "",
       isMutable: true,
       isCollectionNft: false,
+      isCreateMany: false,
+      createManyQuantity: 10,
       ruleSetOption: "metaplex",
       customRuleSetAddress: "",
     })
@@ -2121,6 +2532,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
       collectionAddress: false,
       isMutable: false,
       isCollectionNft: false,
+      isCreateMany: false,
+      createManyQuantity: false,
       ruleSetOption: false,
       customRuleSetAddress: false,
     })
@@ -2141,6 +2554,8 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
     setUploadStep("idle")
     setUploadedUris({ imageUri: null, multimediaUri: null, metadataUri: null })
     setMintResult(null)
+    setBatchMintResult(null)
+    setBatchProgress(null)
   }, [account, imagePreviewUrl, multimediaPreviewUrl])
 
   const handleSuccessDialogClose = useCallback(() => {
@@ -2335,8 +2750,12 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
         <SettingsSection
           isMutable={form.isMutable}
           isCollectionNft={form.isCollectionNft}
+          isCreateMany={form.isCreateMany}
+          createManyQuantity={form.createManyQuantity}
           onMutableChange={handleMutableChange}
           onCollectionNftChange={handleCollectionNftChange}
+          onCreateManyChange={handleCreateManyChange}
+          onCreateManyQuantityChange={handleCreateManyQuantityChange}
         />
 
         {standard === "pnft" && (
@@ -2370,15 +2789,84 @@ function CreateTabContent({ standard, onStandardChange, onPreviewUpdate }: Creat
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-green-500" />
-              NFT Created Successfully!
+              {batchMintResult
+                ? `${batchMintResult.successful} NFTs Created Successfully!`
+                : "NFT Created Successfully!"}
             </DialogTitle>
             <DialogDescription>
-              Your {standard === "core" ? "Core Asset" : standard === "pnft" ? "pNFT" : "Nifty Asset"} has been minted
-              on Solana.
+              {batchMintResult ? (
+                <>
+                  Successfully minted {batchMintResult.successful}{" "}
+                  {standard === "core" ? "Core Assets" : standard === "pnft" ? "pNFTs" : "Nifty Assets"}
+                  {batchMintResult.failed > 0 && ` (${batchMintResult.failed} failed)`}.
+                </>
+              ) : (
+                <>
+                  Your {standard === "core" ? "Core Asset" : standard === "pnft" ? "pNFT" : "Nifty Asset"} has been
+                  minted on Solana.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
-          {mintResult && (
+          {batchMintResult && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Summary</Label>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-green-500/10 p-3 text-center">
+                    <div className="text-2xl font-bold text-green-600">{batchMintResult.successful}</div>
+                    <div className="text-xs text-muted-foreground">Successful</div>
+                  </div>
+                  <div className="rounded-lg bg-destructive/10 p-3 text-center">
+                    <div className="text-2xl font-bold text-destructive">{batchMintResult.failed}</div>
+                    <div className="text-xs text-muted-foreground">Failed</div>
+                  </div>
+                </div>
+              </div>
+
+              {batchMintResult.mintAddresses.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Mint Addresses ({batchMintResult.mintAddresses.length})
+                  </Label>
+                  <div className="max-h-32 overflow-y-auto rounded-lg border bg-muted/50">
+                    {batchMintResult.mintAddresses.slice(0, 10).map((address, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-1.5 border-b last:border-b-0">
+                        <code className="text-xs font-mono truncate max-w-[200px]">{address}</code>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => copyToClipboard(address)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    {batchMintResult.mintAddresses.length > 10 && (
+                      <div className="px-3 py-1.5 text-xs text-muted-foreground text-center">
+                        +{batchMintResult.mintAddresses.length - 10} more
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => copyToClipboard(JSON.stringify(batchMintResult.mintAddresses, null, 2))}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy All Addresses as JSON
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mintResult && !batchMintResult && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Mint Address</Label>
@@ -2669,11 +3157,24 @@ function CollectionSection({ collectionAddress, error, onChange, onBlur }: Colle
 interface SettingsSectionProps {
   isMutable: boolean
   isCollectionNft: boolean
+  isCreateMany: boolean
+  createManyQuantity: number
   onMutableChange: (checked: boolean) => void
   onCollectionNftChange: (checked: boolean) => void
+  onCreateManyChange: (checked: boolean) => void
+  onCreateManyQuantityChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-function SettingsSection({ isMutable, isCollectionNft, onMutableChange, onCollectionNftChange }: SettingsSectionProps) {
+function SettingsSection({
+  isMutable,
+  isCollectionNft,
+  isCreateMany,
+  createManyQuantity,
+  onMutableChange,
+  onCollectionNftChange,
+  onCreateManyChange,
+  onCreateManyQuantityChange,
+}: SettingsSectionProps) {
   return (
     <div className="space-y-4 pt-4 border-t">
       <Label>Settings</Label>
@@ -2713,6 +3214,38 @@ function SettingsSection({ isMutable, isCollectionNft, onMutableChange, onCollec
           <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs text-muted-foreground">
               Collection NFTs do not have attributes or royalties. These sections have been hidden.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="create-many-toggle" className="text-sm font-medium cursor-pointer">
+              Create Many
+            </Label>
+            <p className="text-xs text-muted-foreground">Batch mint multiple identical NFTs at once</p>
+          </div>
+          <Switch id="create-many-toggle" checked={isCreateMany} onCheckedChange={onCreateManyChange} />
+        </div>
+
+        {isCreateMany && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-4">
+              <Label htmlFor="create-many-quantity" className="text-sm shrink-0">
+                Quantity
+              </Label>
+              <Input
+                id="create-many-quantity"
+                type="number"
+                min={1}
+                max={1000}
+                value={createManyQuantity}
+                onChange={onCreateManyQuantityChange}
+                className="w-24"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter the number of NFTs to mint (1-1000). All NFTs will share the same metadata.
             </p>
           </div>
         )}

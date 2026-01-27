@@ -626,3 +626,54 @@
   - Same batch processing pattern as other sections (batchInstructionsBySize + sequential confirmation)
 ---
 
+## 2026-01-27 - US-027
+- Created batchExecute utility in apps/web/src/lib/batch-transactions.ts
+- Provides efficient batch transaction execution with concurrent processing
+- Key features:
+  - Groups instructions into optimal transaction sizes using existing batchInstructionsBySize
+  - Processes up to 50 transactions concurrently (MAX_CONCURRENT_TRANSACTIONS)
+  - Returns progress updates via onProgress callback (completed, total, failed, currentBatch, totalBatches)
+  - Returns onBatchComplete callback with batch index and signatures
+  - Handles partial failures gracefully - continues with remaining batches
+  - Returns BatchExecuteResult: { successful, failed, errors, signatures }
+- Added helper functions:
+  - createInstructionGroups: converts items + instruction generator to InstructionGroup[]
+  - batchExecuteItems: simple wrapper for common item-based batch operations
+- Files changed:
+  - apps/web/src/lib/batch-transactions.ts (new file)
+- **Learnings for future iterations:**
+  - BatchExecuteOptions doesn't need generic type parameter (only InstructionGroup needs it)
+  - Use Promise.allSettled for concurrent operations that should continue on partial failure
+  - Track sent/confirmed separately to handle failures at each stage independently
+  - Chunk batches by MAX_CONCURRENT_TRANSACTIONS to avoid rate limiting
+  - Progress callback receives both item count and batch count for flexible UI
+---
+
+## 2026-01-27 - US-028
+- Implemented Create Many batch minting feature in Create tab
+- Added isCreateMany (boolean) and createManyQuantity (number) to CreateFormState
+- Added Create Many toggle in SettingsSection with quantity input (1-1000 range)
+- Hides custom keypair option when Create Many is enabled (per requirements)
+- Uploads media once, reuses URIs for all NFTs in batch
+- Creates batch mint instruction generators for each standard:
+  - createCoreAssetInstruction: generates Core Asset create instruction
+  - createPnftInstructions: generates pNFT create instructions (4 per NFT)
+  - createNiftyAssetInstruction: generates Nifty Asset create instruction
+- Uses batchExecute utility from lib/batch-transactions.ts for efficient concurrent processing
+- Progress tracking with toast updates showing completed/total/failed counts
+- Added BatchMintResult interface to track batch operation results
+- Updated success dialog to show batch summary with:
+  - Successful/failed counts in green/red boxes
+  - List of first 10 mint addresses with copy buttons
+  - "Copy All Addresses as JSON" button
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (batch minting, UI, dialogs)
+- **Learnings for future iterations:**
+  - Pre-generate all keypairs before creating instructions using Promise.all
+  - InstructionGroup<T> pattern allows tracking items through batch execution
+  - For batch operations, upload media/metadata once, reuse URI for all mints
+  - batchExecute handles instruction batching, signing, sending, and confirmation
+  - Progress callback pattern: { completed, total, failed } for UI updates
+  - Batch success dialog shows summary stats + scrollable list of results
+---
+
