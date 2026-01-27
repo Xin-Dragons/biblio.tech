@@ -339,3 +339,34 @@
   - URL.revokeObjectURL must be called for both image and multimedia previews in resetForm
 ---
 
+## 2026-01-27 - US-017
+- Implemented pNFT (programmable NFT) create transaction using mpl-token-metadata
+- Added PDA derivation functions:
+  - getMetadataPda(mint) - derives metadata PDA
+  - getMasterEditionPda(mint) - derives master edition PDA
+  - getTokenRecordPda(mint, tokenAccount) - derives token record PDA for pNFTs
+- Added constants for TOKEN_METADATA_PROGRAM_ADDRESS, AUTH_RULES_PROGRAM_ADDRESS, mint account size and rent
+- Added mintPnft function that:
+  - Creates mint account via System program (getCreateAccountInstruction)
+  - Initializes mint with 0 decimals via Token program (getInitializeMint2Instruction)
+  - Creates programmable NFT metadata via tokenMetadata.getCreateInstruction
+  - Mints token with tokenRecord via tokenMetadata.getMintInstruction
+- Integrated rule set configuration from form (Metaplex, Compatibility, None, Custom)
+- Updated handleSubmit to:
+  - Call mintCoreAsset for Core Assets (standard === "core")
+  - Call mintPnft for pNFTs (standard === "pnft")
+  - Only skip minting for Nifty (standard === "nifty") - not yet implemented
+- Updated success dialog description to show correct asset type
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (added pNFT minting, PDA helpers, updated submit flow)
+- **Learnings for future iterations:**
+  - pNFT requires 4 instructions: createAccount, initializeMint2, create (metadata), mint
+  - tokenMetadata.getCreateInstruction for pNFT uses TokenStandard.ProgrammableNonFungible
+  - Collection assignment for pNFT: { key: address, verified: false } - verification must happen after
+  - Rule set is optional - can be null for pNFTs without authorization rules
+  - Token record PDA is required for pNFTs (not regular NFTs)
+  - MINT_ACCOUNT_SIZE = 82 bytes, MINT_RENT_LAMPORTS = 1461600 lamports
+  - getCreateAccountInstruction requires TransactionSigner for both payer and newAccount
+  - printSupply: { __kind: "Zero" } for NFTs (no prints allowed)
+---
+
