@@ -27,8 +27,14 @@ import { cn } from "@/lib/utils"
 
 type TabValue = "create" | "update" | "batch"
 type AssetStandard = "core" | "pnft" | "nifty"
+type RuleSetOption = "metaplex" | "compatibility" | "none" | "custom"
 
 type MultimediaCategory = "video" | "audio" | "vr"
+
+const RULE_SET_ADDRESSES = {
+  metaplex: "eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9",
+  compatibility: "AdH2Utn6Fus15ZhtenW4hZBQnvtLgM1YCW2MfVp7pYS5",
+} as const
 
 interface Creator {
   address: string
@@ -54,6 +60,8 @@ interface CreateFormState {
   collectionAddress: string
   isMutable: boolean
   isCollectionNft: boolean
+  ruleSetOption: RuleSetOption
+  customRuleSetAddress: string
 }
 
 interface CreateFormErrors {
@@ -68,6 +76,7 @@ interface CreateFormErrors {
   creatorAddresses?: Record<number, string>
   creatorShares?: Record<number, string>
   collectionAddress?: string
+  customRuleSetAddress?: string
 }
 
 type TextFormField = Exclude<
@@ -81,6 +90,8 @@ type TextFormField = Exclude<
   | "collectionAddress"
   | "isMutable"
   | "isCollectionNft"
+  | "ruleSetOption"
+  | "customRuleSetAddress"
 >
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
@@ -318,6 +329,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     collectionAddress: "",
     isMutable: true,
     isCollectionNft: false,
+    ruleSetOption: "metaplex",
+    customRuleSetAddress: "",
   })
 
   const [errors, setErrors] = useState<CreateFormErrors>({})
@@ -335,6 +348,8 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     collectionAddress: false,
     isMutable: false,
     isCollectionNft: false,
+    ruleSetOption: false,
+    customRuleSetAddress: false,
   })
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -596,6 +611,40 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
     setTouched((prev) => ({ ...prev, isCollectionNft: true }))
   }, [])
 
+  const handleRuleSetOptionChange = useCallback((option: RuleSetOption) => {
+    setForm((prev) => ({
+      ...prev,
+      ruleSetOption: option,
+      customRuleSetAddress: option === "custom" ? prev.customRuleSetAddress : "",
+    }))
+    setTouched((prev) => ({ ...prev, ruleSetOption: true }))
+    if (option !== "custom") {
+      setErrors((prev) => ({ ...prev, customRuleSetAddress: undefined }))
+    }
+  }, [])
+
+  const handleCustomRuleSetAddressChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      setForm((prev) => ({ ...prev, customRuleSetAddress: value }))
+
+      if (touched.customRuleSetAddress) {
+        const error = value && !isValidSolanaAddress(value) ? "Invalid Solana address" : undefined
+        setErrors((prev) => ({ ...prev, customRuleSetAddress: error }))
+      }
+    },
+    [touched.customRuleSetAddress]
+  )
+
+  const handleCustomRuleSetAddressBlur = useCallback(() => {
+    setTouched((prev) => ({ ...prev, customRuleSetAddress: true }))
+    const error =
+      form.customRuleSetAddress && !isValidSolanaAddress(form.customRuleSetAddress)
+        ? "Invalid Solana address"
+        : undefined
+    setErrors((prev) => ({ ...prev, customRuleSetAddress: error }))
+  }, [form.customRuleSetAddress])
+
   return (
     <div className="space-y-6">
       <AssetStandardSelector value={standard} onChange={onStandardChange} />
@@ -781,6 +830,17 @@ function CreateTabContent({ standard, onStandardChange }: CreateTabContentProps)
           onMutableChange={handleMutableChange}
           onCollectionNftChange={handleCollectionNftChange}
         />
+
+        {standard === "pnft" && (
+          <RuleSetSection
+            ruleSetOption={form.ruleSetOption}
+            customRuleSetAddress={form.customRuleSetAddress}
+            error={errors.customRuleSetAddress}
+            onRuleSetOptionChange={handleRuleSetOptionChange}
+            onCustomAddressChange={handleCustomRuleSetAddressChange}
+            onCustomAddressBlur={handleCustomRuleSetAddressBlur}
+          />
+        )}
       </div>
     </div>
   )
@@ -1041,6 +1101,108 @@ function SettingsSection({ isMutable, isCollectionNft, onMutableChange, onCollec
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const RULE_SET_OPTIONS: Array<{ value: RuleSetOption; label: string; description: string }> = [
+  {
+    value: "metaplex",
+    label: "Metaplex",
+    description: "Standard Metaplex rule set for royalty enforcement",
+  },
+  {
+    value: "compatibility",
+    label: "Compatibility",
+    description: "Allows trading on all marketplaces",
+  },
+  {
+    value: "none",
+    label: "None",
+    description: "No programmable rules applied",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Specify your own rule set address",
+  },
+]
+
+interface RuleSetSectionProps {
+  ruleSetOption: RuleSetOption
+  customRuleSetAddress: string
+  error?: string
+  onRuleSetOptionChange: (option: RuleSetOption) => void
+  onCustomAddressChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onCustomAddressBlur: () => void
+}
+
+function RuleSetSection({
+  ruleSetOption,
+  customRuleSetAddress,
+  error,
+  onRuleSetOptionChange,
+  onCustomAddressChange,
+  onCustomAddressBlur,
+}: RuleSetSectionProps) {
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="space-y-1">
+        <Label>Rule Set</Label>
+        <p className="text-xs text-muted-foreground">
+          pNFTs use rule sets to control transfer behavior and royalty enforcement
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {RULE_SET_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+              ruleSetOption === option.value
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-muted-foreground/50"
+            )}
+          >
+            <input
+              type="radio"
+              name="ruleSetOption"
+              value={option.value}
+              checked={ruleSetOption === option.value}
+              onChange={() => onRuleSetOptionChange(option.value)}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <div className="flex-1">
+              <span className="text-sm font-medium">{option.label}</span>
+              <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      {ruleSetOption === "custom" && (
+        <div className="space-y-2">
+          <Label className={cn(error && "text-destructive")}>Custom Rule Set Address</Label>
+          <Input
+            value={customRuleSetAddress}
+            onChange={onCustomAddressChange}
+            onBlur={onCustomAddressBlur}
+            placeholder="Enter rule set address"
+            error={!!error}
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+      )}
+
+      {ruleSetOption !== "custom" && ruleSetOption !== "none" && (
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium">Address:</span>{" "}
+            <code className="font-mono text-xs">{RULE_SET_ADDRESSES[ruleSetOption]}</code>
+          </p>
+        </div>
+      )}
     </div>
   )
 }
