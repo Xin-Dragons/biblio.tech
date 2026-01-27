@@ -1091,6 +1091,220 @@ async function mintNiftyAsset({
   }
 }
 
+interface UpdateCoreAssetOptions {
+  assetAddress: Address
+  newName?: string
+  newUri?: string
+  collectionAddress?: string
+  feePayer: TransactionSigner
+}
+
+async function updateCoreAsset({
+  assetAddress,
+  newName,
+  newUri,
+  collectionAddress,
+  feePayer,
+}: UpdateCoreAssetOptions): Promise<string> {
+  const updateInstruction = mplCore.getUpdateV1Instruction({
+    asset: assetAddress,
+    payer: feePayer,
+    authority: feePayer,
+    collection: collectionAddress ? (collectionAddress as Address) : undefined,
+    newName: newName ?? null,
+    newUri: newUri ?? null,
+    newUpdateAuthority: null,
+  })
+
+  const signature = await prepareAndSendTransaction({
+    instructions: [updateInstruction],
+    feePayer,
+  })
+
+  return signature
+}
+
+interface UpdatePnftOptions {
+  mintAddress: Address
+  newName?: string
+  newSymbol?: string
+  newUri?: string
+  sellerFeeBasisPoints?: number
+  creators?: Array<{ address: Address; verified: boolean; share: number }>
+  collectionAddress?: string
+  originalCollectionAddress?: string
+  ruleSetAddress?: Address | null
+  feePayer: TransactionSigner
+  account: string
+}
+
+async function updatePnft({
+  mintAddress,
+  newName,
+  newSymbol,
+  newUri,
+  sellerFeeBasisPoints,
+  creators,
+  collectionAddress,
+  originalCollectionAddress,
+  ruleSetAddress,
+  feePayer,
+  account,
+}: UpdatePnftOptions): Promise<string> {
+  const metadata = await getMetadataPda(mintAddress)
+  const masterEdition = await getMasterEditionPda(mintAddress)
+
+  const [ata] = await findAssociatedTokenPda({
+    mint: mintAddress,
+    owner: account as Address,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
+  })
+
+  const data =
+    newName !== undefined ||
+    newSymbol !== undefined ||
+    newUri !== undefined ||
+    sellerFeeBasisPoints !== undefined ||
+    creators !== undefined
+      ? {
+          name: newName ?? "",
+          symbol: newSymbol ?? "",
+          uri: newUri ?? "",
+          sellerFeeBasisPoints: sellerFeeBasisPoints ?? 0,
+          creators: creators ?? null,
+        }
+      : null
+
+  let collectionToggle:
+    | { __kind: "None" }
+    | { __kind: "Clear" }
+    | { __kind: "Set"; fields: readonly [{ key: Address; verified: boolean }] } = { __kind: "None" }
+  if (collectionAddress !== originalCollectionAddress) {
+    if (collectionAddress) {
+      collectionToggle = { __kind: "Set", fields: [{ key: collectionAddress as Address, verified: false }] }
+    } else if (originalCollectionAddress) {
+      collectionToggle = { __kind: "Clear" }
+    }
+  }
+
+  const updateIx = tokenMetadata.getUpdateInstruction({
+    authority: feePayer,
+    mint: mintAddress,
+    metadata,
+    edition: masterEdition,
+    token: ata,
+    payer: feePayer,
+    updateArgs: {
+      __kind: "V1",
+      newUpdateAuthority: null,
+      data,
+      primarySaleHappened: null,
+      isMutable: null,
+      collection: collectionToggle,
+      collectionDetails: { __kind: "None" },
+      uses: { __kind: "None" },
+      ruleSet: { __kind: "None" },
+      authorizationData: null,
+    },
+    ...(ruleSetAddress && {
+      authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+      authorizationRules: ruleSetAddress,
+    }),
+  })
+
+  const signature = await prepareAndSendTransaction({
+    instructions: [updateIx],
+    feePayer,
+  })
+
+  return signature
+}
+
+interface UpdateNiftyAssetOptions {
+  assetAddress: Address
+  newName?: string
+  newUri?: string
+  newSymbol?: string
+  newDescription?: string
+  attributes?: Array<{ traitType: string; value: string }>
+  collectionAddress?: string
+  feePayer: TransactionSigner
+}
+
+async function updateNiftyAsset({
+  assetAddress,
+  newName,
+  newUri,
+  newSymbol,
+  newDescription,
+  attributes,
+  collectionAddress,
+  feePayer,
+}: UpdateNiftyAssetOptions): Promise<string> {
+  const instructions: Instruction[] = []
+
+  if (newUri !== undefined || newSymbol !== undefined || newDescription !== undefined) {
+    const metadataBytes = encodeMetadataExtension(newSymbol ?? "", newDescription ?? "", newUri ?? "")
+    const metadataUpdateIx = asset.getUpdateInstruction({
+      asset: assetAddress,
+      authority: feePayer,
+      payer: feePayer,
+      group: collectionAddress ? (collectionAddress as Address) : undefined,
+      name: newName ?? null,
+      mutable: null,
+      extension: {
+        extensionType: asset.ExtensionType.Metadata,
+        length: metadataBytes.length,
+        data: metadataBytes,
+      },
+    })
+    instructions.push(metadataUpdateIx)
+  } else if (newName !== undefined) {
+    const nameUpdateIx = asset.getUpdateInstruction({
+      asset: assetAddress,
+      authority: feePayer,
+      payer: feePayer,
+      group: collectionAddress ? (collectionAddress as Address) : undefined,
+      name: newName,
+      mutable: null,
+      extension: null,
+    })
+    instructions.push(nameUpdateIx)
+  }
+
+  if (attributes !== undefined && attributes.length > 0) {
+    const filteredAttrs = attributes.filter((a) => a.traitType.trim() && a.value.trim())
+    if (filteredAttrs.length > 0) {
+      const attributesBytes = encodeAttributesExtension(filteredAttrs)
+      const attrsUpdateIx = asset.getUpdateInstruction({
+        asset: assetAddress,
+        authority: feePayer,
+        payer: feePayer,
+        group: collectionAddress ? (collectionAddress as Address) : undefined,
+        name: null,
+        mutable: null,
+        extension: {
+          extensionType: asset.ExtensionType.Attributes,
+          length: attributesBytes.length,
+          data: attributesBytes,
+        },
+      })
+      instructions.push(attrsUpdateIx)
+    }
+  }
+
+  if (instructions.length === 0) {
+    throw new Error("No changes to update")
+  }
+
+  const signature = await prepareAndSendTransaction({
+    instructions,
+    feePayer,
+  })
+
+  return signature
+}
+
 interface CreateTabContentProps {
   standard: AssetStandard
   onStandardChange: (value: AssetStandard) => void
@@ -2571,13 +2785,19 @@ interface UpdateTabContentProps {
   onPreviewUpdate: (data: NftPreviewData) => void
 }
 
+type UpdateStep = "idle" | "uploading-image" | "uploading-multimedia" | "uploading-metadata" | "updating" | "complete"
+
 function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
   const { account } = useWallet()
+  const { signer, capabilities } = useTransactionSigner()
   const [tokenAddress, setTokenAddress] = useState("")
   const [tokenAddressError, setTokenAddressError] = useState<string | undefined>()
   const [isLoading, setIsLoading] = useState(false)
   const [loadedNft, setLoadedNft] = useState<LoadedNftData | null>(null)
   const [authorityError, setAuthorityError] = useState<string | undefined>()
+  const [updateStep, setUpdateStep] = useState<UpdateStep>("idle")
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [updateSignature, setUpdateSignature] = useState<string | null>(null)
 
   const [form, setForm] = useState<UpdateFormState>({
     name: "",
@@ -2967,6 +3187,159 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
     toast.info("Changes discarded")
   }, [originalForm, loadedNft, imagePreviewUrl, multimediaPreviewUrl, populateFormFromNft])
 
+  const handleUpdateSubmit = useCallback(async () => {
+    if (!loadedNft || !account || !originalForm || !isFormDirty) return
+    if (!signer || !capabilities?.canSignMessage) {
+      toast.error("Please connect a wallet that can sign messages")
+      return
+    }
+
+    const toastId = "update-nft"
+    try {
+      let imageUri = originalForm.imageUrl
+      let multimediaUri: string | null = null
+
+      const needsMetadataUpload =
+        form.name !== originalForm.name ||
+        form.symbol !== originalForm.symbol ||
+        form.description !== originalForm.description ||
+        form.externalUrl !== originalForm.externalUrl ||
+        form.imageFile !== null ||
+        form.multimediaFile !== null ||
+        form.royaltiesPercent !== originalForm.royaltiesPercent ||
+        JSON.stringify(form.creators) !== JSON.stringify(originalForm.creators) ||
+        JSON.stringify(form.attributes) !== JSON.stringify(originalForm.attributes)
+
+      if (form.imageFile) {
+        setUpdateStep("uploading-image")
+        toast.loading("Uploading new image...", { id: toastId })
+        const imageResult = await uploadToIrys(form.imageFile, account, {
+          signMessage: signer.signMessage?.bind(signer) as (message: Uint8Array) => Promise<Uint8Array>,
+        })
+        imageUri = imageResult.uri
+      }
+
+      if (form.multimediaFile && form.multimediaCategory) {
+        setUpdateStep("uploading-multimedia")
+        toast.loading("Uploading multimedia...", { id: toastId })
+        const multimediaResult = await uploadToIrys(form.multimediaFile, account, {
+          signMessage: signer.signMessage?.bind(signer) as (message: Uint8Array) => Promise<Uint8Array>,
+        })
+        multimediaUri = multimediaResult.uri
+      }
+
+      let metadataUri = loadedNft.uri
+      if (needsMetadataUpload) {
+        setUpdateStep("uploading-metadata")
+        toast.loading("Uploading metadata...", { id: toastId })
+
+        const metadataInput: NftMetadataInput = {
+          name: form.name,
+          symbol: form.symbol,
+          description: form.description,
+          image: imageUri || "",
+          externalUrl: form.externalUrl || undefined,
+          attributes: form.attributes
+            .filter((a) => a.traitType.trim())
+            .map((a) => ({ trait_type: a.traitType, value: a.value })),
+          sellerFeeBasisPoints: Math.round(form.royaltiesPercent * 100),
+          creators: form.creators.map((c) => ({ address: c.address, share: c.share })),
+        }
+
+        if (multimediaUri && form.multimediaCategory) {
+          metadataInput.animationUrl = multimediaUri
+          metadataInput.multimediaCategory = form.multimediaCategory as IrysMultimediaCategory
+        }
+
+        if (imageUri) {
+          metadataInput.imageType = form.imageFile?.type
+        }
+
+        const metadataResult = await uploadJsonMetadata(metadataInput, account, {
+          signMessage: signer.signMessage?.bind(signer) as (message: Uint8Array) => Promise<Uint8Array>,
+        })
+        metadataUri = metadataResult.uri
+      }
+
+      setUpdateStep("updating")
+      toast.loading("Updating NFT...", { id: toastId })
+
+      const feePayer = signer as unknown as TransactionSigner
+      let signature: string
+
+      if (loadedNft.standard === "core") {
+        signature = await updateCoreAsset({
+          assetAddress: loadedNft.mintAddress as Address,
+          newName: form.name !== originalForm.name ? form.name : undefined,
+          newUri: metadataUri !== loadedNft.uri ? metadataUri : undefined,
+          collectionAddress: form.collectionAddress || undefined,
+          feePayer,
+        })
+      } else if (loadedNft.standard === "pnft") {
+        const creators = form.creators.map((c) => ({
+          address: c.address as Address,
+          verified: c.address === account,
+          share: c.share,
+        }))
+
+        signature = await updatePnft({
+          mintAddress: loadedNft.mintAddress as Address,
+          newName: form.name,
+          newSymbol: form.symbol,
+          newUri: metadataUri,
+          sellerFeeBasisPoints: Math.round(form.royaltiesPercent * 100),
+          creators,
+          collectionAddress: form.collectionAddress || undefined,
+          originalCollectionAddress: originalForm.collectionAddress || undefined,
+          ruleSetAddress: loadedNft.ruleSetAddress ? (loadedNft.ruleSetAddress as Address) : null,
+          feePayer,
+          account,
+        })
+      } else {
+        signature = await updateNiftyAsset({
+          assetAddress: loadedNft.mintAddress as Address,
+          newName: form.name !== originalForm.name ? form.name : undefined,
+          newUri: metadataUri !== loadedNft.uri ? metadataUri : undefined,
+          newSymbol: form.symbol !== originalForm.symbol ? form.symbol : undefined,
+          newDescription: form.description !== originalForm.description ? form.description : undefined,
+          attributes:
+            JSON.stringify(form.attributes) !== JSON.stringify(originalForm.attributes) ? form.attributes : undefined,
+          collectionAddress: form.collectionAddress || undefined,
+          feePayer,
+        })
+      }
+
+      setUpdateStep("complete")
+      setUpdateSignature(signature)
+      toast.success("NFT updated successfully!", { id: toastId })
+      setShowSuccessDialog(true)
+
+      const updatedNft = await loadNft(loadedNft.mintAddress)
+      setLoadedNft(updatedNft)
+      populateFormFromNft(updatedNft)
+
+      onPreviewUpdate({
+        name: updatedNft.name,
+        symbol: updatedNft.symbol,
+        description: updatedNft.description,
+        imagePreviewUrl: updatedNft.imageUrl,
+        attributes: updatedNft.attributes,
+      })
+    } catch (err) {
+      console.error("Update failed:", err)
+      const message = err instanceof Error ? err.message : "Update failed"
+      toast.error(message, {
+        id: toastId,
+        action: {
+          label: "Retry",
+          onClick: handleUpdateSubmit,
+        },
+      })
+    } finally {
+      setUpdateStep("idle")
+    }
+  }, [loadedNft, account, originalForm, isFormDirty, signer, capabilities, form, populateFormFromNft, onPreviewUpdate])
+
   const getStandardBadge = (standard: AssetStandard) => {
     const config = ASSET_STANDARDS.find((s) => s.value === standard)
     if (!config) return null
@@ -3282,17 +3655,35 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
                     variant="outline"
                     className="flex-1"
                     onClick={handleCancel}
-                    disabled={!isFormDirty}
+                    disabled={!isFormDirty || updateStep !== "idle"}
                   >
                     Cancel
                   </Button>
-                  <Button type="button" className="flex-1" disabled={!isFormDirty}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Update NFT
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    disabled={!isFormDirty || updateStep !== "idle"}
+                    onClick={handleUpdateSubmit}
+                  >
+                    {updateStep !== "idle" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {updateStep === "uploading-image" && "Uploading image..."}
+                        {updateStep === "uploading-multimedia" && "Uploading multimedia..."}
+                        {updateStep === "uploading-metadata" && "Uploading metadata..."}
+                        {updateStep === "updating" && "Updating NFT..."}
+                        {updateStep === "complete" && "Done!"}
+                      </>
+                    ) : (
+                      <>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Update NFT
+                      </>
+                    )}
                   </Button>
                 </div>
 
-                {isFormDirty && (
+                {isFormDirty && updateStep === "idle" && (
                   <p className="text-xs text-center text-muted-foreground">
                     You have unsaved changes. Click Update NFT to apply them.
                   </p>
@@ -3316,6 +3707,86 @@ function UpdateTabContent({ onPreviewUpdate }: UpdateTabContentProps) {
           </div>
         )}
       </div>
+
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              NFT Updated Successfully!
+            </DialogTitle>
+            <DialogDescription>
+              Your {loadedNft ? ASSET_STANDARDS.find((s) => s.value === loadedNft.standard)?.label : "NFT"} has been
+              updated on-chain.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Token Address</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded bg-muted px-3 py-2 text-sm font-mono truncate">
+                  {loadedNft?.mintAddress}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => {
+                    if (loadedNft) {
+                      navigator.clipboard.writeText(loadedNft.mintAddress)
+                      toast.success("Copied to clipboard")
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {updateSignature && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Transaction Signature</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded bg-muted px-3 py-2 text-sm font-mono truncate">
+                    {updateSignature}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => {
+                      if (updateSignature) {
+                        navigator.clipboard.writeText(updateSignature)
+                        toast.success("Copied to clipboard")
+                      }
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <a
+              href={`https://solscan.io/token/${loadedNft?.mintAddress}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View on Solscan
+            </a>
+            <Button type="button" onClick={() => setShowSuccessDialog(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
