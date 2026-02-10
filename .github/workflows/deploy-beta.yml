@@ -54,6 +54,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:web
+        env:
+          VITE_API_URL: https://api.biblio.so
       - name: Deploy to Cloudflare Workers
         working-directory: apps/web
         run: pnpm wrangler deploy
