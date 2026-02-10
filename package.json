@@ -5,6 +5,7 @@
   "author": "Gentlemonke <gentlemonke@xinlabs.io>",
   "repository": "https://github.com/xin-dragons/biblio.tech",
   "license": "MIT",
+  "packageManager": "pnpm@10.18.3",
   "engines": {
     "node": ">=20"
   },
