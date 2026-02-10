@@ -86,11 +86,11 @@ export function VaultPage() {
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5 text-primary" />
-                Basic Freeze — You can unlock anytime
+                Basic Freeze — Prevents transfers and listings
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5 text-primary" />
-                Secure Freeze — Requires a different wallet to unlock
+                Secure Freeze — Two-wallet protection, even if one is compromised
               </span>
             </div>
           </div>
