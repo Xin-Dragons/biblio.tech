@@ -362,7 +362,7 @@ function WalletShowcaseOption({ onProceed }: { onProceed: () => void }) {
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
         Share your showcase at your wallet address:{" "}
-        <span className="font-mono text-foreground">biblio.tech/showcase/{shortAddress}</span>
+        <span className="font-mono text-foreground">biblio.so/showcase/{shortAddress}</span>
       </p>
       <div className="flex items-center gap-3">
         <button
@@ -1059,7 +1059,7 @@ export function ShowcasePage() {
             </div>
             <p className="mb-4 text-sm text-muted-foreground">
               Lock a Dandy to Biblio to claim a custom username like{" "}
-              <span className="font-mono">biblio.tech/showcase/yourname</span>
+              <span className="font-mono">biblio.so/showcase/yourname</span>
             </p>
             <UsernameClaimForm />
           </div>

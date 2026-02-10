@@ -3,6 +3,7 @@ import { X, Download, Loader2, Image } from "lucide-react"
 import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { logger } from "@/lib/logger"
 
 interface CollageExportDialogProps {
   onClose: () => void
@@ -185,7 +186,7 @@ export function CollageExportDialog({ onClose }: CollageExportDialogProps) {
     try {
       const dataUrl = await generateImage(gridElement, imageDataUrls, gridHeight, settings.scale, settings.quality)
       const sizeKb = Math.round((dataUrl.length * 0.75) / 1024)
-      console.log(`Export size: ~${sizeKb}KB (${selectedQuality})`)
+      logger.debug(`Export size: ~${sizeKb}KB (${selectedQuality})`)
 
       const link = document.createElement("a")
       link.href = dataUrl

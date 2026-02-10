@@ -20,6 +20,7 @@ import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 import { buildUnlockInstructions, createNoopSigner } from "@/lib/vault-transactions"
 import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
+import { logger } from "@/lib/logger"
 
 interface UnvaultDialogProps {
   open: boolean
@@ -219,8 +220,17 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
       onSuccess()
       onOpenChange(false)
     } catch (err) {
-      console.error("Unvault failed:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to unvault NFTs")
+      logger.error("Unvault failed:", err)
+      const errorMessage = err instanceof Error ? err.message : "Failed to unvault NFTs"
+      if (errorMessage.includes("timeout") || errorMessage.includes("Timeout")) {
+        toast.error("Network congestion, please try again")
+      } else if (errorMessage.includes("insufficient") || errorMessage.includes("Insufficient")) {
+        toast.error("Not enough SOL for transaction fees")
+      } else if (errorMessage.includes("signature") || errorMessage.includes("Wallet") || errorMessage.includes("sign")) {
+        toast.error("Wallet signing failed, please reconnect")
+      } else {
+        toast.error(errorMessage)
+      }
     } finally {
       setSigningState({ status: "idle" })
       abortControllerRef.current = null
@@ -311,9 +321,22 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
                 <div className="space-y-1">
                   <div className="text-sm font-medium text-amber-500">Authority Required</div>
                   <div className="text-xs text-muted-foreground">
-                    {allUnauthorized
-                      ? "Your linked wallets do not have unlock authority for any of these NFTs."
-                      : `${nftsWithoutAuthority.length} of ${nfts.length} NFT${nfts.length === 1 ? "" : "s"} cannot be unvaulted because your linked wallets do not have unlock authority.`}
+                    {allUnauthorized ? (
+                      <>
+                        Your linked wallets do not have unlock authority for these NFTs. Each NFT requires both:
+                        <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                          {nftsWithAuthority.some((n) => !n.hasDelegateAuthority && n.delegate) && (
+                            <li>Delegate wallet (the vault key that locked the NFT)</li>
+                          )}
+                          {nftsWithAuthority.some((n) => !n.hasOwnerAuthority) && (
+                            <li>Owner wallet (the NFT owner)</li>
+                          )}
+                        </ul>
+                        Link the required wallets from your profile to unlock.
+                      </>
+                    ) : (
+                      `${nftsWithoutAuthority.length} of ${nfts.length} NFT${nfts.length === 1 ? "" : "s"} cannot be unvaulted because your linked wallets do not have unlock authority.`
+                    )}
                   </div>
                 </div>
               </div>

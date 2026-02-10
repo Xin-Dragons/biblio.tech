@@ -28,8 +28,6 @@ export interface Env {
   TENSOR_API_KEY: string
   HELIUS_API_KEY: string
   SESSION_SECRET: string
-  BIBLIO_LOCK_WALLET: string
-  BIBLIO_LOCK_WALLET_SECRET: string
 }
 
 export type HonoEnv = {

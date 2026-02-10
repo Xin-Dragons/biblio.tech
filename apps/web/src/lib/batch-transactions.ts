@@ -8,6 +8,7 @@ import {
   type InstructionGroup,
   type BatchOptions,
 } from "./transaction"
+import { logger } from "./logger"
 
 const MAX_CONCURRENT_TRANSACTIONS = 50
 
@@ -97,7 +98,7 @@ export async function batchExecute<T>(
         const error = txResult.reason instanceof Error ? txResult.reason : new Error(String(txResult.reason))
         result.errors.push(error)
         result.failed += batchChunk[idx].items.length
-        console.error(`Batch ${batchIndex + 1} signing failed:`, error)
+        logger.error(`Batch ${batchIndex + 1} signing failed:`, error)
         reportProgress()
       }
     })
@@ -116,7 +117,7 @@ export async function batchExecute<T>(
         const error = sendResult.reason instanceof Error ? sendResult.reason : new Error(String(sendResult.reason))
         result.errors.push(error)
         result.failed += batch.items.length
-        console.error(`Batch ${batchIndex + 1} send failed:`, error)
+        logger.error(`Batch ${batchIndex + 1} send failed:`, error)
         reportProgress()
       }
     })
@@ -133,13 +134,13 @@ export async function batchExecute<T>(
         result.successful += batch.items.length
         result.signatures.push(signature)
         chunkSignatures.push(signature)
-        console.log(`Batch ${batchIndex + 1} confirmed: ${signature}`)
+        logger.debug(`Batch ${batchIndex + 1} confirmed: ${signature}`)
       } else {
         const error =
           confirmResult.reason instanceof Error ? confirmResult.reason : new Error(String(confirmResult.reason))
         result.errors.push(error)
         result.failed += batch.items.length
-        console.error(`Batch ${batchIndex + 1} confirmation failed:`, error)
+        logger.error(`Batch ${batchIndex + 1} confirmation failed:`, error)
       }
       reportProgress()
     })

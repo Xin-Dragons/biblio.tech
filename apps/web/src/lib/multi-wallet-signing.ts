@@ -22,6 +22,7 @@ import {
   sendTransaction,
   confirmTransactionViaWebSocket,
 } from "./transaction"
+import { logger } from "./logger"
 
 const POLL_INTERVAL = 500
 const WALLET_CHANGE_TIMEOUT = 120000
@@ -270,7 +271,7 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
     }
 
     onSigning?.(requiredSigner)
-    console.log(`[MultiWalletSigning] Requesting signature from ${requiredSigner.label} (${requiredSigner.address})`)
+    logger.debug(`[MultiWalletSigning] Requesting signature from ${requiredSigner.label} (${requiredSigner.address})`)
 
     // Sign with wallet standard - returns new transaction with signature added
     transaction = await signWithWalletStandard(transaction, requiredSigner.address)
@@ -288,7 +289,7 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
       throw new Error(`Wallet ${requiredSigner.label} returned empty signature`)
     }
 
-    console.log(
+    logger.debug(
       `[MultiWalletSigning] Got signature from ${requiredSigner.address}:`,
       Array.from(signature.slice(0, 8)).join(",") + "..."
     )
@@ -296,7 +297,7 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
 
   // Log final transaction state
   const finalTxWithSigs = transaction as unknown as { signatures: Record<string, Uint8Array | null> }
-  console.log(
+  logger.debug(
     `[MultiWalletSigning] Final transaction signatures:`,
     Object.entries(finalTxWithSigs.signatures).map(([k, v]) => ({
       address: k.slice(0, 8),
@@ -309,7 +310,7 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
   const signedBase64 = getBase64EncodedWireTransaction(
     transaction as Parameters<typeof getBase64EncodedWireTransaction>[0]
   )
-  console.log("[MultiWalletSigning] Verifying signatures with simulation...")
+  logger.debug("[MultiWalletSigning] Verifying signatures with simulation...")
 
   try {
     // Simulate with sigVerify: true to check signatures
@@ -329,30 +330,30 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
     }
 
     if (verifyData.error) {
-      console.error("[MultiWalletSigning] RPC error:", verifyData.error)
+      logger.error("[MultiWalletSigning] RPC error:", verifyData.error)
       throw new Error(`RPC error: ${verifyData.error.message}`)
     }
 
     if (verifyData.result?.value.err) {
-      console.error("[MultiWalletSigning] Simulation failed:", verifyData.result.value.err)
-      console.error("[MultiWalletSigning] Logs:", verifyData.result.value.logs)
+      logger.error("[MultiWalletSigning] Simulation failed:", verifyData.result.value.err)
+      logger.error("[MultiWalletSigning] Logs:", verifyData.result.value.logs)
       throw new Error(`Transaction verification failed: ${JSON.stringify(verifyData.result.value.err)}`)
     }
 
-    console.log("[MultiWalletSigning] Signatures verified successfully")
+    logger.debug("[MultiWalletSigning] Signatures verified successfully")
   } catch (err) {
     if (err instanceof Error && err.message.includes("verification failed")) {
       throw err
     }
-    console.warn("[MultiWalletSigning] Signature verification skipped:", err)
+    logger.warn("[MultiWalletSigning] Signature verification skipped:", err)
   }
 
   // Send the fully signed transaction
   onSending?.()
-  console.log("[MultiWalletSigning] Sending transaction...")
+  logger.debug("[MultiWalletSigning] Sending transaction...")
   const signature = await sendTransaction(signedBase64)
-  console.log("[MultiWalletSigning] Transaction sent, signature:", signature)
+  logger.debug("[MultiWalletSigning] Transaction sent, signature:", signature)
   await confirmTransactionViaWebSocket(signature)
-  console.log("[MultiWalletSigning] Transaction confirmed")
+  logger.debug("[MultiWalletSigning] Transaction confirmed")
   return signature
 }

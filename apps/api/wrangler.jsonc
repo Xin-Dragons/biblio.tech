@@ -70,21 +70,20 @@
     {
       "binding": "DB",
       "database_name": "biblio-db",
-      "database_id": "placeholder-will-be-set-after-creation",
+      "database_id": "9744f3e7-0800-4dcc-bc44-06dae43ba353",
     },
   ],
 
   // Environment variables (secrets set via wrangler secret)
   "vars": {
-    "ENVIRONMENT": "development",
+    "ENVIRONMENT": "production",
   },
 
-  // Uncomment for production
-  // "env": {
-  //   "production": {
-  //     "vars": {
-  //       "ENVIRONMENT": "production"
-  //     }
-  //   }
-  // }
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production"
+      }
+    }
+  }
 }

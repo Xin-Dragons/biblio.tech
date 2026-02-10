@@ -8,7 +8,6 @@ import { nftsRoutes } from "./routes/nfts"
 import { tokensRoutes } from "./routes/tokens"
 import { healthRoutes } from "./routes/health"
 import { showcaseRoutes } from "./routes/showcase"
-import { lockRoutes } from "./routes/lock"
 import { stakeRoutes } from "./routes/stake"
 import { rpcRoutes } from "./routes/rpc"
 import { imageProxyRoutes } from "./routes/image-proxy"
@@ -30,7 +29,7 @@ app.use("*", logger())
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:5173", "https://biblio.tech"],
+    origin: ["http://localhost:5173", "https://biblio.so", "https://beta.biblio.so"],
     credentials: true,
   })
 )
@@ -42,7 +41,6 @@ app.route("/user", userRoutes)
 app.route("/nfts", nftsRoutes)
 app.route("/tokens", tokensRoutes)
 app.route("/showcase", showcaseRoutes)
-app.route("/lock", lockRoutes)
 app.route("/stake", stakeRoutes)
 app.route("/rpc", rpcRoutes)
 app.route("/image-proxy", imageProxyRoutes)

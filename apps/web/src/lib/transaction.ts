@@ -15,6 +15,7 @@ import {
 } from "@solana/kit"
 import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from "@solana-program/compute-budget"
 import { decodeSimulationError } from "./errors"
+import { logger } from "./logger"
 
 const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
 
@@ -61,8 +62,8 @@ export async function simulateTransaction(
   }
 
   if (data.result?.value.err) {
-    console.error("Simulation failed:", data.result.value.err)
-    console.error("Simulation logs:", data.result.value.logs)
+    logger.error("Simulation failed:", data.result.value.err)
+    logger.error("Simulation logs:", data.result.value.logs)
     const decodedError = decodeSimulationError(
       data.result.value.err as { InstructionError?: [number, { Custom?: number }] }
     )
@@ -148,10 +149,10 @@ export async function prepareAndSendTransaction({ instructions, feePayer }: Prep
   const simulationEncoded = getBase64EncodedWireTransaction(simulationTx)
   const { unitsConsumed } = await simulateTransaction(simulationEncoded)
   const cuLimit = Math.ceil(unitsConsumed * 1.1)
-  console.log(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
+  logger.debug(`Simulation used ${unitsConsumed} CUs, setting limit to ${cuLimit}`)
 
   const priorityFee = await getPriorityFee(simulationEncoded)
-  console.log(`Priority fee estimate: ${priorityFee} microLamports`)
+  logger.debug(`Priority fee estimate: ${priorityFee} microLamports`)
 
   // Build final transaction with proper CU limit and priority fee
   const finalMessage = pipe(
@@ -180,7 +181,7 @@ export async function prepareAndSendTransaction({ instructions, feePayer }: Prep
   const signedBase64 = getBase64EncodedWireTransaction(signedTx)
 
   const signature = await sendTransaction(signedBase64)
-  console.log(`Transaction sent: ${signature}`)
+  logger.debug(`Transaction sent: ${signature}`)
 
   await confirmTransactionViaWebSocket(signature)
   return signature
@@ -192,38 +193,38 @@ export async function confirmTransactionViaWebSocket(
 ): Promise<void> {
   const { timeout = 60000, commitment = "confirmed" } = options
 
-  console.log(`[WS] Confirming signature: ${signature}`)
-  console.log(`[WS] Connecting to: ${WS_PROXY_URL}`)
-  console.log(`[WS] Commitment: ${commitment}`)
+  logger.debug(`[WS] Confirming signature: ${signature}`)
+  logger.debug(`[WS] Connecting to: ${WS_PROXY_URL}`)
+  logger.debug(`[WS] Commitment: ${commitment}`)
 
   const rpcSubscriptions = createSolanaRpcSubscriptions(WS_PROXY_URL)
 
   const abortController = new AbortController()
   const timeoutId = setTimeout(() => {
-    console.log(`[WS] Timeout reached after ${timeout}ms, aborting`)
+    logger.debug(`[WS] Timeout reached after ${timeout}ms, aborting`)
     abortController.abort()
   }, timeout)
 
   try {
-    console.log("[WS] Subscribing to signatureNotifications...")
+    logger.debug("[WS] Subscribing to signatureNotifications...")
     const notifications = await rpcSubscriptions
       .signatureNotifications(signature as Signature, { commitment })
       .subscribe({ abortSignal: abortController.signal })
 
-    console.log("[WS] Subscription established, waiting for notifications...")
+    logger.debug("[WS] Subscription established, waiting for notifications...")
 
     for await (const notification of notifications) {
-      console.log("[WS] Received notification:", notification)
+      logger.debug("[WS] Received notification:", notification)
       if ("err" in notification && notification.err !== null) {
         throw new Error(`Transaction failed: ${JSON.stringify(notification.err)}`)
       }
-      console.log("[WS] Transaction confirmed!")
+      logger.debug("[WS] Transaction confirmed!")
       return
     }
 
     throw new Error("Transaction confirmation failed: no confirmation received")
   } catch (err) {
-    console.error("[WS] Error:", err)
+    logger.error("[WS] Error:", err)
     if (abortController.signal.aborted) {
       throw new Error(`Transaction confirmation timeout after ${timeout / 1000} seconds`)
     }
@@ -391,4 +392,46 @@ export async function batchInstructionsBySize<T>(
   }
 
   return batches
+}
+
+export interface ExecuteBatchesOptions<T> {
+  batches: BatchResult<T>[]
+  feePayer: TransactionSigner
+  onProgress: (completed: number, failed: number) => void
+}
+
+export interface ExecuteBatchesResult {
+  completed: number
+  failed: number
+}
+
+export async function executeBatches<T>({
+  batches,
+  feePayer,
+  onProgress,
+}: ExecuteBatchesOptions<T>): Promise<ExecuteBatchesResult> {
+  let completed = 0
+  let failed = 0
+
+  for (const batch of batches) {
+    try {
+      const { blockhash, lastValidBlockHeight } = await getBlockhash()
+      const signedTx = await prepareSignedTransaction({
+        instructions: batch.instructions,
+        feePayer,
+        blockhash,
+        lastValidBlockHeight,
+      })
+      const signature = await sendTransaction(signedTx)
+      await confirmTransactionViaWebSocket(signature)
+      completed += batch.items.length
+    } catch (error) {
+      logger.error("Batch failed:", error)
+      failed += batch.items.length
+    }
+
+    onProgress(completed, failed)
+  }
+
+  return { completed, failed }
 }

@@ -2,8 +2,9 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 import { rateLimiterMiddleware } from "../middleware/rate-limiter"
 import { heliusService } from "../services/helius"
-import { getAssetsByOwner, getAsset, getAssetBatch, type DASAsset, type DASCollection } from "../services/das"
+import { getAssetsByOwner, getAsset, getAssetBatch, mapImageToCdn, type DASAsset, type DASCollection } from "../services/das"
 import { getNiftyAssetsByOwner, fetchNiftyCollections, type NiftyAsset } from "../services/nifty"
+import { getAssetsByAuthority } from "../services/assets-by-authority"
 import { getCachedStakeRecords } from "./stake"
 
 export const nftsRoutes = new Hono<HonoEnv>()
@@ -17,20 +18,12 @@ nftsRoutes.use("*", rateLimiterMiddleware(10))
 
 function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string | null): DASAsset {
   // Normalize nifty Dandies to use the pNFT Dandies collection ID
-  // Debug: Check if group comparison works correctly
-  const groupMatches = niftyAsset.group === DANDIES_NIFTY_COLLECTION
-  if (niftyAsset.group && !groupMatches) {
-    console.log(
-      `[nfts] Nifty asset group mismatch - asset: ${niftyAsset.address}, group: "${niftyAsset.group}", expected: "${DANDIES_NIFTY_COLLECTION}", match: ${groupMatches}`
-    )
-  }
-
-  const collectionId = groupMatches ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+  const collectionId = niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
 
   return {
     mint: niftyAsset.address,
     name: niftyAsset.name,
-    image: niftyAsset.image ?? "",
+    image: mapImageToCdn(niftyAsset.image ?? "", collectionId ?? undefined),
     collectionId,
     collectionName,
     attributes: niftyAsset.attributes.map((attr) => ({
@@ -238,5 +231,18 @@ nftsRoutes.get("/by-collection/:collectionId", async (c) => {
   } catch (err) {
     console.error("Error fetching collection:", err)
     return c.json({ error: "Failed to fetch collection" }, 500)
+  }
+})
+
+// Get assets by update authority using GPA (not DAS)
+nftsRoutes.get("/by-authority/:authority", async (c) => {
+  const authority = c.req.param("authority")
+
+  try {
+    const assets = await getAssetsByAuthority(c.env, authority)
+    return c.json({ assets })
+  } catch (err) {
+    console.error("Error fetching assets by authority:", err)
+    return c.json({ error: "Failed to fetch assets by authority" }, 500)
   }
 })
