@@ -82,9 +82,7 @@ export function LinkWalletDialog({ open, onOpenChange }: LinkWalletDialogProps) 
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground">Detected from {detectedWallet.providerName}</p>
-                    <p className="font-mono text-sm font-medium">
-                      {detectedWallet.address.slice(0, 8)}...{detectedWallet.address.slice(-8)}
-                    </p>
+                    <p className="truncate font-mono text-sm font-medium">{detectedWallet.address}</p>
                   </div>
                 </div>
               </div>
