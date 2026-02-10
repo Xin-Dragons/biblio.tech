@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx",
-    "deploy": "npx wrangler deploy"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@biblio/solana-programs": "workspace:*",
@@ -68,6 +68,7 @@
     "tailwindcss": "^3.4.15",
     "typescript": "^5.4.5",
     "vite": "^6.0.0",
-    "vite-plugin-node-polyfills": "^0.25.0"
+    "vite-plugin-node-polyfills": "^0.25.0",
+    "wrangler": "^4.64.0"
   }
 }

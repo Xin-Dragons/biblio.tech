@@ -566,6 +566,9 @@ importers:
       vite-plugin-node-polyfills:
         specifier: ^0.25.0
         version: 0.25.0(rollup@4.55.2)(vite@6.4.1(@types/node@25.0.9)(jiti@1.21.7)(sass@1.97.2)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      wrangler:
+        specifier: ^4.64.0
+        version: 4.64.0(@cloudflare/workers-types@4.20260120.0)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
 
   packages/solana-programs:
     dependencies:
