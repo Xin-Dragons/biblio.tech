@@ -3,7 +3,7 @@ import { useAtomValue } from "jotai"
 import { Shield, Plus, Lock, Info } from "lucide-react"
 import { vaultedNftsAtom, unvaultedNftsAtom } from "@/stores/vault"
 import { isConnectedAtom } from "@/stores/wallet"
-import { isLoadingAtom, userNftsFetchedAtom } from "@/stores/nfts"
+import { isLoadingAtom, userNftsFetchedAtom, fetchedWalletAtom } from "@/stores/nfts"
 import { NftGrid } from "@/components/nft-grid"
 import { NftGridSkeleton } from "@/components/ui/skeleton"
 import { VaultDialog } from "@/components/vault/VaultDialog"
@@ -19,9 +19,10 @@ export function VaultPage() {
   const vaultedNfts = useAtomValue(vaultedNftsAtom)
   const unvaultedNfts = useAtomValue(unvaultedNftsAtom)
   const isLoading = useAtomValue(isLoadingAtom)
-  const hasFetched = useAtomValue(userNftsFetchedAtom)
+  const hasFetchedUser = useAtomValue(userNftsFetchedAtom)
+  const fetchedWallet = useAtomValue(fetchedWalletAtom)
 
-  const showLoading = isLoading || !hasFetched
+  const showLoading = isLoading || (!hasFetchedUser && !fetchedWallet)
 
   const handleSelectNfts = (nfts: typeof vaultedNfts) => {
     setSelectedNfts(nfts)
