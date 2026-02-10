@@ -81,16 +81,16 @@ export function VaultPage() {
           <div className="space-y-2 text-sm">
             <p className="text-foreground">
               <strong>Vault</strong> protects your NFTs by freezing them on-chain. Frozen NFTs cannot be transferred,
-              listed, or stolen until you unlock them.
+              listed, or drained unless you unlock them.
             </p>
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5 text-primary" />
-                Basic Freeze — Prevents transfers and listings
+                Basic Freeze — Protects against drains
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5 text-primary" />
-                Secure Freeze — Two-wallet protection, even if one is compromised
+                Secure Freeze — Two-wallet protection, even if one wallet is compromised
               </span>
             </div>
           </div>
