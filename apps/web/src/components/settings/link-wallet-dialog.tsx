@@ -72,7 +72,7 @@ export function LinkWalletDialog({ open, onOpenChange }: LinkWalletDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-6">
+        <div className="min-w-0 py-6">
           {detectedWallet ? (
             <div className="space-y-4">
               <div className="overflow-hidden rounded-lg border border-primary/30 bg-primary/5 p-4">
