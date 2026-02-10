@@ -10,6 +10,9 @@ declare global {
 interface ImportMetaEnv {
   readonly VITE_RPC_ENDPOINT: string
   readonly VITE_API_URL: string
+  readonly VITE_FEATURE_CREATOR_STUDIO?: string
+  readonly VITE_FEATURE_SHOWCASE?: string
+  readonly VITE_FEATURE_ALL_NFTS?: string
 }
 
 interface ImportMeta {

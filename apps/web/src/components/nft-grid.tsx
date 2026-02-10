@@ -114,6 +114,8 @@ const NftCard = memo(function NftCard({ nft, showInfo, disableModal }: NftCardPr
   const handleClick = () => {
     if (isSelectMode) {
       toggleSelected(nft.mint)
+    } else if (disableModal && isVaulted) {
+      setUnvaultDialogOpen(true)
     } else if (!disableModal) {
       setSelectedNft(nft)
     }

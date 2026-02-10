@@ -113,7 +113,7 @@ export function Layout() {
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         <Header />
         {showToolbar && <Toolbar />}
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <main className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
           {showWelcome ? <WelcomeScreen /> : <Outlet />}
         </main>
       </div>

@@ -27,13 +27,13 @@ import { TagManagementDialog } from "../tag-management-dialog"
 
 const navItems = [
   { href: "/", label: "Collections", icon: Folder },
-  { href: "/nfts", label: "All NFTs", icon: Image },
+  ...(import.meta.env.VITE_FEATURE_ALL_NFTS === "true" ? [{ href: "/nfts", label: "All NFTs", icon: Image }] : []),
   { href: "/starred", label: "Starred", icon: Star },
   { href: "/spl", label: "Tokens", icon: Coins },
   { href: "/membership", label: "Membership", icon: Lock },
   { href: "/vault", label: "Vault", icon: Shield },
   { href: "/junk", label: "Junk", icon: Trash2 },
-  { href: "/showcase", label: "Showcase", icon: User },
+  ...(import.meta.env.VITE_FEATURE_SHOWCASE === "true" ? [{ href: "/showcase", label: "Showcase", icon: User }] : []),
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
@@ -138,41 +138,44 @@ export function Sidebar() {
           )
         })}
 
-        {/* Tools Section */}
-        {!collapsed && (
-          <p className="mb-3 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Tools
-          </p>
+        {import.meta.env.VITE_FEATURE_CREATOR_STUDIO === "true" && (
+          <>
+            {!collapsed && (
+              <p className="mb-3 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Tools
+              </p>
+            )}
+            {collapsed && <div className="my-3 border-t border-white/5" />}
+            {toolsItems.map((item, index) => {
+              const Icon = item.icon
+              const isActive = location.pathname === item.href
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
+                    "animate-fade-up opacity-0",
+                    collapsed ? "justify-center px-2" : "px-3",
+                    isActive
+                      ? "bg-primary/10 text-primary border-l-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                  style={{ animationDelay: `${(navItems.length + index) * 50}ms`, animationFillMode: "forwards" }}
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0 transition-transform duration-200",
+                      isActive ? "text-primary" : "group-hover:scale-110"
+                    )}
+                  />
+                  {!collapsed && item.label}
+                </Link>
+              )
+            })}
+          </>
         )}
-        {collapsed && <div className="my-3 border-t border-white/5" />}
-        {toolsItems.map((item, index) => {
-          const Icon = item.icon
-          const isActive = location.pathname === item.href
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                "group flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
-                "animate-fade-up opacity-0",
-                collapsed ? "justify-center px-2" : "px-3",
-                isActive
-                  ? "bg-primary/10 text-primary border-l-2 border-primary"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-              style={{ animationDelay: `${(navItems.length + index) * 50}ms`, animationFillMode: "forwards" }}
-            >
-              <Icon
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform duration-200",
-                  isActive ? "text-primary" : "group-hover:scale-110"
-                )}
-              />
-              {!collapsed && item.label}
-            </Link>
-          )
-        })}
       </nav>
 
       {/* Tags Section - hidden when collapsed or not authenticated */}
