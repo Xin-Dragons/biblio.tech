@@ -60,29 +60,23 @@ function getAddressFromProvider(provider: WalletProvider["provider"]): string | 
   return provider.publicKey.toBase58?.() ?? provider.publicKey.toString?.() ?? null
 }
 
-function getPhantomCurrentAccount(): string | null {
+async function getPhantomAccount(): Promise<string | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const phantom = (window as any).phantom?.solana
-  if (!phantom?.publicKey) return null
-  return phantom.publicKey.toString()
-}
-
-function onPhantomAccountChanged(callback: (newAccount: string) => void): (() => void) | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const phantom = (window as any).phantom?.solana
-  if (!phantom?.on) return null
-  const handler = (publicKey: { toString(): string } | null) => {
-    if (publicKey) callback(publicKey.toString())
+  if (!phantom?.request) return null
+  try {
+    const resp = await phantom.request({ method: "connect", params: { onlyIfTrusted: true } })
+    return resp?.publicKey?.toString() ?? null
+  } catch {
+    return null
   }
-  phantom.on("accountChanged", handler)
-  return () => phantom.removeListener("accountChanged", handler)
 }
 
-function detectAccountChange(
+async function detectAccountChange(
   connectedWalletName: string | null,
   sessionWallet: string,
   linkedWallets: string[]
-): { address: string; providerName: string } | null {
+): Promise<{ address: string; providerName: string } | null> {
   if (!connectedWalletName) return null
 
   const providers = getWalletProviders()
@@ -90,7 +84,7 @@ function detectAccountChange(
   if (!connectedProvider) return null
 
   const isPhantom = connectedProvider.name.toLowerCase() === "phantom"
-  const address = isPhantom ? getPhantomCurrentAccount() : getAddressFromProvider(connectedProvider.provider)
+  const address = isPhantom ? await getPhantomAccount() : getAddressFromProvider(connectedProvider.provider)
 
   if (address && address !== sessionWallet && !linkedWallets.includes(address)) {
     return { address, providerName: connectedProvider.name }
@@ -155,59 +149,26 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
     const signal = abortControllerRef.current.signal
     const startTime = Date.now()
-    const isPhantom = connectedWalletName?.toLowerCase() === "phantom"
 
-    if (isPhantom) {
-      let resolved = false
-      const onDetected = (newAccount: string) => {
-        if (signal.aborted || resolved) return
-        if (newAccount !== session.wallet && !linkedAddresses.includes(newAccount)) {
-          resolved = true
-          setDetectedWallet({ address: newAccount, providerName: "Phantom" })
+    const poll = async () => {
+      while (!signal.aborted) {
+        const detected = await detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
+        if (detected) {
+          setDetectedWallet(detected)
+          return
         }
-      }
 
-      const unsub = onPhantomAccountChanged(onDetected)
-
-      // Also poll phantom.publicKey as fallback
-      const pollId = setInterval(() => {
-        const current = getPhantomCurrentAccount()
-        if (current) onDetected(current)
-      }, POLL_INTERVAL)
-
-      const timeoutId = setTimeout(() => {
-        if (!signal.aborted) {
+        if (Date.now() - startTime > LINK_TIMEOUT) {
           toast.error("Wallet detection timed out. Please try again.")
           cancelWatching()
+          return
         }
-      }, LINK_TIMEOUT)
 
-      signal.addEventListener("abort", () => {
-        unsub?.()
-        clearInterval(pollId)
-        clearTimeout(timeoutId)
-      })
-    } else {
-      const poll = async () => {
-        while (!signal.aborted) {
-          const detected = detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
-          if (detected) {
-            setDetectedWallet(detected)
-            return
-          }
-
-          if (Date.now() - startTime > LINK_TIMEOUT) {
-            toast.error("Wallet detection timed out. Please try again.")
-            cancelWatching()
-            return
-          }
-
-          await sleep(POLL_INTERVAL)
-        }
+        await sleep(POLL_INTERVAL)
       }
-
-      poll()
     }
+
+    poll()
   }, [session?.wallet, connectedWalletName, linkedAddresses, cancelWatching, setSkipAuthWalletSwitch])
 
   const connectOtherWallet = useCallback(
