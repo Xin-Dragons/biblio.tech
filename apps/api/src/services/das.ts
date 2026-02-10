@@ -93,7 +93,7 @@ type CoreAsset = Asset & {
   plugins?: CorePlugin[] | Record<string, CorePlugin>
 }
 
-function mapImageToCdn(imageUrl: string, slug?: string): string {
+export function mapImageToCdn(imageUrl: string, slug?: string): string {
   if (!imageUrl) return ""
   if (slug) {
     const encodedUrl = encodeURIComponent(imageUrl)

@@ -355,6 +355,9 @@ type NiftyMetadata = {
   name?: string
   description?: string
   attributes?: Array<{ trait_type: string; value: string }>
+  properties?: {
+    files?: Array<{ uri?: string; type?: string }>
+  }
 }
 
 /**
@@ -382,9 +385,10 @@ async function fetchNiftyMetadata(assets: NiftyAsset[]): Promise<void> {
               const metadata = (await response.json()) as NiftyMetadata
               if (metadata.image) {
                 asset.image = metadata.image
+              } else if (metadata.properties?.files?.[0]?.uri) {
+                asset.image = metadata.properties.files[0].uri
               }
             } else if (contentType.includes("image/")) {
-              // The URI itself is an image
               asset.image = asset.uri
             }
           }
@@ -432,6 +436,87 @@ export async function getNiftyAssetsByOwner(env: Env, wallet: string): Promise<N
   await fetchNiftyMetadata(assets)
 
   return assets
+}
+
+/**
+ * Fetches all nifty assets where wallet has update authority
+ * For Nifty, update authority works as follows:
+ * - Standalone assets (no group): asset's authority field
+ * - Grouped assets: the GROUP's authority is the update authority
+ *
+ * So we need to:
+ * 1. Find collections where user is authority → get all assets in those collections
+ * 2. Find standalone assets where user is direct authority
+ */
+export async function getNiftyAssetsByAuthority(env: Env, authority: string): Promise<NiftyAsset[]> {
+  const rpc = getClient(env)
+
+  type Base58EncodedBytes = string & {
+    readonly "__brand:@solana/kit": "Base58EncodedBytes"
+    readonly "__stringEncoding:@solana/kit": "base58"
+  }
+
+  const base64Encoder = getBase64Encoder()
+  const assets: NiftyAsset[] = []
+
+  // Step 1: Find all collections where user is authority (at offset 68)
+  const collectionsResponse = await rpc
+    .getProgramAccounts(NIFTY_PROGRAM_ID, {
+      encoding: "base64",
+      filters: [{ memcmp: { offset: 68n, bytes: authority as Base58EncodedBytes, encoding: "base58" } }],
+    })
+    .send()
+
+  const userCollections: string[] = []
+  for (const account of collectionsResponse) {
+    const [dataBase64] = account.account.data
+    const rawData = base64Encoder.encode(dataBase64)
+    const data = new Uint8Array(rawData)
+    const decodedAsset = decodeNiftyAsset(data, account.pubkey)
+    if (decodedAsset && decodedAsset.authority === authority) {
+      // Check if this is a collection (no group) or standalone asset
+      if (!decodedAsset.group) {
+        // This could be a collection OR a standalone asset
+        // Collections have assets pointing to them via group field
+        userCollections.push(account.pubkey)
+        // Also add as a potential standalone asset
+        assets.push(decodedAsset)
+      }
+    }
+  }
+
+  // Step 2: For each collection the user owns, find all assets in that collection
+  for (const collectionAddress of userCollections) {
+    const assetsInCollection = await rpc
+      .getProgramAccounts(NIFTY_PROGRAM_ID, {
+        encoding: "base64",
+        filters: [{ memcmp: { offset: 36n, bytes: collectionAddress as Base58EncodedBytes, encoding: "base58" } }],
+      })
+      .send()
+
+    for (const account of assetsInCollection) {
+      const [dataBase64] = account.account.data
+      const rawData = base64Encoder.encode(dataBase64)
+      const data = new Uint8Array(rawData)
+      const decodedAsset = decodeNiftyAsset(data, account.pubkey)
+      if (decodedAsset && decodedAsset.group === collectionAddress) {
+        assets.push(decodedAsset)
+      }
+    }
+  }
+
+  // Dedupe by address (in case collection was added as standalone)
+  const uniqueAssets = new Map<string, NiftyAsset>()
+  for (const asset of assets) {
+    uniqueAssets.set(asset.address, asset)
+  }
+
+  const result = Array.from(uniqueAssets.values())
+
+  // Fetch off-chain metadata to get actual image URLs
+  await fetchNiftyMetadata(result)
+
+  return result
 }
 
 export type NiftyCollection = {
