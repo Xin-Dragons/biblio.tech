@@ -51,7 +51,7 @@ export const signInAtom = atom(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publicKey,
-          signature: Buffer.from(signature).toString("base64"),
+          signature: btoa(String.fromCharCode(...signature)),
           message,
         }),
       })
