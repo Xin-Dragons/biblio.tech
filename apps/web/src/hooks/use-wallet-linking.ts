@@ -158,12 +158,22 @@ export function useWalletLinking(): UseWalletLinkingResult {
     const isPhantom = connectedWalletName?.toLowerCase() === "phantom"
 
     if (isPhantom) {
-      const unsub = onPhantomAccountChanged((newAccount) => {
-        if (signal.aborted) return
+      let resolved = false
+      const onDetected = (newAccount: string) => {
+        if (signal.aborted || resolved) return
         if (newAccount !== session.wallet && !linkedAddresses.includes(newAccount)) {
+          resolved = true
           setDetectedWallet({ address: newAccount, providerName: "Phantom" })
         }
-      })
+      }
+
+      const unsub = onPhantomAccountChanged(onDetected)
+
+      // Also poll phantom.publicKey as fallback
+      const pollId = setInterval(() => {
+        const current = getPhantomCurrentAccount()
+        if (current) onDetected(current)
+      }, POLL_INTERVAL)
 
       const timeoutId = setTimeout(() => {
         if (!signal.aborted) {
@@ -174,6 +184,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
       signal.addEventListener("abort", () => {
         unsub?.()
+        clearInterval(pollId)
         clearTimeout(timeoutId)
       })
     } else {

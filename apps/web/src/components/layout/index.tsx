@@ -9,7 +9,7 @@ import { NftDetailModal } from "../nft-detail-modal"
 import { ToastContainer } from "../toast"
 import { ErrorWatcher } from "../error-watcher"
 import { WelcomeScreen } from "../welcome-screen"
-import { fetchNftsAtom, fetchUserNftsAtom, nftsAtom } from "@/stores/nfts"
+import { fetchNftsAtom, nftsAtom } from "@/stores/nfts"
 import { fetchTierAtom } from "@/stores/tier"
 import { detectVaultedNftsAtom } from "@/stores/vault"
 import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
@@ -29,7 +29,6 @@ function DataFetcher() {
   const session = useAtomValue(sessionAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const fetchNfts = useSetAtom(fetchNftsAtom)
-  const fetchUserNfts = useSetAtom(fetchUserNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
   const fetchTags = useSetAtom(fetchTagsAtom)
@@ -58,17 +57,11 @@ function DataFetcher() {
     fetchNftTags()
   }, [session?.token, fetchTags, fetchNftTags])
 
-  // Authenticated: fetch for all linked wallets (no dependency on connected account)
+  // Fetch NFTs for connected wallet (always use public endpoint)
   useEffect(() => {
-    if (!isConnected || !session?.token) return
-    fetchUserNfts()
-  }, [isConnected, session?.token, fetchUserNfts])
-
-  // Non-authenticated: fetch for connected wallet only
-  useEffect(() => {
-    if (!isConnected || session?.token || !account) return
+    if (!isConnected || !account) return
     fetchNfts(account)
-  }, [isConnected, session?.token, account, fetchNfts])
+  }, [isConnected, account, fetchNfts])
 
   // Detect vaulted NFTs - authenticated users (use session.wallet, stable across linked wallet switches)
   useEffect(() => {
