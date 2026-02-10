@@ -25,6 +25,7 @@ export function LinkWalletDialog({ open, onOpenChange }: LinkWalletDialogProps) 
     isWatching,
     detectedWallet,
     connectedWalletName,
+    connectedWalletIcon,
     otherWallets,
     startWatching,
     cancelWatching,
@@ -102,7 +103,11 @@ export function LinkWalletDialog({ open, onOpenChange }: LinkWalletDialogProps) 
               <div className="flex flex-col items-center justify-center py-4">
                 <div className="relative mb-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                    <Wallet className="h-8 w-8 text-muted-foreground" />
+                    {connectedWalletIcon ? (
+                      <img src={connectedWalletIcon} alt={walletName} className="h-8 w-8" />
+                    ) : (
+                      <Wallet className="h-8 w-8 text-muted-foreground" />
+                    )}
                   </div>
                   <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary">
                     <Loader2 className="h-4 w-4 animate-spin text-primary-foreground" />

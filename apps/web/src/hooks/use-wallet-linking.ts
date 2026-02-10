@@ -97,6 +97,7 @@ interface UseWalletLinkingResult {
   isWatching: boolean
   detectedWallet: { address: string; providerName: string } | null
   connectedWalletName: string | null
+  connectedWalletIcon: string
   otherWallets: InstalledWallet[]
   startWatching: () => void
   cancelWatching: () => void
@@ -118,6 +119,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
   const linkedAddresses = linkedWallets.map((w) => w.publicKey)
   const connectedWalletName = connectedWallet?.name ?? null
+  const connectedWalletIcon = connectedWalletName ? getWalletIcon(connectedWalletName) : ""
   const otherWallets = getOtherInstalledWallets(connectedWalletName)
 
   const cancelWatching = useCallback(() => {
@@ -284,6 +286,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
     isWatching,
     detectedWallet,
     connectedWalletName,
+    connectedWalletIcon,
     otherWallets,
     startWatching,
     cancelWatching,
