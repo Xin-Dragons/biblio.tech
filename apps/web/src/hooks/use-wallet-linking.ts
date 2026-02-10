@@ -60,23 +60,29 @@ function getAddressFromProvider(provider: WalletProvider["provider"]): string | 
   return provider.publicKey.toBase58?.() ?? provider.publicKey.toString?.() ?? null
 }
 
-async function getPhantomAccount(): Promise<string | null> {
+function getPhantomCurrentAccount(): string | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const phantom = (window as any).phantom?.solana
-  if (!phantom?.request) return null
-  try {
-    const resp = await phantom.request({ method: "connect", params: { onlyIfTrusted: true } })
-    return resp?.publicKey?.toString() ?? null
-  } catch {
-    return null
-  }
+  if (!phantom?.publicKey) return null
+  return phantom.publicKey.toString()
 }
 
-async function detectAccountChange(
+function onPhantomAccountChanged(callback: (newAccount: string) => void): (() => void) | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phantom = (window as any).phantom?.solana
+  if (!phantom?.on) return null
+  const handler = (publicKey: { toString(): string } | null) => {
+    if (publicKey) callback(publicKey.toString())
+  }
+  phantom.on("accountChanged", handler)
+  return () => phantom.removeListener("accountChanged", handler)
+}
+
+function detectAccountChange(
   connectedWalletName: string | null,
   sessionWallet: string,
   linkedWallets: string[]
-): Promise<{ address: string; providerName: string } | null> {
+): { address: string; providerName: string } | null {
   if (!connectedWalletName) return null
 
   const providers = getWalletProviders()
@@ -84,7 +90,7 @@ async function detectAccountChange(
   if (!connectedProvider) return null
 
   const isPhantom = connectedProvider.name.toLowerCase() === "phantom"
-  const address = isPhantom ? await getPhantomAccount() : getAddressFromProvider(connectedProvider.provider)
+  const address = isPhantom ? getPhantomCurrentAccount() : getAddressFromProvider(connectedProvider.provider)
 
   if (address && address !== sessionWallet && !linkedWallets.includes(address)) {
     return { address, providerName: connectedProvider.name }
@@ -149,26 +155,48 @@ export function useWalletLinking(): UseWalletLinkingResult {
 
     const signal = abortControllerRef.current.signal
     const startTime = Date.now()
+    const isPhantom = connectedWalletName?.toLowerCase() === "phantom"
 
-    const poll = async () => {
-      while (!signal.aborted) {
-        const detected = await detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
-        if (detected) {
-          setDetectedWallet(detected)
-          return
+    if (isPhantom) {
+      const unsub = onPhantomAccountChanged((newAccount) => {
+        if (signal.aborted) return
+        if (newAccount !== session.wallet && !linkedAddresses.includes(newAccount)) {
+          setDetectedWallet({ address: newAccount, providerName: "Phantom" })
         }
+      })
 
-        if (Date.now() - startTime > LINK_TIMEOUT) {
+      const timeoutId = setTimeout(() => {
+        if (!signal.aborted) {
           toast.error("Wallet detection timed out. Please try again.")
           cancelWatching()
-          return
         }
+      }, LINK_TIMEOUT)
 
-        await sleep(POLL_INTERVAL)
+      signal.addEventListener("abort", () => {
+        unsub?.()
+        clearTimeout(timeoutId)
+      })
+    } else {
+      const poll = async () => {
+        while (!signal.aborted) {
+          const detected = detectAccountChange(connectedWalletName, session.wallet, linkedAddresses)
+          if (detected) {
+            setDetectedWallet(detected)
+            return
+          }
+
+          if (Date.now() - startTime > LINK_TIMEOUT) {
+            toast.error("Wallet detection timed out. Please try again.")
+            cancelWatching()
+            return
+          }
+
+          await sleep(POLL_INTERVAL)
+        }
       }
-    }
 
-    poll()
+      poll()
+    }
   }, [session?.wallet, connectedWalletName, linkedAddresses, cancelWatching, setSkipAuthWalletSwitch])
 
   const connectOtherWallet = useCallback(
@@ -246,7 +274,7 @@ export function useWalletLinking(): UseWalletLinkingResult {
         const encodedMessage = new TextEncoder().encode(message)
         const signatureResponse = await walletProvider.signMessage(encodedMessage)
         const signatureBytes = signatureResponse.signature ?? signatureResponse
-        signature = Buffer.from(signatureBytes).toString("base64")
+        signature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)))
 
         const linkPromise = linkWallet({
           publicKey: address,
