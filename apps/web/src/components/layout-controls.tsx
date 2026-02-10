@@ -65,23 +65,27 @@ export function LayoutControls({
         )}
         {showManageControls && (
           <>
-            {showSelectionControls && <SelectionControls nfts={nfts} />}
+            {showSelectionControls && import.meta.env.VITE_FEATURE_SELECT === "true" && (
+              <SelectionControls nfts={nfts} />
+            )}
             {showTagFilter && <TagFilterDropdown />}
-            <select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value as SortOption)}
-              className={cn(
-                "h-8 rounded-md border border-border bg-background px-2.5 text-sm",
-                "focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
-                "cursor-pointer"
-              )}
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {import.meta.env.VITE_FEATURE_SORT === "true" && (
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                className={cn(
+                  "h-8 rounded-md border border-border bg-background px-2.5 text-sm",
+                  "focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
+                  "cursor-pointer"
+                )}
+              >
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="flex overflow-hidden rounded-md border border-border">
               {layoutOptions.map((option) => {
                 const Icon = option.icon

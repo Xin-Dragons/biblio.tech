@@ -338,22 +338,6 @@ export const deleteTagAtom = atom(null, async (get, set, tagId: string) => {
   }
 })
 
-export const toggleNftTagAtom = atom(null, (_get, set, { mint, tagId }: { mint: string; tagId: string }) => {
-  set(nftTagsAtom, (prev) => {
-    const tags = prev[mint] ?? []
-    const hasTag = tags.includes(tagId)
-    if (hasTag) {
-      const filtered = tags.filter((t) => t !== tagId)
-      if (filtered.length === 0) {
-        const { [mint]: _, ...rest } = prev
-        return rest
-      }
-      return { ...prev, [mint]: filtered }
-    }
-    return { ...prev, [mint]: [...tags, tagId] }
-  })
-})
-
 // Bulk update NFT-tag associations via API with optimistic update
 export const bulkUpdateNftTagsAtom = atom(
   null,

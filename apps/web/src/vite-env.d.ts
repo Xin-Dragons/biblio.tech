@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_FEATURE_CREATOR_STUDIO?: string
   readonly VITE_FEATURE_SHOWCASE?: string
   readonly VITE_FEATURE_ALL_NFTS?: string
+  readonly VITE_FEATURE_SORT?: string
+  readonly VITE_FEATURE_SELECT?: string
 }
 
 interface ImportMeta {
