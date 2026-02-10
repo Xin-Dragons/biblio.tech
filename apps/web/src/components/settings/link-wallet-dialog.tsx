@@ -80,9 +80,9 @@ export function LinkWalletDialog({ open, onOpenChange }: LinkWalletDialogProps) 
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                     <Check className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-muted-foreground">Detected from {detectedWallet.providerName}</p>
-                    <p className="font-mono text-sm font-medium">{detectedWallet.address}</p>
+                    <p className="truncate font-mono text-sm font-medium">{detectedWallet.address}</p>
                   </div>
                 </div>
               </div>
