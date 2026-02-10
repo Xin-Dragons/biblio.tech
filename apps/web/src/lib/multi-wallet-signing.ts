@@ -23,6 +23,7 @@ import {
   confirmTransactionViaWebSocket,
 } from "./transaction"
 import { logger } from "./logger"
+import { API_BASE } from "@/lib/api"
 
 const POLL_INTERVAL = 500
 const WALLET_CHANGE_TIMEOUT = 120000
@@ -314,7 +315,7 @@ export async function signWithMultipleWallets(options: MultiWalletSigningOptions
 
   try {
     // Simulate with sigVerify: true to check signatures
-    const verifyResponse = await fetch("/api/rpc", {
+    const verifyResponse = await fetch(`${API_BASE}/rpc`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

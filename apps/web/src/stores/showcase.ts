@@ -1,4 +1,5 @@
 import { atom } from "jotai"
+import { API_BASE } from "@/lib/api"
 
 function getAuthHeaders(): HeadersInit {
   try {
@@ -75,7 +76,7 @@ export const usernameAvailabilityAtom = atom<{ username: string; available: bool
 export const fetchUsernameAtom = atom(null, async (_get, set) => {
   set(usernameLoadingAtom, true)
   try {
-    const res = await authFetch("/api/user/username")
+    const res = await authFetch(`${API_BASE}/user/username`)
     if (res.ok) {
       const data = await res.json()
       set(usernameAtom, data.username)
@@ -92,7 +93,7 @@ export const claimUsernameAtom = atom(
   null,
   async (_get, set, username: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await authFetch("/api/user/username", {
+      const res = await authFetch(`${API_BASE}/user/username`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
@@ -115,7 +116,7 @@ export const claimUsernameAtom = atom(
 // Release username
 export const releaseUsernameAtom = atom(null, async (_get, set) => {
   try {
-    const res = await authFetch("/api/user/username", { method: "DELETE" })
+    const res = await authFetch(`${API_BASE}/user/username`, { method: "DELETE" })
     if (res.ok) {
       set(usernameAtom, null)
       return true
@@ -134,7 +135,7 @@ export const checkUsernameAtom = atom(null, async (_get, set, username: string) 
   }
 
   try {
-    const res = await fetch(`/api/showcase/check/${encodeURIComponent(username)}`)
+    const res = await fetch(`${API_BASE}/showcase/check/${encodeURIComponent(username)}`)
     if (res.ok) {
       const data = await res.json()
       set(usernameAvailabilityAtom, data)
@@ -156,7 +157,7 @@ const DEFAULT_SHOWCASE_CONFIG: ShowcaseConfig = {
 export const fetchShowcaseConfigAtom = atom(null, async (_get, set) => {
   set(showcaseLoadingAtom, true)
   try {
-    const res = await authFetch("/api/user/showcase")
+    const res = await authFetch(`${API_BASE}/user/showcase`)
     if (res.ok) {
       const data = await res.json()
       set(showcaseConfigAtom, data ?? DEFAULT_SHOWCASE_CONFIG)
@@ -179,7 +180,7 @@ export const updateShowcaseConfigAtom = atom(
     set(showcaseConfigAtom, updated as ShowcaseConfig)
 
     try {
-      const res = await authFetch("/api/user/showcase", {
+      const res = await authFetch(`${API_BASE}/user/showcase`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -202,7 +203,7 @@ export const fetchPublicShowcaseAtom = atom(
   null,
   async (_get, _set, username: string): Promise<PublicShowcase | null> => {
     try {
-      const res = await fetch(`/api/showcase/${encodeURIComponent(username)}`)
+      const res = await fetch(`${API_BASE}/showcase/${encodeURIComponent(username)}`)
       if (res.ok) {
         return await res.json()
       }
@@ -221,7 +222,7 @@ export const leaderboardLoadingAtom = atom(false)
 // Fetch remaining votes for current user
 export const fetchRemainingVotesAtom = atom(null, async (_get, set) => {
   try {
-    const res = await authFetch("/api/showcase/votes/remaining")
+    const res = await authFetch(`${API_BASE}/showcase/votes/remaining`)
     if (res.ok) {
       const data = await res.json()
       set(remainingVotesAtom, data)
@@ -236,7 +237,7 @@ export const voteForShowcaseAtom = atom(
   null,
   async (_get, set, username: string): Promise<{ success: boolean; error?: string; remaining?: number }> => {
     try {
-      const res = await authFetch(`/api/showcase/${encodeURIComponent(username)}/vote`, {
+      const res = await authFetch(`${API_BASE}/showcase/${encodeURIComponent(username)}/vote`, {
         method: "POST",
       })
 
@@ -266,7 +267,7 @@ export const voteForShowcaseAtom = atom(
 export const fetchLeaderboardAtom = atom(null, async (_get, set) => {
   set(leaderboardLoadingAtom, true)
   try {
-    const res = await fetch("/api/showcase/leaderboard")
+    const res = await fetch(`${API_BASE}/showcase/leaderboard`)
     if (res.ok) {
       const data = await res.json()
       set(leaderboardAtom, data)
@@ -294,7 +295,7 @@ export const dandiesLoadingAtom = atom(false)
 export const fetchDandiesAtom = atom(null, async (_get, set) => {
   set(dandiesLoadingAtom, true)
   try {
-    const res = await authFetch("/api/lock/dandies")
+    const res = await authFetch(`${API_BASE}/lock/dandies`)
     if (res.ok) {
       const data = await res.json()
       set(dandiesAtom, data.dandies ?? [])
@@ -314,7 +315,7 @@ export const buildLockTxAtom = atom(
     { mint, owner }: { mint: string; owner: string }
   ): Promise<{ transaction: string; blockhash: string; lastValidBlockHeight: number } | null> => {
     try {
-      const res = await authFetch("/api/lock/build-lock-tx", {
+      const res = await authFetch(`${API_BASE}/lock/build-lock-tx`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mint, owner }),

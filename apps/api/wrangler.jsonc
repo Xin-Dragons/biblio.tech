@@ -79,6 +79,13 @@
     "ENVIRONMENT": "production",
   },
 
+  "routes": [
+    {
+      "pattern": "api.biblio.so",
+      "custom_domain": true
+    }
+  ],
+
   "env": {
     "production": {
       "vars": {

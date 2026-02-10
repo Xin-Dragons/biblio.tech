@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { isSome, type Option } from "@solana/kit"
+import { API_BASE } from "@/lib/api"
 
 /**
  * Converts string values in an object back to BigInt where expected
@@ -118,7 +119,7 @@ export const fetchStakeDataAtom = atom(null, async (_get, set) => {
   set(errorAtom, null)
 
   try {
-    const response = await fetch("/api/stake/dandies")
+    const response = await fetch(`${API_BASE}/stake/dandies`)
     if (!response.ok) {
       throw new Error("Failed to fetch stake data")
     }

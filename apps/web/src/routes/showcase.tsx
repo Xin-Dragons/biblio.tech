@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useWallet, useSolanaClient, useTransactionSigner } from "@solana/connector/react"
 import bs58 from "bs58"
+import { API_BASE } from "@/lib/api"
 import {
   User,
   ExternalLink,
@@ -208,7 +209,7 @@ function DandyLockSelector({ onLockSuccess }: { onLockSuccess: () => void }) {
       const signedTx = await signer.signTransaction(txBytes)
 
       // Send the signed transaction via RPC proxy
-      const sendResponse = await fetch("/api/rpc", {
+      const sendResponse = await fetch(`${API_BASE}/rpc`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -235,7 +236,7 @@ function DandyLockSelector({ onLockSuccess }: { onLockSuccess: () => void }) {
       let confirmed = false
 
       while (!confirmed && Date.now() - startTime < timeout) {
-        const statusResponse = await fetch("/api/rpc", {
+        const statusResponse = await fetch(`${API_BASE}/rpc`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

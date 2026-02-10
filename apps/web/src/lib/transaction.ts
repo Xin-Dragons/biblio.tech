@@ -16,14 +16,15 @@ import {
 import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from "@solana-program/compute-budget"
 import { decodeSimulationError } from "./errors"
 import { logger } from "./logger"
+import { API_BASE } from "@/lib/api"
 
-const WS_PROXY_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
+const WS_PROXY_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL.replace(/^http/, 'ws')}/rpc/ws` : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/rpc/ws`
 
 export const MAX_TX_SIZE = 1232
 export const SIZE_BUFFER = 100
 
 export async function getBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: bigint }> {
-  const response = await fetch("/api/rpc", {
+  const response = await fetch(`${API_BASE}/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -47,7 +48,7 @@ export async function getBlockhash(): Promise<{ blockhash: string; lastValidBloc
 export async function simulateTransaction(
   encodedTransaction: string
 ): Promise<{ unitsConsumed: number; logs: string[] }> {
-  const response = await fetch("/api/rpc", {
+  const response = await fetch(`${API_BASE}/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -77,7 +78,7 @@ export async function simulateTransaction(
 }
 
 export async function getPriorityFee(encodedTransaction: string): Promise<number> {
-  const response = await fetch("/api/rpc", {
+  const response = await fetch(`${API_BASE}/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -97,7 +98,7 @@ export async function getPriorityFee(encodedTransaction: string): Promise<number
 }
 
 export async function sendTransaction(signedTxBase64: string): Promise<string> {
-  const response = await fetch("/api/rpc", {
+  const response = await fetch(`${API_BASE}/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

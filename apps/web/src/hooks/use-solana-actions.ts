@@ -23,6 +23,7 @@ import {
   SIZE_BUFFER,
 } from "@/lib/transaction"
 import type { NFT, TokenStandard } from "../stores/nfts"
+import { API_BASE } from "@/lib/api"
 
 const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
 
@@ -73,7 +74,7 @@ function isProgrammableNft(tokenStandard: TokenStandard): boolean {
 }
 
 async function checkAccountExists(address: Address): Promise<boolean> {
-  const response = await fetch("/api/rpc", {
+  const response = await fetch(`${API_BASE}/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

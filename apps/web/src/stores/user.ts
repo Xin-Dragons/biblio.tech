@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { atomWithStorage, createJSONStorage } from "jotai/utils"
+import { API_BASE } from "@/lib/api"
 
 export const PRESET_COLORS = [
   "#ef4444",
@@ -91,7 +92,7 @@ export const tagsLoadingAtom = atom(false)
 export const fetchTagsAtom = atom(null, async (_get, set) => {
   set(tagsLoadingAtom, true)
   try {
-    const res = await authFetch("/api/user/tags")
+    const res = await authFetch(`${API_BASE}/user/tags`)
     if (res.ok) {
       const tags = (await res.json()) as Tag[]
       set(tagsAtom, tags)
@@ -106,7 +107,7 @@ export const fetchTagsAtom = atom(null, async (_get, set) => {
 // Fetch nft-tag associations from API - called on authenticated app load
 export const fetchNftTagsAtom = atom(null, async (_get, set) => {
   try {
-    const res = await authFetch("/api/user/nft-tags")
+    const res = await authFetch(`${API_BASE}/user/nft-tags`)
     if (res.ok) {
       const nftTags = (await res.json()) as Record<string, string[]>
       set(nftTagsAtom, nftTags)
@@ -128,7 +129,7 @@ export const collageLayoutAtom = atom<CollageLayoutItem[]>([])
 
 export const fetchCollageLayoutAtom = atom(null, async (_get, set, context: string = "nfts") => {
   try {
-    const res = await authFetch(`/api/user/layout/${context}`)
+    const res = await authFetch(`${API_BASE}/user/layout/${context}`)
     if (res.ok) {
       const data = (await res.json()) as CollageLayoutItem[]
       set(collageLayoutAtom, data ?? [])
@@ -143,7 +144,7 @@ export const saveCollageLayoutAtom = atom(
   async (_get, set, layout: CollageLayoutItem[], context: string = "nfts") => {
     set(collageLayoutAtom, layout)
     try {
-      await authFetch(`/api/user/layout/${context}`, {
+      await authFetch(`${API_BASE}/user/layout/${context}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(layout),
@@ -160,7 +161,7 @@ export const collageSizesAtom = atom<Record<string, CollageSizeClass>>({})
 
 export const fetchCollageSizesAtom = atom(null, async (_get, set, context: string = "nfts") => {
   try {
-    const res = await authFetch(`/api/user/sizes/${context}`)
+    const res = await authFetch(`${API_BASE}/user/sizes/${context}`)
     if (res.ok) {
       const data = (await res.json()) as Record<string, CollageSizeClass>
       set(collageSizesAtom, data ?? {})
@@ -175,7 +176,7 @@ export const saveCollageSizesAtom = atom(
   async (_get, set, sizes: Record<string, CollageSizeClass>, context: string = "nfts") => {
     set(collageSizesAtom, sizes)
     try {
-      await authFetch(`/api/user/sizes/${context}`, {
+      await authFetch(`${API_BASE}/user/sizes/${context}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sizes),
@@ -191,7 +192,7 @@ export const collageOrderAtom = atom<string[]>([])
 
 export const fetchCollageOrderAtom = atom(null, async (_get, set, context: string = "nfts") => {
   try {
-    const res = await authFetch(`/api/user/order/${context}`)
+    const res = await authFetch(`${API_BASE}/user/order/${context}`)
     if (res.ok) {
       const data = (await res.json()) as Record<string, number> | string[]
       if (Array.isArray(data)) {
@@ -214,7 +215,7 @@ export const fetchCollageOrderAtom = atom(null, async (_get, set, context: strin
 export const saveCollageOrderAtom = atom(null, async (_get, set, order: string[], context: string = "nfts") => {
   set(collageOrderAtom, order)
   try {
-    await authFetch(`/api/user/order/${context}`, {
+    await authFetch(`${API_BASE}/user/order/${context}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(order),
@@ -257,7 +258,7 @@ export const createTagAtom = atom(null, async (get, set, tag: Omit<Tag, "id">) =
   set(tagsAtom, [...prevTags, newTag])
 
   try {
-    const res = await authFetch("/api/user/tags", {
+    const res = await authFetch(`${API_BASE}/user/tags`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newTag),
@@ -289,7 +290,7 @@ export const updateTagAtom = atom(
     set(tagsAtom, newTags)
 
     try {
-      const res = await authFetch(`/api/user/tags/${id}`, {
+      const res = await authFetch(`${API_BASE}/user/tags/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -325,7 +326,7 @@ export const deleteTagAtom = atom(null, async (get, set, tagId: string) => {
   set(nftTagsAtom, nextNftTags)
 
   try {
-    const res = await authFetch(`/api/user/tags/${tagId}`, { method: "DELETE" })
+    const res = await authFetch(`${API_BASE}/user/tags/${tagId}`, { method: "DELETE" })
     if (!res.ok && res.status !== 404) {
       throw new Error("Failed to delete tag")
     }
@@ -387,7 +388,7 @@ export const bulkUpdateNftTagsAtom = atom(
       if (add && add.length > 0) body.add = add
       if (remove && remove.length > 0) body.remove = remove
 
-      const res = await authFetch(`/api/user/tags/${tagId}/nfts`, {
+      const res = await authFetch(`${API_BASE}/user/tags/${tagId}/nfts`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

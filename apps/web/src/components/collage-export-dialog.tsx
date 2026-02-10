@@ -4,6 +4,7 @@ import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { logger } from "@/lib/logger"
+import { API_BASE } from "@/lib/api"
 
 interface CollageExportDialogProps {
   onClose: () => void
@@ -18,7 +19,7 @@ const qualitySettings: Record<QualityOption, { scale: number; quality: number; l
 }
 
 async function fetchImageAsDataUrl(src: string): Promise<string> {
-  const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(src)}`
+  const proxyUrl = `${API_BASE}/image-proxy?url=${encodeURIComponent(src)}`
   const response = await fetch(proxyUrl)
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status}`)

@@ -1,6 +1,7 @@
 import { atom } from "jotai"
 import { searchQueryAtom, sortOptionAtom, tagFilterAtom, showUntaggedFilterAtom } from "./ui"
 import { junkAtom, nftTagsAtom } from "./user"
+import { API_BASE } from "@/lib/api"
 
 function getAuthHeaders(): HeadersInit {
   try {
@@ -121,7 +122,7 @@ function mapCollectionData(col: Record<string, unknown>): Collection {
 async function saveToCache(wallet: string, nfts: NFT[], collections: Collection[]) {
   if (!isAuthenticated()) return
   try {
-    await authFetch(`/api/user/nft-cache/${wallet}`, {
+    await authFetch(`${API_BASE}/user/nft-cache/${wallet}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nfts, collections }),
@@ -135,7 +136,7 @@ async function saveToCache(wallet: string, nfts: NFT[], collections: Collection[
 async function doBackgroundRefresh(set: (atom: unknown, value: unknown) => void) {
   set(isRefreshingAtom, true)
   try {
-    const response = await authFetch("/api/user/nfts?refresh=true")
+    const response = await authFetch(`${API_BASE}/user/nfts?refresh=true`)
     if (response.ok) {
       const data = await response.json()
       const nfts: NFT[] = data.mints.map((m: Record<string, unknown>) => mapNftData(m))
@@ -165,7 +166,7 @@ export const fetchUserNftsAtom = atom(null, async (get, set) => {
   set(errorAtom, null)
 
   try {
-    const response = await authFetch("/api/user/nfts")
+    const response = await authFetch(`${API_BASE}/user/nfts`)
     if (!response.ok) {
       throw new Error("Failed to fetch NFTs")
     }
@@ -195,7 +196,7 @@ export const refreshUserNftsAtom = atom(null, async (_get, set) => {
   set(errorAtom, null)
 
   try {
-    const response = await authFetch("/api/user/nfts?refresh=true")
+    const response = await authFetch(`${API_BASE}/user/nfts?refresh=true`)
     if (!response.ok) {
       throw new Error("Failed to fetch NFTs")
     }
@@ -226,7 +227,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
     if (cacheLoaded) {
       set(isRefreshingAtom, true)
       try {
-        const response = await fetch(`/api/nfts/by-owner/${wallet}`)
+        const response = await fetch(`${API_BASE}/nfts/by-owner/${wallet}`)
         if (response.ok) {
           const data = await response.json()
           const nfts: NFT[] = data.mints.map((m: Record<string, unknown>) => mapNftData(m, wallet))
@@ -249,7 +250,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
   // Try to load from cache first (only if authenticated)
   if (isAuthenticated()) {
     try {
-      const cacheRes = await authFetch(`/api/user/nft-cache/${wallet}`)
+      const cacheRes = await authFetch(`${API_BASE}/user/nft-cache/${wallet}`)
       if (cacheRes.ok) {
         const cache = await cacheRes.json()
         if (cache && cache.nfts && cache.nfts.length > 0) {
@@ -267,7 +268,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
           set(cacheLoadedAtom, true)
           // Now fetch fresh data in background
           set(isRefreshingAtom, true)
-          fetch(`/api/nfts/by-owner/${wallet}`)
+          fetch(`${API_BASE}/nfts/by-owner/${wallet}`)
             .then(async (response) => {
               if (response.ok) {
                 const data = await response.json()
@@ -299,7 +300,7 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
   set(errorAtom, null)
 
   try {
-    const response = await fetch(`/api/nfts/by-owner/${wallet}`)
+    const response = await fetch(`${API_BASE}/nfts/by-owner/${wallet}`)
     if (!response.ok) {
       throw new Error("Failed to fetch NFTs")
     }
@@ -330,7 +331,7 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
   try {
     // If authenticated, use the user endpoint for all wallets
     if (isAuthenticated()) {
-      const response = await authFetch("/api/user/nfts?refresh=true")
+      const response = await authFetch(`${API_BASE}/user/nfts?refresh=true`)
       if (!response.ok) {
         throw new Error("Failed to fetch NFTs")
       }
@@ -349,7 +350,7 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
 
       set(fetchedWalletAtom, null)
 
-      const response = await fetch(`/api/nfts/by-owner/${wallet}`)
+      const response = await fetch(`${API_BASE}/nfts/by-owner/${wallet}`)
       if (!response.ok) {
         throw new Error("Failed to fetch NFTs")
       }
@@ -488,7 +489,7 @@ export const refetchNftAtom = atom(null, async (get, set, mint: string) => {
   }
 
   try {
-    const response = await authFetch(`/api/nfts/${mint}`)
+    const response = await authFetch(`${API_BASE}/nfts/${mint}`)
     if (!response.ok) {
       return
     }
@@ -517,7 +518,7 @@ export const refetchNftBatchAtom = atom(null, async (get, set, mints: string[]):
   if (mintsToFetch.length === 0) return []
 
   try {
-    const response = await authFetch("/api/nfts/batch", {
+    const response = await authFetch(`${API_BASE}/nfts/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mints: mintsToFetch }),
@@ -562,7 +563,7 @@ export const fetchTokensAtom = atom(null, async (get, set, wallet: string) => {
   set(tokensLoadingAtom, true)
 
   try {
-    const response = await fetch(`/api/tokens/by-owner/${wallet}`)
+    const response = await fetch(`${API_BASE}/tokens/by-owner/${wallet}`)
     if (!response.ok) {
       throw new Error("Failed to fetch tokens")
     }

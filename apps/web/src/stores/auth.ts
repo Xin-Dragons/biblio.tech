@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import { API_BASE } from "@/lib/api"
 
 interface Session {
   token: string
@@ -37,7 +38,7 @@ export const signInAtom = atom(
     { publicKey, signMessage }: { publicKey: string; signMessage: (message: Uint8Array) => Promise<Uint8Array> }
   ) => {
     try {
-      const nonceRes = await fetch("/api/auth/nonce")
+      const nonceRes = await fetch(`${API_BASE}/auth/nonce`)
       if (!nonceRes.ok) throw new Error("Failed to get nonce")
       const { nonce } = await nonceRes.json()
 
@@ -45,7 +46,7 @@ export const signInAtom = atom(
       const encodedMessage = new TextEncoder().encode(message)
       const signature = await signMessage(encodedMessage)
 
-      const verifyRes = await fetch("/api/auth/verify", {
+      const verifyRes = await fetch(`${API_BASE}/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,7 +72,7 @@ export const signOutAtom = atom(null, async (get, set) => {
   const session = get(sessionAtom)
   if (session?.token) {
     try {
-      await fetch("/api/auth/logout", {
+      await fetch(`${API_BASE}/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },
       })

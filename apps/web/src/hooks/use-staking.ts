@@ -18,6 +18,7 @@ import {
   type StakerAccount,
   type StakeRecordAccount,
 } from "../stores/stake"
+import { API_BASE } from "@/lib/api"
 
 export const MPL_CORE_PROGRAM_ADDRESS = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" as Address
 export const TOKEN_METADATA_PROGRAM_ADDRESS = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s" as Address
@@ -112,7 +113,7 @@ export async function getStakeRecordPda(staker: Address, nftMint: Address): Prom
  */
 export async function fetchStakeRecord(nftMint: string): Promise<StakeRecordAccount | null> {
   try {
-    const response = await fetch(`/api/stake/record/${nftMint}`)
+    const response = await fetch(`${API_BASE}/stake/record/${nftMint}`)
 
     if (!response.ok) {
       if (response.status === 404) {

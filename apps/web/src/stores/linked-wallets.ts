@@ -1,6 +1,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { sessionAtom } from "./auth"
+import { API_BASE } from "@/lib/api"
 
 export interface LinkedWallet {
   publicKey: string
@@ -33,7 +34,7 @@ export const fetchLinkedWalletsAtom = atom(null, async (get, set) => {
   set(linkedWalletsErrorAtom, null)
 
   try {
-    const res = await fetch("/api/user/wallets", {
+    const res = await fetch(`${API_BASE}/user/wallets`, {
       headers: getAuthHeaders(session.token),
     })
 
@@ -66,7 +67,7 @@ export const linkWalletAtom = atom(null, async (get, set, input: LinkWalletInput
     throw new Error("Not authenticated")
   }
 
-  const res = await fetch("/api/user/wallets/link", {
+  const res = await fetch(`${API_BASE}/user/wallets/link`, {
     method: "POST",
     headers: {
       ...getAuthHeaders(session.token),
@@ -91,7 +92,7 @@ export const unlinkWalletAtom = atom(null, async (get, set, publicKey: string) =
     throw new Error("Not authenticated")
   }
 
-  const res = await fetch(`/api/user/wallets/${publicKey}`, {
+  const res = await fetch(`${API_BASE}/user/wallets/${publicKey}`, {
     method: "DELETE",
     headers: getAuthHeaders(session.token),
   })

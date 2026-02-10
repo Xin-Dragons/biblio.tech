@@ -1,4 +1,5 @@
 import { atom } from "jotai"
+import { API_BASE } from "@/lib/api"
 
 export enum Tier {
   Free = "Free",
@@ -46,7 +47,7 @@ export const tierLoadingAtom = atom(false)
 export const fetchTierAtom = atom(null, async (_get, set) => {
   set(tierLoadingAtom, true)
   try {
-    const res = await authFetch("/api/user/tier")
+    const res = await authFetch(`${API_BASE}/user/tier`)
     if (res.ok) {
       const data = await res.json()
       set(tierAtom, data)
