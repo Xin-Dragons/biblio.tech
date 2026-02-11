@@ -1,9 +1,9 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react"
-import { Shield, Unlock, AlertTriangle, Loader2 } from "lucide-react"
+import { Shield, Unlock, AlertTriangle, Loader2, ArrowRightLeft } from "lucide-react"
 import { useWallet, useKitTransactionSigner, useDisconnectWallet, useConnectWallet } from "@solana/connector/react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { toast } from "sonner"
-import { address, type TransactionSigner } from "@solana/kit"
+import { address, type Address, type TransactionSigner } from "@solana/kit"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,11 +13,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { refetchNftAtom, type NFT } from "@/stores/nfts"
 import { linkedWalletsAtom } from "@/stores/linked-wallets"
 import { removeVaultedMintsAtom } from "@/stores/vault"
 import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
-import { buildUnlockInstructions, createNoopSigner } from "@/lib/vault-transactions"
+import { buildUnlockInstructions, buildTransferInstructions, createNoopSigner } from "@/lib/vault-transactions"
 import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
 import { logger } from "@/lib/logger"
@@ -38,6 +39,8 @@ type SigningState =
 
 export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDialogProps) {
   const [signingState, setSigningState] = useState<SigningState>({ status: "idle" })
+  const [recoverMode, setRecoverMode] = useState(false)
+  const [selectedDestination, setSelectedDestination] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const { account } = useWallet()
@@ -59,6 +62,11 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
     if (account) addresses.push(account)
     return new Set(addresses)
   }, [account, linkedWallets])
+
+  const otherWallets = useMemo(
+    () => linkedWallets.map((w) => w.publicKey).filter((w) => w !== account),
+    [linkedWallets, account]
+  )
 
   const nftsWithAuthority = useMemo(() => {
     return nfts.map((nft) => {
@@ -167,17 +175,16 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
         noopSigners.set(address, createNoopSigner(address))
       }
 
-      // Build instructions for each NFT
+      const destinationAddress = recoverMode && selectedDestination ? (selectedDestination as Address) : null
+
       const nftInstructions: InstructionGroup<NFT>[] = await Promise.all(
-        nftsToUnvaultWithSigners.map(async ({ nft, owner, delegate }) => ({
-          item: nft,
-          instructions: await buildUnlockInstructions({
-            nft,
-            owner,
-            delegate,
-            signers: noopSigners,
-          }),
-        }))
+        nftsToUnvaultWithSigners.map(async ({ nft, owner, delegate }) => {
+          const unlockIxs = await buildUnlockInstructions({ nft, owner, delegate, signers: noopSigners })
+          const transferIxs = destinationAddress
+            ? await buildTransferInstructions({ nft, owner, destination: destinationAddress, signers: noopSigners })
+            : []
+          return { item: nft, instructions: [...unlockIxs, ...transferIxs] }
+        })
       )
 
       // Batch instructions by transaction size
@@ -214,8 +221,9 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
       }
 
       const txCount = batches.length
+      const action = destinationAddress ? "Recovered" : "Unvaulted"
       toast.success(
-        `Unvaulted ${successfulNfts.length} NFT${successfulNfts.length === 1 ? "" : "s"}${txCount > 1 ? ` in ${txCount} transactions` : ""}`
+        `${action} ${successfulNfts.length} NFT${successfulNfts.length === 1 ? "" : "s"}${txCount > 1 ? ` in ${txCount} transactions` : ""}`
       )
       onSuccess()
       onOpenChange(false)
@@ -240,7 +248,7 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
 
   const isProcessing = signingState.status !== "idle"
   const isReady = !!account && !!signer && ready && nfts.length > 0
-  const isUnvaultDisabled = !isReady || isProcessing || allUnauthorized
+  const isUnvaultDisabled = !isReady || isProcessing || allUnauthorized || (recoverMode && !selectedDestination)
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
@@ -343,8 +351,40 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
             </div>
           )}
 
+          {signingState.status === "idle" && otherWallets.length > 0 && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={recoverMode}
+                  onChange={(e) => {
+                    setRecoverMode(e.target.checked)
+                    if (!e.target.checked) setSelectedDestination(null)
+                  }}
+                  className="rounded border-border"
+                />
+                <ArrowRightLeft className="h-4 w-4 text-amber-500" />
+                <span className="text-sm">Transfer to another wallet after unlock</span>
+              </label>
+              {recoverMode && (
+                <Select value={selectedDestination ?? ""} onValueChange={setSelectedDestination}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select destination wallet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {otherWallets.map((wallet) => (
+                      <SelectItem key={wallet} value={wallet}>
+                        {wallet.slice(0, 4)}...{wallet.slice(-4)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
           <div className="space-y-3">
-            <span className="text-sm font-medium">NFTs to Unvault</span>
+            <span className="text-sm font-medium">NFTs to {recoverMode ? "Recover" : "Unvault"}</span>
             <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 max-h-[200px] overflow-y-auto">
               {nftsWithAuthority.map(({ nft, canUnlock, requiredSigners }) => (
                 <div
@@ -397,8 +437,8 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
               </>
             ) : (
               <>
-                <Unlock className="mr-2 h-4 w-4" />
-                Unvault
+                {recoverMode ? <ArrowRightLeft className="mr-2 h-4 w-4" /> : <Unlock className="mr-2 h-4 w-4" />}
+                {recoverMode ? "Recover" : "Unvault"}
                 {!allUnauthorized && nftsWithoutAuthority.length > 0
                   ? ` (${nfts.length - nftsWithoutAuthority.length})`
                   : ""}

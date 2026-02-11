@@ -361,192 +361,62 @@ function buildMplCoreUnlockInstructionsWithSigners(
   return [removePluginIx]
 }
 
-export interface BuildRecoverInput {
+export interface BuildTransferInput {
   nft: NFT
   owner: Address
-  delegate: Address
   destination: Address
-  payer: TransactionSigner
+  signers: Map<string, TransactionSigner>
 }
 
-export async function buildRecoverInstructions(input: BuildRecoverInput): Promise<Instruction[]> {
-  const { nft, owner, delegate, destination, payer } = input
-
+export async function buildTransferInstructions(input: BuildTransferInput): Promise<Instruction[]> {
+  const { nft, owner, destination, signers } = input
   const mintAddress = nft.mint as Address
+  const ownerSigner = getOrCreateSigner(signers, owner)
 
   if (isNiftyAsset(nft.tokenStandard)) {
-    return buildNiftyRecoverInstructions(mintAddress, owner, delegate, destination)
+    return [asset.getTransferInstruction({ asset: mintAddress, signer: ownerSigner, recipient: destination })]
   }
 
   if (isMplCoreAsset(nft.tokenStandard)) {
-    return buildMplCoreRecoverInstructions(mintAddress, owner, delegate, destination, payer)
+    return [mplCore.getTransferV1Instruction({
+      asset: mintAddress,
+      payer: ownerSigner,
+      authority: ownerSigner,
+      newOwner: destination,
+      compressionProof: null,
+    })]
   }
 
-  return buildTokenMetadataRecoverInstructions(nft, owner, delegate, destination, payer)
-}
-
-async function buildTokenMetadataRecoverInstructions(
-  nft: NFT,
-  owner: Address,
-  delegate: Address,
-  destination: Address,
-  payer: TransactionSigner
-): Promise<Instruction[]> {
-  const mintAddress = nft.mint as Address
-  const isPnft = isProgrammableNft(nft.tokenStandard)
-
-  const [sourceAta] = await findAssociatedTokenPda({
-    mint: mintAddress,
-    owner: owner,
-    tokenProgram: TOKEN_PROGRAM_ADDRESS,
-  })
-
-  const [destAta] = await findAssociatedTokenPda({
-    mint: mintAddress,
-    owner: destination,
-    tokenProgram: TOKEN_PROGRAM_ADDRESS,
-  })
-
+  const [sourceAta] = await findAssociatedTokenPda({ mint: mintAddress, owner, tokenProgram: TOKEN_PROGRAM_ADDRESS })
+  const [destAta] = await findAssociatedTokenPda({ mint: mintAddress, owner: destination, tokenProgram: TOKEN_PROGRAM_ADDRESS })
   const metadata = await getMetadataPda(mintAddress)
   const edition = await getMasterEditionPda(mintAddress)
 
-  const instructions: Instruction[] = []
+  const isPnft = isProgrammableNft(nft.tokenStandard)
+  const hasRuleSet = !!nft.ruleSet
 
-  if (isPnft) {
-    const sourceTokenRecord = await getTokenRecordPda(mintAddress, sourceAta)
-    const destTokenRecord = await getTokenRecordPda(mintAddress, destAta)
-    const hasRuleSet = !!nft.ruleSet
-
-    const unlockIx = tokenMetadata.getUnlockInstruction({
-      authority: createNoopSigner(delegate),
-      tokenOwner: owner,
-      token: sourceAta,
-      mint: mintAddress,
-      metadata: metadata,
-      edition: edition,
-      tokenRecord: sourceTokenRecord,
-      payer: payer,
-      splTokenProgram: TOKEN_PROGRAM_ADDRESS,
-      unlockArgs: { __kind: "V1", authorizationData: null },
-      ...(hasRuleSet && {
-        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
-        authorizationRules: nft.ruleSet as Address,
-      }),
-    })
-
-    const transferIx = tokenMetadata.getTransferInstruction({
-      token: sourceAta,
-      tokenOwner: owner,
-      destination: destAta,
-      destinationOwner: destination,
-      mint: mintAddress,
-      metadata: metadata,
-      edition: edition,
-      ownerTokenRecord: sourceTokenRecord,
-      destinationTokenRecord: destTokenRecord,
-      authority: createNoopSigner(owner),
-      payer: payer,
-      transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
-      ...(hasRuleSet && {
-        authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
-        authorizationRules: nft.ruleSet as Address,
-      }),
-    })
-
-    const closeIx = getCloseAccountInstruction({
-      account: sourceAta,
-      destination: destination,
-      owner: createNoopSigner(owner),
-    })
-
-    instructions.push(unlockIx, transferIx, closeIx)
-  } else {
-    const unlockIx = tokenMetadata.getUnlockInstruction({
-      authority: createNoopSigner(delegate),
-      tokenOwner: owner,
-      token: sourceAta,
-      mint: mintAddress,
-      metadata: metadata,
-      edition: edition,
-      payer: payer,
-      splTokenProgram: TOKEN_PROGRAM_ADDRESS,
-      unlockArgs: { __kind: "V1", authorizationData: null },
-    })
-
-    const transferIx = tokenMetadata.getTransferInstruction({
-      token: sourceAta,
-      tokenOwner: owner,
-      destination: destAta,
-      destinationOwner: destination,
-      mint: mintAddress,
-      metadata: metadata,
-      edition: edition,
-      authority: createNoopSigner(owner),
-      payer: payer,
-      transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
-    })
-
-    const closeIx = getCloseAccountInstruction({
-      account: sourceAta,
-      destination: destination,
-      owner: createNoopSigner(owner),
-    })
-
-    instructions.push(unlockIx, transferIx, closeIx)
-  }
-
-  return instructions
-}
-
-function buildNiftyRecoverInstructions(
-  assetAddress: Address,
-  owner: Address,
-  delegate: Address,
-  destination: Address
-): Instruction[] {
-  const instructions: Instruction[] = []
-
-  const unlockIx = asset.getUnlockInstruction({
-    asset: assetAddress,
-    signer: createNoopSigner(delegate),
+  const transferIx = tokenMetadata.getTransferInstruction({
+    token: sourceAta,
+    tokenOwner: owner,
+    destination: destAta,
+    destinationOwner: destination,
+    mint: mintAddress,
+    metadata,
+    edition,
+    authority: ownerSigner,
+    payer: ownerSigner,
+    transferArgs: { __kind: "V1", amount: 1, authorizationData: null },
+    ...(isPnft && {
+      ownerTokenRecord: await getTokenRecordPda(mintAddress, sourceAta),
+      destinationTokenRecord: await getTokenRecordPda(mintAddress, destAta),
+    }),
+    ...(hasRuleSet && {
+      authorizationRulesProgram: AUTH_RULES_PROGRAM_ADDRESS,
+      authorizationRules: nft.ruleSet as Address,
+    }),
   })
 
-  const transferIx = asset.getTransferInstruction({
-    asset: assetAddress,
-    signer: createNoopSigner(owner),
-    recipient: destination,
-  })
+  const closeIx = getCloseAccountInstruction({ account: sourceAta, destination, owner: ownerSigner })
 
-  instructions.push(unlockIx, transferIx)
-
-  return instructions
-}
-
-function buildMplCoreRecoverInstructions(
-  assetAddress: Address,
-  owner: Address,
-  delegate: Address,
-  destination: Address,
-  payer: TransactionSigner
-): Instruction[] {
-  const instructions: Instruction[] = []
-
-  const removePluginIx = mplCore.getRemovePluginV1Instruction({
-    asset: assetAddress,
-    payer: payer,
-    authority: createNoopSigner(delegate),
-    pluginType: mplCore.PluginType.FreezeDelegate,
-  })
-
-  const transferIx = mplCore.getTransferV1Instruction({
-    asset: assetAddress,
-    payer: payer,
-    authority: createNoopSigner(owner),
-    newOwner: destination,
-    compressionProof: null,
-  })
-
-  instructions.push(removePluginIx, transferIx)
-
-  return instructions
+  return [transferIx, closeIx]
 }
