@@ -10,7 +10,7 @@ import { LayoutControls } from "@/components/layout-controls"
 import { useWallet } from "@solana/connector/react"
 import { fetchStakeDataAtom, errorAtom } from "@/stores/stake"
 import { type NFT } from "@/stores/nfts"
-import { useLockDandy, useUnlockDandy } from "@/hooks/use-lock-dandy"
+import { useLockDandy } from "@/hooks/use-lock-dandy"
 
 export function MembershipPage() {
   const { account } = useWallet()
@@ -18,25 +18,28 @@ export function MembershipPage() {
   const fetchStakeData = useSetAtom(fetchStakeDataAtom)
 
   const { lock, lockingMint } = useLockDandy()
-  const { unlock, unlockingMint } = useUnlockDandy()
 
   const [bulkLockNfts, setBulkLockNfts] = useState<NFT[] | null>(null)
-  const [bulkUnlockNfts, setBulkUnlockNfts] = useState<NFT[] | null>(null)
+  const [unlockNfts, setUnlockNfts] = useState<NFT[] | null>(null)
 
   const handleLockAll = (nfts: NFT[]) => {
     setBulkLockNfts(nfts)
   }
 
+  const handleUnlock = (nft: NFT) => {
+    setUnlockNfts([nft])
+  }
+
   const handleUnlockAll = (nfts: NFT[]) => {
-    setBulkUnlockNfts(nfts)
+    setUnlockNfts(nfts)
   }
 
   const handleBulkLockDialogClose = () => {
     setBulkLockNfts(null)
   }
 
-  const handleBulkUnlockDialogClose = () => {
-    setBulkUnlockNfts(null)
+  const handleUnlockDialogClose = () => {
+    setUnlockNfts(null)
   }
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export function MembershipPage() {
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <MembershipStatus />
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-            <LockedDandiesGrid onUnlock={unlock} unlockingMint={unlockingMint} onUnlockAll={handleUnlockAll} />
+            <LockedDandiesGrid onUnlock={handleUnlock} onUnlockAll={handleUnlockAll} />
             <AvailableToLockGrid onLock={lock} lockingMint={lockingMint} onLockAll={handleLockAll} />
           </div>
         </div>
@@ -76,7 +79,7 @@ export function MembershipPage() {
 
       {bulkLockNfts && <BulkLockDialog nfts={bulkLockNfts} onClose={handleBulkLockDialogClose} />}
 
-      {bulkUnlockNfts && <BulkUnlockDialog nfts={bulkUnlockNfts} onClose={handleBulkUnlockDialogClose} />}
+      {unlockNfts && <BulkUnlockDialog nfts={unlockNfts} onClose={handleUnlockDialogClose} />}
     </div>
   )
 }

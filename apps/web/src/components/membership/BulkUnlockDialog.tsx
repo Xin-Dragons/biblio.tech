@@ -246,9 +246,11 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Unlock className="h-5 w-5 text-primary" />
-            Unlock All Dandies
+            Unlock {nfts.length === 1 ? nfts[0].name : `${nfts.length} Dandies`}
           </DialogTitle>
-          <DialogDescription>Unlock {nfts.length} Dandies to transfer or sell them.</DialogDescription>
+          <DialogDescription>
+            Unlock {nfts.length === 1 ? "this Dandy" : `${nfts.length} Dandies`} to transfer or sell {nfts.length === 1 ? "it" : "them"}.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-4">
@@ -349,7 +351,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
             ) : (
               <>
                 {recoverMode ? <ArrowRightLeft className="mr-2 h-4 w-4" /> : <Unlock className="mr-2 h-4 w-4" />}
-                {recoverMode ? "Recover All" : "Unlock All"}
+                {recoverMode ? "Recover" : "Unlock"}{nfts.length > 1 ? " All" : ""}
               </>
             )}
           </Button>

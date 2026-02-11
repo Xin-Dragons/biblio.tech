@@ -1,6 +1,6 @@
 import { memo } from "react"
 import { useAtomValue } from "jotai"
-import { LockOpen, Unlock, Loader2 } from "lucide-react"
+import { LockOpen, Unlock } from "lucide-react"
 import { FixedSizeGrid, type GridChildComponentProps } from "react-window"
 import AutoSizer from "react-virtualized-auto-sizer"
 import { Button } from "@/components/ui/button"
@@ -17,10 +17,9 @@ const DANDIES_COLLECTION_ID = "CdxKBSnipG5YD5KBuH3L1szmhPW1mwDHe6kQFR3nk9ys"
 interface LockedDandyCardProps {
   nft: NFT
   onUnlock: (nft: NFT) => void
-  isUnlocking: boolean
 }
 
-const LockedDandyCard = memo(function LockedDandyCard({ nft, onUnlock, isUnlocking }: LockedDandyCardProps) {
+const LockedDandyCard = memo(function LockedDandyCard({ nft, onUnlock }: LockedDandyCardProps) {
   const isNifty = isNiftyAsset(nft)
 
   return (
@@ -42,14 +41,9 @@ const LockedDandyCard = memo(function LockedDandyCard({ nft, onUnlock, isUnlocki
           size="sm"
           className="mt-2 w-full text-[clamp(0.65rem,1.5vw,0.875rem)]"
           onClick={() => onUnlock(nft)}
-          disabled={isUnlocking}
         >
-          {isUnlocking ? (
-            <Loader2 className="mr-1 h-[1em] w-[1em] animate-spin" />
-          ) : (
-            <LockOpen className="mr-1 h-[1em] w-[1em]" />
-          )}
-          {isUnlocking ? "Unlocking..." : "Unlock"}
+          <LockOpen className="mr-1 h-[1em] w-[1em]" />
+          Unlock
         </Button>
       </div>
     </div>
@@ -60,12 +54,11 @@ type CellData = {
   items: NFT[]
   columnCount: number
   onUnlock: (nft: NFT) => void
-  unlockingMint: string | null
   gap: number
 }
 
 function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<CellData>) {
-  const { items, columnCount, onUnlock, unlockingMint, gap } = data
+  const { items, columnCount, onUnlock, gap } = data
   const index = rowIndex * columnCount + columnIndex
   const nft = items[index]
 
@@ -75,18 +68,17 @@ function Cell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<Ce
 
   return (
     <div style={{ ...style, padding }}>
-      <LockedDandyCard nft={nft} onUnlock={onUnlock} isUnlocking={unlockingMint === nft.mint} />
+      <LockedDandyCard nft={nft} onUnlock={onUnlock} />
     </div>
   )
 }
 
 interface LockedDandiesGridProps {
   onUnlock: (nft: NFT) => void
-  unlockingMint: string | null
   onUnlockAll: (nfts: NFT[]) => void
 }
 
-export function LockedDandiesGrid({ onUnlock, unlockingMint, onUnlockAll }: LockedDandiesGridProps) {
+export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridProps) {
   const nfts = useAtomValue(nftsAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
   const isNftsLoading = useAtomValue(nftsLoadingAtom)
@@ -191,7 +183,6 @@ export function LockedDandiesGrid({ onUnlock, unlockingMint, onUnlockAll }: Lock
                   items: lockedDandies,
                   columnCount,
                   onUnlock,
-                  unlockingMint,
                   gap,
                 }}
               >

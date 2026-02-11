@@ -677,3 +677,60 @@
   - Batch success dialog shows summary stats + scrollable list of results
 ---
 
+## 2026-01-27 - US-029
+- Implemented custom keypair support for Create tab (vanity token addresses)
+- Added KeyPairSigner import from @solana/kit and createKeyPairSignerFromBytes for parsing uploaded keypairs
+- Added customKeypair field to CreateFormState interface (KeyPairSigner | null)
+- Added isValidatingKeypair state for async validation feedback
+- Created handlers:
+  - checkAccountExists: RPC call to verify address is unused
+  - handleGenerateKeypair: generates random keypair, validates not in use
+  - handleUploadKeypair: parses JSON keypair file, validates format (64-byte array) and checks not in use
+  - handleClearKeypair: clears custom keypair from form state
+- Created CustomKeypairSection component with:
+  - Read-only address display field
+  - "Respin" button with RefreshCw icon for random keypair generation
+  - "Upload Keypair" button with Upload icon for JSON file upload
+  - Clear button (X icon) when keypair is set
+  - Validation error display
+  - Success indicator when keypair is validated
+- Updated mint functions (mintCoreAsset, mintPnft, mintNiftyAsset) to accept optional customKeypair parameter
+- Custom keypair is used as mint signer when provided, falls back to generateKeyPairSigner() otherwise
+- CustomKeypairSection hidden when isCreateMany is true (batch minting uses random keypairs)
+- Updated resetForm to clear customKeypair state
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (custom keypair support)
+- **Learnings for future iterations:**
+  - createKeyPairSignerFromBytes(bytes) creates KeyPairSigner from 64-byte Uint8Array
+  - JSON keypair files are arrays of 64 integers (0-255) representing the full keypair
+  - Use getAccountInfo RPC to check if address already exists on-chain
+  - React.RefObject<HTMLInputElement> (without null) for ref props passed to native elements
+  - Custom keypair feature is mutually exclusive with batch minting (Create Many)
+---
+
+## 2026-01-27 - US-030
+- Implemented NftPickerModal component for collection selection
+- Created CollectionNft interface for picker data structure
+- Added fetchUserCollectionNfts function using getAssetsByOwner DAS call
+  - Filters by specification_asset_class === "nft_collection" or interface === "MplCoreCollection"
+  - Fetches all pages from DAS API for complete collection list
+- Created CollectionNftCard component (memoized) with selection visual feedback
+- Created CollectionNftGridCell for react-window virtualization
+- NftPickerModal features:
+  - Search/filter by name or mint address
+  - Virtualized grid using FixedSizeGrid and AutoSizer
+  - Loading, error, and empty states
+  - Selection with CheckCircle2 overlay indicator
+  - Cancel and Select Collection buttons in footer
+- Updated CollectionSection to accept account, onSelectCollection props
+- Added modal state and handler in both Create and Update tabs
+- Files changed:
+  - apps/web/src/routes/creator-studio.tsx (modal component, grid, DAS fetch, handlers)
+- **Learnings for future iterations:**
+  - DAS returns specification_asset_class: "nft_collection" for pNFT/V1_NFT collection parents
+  - MplCoreCollection interface identifies Core collection assets
+  - Use HeliusDasAssetExtended interface to add fields not in base interface (specification_asset_class)
+  - Modal state should be internal to CollectionSection to avoid prop drilling
+  - getPickerGridColumnCount adjusts columns for smaller modal widths vs main batch grid
+---
+
