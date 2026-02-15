@@ -59,10 +59,14 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
   const emissions = useAtomValue(emissionsAtom)
   const setNftsBatchStaked = useSetAtom(setNftsBatchStakedAtom)
 
-  const otherWallets = useMemo(
-    () => linkedWallets.map((w) => w.publicKey).filter((w) => w !== account),
-    [linkedWallets, account]
-  )
+  const nftOwner = nfts[0]?.owner ?? account
+
+  const destinationWallets = useMemo(() => {
+    const allAddresses = new Set(linkedWallets.map((w) => w.publicKey))
+    if (account) allAddresses.add(account)
+    allAddresses.delete(nftOwner)
+    return Array.from(allAddresses)
+  }, [linkedWallets, account, nftOwner])
 
   useEffect(() => {
     signerRef.current = signer
@@ -105,7 +109,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
     }
 
     const estimateTxCount = async () => {
-      const ownerAddress = account as Address
+      const ownerAddress = (nftOwner ?? account) as Address
       const noopSigner = createNoopSigner(ownerAddress)
       const destinationAddress = recoverMode && selectedDestination ? (selectedDestination as Address) : null
       const noopSignersMap = new Map<string, TransactionSigner>()
@@ -117,6 +121,10 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         const collection = collections.find((c) => c.collectionMint === collectionMintToFind)
         if (!collection) continue
 
+        const itemOwner = item.nft.owner as Address
+        const itemOwnerSigner = itemOwner === ownerAddress ? noopSigner : createNoopSigner(itemOwner)
+        if (!noopSignersMap.has(itemOwner)) noopSignersMap.set(itemOwner, itemOwnerSigner)
+
         const unstakeIxs = isNiftyAsset(item.nft)
           ? await buildUnstakeNiftyInstructions({
               nft: item.nft,
@@ -124,8 +132,8 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               staker,
               collection,
               emissions,
-              owner: ownerAddress,
-              ownerSigner: noopSigner,
+              owner: itemOwner,
+              ownerSigner: itemOwnerSigner,
             })
           : await buildUnstakeInstructions({
               nft: item.nft,
@@ -133,11 +141,11 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               staker,
               collection,
               emissions,
-              owner: ownerAddress,
-              ownerSigner: noopSigner,
+              owner: itemOwner,
+              ownerSigner: itemOwnerSigner,
             })
         const transferIxs = destinationAddress
-          ? await buildTransferInstructions({ nft: item.nft, owner: ownerAddress, destination: destinationAddress, signers: noopSignersMap })
+          ? await buildTransferInstructions({ nft: item.nft, owner: itemOwner, destination: destinationAddress, signers: noopSignersMap })
           : []
         itemInstructions.push({ item, instructions: [...unstakeIxs, ...transferIxs] })
       }
@@ -167,13 +175,10 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
     setUnlocking(true)
 
     try {
-      const ownerAddress = account as Address
-      const noopSigner = createNoopSigner(ownerAddress)
-
       const destinationAddress = recoverMode && selectedDestination ? (selectedDestination as Address) : null
       const noopSigners = new Map<string, TransactionSigner>()
-      noopSigners.set(ownerAddress, noopSigner)
 
+      const requiredSignersMap = new Map<string, RequiredSigner>()
       const itemInstructions: InstructionGroup<BulkUnlockItem>[] = []
       for (const item of items) {
         const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
@@ -183,6 +188,11 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
           continue
         }
 
+        const itemOwner = item.nft.owner as Address
+        if (!noopSigners.has(itemOwner)) noopSigners.set(itemOwner, createNoopSigner(itemOwner))
+        if (!requiredSignersMap.has(itemOwner)) requiredSignersMap.set(itemOwner, { address: itemOwner, label: "Owner" })
+        const itemOwnerSigner = noopSigners.get(itemOwner)!
+
         const unstakeIxs = isNiftyAsset(item.nft)
           ? await buildUnstakeNiftyInstructions({
               nft: item.nft,
@@ -190,8 +200,8 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               staker,
               collection,
               emissions,
-              owner: ownerAddress,
-              ownerSigner: noopSigner,
+              owner: itemOwner,
+              ownerSigner: itemOwnerSigner,
             })
           : await buildUnstakeInstructions({
               nft: item.nft,
@@ -199,11 +209,11 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               staker,
               collection,
               emissions,
-              owner: ownerAddress,
-              ownerSigner: noopSigner,
+              owner: itemOwner,
+              ownerSigner: itemOwnerSigner,
             })
         const transferIxs = destinationAddress
-          ? await buildTransferInstructions({ nft: item.nft, owner: ownerAddress, destination: destinationAddress, signers: noopSigners })
+          ? await buildTransferInstructions({ nft: item.nft, owner: itemOwner, destination: destinationAddress, signers: noopSigners })
           : []
         itemInstructions.push({ item, instructions: [...unstakeIxs, ...transferIxs] })
       }
@@ -214,12 +224,18 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         return
       }
 
-      const batches = await batchInstructionsBySize(itemInstructions, noopSigner)
+      const allSigners = Array.from(requiredSignersMap.values())
+      const connectedFirst = allSigners.find((s) => s.address === account)
+      const requiredSigners = connectedFirst
+        ? [connectedFirst, ...allSigners.filter((s) => s.address !== account)]
+        : allSigners
+
+      const feePayerSigner = noopSigners.get(requiredSigners[0].address)!
+      const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
       setProgress({ current: 0, total: batches.length })
 
       const successfulItems: BulkUnlockItem[] = []
-      const requiredSigners: RequiredSigner[] = [{ address: ownerAddress, label: "Owner" }]
 
       for (let i = 0; i < batches.length; i++) {
         if (abortControllerRef.current.signal.aborted) break
@@ -283,7 +299,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
             </div>
           </div>
 
-          {otherWallets.length > 0 && (
+          {destinationWallets.length > 0 && (
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -304,7 +320,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
                     <SelectValue placeholder="Select destination wallet" />
                   </SelectTrigger>
                   <SelectContent>
-                    {otherWallets.map((wallet) => (
+                    {destinationWallets.map((wallet) => (
                       <SelectItem key={wallet} value={wallet}>
                         {wallet.slice(0, 4)}...{wallet.slice(-4)}
                       </SelectItem>
