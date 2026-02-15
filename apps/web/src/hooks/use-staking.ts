@@ -4,6 +4,7 @@ import {
   type Address,
   type Instruction,
   type AccountMeta,
+  type TransactionSigner,
 } from "@solana/kit"
 import { createNoopSigner } from "@/lib/vault-transactions"
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token"
@@ -353,10 +354,11 @@ export interface BuildUnstakeNiftyInstructionsInput {
   collection: CollectionAccount
   emissions: EmissionAccount[]
   owner: Address
+  ownerSigner?: TransactionSigner
 }
 
 export async function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInstructionsInput): Promise<Instruction[]> {
-  const { nft, stakeRecord, staker, collection, emissions, owner } = input
+  const { nft, stakeRecord, staker, collection, emissions, owner, ownerSigner } = input
 
   const stakerAddress = staker.address as Address
   const collectionAddress = collection.address as Address
@@ -386,7 +388,7 @@ export async function buildUnstakeNiftyInstructions(input: BuildUnstakeNiftyInst
     feesWallet: FEES_WALLET_ADDRESS,
     tokenAuthority: tokenAuthority,
     nftAuthority: nftAuthorityPda,
-    owner: createNoopSigner(owner),
+    owner: ownerSigner ?? createNoopSigner(owner),
     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
     niftyProgram: NIFTY_PROGRAM_ADDRESS,
   })
@@ -411,10 +413,11 @@ export interface BuildUnstakeInstructionsInput {
   collection: CollectionAccount
   emissions: EmissionAccount[]
   owner: Address
+  ownerSigner?: TransactionSigner
 }
 
 export async function buildUnstakeInstructions(input: BuildUnstakeInstructionsInput): Promise<Instruction[]> {
-  const { nft, stakeRecord, staker, collection, emissions, owner } = input
+  const { nft, stakeRecord, staker, collection, emissions, owner, ownerSigner } = input
 
   const stakerAddress = staker.address as Address
   const collectionAddress = collection.address as Address
@@ -460,7 +463,7 @@ export async function buildUnstakeInstructions(input: BuildUnstakeInstructionsIn
     masterEdition: masterEditionPda,
     tokenAuthority: tokenAuthority,
     nftAuthority: nftAuthorityPda,
-    owner: createNoopSigner(owner),
+    owner: ownerSigner ?? createNoopSigner(owner),
     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
     metadataProgram: TOKEN_METADATA_PROGRAM_ADDRESS,
     authRules: DANDIES_AUTH_RULES_ADDRESS,

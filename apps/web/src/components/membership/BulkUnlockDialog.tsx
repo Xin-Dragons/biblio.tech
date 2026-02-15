@@ -47,6 +47,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
   const [estimatedTxCount, setEstimatedTxCount] = useState(1)
   const [recoverMode, setRecoverMode] = useState(false)
   const [selectedDestination, setSelectedDestination] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const { account } = useWallet()
   const { signer, ready } = useKitTransactionSigner()
   const { disconnect } = useDisconnectWallet()
@@ -124,6 +125,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               collection,
               emissions,
               owner: ownerAddress,
+              ownerSigner: noopSigner,
             })
           : await buildUnstakeInstructions({
               nft: item.nft,
@@ -132,6 +134,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               collection,
               emissions,
               owner: ownerAddress,
+              ownerSigner: noopSigner,
             })
         const transferIxs = destinationAddress
           ? await buildTransferInstructions({ nft: item.nft, owner: ownerAddress, destination: destinationAddress, signers: noopSignersMap })
@@ -146,12 +149,21 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
     estimateTxCount().catch(console.error)
   }, [items, staker, collections, emissions, account, signer, recoverMode, selectedDestination])
 
+  const handleCancel = () => {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setUnlocking(false)
+    setProgress({ current: 0, total: 0 })
+    onClose()
+  }
+
   const handleBulkUnlock = async () => {
     if (!account || !signer || !ready || !staker) {
       toast.error("Wallet not connected or membership not available")
       return
     }
 
+    abortControllerRef.current = new AbortController()
     setUnlocking(true)
 
     try {
@@ -179,6 +191,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               collection,
               emissions,
               owner: ownerAddress,
+              ownerSigner: noopSigner,
             })
           : await buildUnstakeInstructions({
               nft: item.nft,
@@ -187,6 +200,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               collection,
               emissions,
               owner: ownerAddress,
+              ownerSigner: noopSigner,
             })
         const transferIxs = destinationAddress
           ? await buildTransferInstructions({ nft: item.nft, owner: ownerAddress, destination: destinationAddress, signers: noopSigners })
@@ -208,6 +222,8 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
       const requiredSigners: RequiredSigner[] = [{ address: ownerAddress, label: "Owner" }]
 
       for (let i = 0; i < batches.length; i++) {
+        if (abortControllerRef.current.signal.aborted) break
+
         setProgress({ current: i + 1, total: batches.length })
         const batch = batches[i]
 
@@ -219,6 +235,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
           noopSigners,
           getConnectedSigner,
           onPhantomAccountChange: handlePhantomAccountChange,
+          signal: abortControllerRef.current.signal,
         })
 
         successfulItems.push(...batch.items)
@@ -235,13 +252,14 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
     } finally {
       setUnlocking(false)
       setProgress({ current: 0, total: 0 })
+      abortControllerRef.current = null
     }
   }
 
   const isReady = !!account && !!signer && ready && !!staker && items.length > 0 && !loading
 
   return (
-    <Dialog open onOpenChange={(open) => !open && !unlocking && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && handleCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -334,7 +352,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={unlocking}>
+          <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button onClick={handleBulkUnlock} disabled={!isReady || unlocking || (recoverMode && !selectedDestination)}>
