@@ -27,6 +27,7 @@ import { logger } from "@/lib/logger"
 import { setNftsBatchStakedAtom, type NFT } from "@/stores/nfts"
 import { createNoopSigner, buildTransferInstructions } from "@/lib/vault-transactions"
 import { linkedWalletsAtom } from "@/stores/linked-wallets"
+import { skipAuthWalletSwitchAtom } from "@/stores/wallet-operations"
 import { signWithMultipleWallets, type RequiredSigner } from "@/lib/multi-wallet-signing"
 
 interface BulkUnlockItem {
@@ -39,8 +40,16 @@ interface BulkUnlockDialogProps {
   onClose: () => void
 }
 
+type SigningState =
+  | { status: "idle" }
+  | { status: "building" }
+  | { status: "waiting_for_wallet"; signer: RequiredSigner; index: number; total: number }
+  | { status: "signing"; signer: RequiredSigner }
+  | { status: "sending"; batchIndex?: number; batchTotal?: number }
+
 export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
   const [unlocking, setUnlocking] = useState(false)
+  const [signingState, setSigningState] = useState<SigningState>({ status: "idle" })
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<BulkUnlockItem[]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
@@ -58,6 +67,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
   const collections = useAtomValue(collectionsAtom)
   const emissions = useAtomValue(emissionsAtom)
   const setNftsBatchStaked = useSetAtom(setNftsBatchStakedAtom)
+  const setSkipAuthWalletSwitch = useSetAtom(skipAuthWalletSwitchAtom)
 
   const nftOwner = nfts[0]?.owner ?? account
 
@@ -161,6 +171,7 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
     setUnlocking(false)
+    setSigningState({ status: "idle" })
     setProgress({ current: 0, total: 0 })
     onClose()
   }
@@ -230,6 +241,11 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         ? [connectedFirst, ...allSigners.filter((s) => s.address !== account)]
         : allSigners
 
+      const needsWalletSwitch = requiredSigners.length > 1 || !requiredSigners.some((s) => s.address === account)
+      if (needsWalletSwitch) {
+        setSkipAuthWalletSwitch(true)
+      }
+
       const feePayerSigner = noopSigners.get(requiredSigners[0].address)!
       const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
@@ -251,6 +267,10 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
           noopSigners,
           getConnectedSigner,
           onPhantomAccountChange: handlePhantomAccountChange,
+          onWaitingForWallet: (signerInfo, index, total) =>
+            setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
+          onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
+          onSending: () => setSigningState({ status: "sending", batchIndex: i + 1, batchTotal: batches.length }),
           signal: abortControllerRef.current.signal,
         })
 
@@ -267,8 +287,10 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
       toast.error(err instanceof Error ? err.message : "Failed to unlock Dandies")
     } finally {
       setUnlocking(false)
+      setSigningState({ status: "idle" })
       setProgress({ current: 0, total: 0 })
       abortControllerRef.current = null
+      setSkipAuthWalletSwitch(false)
     }
   }
 
@@ -298,6 +320,52 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
               <span className="font-medium">{loading ? "..." : estimatedTxCount}</span>
             </div>
           </div>
+
+          {signingState.status === "waiting_for_wallet" && (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                <div>
+                  <p className="text-sm font-medium">Switch to {signingState.signer.label} wallet</p>
+                  <p className="text-xs text-muted-foreground">
+                    {signingState.signer.address.slice(0, 4)}...{signingState.signer.address.slice(-4)} (
+                    {signingState.index + 1} of {signingState.total})
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {signingState.status === "signing" && (
+            <div className="rounded-lg border border-primary/50 bg-primary/10 p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Approve in {signingState.signer.label} wallet</p>
+                  <p className="text-xs text-muted-foreground">
+                    {signingState.signer.address.slice(0, 4)}...{signingState.signer.address.slice(-4)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {signingState.status === "sending" && (
+            <div className="rounded-lg border border-primary/50 bg-primary/10 p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <div>
+                  <p className="text-sm font-medium">
+                    Sending transaction
+                    {signingState.batchTotal && signingState.batchTotal > 1
+                      ? ` (${signingState.batchIndex}/${signingState.batchTotal})`
+                      : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Waiting for confirmation...</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {destinationWallets.length > 0 && (
             <div className="space-y-2">
