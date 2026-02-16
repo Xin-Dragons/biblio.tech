@@ -138,26 +138,39 @@ export function BulkLockDialog({ nfts, onClose }: BulkLockDialogProps) {
       const noopSigners = new Map<string, TransactionSigner>()
       noopSigners.set(ownerAddress, noopSigner)
 
-      for (let i = 0; i < batches.length; i++) {
-        setProgress({ current: i + 1, total: batches.length })
-        const batch = batches[i]
+      const CHUNK_SIZE = 50
+      const totalBatches = batches.length
 
-        logger.debug(`Batch ${i + 1}: Signing and sending transaction with ${batch.instructions.length} instructions`)
+      for (let i = 0; i < totalBatches; i += CHUNK_SIZE) {
+        const chunkEnd = Math.min(i + CHUNK_SIZE, totalBatches)
 
-        await signWithMultipleWallets({
-          instructions: batch.instructions,
-          requiredSigners,
-          noopSigners,
-          getConnectedSigner,
-          onPhantomAccountChange: handlePhantomAccountChange,
-        })
+        for (let j = i; j < chunkEnd; j++) {
+          setProgress({ current: j + 1, total: totalBatches })
+          const batch = batches[j]
 
-        successfulNfts.push(...batch.items)
+          logger.debug(`Batch ${j + 1}: Signing and sending transaction with ${batch.instructions.length} instructions`)
+
+          await signWithMultipleWallets({
+            instructions: batch.instructions,
+            requiredSigners,
+            noopSigners,
+            getConnectedSigner,
+            onPhantomAccountChange: handlePhantomAccountChange,
+          })
+
+          successfulNfts.push(...batch.items)
+        }
+
+        if (chunkEnd < totalBatches) {
+          setNftsBatchStaked({ mints: successfulNfts.map((nft) => nft.mint), staked: true })
+          toast.success(`${successfulNfts.length} of ${totalBatches} complete, continuing...`)
+          await new Promise((r) => setTimeout(r, 1000))
+        }
       }
 
       setNftsBatchStaked({ mints: successfulNfts.map((nft) => nft.mint), staked: true })
 
-      toast.success(`Locked ${successfulNfts.length} Dandies in ${batches.length} transactions!`)
+      toast.success(`Locked ${successfulNfts.length} Dandies in ${totalBatches} transactions!`)
       onClose()
     } catch (err) {
       console.error("Bulk lock failed:", err)

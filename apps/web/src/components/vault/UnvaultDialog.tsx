@@ -192,25 +192,38 @@ export function UnvaultDialog({ open, onOpenChange, nfts, onSuccess }: UnvaultDi
       const noopSigner = noopSigners.get(firstSigner.address) as TransactionSigner
       const batches = await batchInstructionsBySize(nftInstructions, noopSigner)
 
-      // Process each batch
+      // Process batches in chunks to avoid Phantom crashes on large sets
       const successfulNfts: NFT[] = []
-      for (let i = 0; i < batches.length; i++) {
-        if (abortControllerRef.current.signal.aborted) break
+      const CHUNK_SIZE = 50
+      const totalBatches = batches.length
 
-        const batch = batches[i]
-        await signWithMultipleWallets({
-          instructions: batch.instructions,
-          requiredSigners,
-          noopSigners,
-          getConnectedSigner,
-          onPhantomAccountChange: handlePhantomAccountChange,
-          onWaitingForWallet: (signerInfo, index, total) =>
-            setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
-          onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
-          onSending: () => setSigningState({ status: "sending", batchIndex: i + 1, batchTotal: batches.length }),
-          signal: abortControllerRef.current.signal,
-        })
-        successfulNfts.push(...batch.items)
+      for (let i = 0; i < totalBatches; i += CHUNK_SIZE) {
+        const chunkEnd = Math.min(i + CHUNK_SIZE, totalBatches)
+
+        for (let j = i; j < chunkEnd; j++) {
+          if (abortControllerRef.current.signal.aborted) break
+
+          const batch = batches[j]
+          await signWithMultipleWallets({
+            instructions: batch.instructions,
+            requiredSigners,
+            noopSigners,
+            getConnectedSigner,
+            onPhantomAccountChange: handlePhantomAccountChange,
+            onWaitingForWallet: (signerInfo, index, total) =>
+              setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
+            onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
+            onSending: () => setSigningState({ status: "sending", batchIndex: j + 1, batchTotal: totalBatches }),
+            signal: abortControllerRef.current.signal,
+          })
+          successfulNfts.push(...batch.items)
+        }
+
+        if (chunkEnd < totalBatches && !abortControllerRef.current.signal.aborted) {
+          removeVaultedMints(successfulNfts.map((nft) => nft.mint))
+          toast.success(`${successfulNfts.length} of ${nfts.length} unvaulted, continuing...`)
+          await new Promise((r) => setTimeout(r, 1000))
+        }
       }
 
       removeVaultedMints(successfulNfts.map((nft) => nft.mint))
