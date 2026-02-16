@@ -265,38 +265,57 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
       const feePayerSigner = noopSigners.get(feePayerAddress)!
       const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
-      setProgress({ current: 0, total: batches.length })
+      const CHUNK_SIZE = 50
+      const totalBatches = batches.length
+      setProgress({ current: 0, total: totalBatches })
 
       const successfulItems: BulkUnlockItem[] = []
 
-      for (let i = 0; i < batches.length; i++) {
+      for (let i = 0; i < totalBatches; i += CHUNK_SIZE) {
         if (abortControllerRef.current.signal.aborted) break
 
-        setProgress({ current: i + 1, total: batches.length })
-        const batch = batches[i]
+        const chunk = batches.slice(i, i + CHUNK_SIZE)
+        const chunkStart = i
+        const chunkEnd = Math.min(i + CHUNK_SIZE, totalBatches)
 
-        logger.debug(`Batch ${i + 1}: Signing and sending transaction with ${batch.instructions.length} instructions`)
+        logger.debug(`Processing chunk ${chunkStart + 1}-${chunkEnd} of ${totalBatches}`)
 
-        await signWithMultipleWallets({
-          instructions: batch.instructions,
-          requiredSigners,
-          noopSigners,
-          getConnectedSigner,
-          onPhantomAccountChange: handlePhantomAccountChange,
-          onWaitingForWallet: (signerInfo, index, total) =>
-            setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
-          onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
-          onSending: () => setSigningState({ status: "sending", batchIndex: i + 1, batchTotal: batches.length }),
-          signal: abortControllerRef.current.signal,
-        })
+        for (let j = 0; j < chunk.length; j++) {
+          if (abortControllerRef.current.signal.aborted) break
 
-        successfulItems.push(...batch.items)
+          const batchIndex = chunkStart + j
+          setProgress({ current: batchIndex + 1, total: totalBatches })
+          const batch = chunk[j]
+
+          logger.debug(`Batch ${batchIndex + 1}: Signing and sending transaction with ${batch.instructions.length} instructions`)
+
+          await signWithMultipleWallets({
+            instructions: batch.instructions,
+            requiredSigners,
+            noopSigners,
+            getConnectedSigner,
+            onPhantomAccountChange: handlePhantomAccountChange,
+            onWaitingForWallet: (signerInfo, index, total) =>
+              setSigningState({ status: "waiting_for_wallet", signer: signerInfo, index, total }),
+            onSigning: (signerInfo) => setSigningState({ status: "signing", signer: signerInfo }),
+            onSending: () => setSigningState({ status: "sending", batchIndex: batchIndex + 1, batchTotal: totalBatches }),
+            signal: abortControllerRef.current.signal,
+          })
+
+          successfulItems.push(...batch.items)
+        }
+
+        if (chunkEnd < totalBatches && !abortControllerRef.current.signal.aborted) {
+          setNftsBatchStaked({ mints: successfulItems.map((item) => item.nft.mint), staked: false })
+          toast.success(`${successfulItems.length} of ${totalBatches} complete, continuing...`)
+          await new Promise((r) => setTimeout(r, 1000))
+        }
       }
 
       setNftsBatchStaked({ mints: successfulItems.map((item) => item.nft.mint), staked: false })
 
       const action = destinationAddress ? "Recovered" : "Unlocked"
-      toast.success(`${action} ${successfulItems.length} Dandies in ${batches.length} transactions!`)
+      toast.success(`${action} ${successfulItems.length} Dandies in ${totalBatches} transactions!`)
       onClose()
     } catch (err) {
       console.error("Bulk unlock failed:", err)
