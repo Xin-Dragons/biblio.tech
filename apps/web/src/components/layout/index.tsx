@@ -9,7 +9,7 @@ import { NftDetailModal } from "../nft-detail-modal"
 import { ToastContainer } from "../toast"
 import { ErrorWatcher } from "../error-watcher"
 import { WelcomeScreen } from "../welcome-screen"
-import { fetchNftsAtom, refreshNftsAtom, nftsAtom, fetchedWalletAtom, cacheLoadedAtom, userNftsFetchedAtom, tokensFetchedWalletAtom, tokensAtom } from "@/stores/nfts"
+import { fetchNftsAtom, fetchUserNftsAtom, nftsAtom, fetchedWalletAtom, cacheLoadedAtom, userNftsFetchedAtom, tokensFetchedWalletAtom, tokensAtom } from "@/stores/nfts"
 import { fetchTierAtom } from "@/stores/tier"
 import { detectVaultedNftsAtom } from "@/stores/vault"
 import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
@@ -29,7 +29,7 @@ function DataFetcher() {
   const session = useAtomValue(sessionAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const fetchNfts = useSetAtom(fetchNftsAtom)
-  const refreshNfts = useSetAtom(refreshNftsAtom)
+  const fetchUserNfts = useSetAtom(fetchUserNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
   const fetchTags = useSetAtom(fetchTagsAtom)
@@ -79,17 +79,16 @@ function DataFetcher() {
     }
   }, [account, setFetchedWallet, setCacheLoaded, setUserNftsFetched, setTokensFetchedWallet, setTokens])
 
-  // Fetch NFTs for connected wallet (public endpoint)
+  // Fetch NFTs - use multi-wallet cached endpoint for authenticated users,
+  // single-wallet public endpoint for unauthenticated
   useEffect(() => {
     if (!isConnected || !account) return
-    fetchNfts(account)
-  }, [isConnected, account, fetchNfts])
-
-  // Re-fetch NFTs for all linked wallets after sign-in
-  useEffect(() => {
-    if (!session?.token) return
-    refreshNfts()
-  }, [session?.token, refreshNfts])
+    if (session?.token) {
+      fetchUserNfts()
+    } else {
+      fetchNfts(account)
+    }
+  }, [isConnected, account, session?.token, fetchNfts, fetchUserNfts])
 
   // Detect vaulted NFTs - authenticated users (use session.wallet, stable across linked wallet switches)
   useEffect(() => {
