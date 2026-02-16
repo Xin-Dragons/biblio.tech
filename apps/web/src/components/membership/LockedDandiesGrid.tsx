@@ -82,7 +82,7 @@ export function LockedDandiesGrid({ onUnlock, onUnlockAll }: LockedDandiesGridPr
   const nfts = useAtomValue(nftsAtom)
   const isStakeLoading = useAtomValue(isLoadingAtom)
   const isNftsLoading = useAtomValue(nftsLoadingAtom)
-  const isLoading = isStakeLoading || isNftsLoading
+  const isLoading = (isStakeLoading || isNftsLoading) && nfts.length === 0
   const layoutSize = useAtomValue(layoutSizeAtom)
   const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
 

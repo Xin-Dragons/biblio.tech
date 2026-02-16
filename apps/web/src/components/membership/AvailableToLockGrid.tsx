@@ -93,7 +93,7 @@ export function AvailableToLockGrid({ onLock, lockingMint, onLockAll }: Availabl
   const layoutSize = useAtomValue(layoutSizeAtom)
   const searchQuery = useAtomValue(searchQueryAtom).toLowerCase()
 
-  const isLoading = isStakeLoading || isNftsLoading
+  const isLoading = (isStakeLoading || isNftsLoading) && nfts.length === 0
 
   const availableDandies = nfts.filter((nft) => {
     const isDandies =
