@@ -22,7 +22,7 @@ import {
   DANDIES_NIFTY_COLLECTION_ADDRESS,
   fetchStakeRecord,
 } from "@/hooks/use-staking"
-import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
+import { batchInstructionsBySize, getBalance, type InstructionGroup } from "@/lib/transaction"
 import { logger } from "@/lib/logger"
 import { setNftsBatchStakedAtom, type NFT } from "@/stores/nfts"
 import { createNoopSigner, buildTransferInstructions } from "@/lib/vault-transactions"
@@ -236,18 +236,33 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
       }
 
       const connectedAddress = account as Address
-      if (!noopSigners.has(connectedAddress)) noopSigners.set(connectedAddress, createNoopSigner(connectedAddress))
-      if (!requiredSignersMap.has(connectedAddress)) requiredSignersMap.set(connectedAddress, { address: connectedAddress, label: "Connected" })
-
       const allSigners = Array.from(requiredSignersMap.values())
-      const connectedSigner = allSigners.find((s) => s.address === connectedAddress)!
-      const requiredSigners = [connectedSigner, ...allSigners.filter((s) => s.address !== connectedAddress)]
+      const connectedIsOwner = allSigners.some((s) => s.address === connectedAddress)
 
-      if (requiredSigners.length > 1) {
+      let feePayerAddress: Address
+      if (connectedIsOwner) {
+        feePayerAddress = connectedAddress
+      } else {
+        const ownerAddress = allSigners[0].address
+        const ownerBalance = await getBalance(ownerAddress)
+        if (ownerBalance > 10_000_000) {
+          feePayerAddress = ownerAddress
+        } else {
+          feePayerAddress = connectedAddress
+          if (!noopSigners.has(connectedAddress)) noopSigners.set(connectedAddress, createNoopSigner(connectedAddress))
+          if (!requiredSignersMap.has(connectedAddress)) requiredSignersMap.set(connectedAddress, { address: connectedAddress, label: "Connected" })
+        }
+      }
+
+      const finalSigners = Array.from(requiredSignersMap.values())
+      const feePayer = finalSigners.find((s) => s.address === feePayerAddress)!
+      const requiredSigners = [feePayer, ...finalSigners.filter((s) => s.address !== feePayerAddress)]
+
+      if (requiredSigners.length > 1 || !connectedIsOwner) {
         setSkipAuthWalletSwitch(true)
       }
 
-      const feePayerSigner = noopSigners.get(connectedAddress)!
+      const feePayerSigner = noopSigners.get(feePayerAddress)!
       const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
       setProgress({ current: 0, total: batches.length })

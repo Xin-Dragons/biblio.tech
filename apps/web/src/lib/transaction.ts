@@ -45,6 +45,21 @@ export async function getBlockhash(): Promise<{ blockhash: string; lastValidBloc
   }
 }
 
+export async function getBalance(address: string): Promise<number> {
+  const response = await fetch(`${API_BASE}/rpc`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: crypto.randomUUID(),
+      method: "getBalance",
+      params: [address, { commitment: "confirmed" }],
+    }),
+  })
+  const data = (await response.json()) as { result?: { value: number } }
+  return data.result?.value ?? 0
+}
+
 export async function simulateTransaction(
   encodedTransaction: string
 ): Promise<{ unitsConsumed: number; logs: string[] }> {
