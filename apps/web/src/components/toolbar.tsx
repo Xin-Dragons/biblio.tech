@@ -3,7 +3,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Search, RefreshCw, Settings, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { searchQueryAtom, showInfoAtom } from "@/stores/ui"
-import { refreshNftsAtom, isLoadingAtom } from "@/stores/nfts"
+import { refreshNftsAtom, isLoadingAtom, isRefreshingAtom } from "@/stores/nfts"
 import { WalletButton } from "./wallet-button"
 import { Button } from "./ui/button"
 
@@ -11,6 +11,8 @@ export function Toolbar() {
   const [searchQuery, setSearchQuery] = useAtom(searchQueryAtom)
   const refreshNfts = useSetAtom(refreshNftsAtom)
   const isLoading = useAtomValue(isLoadingAtom)
+  const isRefreshing = useAtomValue(isRefreshingAtom)
+  const isSyncing = isLoading || isRefreshing
   const [showInfo, setShowInfo] = useAtom(showInfoAtom)
 
   return (
@@ -20,14 +22,14 @@ export function Toolbar() {
         variant="ghost"
         size="icon-sm"
         onClick={() => refreshNfts()}
-        disabled={isLoading}
+        disabled={isSyncing}
         title="Refresh NFTs"
         className="group"
       >
         <RefreshCw
           className={cn(
             "h-4 w-4 transition-transform duration-500",
-            isLoading ? "animate-spin" : "group-hover:rotate-180"
+            isSyncing ? "animate-spin" : "group-hover:rotate-180"
           )}
         />
       </Button>
