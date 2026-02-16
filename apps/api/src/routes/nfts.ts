@@ -39,68 +39,147 @@ function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string
   }
 }
 
-// Get NFTs for a wallet using Helius DAS API + nifty-oss assets
+async function fetchFreshNfts(env: HonoEnv["Bindings"], wallet: string) {
+  const [dasResult, niftyAssets, stakeRecords] = await Promise.all([
+    getAssetsByOwner(env, wallet),
+    getNiftyAssetsByOwner(env, wallet),
+    getCachedStakeRecords(env, wallet),
+  ])
+
+  const stakedMints = new Set(stakeRecords.map((r) => r.nftMint))
+  const { assets: dasAssets, collections: dasCollections } = dasResult
+
+  const niftyCollectionIds = niftyAssets.map((a) => a.group).filter((g): g is string => g !== null)
+  const niftyCollections = await fetchNiftyCollections(env, niftyCollectionIds)
+
+  const mappedNiftyAssets: DASAsset[] = niftyAssets.map((niftyAsset) => {
+    const collection = niftyAsset.group ? niftyCollections.get(niftyAsset.group) : null
+    return mapNiftyAssetToDASFormat(niftyAsset, collection?.name ?? null)
+  })
+
+  const allAssets = [...dasAssets, ...mappedNiftyAssets]
+
+  for (const asset of allAssets) {
+    asset.staked = stakedMints.has(asset.mint)
+  }
+
+  const collectionsMap = new Map<string, DASCollection>()
+  for (const col of dasCollections) {
+    collectionsMap.set(col.id, col)
+  }
+
+  for (const niftyAsset of niftyAssets) {
+    if (niftyAsset.group) {
+      const collectionId = niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
+      const existing = collectionsMap.get(collectionId)
+      if (existing) {
+        existing.count++
+      } else {
+        const collectionData = niftyCollections.get(niftyAsset.group)
+        collectionsMap.set(collectionId, {
+          id: collectionId,
+          name: collectionData?.name ?? niftyAsset.group,
+          image: collectionData?.image ?? null,
+          count: 1,
+        })
+      }
+    }
+  }
+
+  return { mints: allAssets, collections: Array.from(collectionsMap.values()) }
+}
+
+function saveNftCache(env: HonoEnv["Bindings"], wallet: string, mints: DASAsset[], collections: DASCollection[]) {
+  const cacheId = env.NFT_CACHE_DO.idFromName(wallet)
+  const cacheStub = env.NFT_CACHE_DO.get(cacheId)
+  const cacheNfts = mints.map((a) => ({
+    mint: a.mint,
+    name: a.name,
+    image: a.image,
+    collectionId: a.collectionId ?? "",
+    collectionName: a.collectionName,
+    attributes: a.attributes,
+    frozen: a.frozen,
+    delegate: a.delegate,
+    compressed: a.compressed,
+    tokenStandard: a.tokenStandard,
+    staked: a.staked,
+  }))
+  const cacheCollections = collections.map((col) => ({
+    id: col.id,
+    name: col.name,
+    image: col.image ?? "",
+    numMints: col.count,
+  }))
+  void cacheStub.fetch(
+    new Request("http://do/cache", {
+      method: "PUT",
+      body: JSON.stringify({ nfts: cacheNfts, collections: cacheCollections }),
+    })
+  )
+}
+
 nftsRoutes.get("/by-owner/:wallet", async (c) => {
   const wallet = c.req.param("wallet")
 
   try {
-    const [dasResult, niftyAssets, stakeRecords] = await Promise.all([
-      getAssetsByOwner(c.env, wallet),
-      getNiftyAssetsByOwner(c.env, wallet),
-      getCachedStakeRecords(c.env, wallet),
-    ])
+    const cacheId = c.env.NFT_CACHE_DO.idFromName(wallet)
+    const cacheStub = c.env.NFT_CACHE_DO.get(cacheId)
+    const cacheRes = await cacheStub.fetch(new Request("http://do/cache"))
+    const cacheData = await cacheRes.json<{
+      cached: boolean
+      stale?: boolean
+      nfts?: Array<{
+        mint: string
+        name: string
+        image: string
+        collectionId: string
+        collectionName: string | null
+        attributes: Array<{ trait_type: string; value: string }>
+        frozen: boolean
+        delegate: string | null
+        compressed: boolean
+        tokenStandard: string
+        staked?: boolean
+      }>
+      collections?: Array<{ id: string; name: string; image: string; numMints: number }>
+    }>()
 
-    // Build set of staked mints
-    const stakedMints = new Set(stakeRecords.map((r) => r.nftMint))
+    if (cacheData.cached && cacheData.nfts && cacheData.collections) {
+      const cachedMints: DASAsset[] = cacheData.nfts.map((nft) => ({
+        ...nft,
+        tokenStandard: nft.tokenStandard as DASAsset["tokenStandard"],
+        ruleSet: null,
+        staked: nft.staked ?? false,
+      }))
+      const cachedCollections: DASCollection[] = cacheData.collections.map((col) => ({
+        id: col.id,
+        name: col.name,
+        image: col.image,
+        count: col.numMints,
+      }))
 
-    const { assets: dasAssets, collections: dasCollections } = dasResult
+      c.executionCtx.waitUntil(
+        fetchFreshNfts(c.env, wallet).then(({ mints, collections }) => {
+          saveNftCache(c.env, wallet, mints, collections)
+        }).catch((err) => console.error("[nfts/by-owner] Background refresh failed:", err))
+      )
 
-    const niftyCollectionIds = niftyAssets.map((a) => a.group).filter((g): g is string => g !== null)
-    const niftyCollections = await fetchNiftyCollections(c.env, niftyCollectionIds)
-
-    const mappedNiftyAssets: DASAsset[] = niftyAssets.map((niftyAsset) => {
-      const collection = niftyAsset.group ? niftyCollections.get(niftyAsset.group) : null
-      return mapNiftyAssetToDASFormat(niftyAsset, collection?.name ?? null)
-    })
-
-    const allAssets = [...dasAssets, ...mappedNiftyAssets]
-
-    // Enrich assets with staked status
-    for (const asset of allAssets) {
-      asset.staked = stakedMints.has(asset.mint)
+      return c.json({
+        collections: cachedCollections,
+        mints: cachedMints,
+        total: cachedMints.length,
+        stale: cacheData.stale ?? false,
+      })
     }
 
-    const collectionsMap = new Map<string, DASCollection>()
-    for (const col of dasCollections) {
-      collectionsMap.set(col.id, col)
-    }
-
-    for (const niftyAsset of niftyAssets) {
-      if (niftyAsset.group) {
-        // Normalize nifty Dandies to pNFT Dandies collection
-        const collectionId = niftyAsset.group === DANDIES_NIFTY_COLLECTION ? DANDIES_PNFT_COLLECTION : niftyAsset.group
-
-        const existing = collectionsMap.get(collectionId)
-        if (existing) {
-          existing.count++
-        } else {
-          const collectionData = niftyCollections.get(niftyAsset.group)
-          collectionsMap.set(collectionId, {
-            id: collectionId,
-            name: collectionData?.name ?? niftyAsset.group,
-            image: collectionData?.image ?? null,
-            count: 1,
-          })
-        }
-      }
-    }
-
-    const allCollections = Array.from(collectionsMap.values())
+    const { mints, collections } = await fetchFreshNfts(c.env, wallet)
+    saveNftCache(c.env, wallet, mints, collections)
 
     return c.json({
-      collections: allCollections,
-      mints: allAssets,
-      total: allAssets.length,
+      collections,
+      mints,
+      total: mints.length,
     })
   } catch (err) {
     console.error("Error fetching NFTs:", err)
