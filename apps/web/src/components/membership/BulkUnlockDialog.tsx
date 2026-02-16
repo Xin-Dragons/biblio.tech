@@ -235,18 +235,19 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         return
       }
 
-      const allSigners = Array.from(requiredSignersMap.values())
-      const connectedFirst = allSigners.find((s) => s.address === account)
-      const requiredSigners = connectedFirst
-        ? [connectedFirst, ...allSigners.filter((s) => s.address !== account)]
-        : allSigners
+      const connectedAddress = account as Address
+      if (!noopSigners.has(connectedAddress)) noopSigners.set(connectedAddress, createNoopSigner(connectedAddress))
+      if (!requiredSignersMap.has(connectedAddress)) requiredSignersMap.set(connectedAddress, { address: connectedAddress, label: "Connected" })
 
-      const needsWalletSwitch = requiredSigners.length > 1 || !requiredSigners.some((s) => s.address === account)
-      if (needsWalletSwitch) {
+      const allSigners = Array.from(requiredSignersMap.values())
+      const connectedSigner = allSigners.find((s) => s.address === connectedAddress)!
+      const requiredSigners = [connectedSigner, ...allSigners.filter((s) => s.address !== connectedAddress)]
+
+      if (requiredSigners.length > 1) {
         setSkipAuthWalletSwitch(true)
       }
 
-      const feePayerSigner = noopSigners.get(requiredSigners[0].address)!
+      const feePayerSigner = noopSigners.get(connectedAddress)!
       const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
       setProgress({ current: 0, total: batches.length })
