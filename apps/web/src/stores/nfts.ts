@@ -325,7 +325,12 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
 
 // Force refresh - uses authenticated endpoint if available (bypasses cache)
 export const refreshNftsAtom = atom(null, async (get, set) => {
-  set(isLoadingAtom, true)
+  const hasExistingData = get(nftsAtom).length > 0
+  if (hasExistingData) {
+    set(isRefreshingAtom, true)
+  } else {
+    set(isLoadingAtom, true)
+  }
   set(errorAtom, null)
 
   try {
@@ -367,6 +372,7 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
     set(errorAtom, err instanceof Error ? err.message : "Unknown error")
   } finally {
     set(isLoadingAtom, false)
+    set(isRefreshingAtom, false)
   }
 })
 
