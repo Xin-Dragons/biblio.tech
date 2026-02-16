@@ -63,14 +63,19 @@ async function refreshConfig(env: HonoEnv["Bindings"]): Promise<DandiesStakeResp
   return data
 }
 
-/**
- * Gets stake records for a wallet directly from RPC
- * Returns minimal data needed for NFT enrichment (just nftMint)
- */
 export async function getCachedStakeRecords(env: HonoEnv["Bindings"], wallet: string): Promise<StakeRecord[]> {
-  const allRecords = await getStakeRecordsByOwner(env, wallet)
-  const records = allRecords.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
-  return records.map((r) => ({ nftMint: r.nftMint }))
+  try {
+    const id = env.STAKE_RECORD_CACHE_DO.idFromName(DANDIES_STAKER_PUBKEY)
+    const stub = env.STAKE_RECORD_CACHE_DO.get(id)
+    const res = await stub.fetch(new Request(`http://do/records?owner=${wallet}`))
+    if (!res.ok) throw new Error(`DO returned ${res.status}`)
+    return (await res.json<{ records: StakeRecord[] }>()).records
+  } catch (err) {
+    console.error("[getCachedStakeRecords] DO failed, falling back to RPC:", err)
+    const allRecords = await getStakeRecordsByOwner(env, wallet)
+    const records = allRecords.filter((r) => r.staker === DANDIES_STAKER_PUBKEY)
+    return records.map((r) => ({ nftMint: r.nftMint }))
+  }
 }
 
 /**

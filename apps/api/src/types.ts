@@ -6,6 +6,7 @@ import type { VotingDO } from "./dos/voting"
 import type { RpcWebSocketDO } from "./dos/rpc-websocket"
 import type { StakerSettingsDO } from "./dos/staker-settings"
 import type { NftCacheDO } from "./dos/nft-cache"
+import type { StakeRecordCacheDO } from "./dos/stake-record-cache"
 
 export interface Env {
   // Durable Objects
@@ -17,6 +18,7 @@ export interface Env {
   RPC_WEBSOCKET_DO: DurableObjectNamespace<RpcWebSocketDO>
   STAKER_SETTINGS_DO: DurableObjectNamespace<StakerSettingsDO>
   NFT_CACHE_DO: DurableObjectNamespace<NftCacheDO>
+  STAKE_RECORD_CACHE_DO: DurableObjectNamespace<StakeRecordCacheDO>
 
   // D1 Database
   DB: D1Database

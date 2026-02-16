@@ -45,6 +45,10 @@
         "name": "NFT_CACHE_DO",
         "class_name": "NftCacheDO",
       },
+      {
+        "name": "STAKE_RECORD_CACHE_DO",
+        "class_name": "StakeRecordCacheDO",
+      },
     ],
   },
 
@@ -62,6 +66,10 @@
         "StakerSettingsDO",
         "NftCacheDO"
       ],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["StakeRecordCacheDO"],
     },
   ],
 

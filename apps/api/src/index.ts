@@ -21,6 +21,7 @@ export { VotingDO } from "./dos/voting"
 export { RpcWebSocketDO } from "./dos/rpc-websocket"
 export { StakerSettingsDO } from "./dos/staker-settings"
 export { NftCacheDO } from "./dos/nft-cache"
+export { StakeRecordCacheDO } from "./dos/stake-record-cache"
 
 const app = new Hono<HonoEnv>()
 
