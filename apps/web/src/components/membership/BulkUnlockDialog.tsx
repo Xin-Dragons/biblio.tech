@@ -22,7 +22,7 @@ import {
   DANDIES_NIFTY_COLLECTION_ADDRESS,
   fetchStakeRecord,
 } from "@/hooks/use-staking"
-import { batchInstructionsBySize, getBalance, type InstructionGroup } from "@/lib/transaction"
+import { batchInstructionsBySize, type InstructionGroup } from "@/lib/transaction"
 import { logger } from "@/lib/logger"
 import { setNftsBatchStakedAtom, type NFT } from "@/stores/nfts"
 import { createNoopSigner, buildTransferInstructions } from "@/lib/vault-transactions"
@@ -187,9 +187,14 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
 
     try {
       const destinationAddress = recoverMode && selectedDestination ? (selectedDestination as Address) : null
-      const noopSigners = new Map<string, TransactionSigner>()
+      const connectedAddress = account as Address
 
       const requiredSignersMap = new Map<string, RequiredSigner>()
+      requiredSignersMap.set(connectedAddress, { address: connectedAddress, label: "Connected" })
+
+      const noopSigners = new Map<string, TransactionSigner>()
+      noopSigners.set(connectedAddress, createNoopSigner(connectedAddress))
+
       const itemInstructions: InstructionGroup<BulkUnlockItem>[] = []
       for (const item of items) {
         const collectionMintToFind = isNiftyAsset(item.nft) ? DANDIES_NIFTY_COLLECTION_ADDRESS : item.nft.collectionId
@@ -235,34 +240,16 @@ export function BulkUnlockDialog({ nfts, onClose }: BulkUnlockDialogProps) {
         return
       }
 
-      const connectedAddress = account as Address
       const allSigners = Array.from(requiredSignersMap.values())
-      const connectedIsOwner = allSigners.some((s) => s.address === connectedAddress)
+      const connectedFirst = allSigners.find((s) => s.address === connectedAddress)!
+      const requiredSigners = [connectedFirst, ...allSigners.filter((s) => s.address !== connectedAddress)]
 
-      let feePayerAddress: Address
-      if (connectedIsOwner) {
-        feePayerAddress = connectedAddress
-      } else {
-        const ownerAddress = allSigners[0].address
-        const ownerBalance = await getBalance(ownerAddress)
-        if (ownerBalance > 10_000_000) {
-          feePayerAddress = ownerAddress
-        } else {
-          feePayerAddress = connectedAddress
-          if (!noopSigners.has(connectedAddress)) noopSigners.set(connectedAddress, createNoopSigner(connectedAddress))
-          if (!requiredSignersMap.has(connectedAddress)) requiredSignersMap.set(connectedAddress, { address: connectedAddress, label: "Connected" })
-        }
-      }
-
-      const finalSigners = Array.from(requiredSignersMap.values())
-      const feePayer = finalSigners.find((s) => s.address === feePayerAddress)!
-      const requiredSigners = [feePayer, ...finalSigners.filter((s) => s.address !== feePayerAddress)]
-
-      if (requiredSigners.length > 1 || !connectedIsOwner) {
+      const needsWalletSwitch = requiredSigners.length > 1 || !requiredSigners.some((s) => s.address === connectedAddress)
+      if (needsWalletSwitch) {
         setSkipAuthWalletSwitch(true)
       }
 
-      const feePayerSigner = noopSigners.get(feePayerAddress)!
+      const feePayerSigner = noopSigners.get(connectedAddress)!
       const batches = await batchInstructionsBySize(itemInstructions, feePayerSigner)
 
       const CHUNK_SIZE = 50
