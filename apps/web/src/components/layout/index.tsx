@@ -13,7 +13,7 @@ import { fetchNftsAtom, fetchUserNftsAtom, nftsAtom, fetchedWalletAtom, cacheLoa
 import { fetchTierAtom } from "@/stores/tier"
 import { detectVaultedNftsAtom } from "@/stores/vault"
 import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
-import { sessionAtom } from "@/stores/auth"
+import { sessionAtom, isAuthenticatedAtom } from "@/stores/auth"
 import { isConnectedAtom } from "@/stores/wallet"
 import { searchQueryAtom } from "@/stores/ui"
 import { fetchTagsAtom, fetchNftTagsAtom } from "@/stores/user"
@@ -27,6 +27,7 @@ function isViewingOthersShowcase(pathname: string): boolean {
 function DataFetcher() {
   const { isConnected, account } = useWallet()
   const session = useAtomValue(sessionAtom)
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const fetchNfts = useSetAtom(fetchNftsAtom)
   const fetchUserNfts = useSetAtom(fetchUserNftsAtom)
@@ -40,23 +41,23 @@ function DataFetcher() {
 
   // Sync isConnected to atom - for authenticated users, having a session means "connected" for UI purposes
   useEffect(() => {
-    const effectivelyConnected = isConnected || !!session?.token
+    const effectivelyConnected = isConnected || isAuthenticated
     setIsConnected(effectivelyConnected)
-  }, [isConnected, session?.token, setIsConnected])
+  }, [isConnected, isAuthenticated, setIsConnected])
 
   // Fetch tier and linked wallets - only on connection or session change, not on linked wallet switch
   useEffect(() => {
     if (!isConnected) return
     fetchTier()
     fetchLinkedWallets()
-  }, [isConnected, session?.token, fetchTier, fetchLinkedWallets])
+  }, [isConnected, isAuthenticated, fetchTier, fetchLinkedWallets])
 
   // Fetch tags and nft-tag associations - only for authenticated users
   useEffect(() => {
-    if (!session?.token) return
+    if (!isAuthenticated) return
     fetchTags()
     fetchNftTags()
-  }, [session?.token, fetchTags, fetchNftTags])
+  }, [isAuthenticated, fetchTags, fetchNftTags])
 
   const setFetchedWallet = useSetAtom(fetchedWalletAtom)
   const setCacheLoaded = useSetAtom(cacheLoadedAtom)
@@ -83,24 +84,24 @@ function DataFetcher() {
   // single-wallet public endpoint for unauthenticated
   useEffect(() => {
     if (!isConnected || !account) return
-    if (session?.token) {
+    if (isAuthenticated) {
       fetchUserNfts()
     } else {
       fetchNfts(account)
     }
-  }, [isConnected, account, session?.token, fetchNfts, fetchUserNfts])
+  }, [isConnected, account, isAuthenticated, fetchNfts, fetchUserNfts])
 
   // Detect vaulted NFTs - authenticated users (use session.wallet, stable across linked wallet switches)
   useEffect(() => {
-    if (!session?.token || nfts.length === 0) return
-    detectVaultedNfts(session.wallet)
-  }, [nfts, linkedWallets, session?.token, session?.wallet, detectVaultedNfts])
+    if (!isAuthenticated || nfts.length === 0) return
+    detectVaultedNfts(session!.wallet)
+  }, [nfts, linkedWallets, isAuthenticated, session?.wallet, detectVaultedNfts])
 
   // Detect vaulted NFTs - non-authenticated users
   useEffect(() => {
-    if (session?.token || nfts.length === 0 || !account) return
+    if (isAuthenticated || nfts.length === 0 || !account) return
     detectVaultedNfts(account)
-  }, [nfts, linkedWallets, session?.token, account, detectVaultedNfts])
+  }, [nfts, linkedWallets, isAuthenticated, account, detectVaultedNfts])
 
   return null
 }

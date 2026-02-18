@@ -32,7 +32,7 @@ function isAuthenticated(): boolean {
     const sessionStr = localStorage.getItem("biblio-session")
     if (sessionStr) {
       const session = JSON.parse(sessionStr)
-      return !!session?.token
+      return !!session?.token && session.expiresAt > Date.now()
     }
   } catch {
     // Ignore parse errors
