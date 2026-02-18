@@ -1,7 +1,6 @@
 import { atom } from "jotai"
 import { searchQueryAtom, sortOptionAtom, tagFilterAtom, showUntaggedFilterAtom } from "./ui"
 import { junkAtom, nftTagsAtom } from "./user"
-import { linkedWalletsAtom, type LinkedWallet } from "./linked-wallets"
 import { API_BASE } from "@/lib/api"
 
 function getAuthHeaders(): HeadersInit {
@@ -117,24 +116,6 @@ function mapCollectionData(col: Record<string, unknown>): Collection {
     image: (col.image as string) ?? "",
     numMints: col.count as number,
   }
-}
-
-function setLinkedWalletsFromResponse(
-  get: (atom: unknown) => unknown,
-  set: (atom: unknown, value: unknown) => void,
-  data: { linkedWallets?: string[] },
-  connectedWallet: string
-) {
-  if (!data.linkedWallets || data.linkedWallets.length <= 1) return
-  if (isAuthenticated()) return
-  const existing = get(linkedWalletsAtom) as LinkedWallet[]
-  if (existing.length > 0) return
-  const wallets: LinkedWallet[] = data.linkedWallets.map((w) => ({
-    publicKey: w,
-    isMain: w === connectedWallet,
-    addedAt: Date.now(),
-  }))
-  set(linkedWalletsAtom, wallets)
 }
 
 // Save to cache (fire and forget)
@@ -254,7 +235,6 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
           set(nftsAtom, nfts)
           set(collectionsAtom, collections)
           set(cacheLoadedAtom, false)
-          setLinkedWalletsFromResponse(get as (atom: unknown) => unknown, set as (atom: unknown, value: unknown) => void, data, wallet)
           saveToCache(wallet, nfts, collections)
         }
       } catch {
@@ -296,7 +276,6 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
                 set(nftsAtom, nfts)
                 set(collectionsAtom, collections)
                 set(cacheLoadedAtom, false)
-                setLinkedWalletsFromResponse(get as (atom: unknown) => unknown, set as (atom: unknown, value: unknown) => void, data, wallet)
                 saveToCache(wallet, nfts, collections)
               }
             })
@@ -332,7 +311,6 @@ export const fetchNftsAtom = atom(null, async (get, set, wallet: string) => {
     set(collectionsAtom, collections)
     set(fetchedWalletAtom, wallet)
     set(cacheLoadedAtom, false)
-    setLinkedWalletsFromResponse(get as (atom: unknown) => unknown, set as (atom: unknown, value: unknown) => void, data, wallet)
 
     saveToCache(wallet, nfts, collections)
   } catch (err) {
@@ -386,7 +364,6 @@ export const refreshNftsAtom = atom(null, async (get, set) => {
       set(nftsAtom, nfts)
       set(collectionsAtom, collections)
       set(fetchedWalletAtom, wallet)
-      setLinkedWalletsFromResponse(get as (atom: unknown) => unknown, set as (atom: unknown, value: unknown) => void, data, wallet)
     }
   } catch (err) {
     set(errorAtom, err instanceof Error ? err.message : "Unknown error")
