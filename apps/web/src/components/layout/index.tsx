@@ -12,7 +12,7 @@ import { WelcomeScreen } from "../welcome-screen"
 import { fetchNftsAtom, fetchUserNftsAtom, nftsAtom, fetchedWalletAtom, cacheLoadedAtom, userNftsFetchedAtom, tokensFetchedWalletAtom, tokensAtom } from "@/stores/nfts"
 import { fetchTierAtom } from "@/stores/tier"
 import { detectVaultedNftsAtom } from "@/stores/vault"
-import { linkedWalletsAtom, fetchLinkedWalletsAtom, clearLinkedWalletsAtom } from "@/stores/linked-wallets"
+import { linkedWalletsAtom, fetchLinkedWalletsAtom } from "@/stores/linked-wallets"
 import { sessionAtom, isAuthenticatedAtom } from "@/stores/auth"
 import { isConnectedAtom } from "@/stores/wallet"
 import { searchQueryAtom } from "@/stores/ui"
@@ -33,20 +33,11 @@ function DataFetcher() {
   const fetchUserNfts = useSetAtom(fetchUserNftsAtom)
   const fetchTier = useSetAtom(fetchTierAtom)
   const fetchLinkedWallets = useSetAtom(fetchLinkedWalletsAtom)
-  const clearLinkedWallets = useSetAtom(clearLinkedWalletsAtom)
   const fetchTags = useSetAtom(fetchTagsAtom)
   const fetchNftTags = useSetAtom(fetchNftTagsAtom)
   const nfts = useAtomValue(nftsAtom)
   const linkedWallets = useAtomValue(linkedWalletsAtom)
   const detectVaultedNfts = useSetAtom(detectVaultedNftsAtom)
-
-  // Clear stale linked wallets from localStorage if no valid session
-  useEffect(() => {
-    if (!isAuthenticated) {
-      clearLinkedWallets()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Sync isConnected to atom - for authenticated users, having a session means "connected" for UI purposes
   useEffect(() => {

@@ -39,17 +39,6 @@ function mapNiftyAssetToDASFormat(niftyAsset: NiftyAsset, collectionName: string
   }
 }
 
-async function getLinkedWallets(db: D1Database, wallet: string): Promise<string[]> {
-  try {
-    const { results } = await db.prepare(
-      "SELECT wallet FROM wallet_users WHERE user_id = (SELECT user_id FROM wallet_users WHERE wallet = ?)"
-    ).bind(wallet).all<{ wallet: string }>()
-    return results.map((r) => r.wallet)
-  } catch {
-    return [wallet]
-  }
-}
-
 async function fetchFreshNfts(env: HonoEnv["Bindings"], wallet: string) {
   const [dasResult, niftyAssets, stakeRecords] = await Promise.all([
     getAssetsByOwner(env, wallet),
@@ -130,154 +119,67 @@ function saveNftCache(env: HonoEnv["Bindings"], wallet: string, mints: DASAsset[
   )
 }
 
-type CachedNft = {
-  mint: string
-  name: string
-  image: string
-  collectionId: string
-  collectionName: string | null
-  attributes: Array<{ trait_type: string; value: string }>
-  frozen: boolean
-  delegate: string | null
-  compressed: boolean
-  tokenStandard: string
-  staked?: boolean
-}
-
-type CachedCollection = { id: string; name: string; image: string; numMints: number }
-
-type CacheResponse = {
-  cached: boolean
-  stale?: boolean
-  nfts?: CachedNft[]
-  collections?: CachedCollection[]
-}
-
-async function fetchWalletFromCache(env: HonoEnv["Bindings"], wallet: string) {
-  const cacheId = env.NFT_CACHE_DO.idFromName(wallet)
-  const cacheStub = env.NFT_CACHE_DO.get(cacheId)
-  const cacheRes = await cacheStub.fetch(new Request("http://do/cache"))
-  return cacheRes.json<CacheResponse>()
-}
-
-function cachedToAssets(cacheData: CacheResponse, owner: string) {
-  const mints: DASAsset[] = (cacheData.nfts ?? []).map((nft) => ({
-    ...nft,
-    owner,
-    tokenStandard: nft.tokenStandard as DASAsset["tokenStandard"],
-    ruleSet: null,
-    staked: nft.staked ?? false,
-  }))
-  const collections: DASCollection[] = (cacheData.collections ?? []).map((col) => ({
-    id: col.id,
-    name: col.name,
-    image: col.image,
-    count: col.numMints,
-  }))
-  return { mints, collections }
-}
-
-function mergeCollections(allCollections: DASCollection[][]): DASCollection[] {
-  const map = new Map<string, DASCollection>()
-  for (const collections of allCollections) {
-    for (const col of collections) {
-      const existing = map.get(col.id)
-      if (existing) {
-        existing.count += col.count
-      } else {
-        map.set(col.id, { ...col })
-      }
-    }
-  }
-  return Array.from(map.values())
-}
-
 nftsRoutes.get("/by-owner/:wallet", async (c) => {
   const wallet = c.req.param("wallet")
 
   try {
-    const linkedWallets = await getLinkedWallets(c.env.DB, wallet)
-    const isMultiWallet = linkedWallets.length > 1
+    const cacheId = c.env.NFT_CACHE_DO.idFromName(wallet)
+    const cacheStub = c.env.NFT_CACHE_DO.get(cacheId)
+    const cacheRes = await cacheStub.fetch(new Request("http://do/cache"))
+    const cacheData = await cacheRes.json<{
+      cached: boolean
+      stale?: boolean
+      nfts?: Array<{
+        mint: string
+        name: string
+        image: string
+        collectionId: string
+        collectionName: string | null
+        attributes: Array<{ trait_type: string; value: string }>
+        frozen: boolean
+        delegate: string | null
+        compressed: boolean
+        tokenStandard: string
+        staked?: boolean
+      }>
+      collections?: Array<{ id: string; name: string; image: string; numMints: number }>
+    }>()
 
-    if (!isMultiWallet) {
-      const cacheData = await fetchWalletFromCache(c.env, wallet)
-
-      if (cacheData.cached && cacheData.nfts && cacheData.collections) {
-        const { mints, collections } = cachedToAssets(cacheData, wallet)
-
-        c.executionCtx.waitUntil(
-          fetchFreshNfts(c.env, wallet).then(({ mints, collections }) => {
-            saveNftCache(c.env, wallet, mints, collections)
-          }).catch((err) => console.error("[nfts/by-owner] Background refresh failed:", err))
-        )
-
-        return c.json({
-          collections,
-          mints,
-          total: mints.length,
-          stale: cacheData.stale ?? false,
-        })
-      }
-
-      const { mints, collections } = await fetchFreshNfts(c.env, wallet)
-      saveNftCache(c.env, wallet, mints, collections)
-
-      return c.json({
-        collections,
-        mints,
-        total: mints.length,
-      })
-    }
-
-    // Multi-wallet: try cache for all wallets
-    const cacheResults = await Promise.all(linkedWallets.map((w) => fetchWalletFromCache(c.env, w)))
-    const allCached = cacheResults.every((r) => r.cached && r.nfts && r.collections)
-
-    if (allCached) {
-      const allMints: DASAsset[] = []
-      const allCollections: DASCollection[][] = []
-
-      for (let i = 0; i < linkedWallets.length; i++) {
-        const { mints, collections } = cachedToAssets(cacheResults[i], linkedWallets[i])
-        allMints.push(...mints)
-        allCollections.push(collections)
-      }
+    if (cacheData.cached && cacheData.nfts && cacheData.collections) {
+      const cachedMints: DASAsset[] = cacheData.nfts.map((nft) => ({
+        ...nft,
+        tokenStandard: nft.tokenStandard as DASAsset["tokenStandard"],
+        ruleSet: null,
+        staked: nft.staked ?? false,
+      }))
+      const cachedCollections: DASCollection[] = cacheData.collections.map((col) => ({
+        id: col.id,
+        name: col.name,
+        image: col.image,
+        count: col.numMints,
+      }))
 
       c.executionCtx.waitUntil(
-        Promise.all(linkedWallets.map((w) =>
-          fetchFreshNfts(c.env, w).then(({ mints, collections }) => {
-            saveNftCache(c.env, w, mints, collections)
-          })
-        )).catch((err) => console.error("[nfts/by-owner] Background refresh failed:", err))
+        fetchFreshNfts(c.env, wallet).then(({ mints, collections }) => {
+          saveNftCache(c.env, wallet, mints, collections)
+        }).catch((err) => console.error("[nfts/by-owner] Background refresh failed:", err))
       )
 
       return c.json({
-        collections: mergeCollections(allCollections),
-        mints: allMints,
-        total: allMints.length,
-        stale: cacheResults.some((r) => r.stale),
-        linkedWallets,
+        collections: cachedCollections,
+        mints: cachedMints,
+        total: cachedMints.length,
+        stale: cacheData.stale ?? false,
       })
     }
 
-    // Not all cached - fetch fresh for all wallets
-    const freshResults = await Promise.all(linkedWallets.map((w) => fetchFreshNfts(c.env, w)))
-    const allMints: DASAsset[] = []
-    const allCollections: DASCollection[][] = []
-
-    for (let i = 0; i < linkedWallets.length; i++) {
-      const { mints, collections } = freshResults[i]
-      const mintsWithOwner = mints.map((m) => ({ ...m, owner: linkedWallets[i] }))
-      allMints.push(...mintsWithOwner)
-      allCollections.push(collections)
-      saveNftCache(c.env, linkedWallets[i], mints, collections)
-    }
+    const { mints, collections } = await fetchFreshNfts(c.env, wallet)
+    saveNftCache(c.env, wallet, mints, collections)
 
     return c.json({
-      collections: mergeCollections(allCollections),
-      mints: allMints,
-      total: allMints.length,
-      linkedWallets,
+      collections,
+      mints,
+      total: mints.length,
     })
   } catch (err) {
     console.error("Error fetching NFTs:", err)
